@@ -210,6 +210,7 @@ const AdminDashboard = () => {
             const associatedRescue = r.rescue || null;
             const color = getMarkerColor(r, associatedRescue);
             const statusName = r.status?.status_name || getStatusName(r.status_id);
+            const photoUrl = r.photo_url || r.image_url || r.media?.[0]?.file_url || null;
 
             return {
                 id: r.report_id,
@@ -219,12 +220,15 @@ const AdminDashboard = () => {
                 priority: r.priority_level || "Medium",
                 category: r.animal_type || "Stray Animal",
                 color: color,
+                photo: photoUrl,
                 time: r.created_at ? new Date(r.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : "N/A",
                 rawData: {
                     ...r,
                     statusName: statusName,
                     reporterName: r.reporter_name || r.reporter?.name || "Citizen",
-                    rescue: associatedRescue
+                    rescue: associatedRescue,
+                    image_url: photoUrl,
+                    media: r.media || (photoUrl ? [{ file_url: photoUrl }] : [])
                 }
             };
         });

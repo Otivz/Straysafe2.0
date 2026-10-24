@@ -1,5 +1,7 @@
 # Existing System DFDs (Figures 2.2–2.5)
 
+> [Exact editable DFD symbols](../drawio/README.md) are available in the native `.drawio` files. The Mermaid blocks below are simplified previews with portable labels.
+
 Code-based versions of the team's existing-system diagrams with the review corrections applied. They match `MANUSCRIPT_DFD_EXISTING.txt`. Each figure has a flow checklist for redrawing. These are partial role views of one manual system, sharing processes 1.0–4.0. Processes are rounded rectangles. Data stores are open-ended rectangles with a grey ID compartment and a yellow name area, matching the supplied notation reference.
 
 ## Figure 2.2 Existing System Context Diagram
@@ -33,6 +35,7 @@ flowchart LR
     STF["Barangay Staff"]:::ent
     P0("0<br/>Manual Stray<br/>Management"):::proc
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     RES -->|"Location Information, Request for Update,<br/>Animal Description, Stray Animal Report"| P0
     P0 -->|"Verbal Acknowledgment, SMS Notification,<br/>Report Status, Final Resolution"| RES
@@ -42,8 +45,8 @@ flowchart LR
     P0 -->|"Animal Location Details, Personnel Visit Request,<br/>Incident Information"| STF
 
     classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
-    classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#d9d9d9,stroke:#000000,stroke-width:1px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
 ```
 
 **Explanation (manuscript text):**
@@ -95,8 +98,9 @@ flowchart LR
     RES["Resident"]:::ent
     P1("1.0<br/>Record Incident<br/>Reports"):::proc
     P4("4.0<br/>Maintain Records<br/>& Report Resolution"):::proc
-    D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Incident Logbook</td></tr></table>"]:::store
+    D1["D1 | Incident Logbook"]:::store
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     RES -->|"Location Information, Animal Description,<br/>Stray Animal Report"| P1
     P1 -->|"Incident Report Record"| D1
@@ -105,8 +109,8 @@ flowchart LR
     P4 -->|"Verbal Acknowledgment, SMS Notification,<br/>Report Status, Final Resolution"| RES
 
     classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
-    classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
 ```
 
 **Explanation (manuscript text):**
@@ -153,8 +157,9 @@ flowchart LR
     LDR["Subdivision Leader"]:::ent
     P2("2.0<br/>Coordinate Assistance<br/>& Escalation"):::proc
     P4("4.0<br/>Maintain Records<br/>& Report Resolution"):::proc
-    D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Incident Logbook</td></tr></table>"]:::store
+    D1["D1 | Incident Logbook"]:::store
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     LDR -->|"Escalation Request, Request for Assistance"| P2
     P2 -->|"Escalation and Assistance Request Record"| D1
@@ -162,8 +167,8 @@ flowchart LR
     P4 -->|"Report Updates, Action Taken Information, Final Resolution Report"| LDR
 
     classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
-    classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
 ```
 
 **Explanation (manuscript text):**
@@ -210,9 +215,10 @@ flowchart LR
     STF["Barangay Staff"]:::ent
     P3("3.0<br/>Record Field<br/>Operations"):::proc
     P4("4.0<br/>Maintain Records<br/>& Report Resolution"):::proc
-    D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Incident Logbook</td></tr></table>"]:::store
-    D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Impound Registry</td></tr></table>"]:::store
+    D1["D1 | Incident Logbook"]:::store
+    D2["D2 | Impound Registry"]:::store
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     P2 -->|"Personnel Visit Request"| STF
     D1 -->|"Animal Location Details, Incident Information"| P3
@@ -227,8 +233,8 @@ flowchart LR
     P4 -->|"Resolution and Report Status Records"| D1
 
     classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
-    classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
 ```
 
 **Explanation (manuscript text):**

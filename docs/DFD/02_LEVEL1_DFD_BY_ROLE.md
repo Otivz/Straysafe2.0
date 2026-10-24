@@ -1,6 +1,8 @@
 # Level 1 DFDs by User Role
 
-The Level 1 DFD is presented once for each user role, so that every diagram shows only the processes, data flows and data stores that the role actually uses. All four use the same process numbers (1.0–10.0) and the same data stores (D1–D11), so they can be read side by side. These are partial views of the same system, showing selected interactions for each role. They do not define separate system boundaries or list every permission available to that role.
+> [Exact editable DFD symbols](drawio/README.md) are available in the native `.drawio` files. The Mermaid blocks below are simplified previews with portable labels.
+
+The Level 1 DFD is presented once for each focus role. Whenever process 1.0 Manage User Accounts is drawn as a complete process, all four authenticated human roles are included with account inputs and results. Other processes retain their focus-role interactions. All four use the same process numbers (1.0–10.0) and the same data stores (D1–D11), so they can be read side by side. These are partial views of the same system, with a shared account process and selected operational interactions for the focus role. They do not define separate system boundaries or list every permission available to that role.
 
 | Role | Processes used |
 |---|---|
@@ -39,9 +41,9 @@ flowchart LR
     subgraph COL1[" "]
         direction TB
         RES["Resident"]:::ent
-        EML["Email Service"]:::ent
-        CLD["Cloudinary<br/>Media Storage"]:::ent
-        MAP["OpenStreetMap<br/>Services"]:::ent
+        LDR["Subdivision Leader"]:::ent
+        STF["Barangay Staff"]:::ent
+        ADM["Administrator"]:::ent
     end
     subgraph COL2[" "]
         direction TB
@@ -52,17 +54,17 @@ flowchart LR
     end
     subgraph COL3[" "]
         direction TB
-        D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Users</td></tr></table>"]:::store
-        D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Locations</td></tr></table>"]:::store
-        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
-        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
-        D6["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D6</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>AI Matches</td></tr></table>"]:::store
+        D1["D1 | Users"]:::store
+        D2["D2 | Locations"]:::store
+        D3["D3 | Pets"]:::store
+        D4["D4 | Reports"]:::store
+        D6["D6 | AI Matches"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     RES -->|"registration, sign-in, profile"| P1
-    P1 -->|"OTP code"| EML
     P1 -->|"account"| D1
     D1 -->|"account details"| P1
     P1 -->|"verified account"| RES
@@ -71,8 +73,6 @@ flowchart LR
     D3 -->|"my pets, scan history"| P2
     P2 -->|"pet QR card, scan alerts"| RES
     RES -->|"stray or lost-pet report, photos, dispute and evidence"| P3
-    P3 -->|"photos"| CLD
-    MAP -->|"street address"| P3
     D2 -->|"subdivision, landmarks"| P3
     P3 -->|"report"| D4
     D4 -->|"report and timeline"| P3
@@ -81,15 +81,19 @@ flowchart LR
     P4 -->|"match for owner to verify"| RES
     RES -->|"owner answer"| P4
     P4 -->|"owner response"| D6
-    CLD -->|"stored evidence links"| P3
-    P3 -->|"location coordinates"| MAP
-    CLD -->|"stored report media links"| P3
-    P2 -->|"pet photos"| CLD
-    CLD -->|"stored pet media links"| P2
+
+
+    %% Shared account process includes every authenticated human role.
+    LDR -->|"login credentials and profile updates"| P1
+    P1 -->|"account status and subdivision access"| LDR
+    STF -->|"login credentials and profile updates; personnel account details from Head Officer"| P1
+    P1 -->|"access result and personnel account status"| STF
+    ADM -->|"login credentials, user account and role changes"| P1
+    P1 -->|"access result, user accounts and role records"| ADM
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
-    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
 
     style COL1 fill:transparent,stroke:none
@@ -140,8 +144,6 @@ flowchart LR
     subgraph COL1[" "]
         direction TB
         RES["Resident"]:::ent
-        CLD["Cloudinary<br/>Media Storage"]:::ent
-        PSH["Web Push Service"]:::ent
     end
     subgraph COL2[" "]
         direction TB
@@ -152,16 +154,17 @@ flowchart LR
     end
     subgraph COL3[" "]
         direction TB
-        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
-        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
-        D5["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D5</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Claims and Returns</td></tr></table>"]:::store
-        D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescues and Holding</td></tr></table>"]:::store
-        D8["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D8</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Adoptions</td></tr></table>"]:::store
-        D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Messages and Notifications</td></tr></table>"]:::store
-        D10["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D10</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Announcements</td></tr></table>"]:::store
+        D3["D3 | Pets"]:::store
+        D4["D4 | Reports"]:::store
+        D5["D5 | Claims and Returns"]:::store
+        D7["D7 | Rescues and Holding"]:::store
+        D8["D8 | Adoptions"]:::store
+        D9["D9 | Messages and Notifications"]:::store
+        D10["D10 | Announcements"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     RES -->|"claim, proof, recovery confirmation"| P6
     P6 -->|"claim"| D5
@@ -174,7 +177,6 @@ flowchart LR
     RES -->|"messages, notification settings"| P8
     P8 -->|"messages, preferences"| D9
     P8 -->|"notifications, replies"| RES
-    P8 -->|"push notifications"| PSH
     D10 -->|"published alerts"| P9
     P9 -->|"community alerts"| RES
     RES -->|"comments, reactions"| P9
@@ -186,14 +188,10 @@ flowchart LR
     P6 -->|"claim and recovery status"| D4
     D3 -->|"registered pet and ownership records"| P6
     D4 -->|"report and recovery records"| P6
-    P6 -->|"claim proof and recovery photos"| CLD
-    CLD -->|"stored proof links"| P6
-    P7 -->|"application documents and check-in photos"| CLD
-    CLD -->|"stored adoption media links"| P7
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
-    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
 
     style COL1 fill:transparent,stroke:none
@@ -244,7 +242,9 @@ flowchart LR
     subgraph COL1[" "]
         direction TB
         LDR["Subdivision Leader"]:::ent
-        CLD["Cloudinary<br/>Media Storage"]:::ent
+        RES["Resident"]:::ent
+        STF["Barangay Staff"]:::ent
+        ADM["Administrator"]:::ent
     end
     subgraph COL2[" "]
         direction TB
@@ -256,13 +256,14 @@ flowchart LR
     end
     subgraph COL3[" "]
         direction TB
-        D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Users</td></tr></table>"]:::store
-        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
-        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
-        D6["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D6</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>AI Matches</td></tr></table>"]:::store
+        D1["D1 | Users"]:::store
+        D3["D3 | Pets"]:::store
+        D4["D4 | Reports"]:::store
+        D6["D6 | AI Matches"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     LDR -->|"sign-in"| P1
     D1 -->|"role and subdivision"| P1
@@ -274,18 +275,25 @@ flowchart LR
     D4 -->|"subdivision reports"| P3
     P3 -->|"report queue"| LDR
     LDR -->|"report assignment, verification, visibility, transfer, status, endorsement and dispute decisions"| P3
-    P3 -->|"evidence photos"| CLD
     P3 -->|"updated report, timeline, letter"| D4
     D6 -->|"AI match suggestions"| P4
     P4 -->|"suggestions with evidence"| LDR
     LDR -->|"match decision, review remarks and owner-verification request"| P4
     P4 -->|"review decision"| D6
     P3 -->|"report escalated for rescue"| P5
-    CLD -->|"stored evidence links"| P3
+
+
+    %% Shared account process includes every authenticated human role.
+    RES -->|"registration details, login credentials and profile updates"| P1
+    P1 -->|"account verification and access result"| RES
+    STF -->|"login credentials and profile updates; personnel account details from Head Officer"| P1
+    P1 -->|"access result and personnel account status"| STF
+    ADM -->|"login credentials, user account and role changes"| P1
+    P1 -->|"access result, user accounts and role records"| ADM
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
-    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
 
     style COL1 fill:transparent,stroke:none
@@ -347,16 +355,17 @@ flowchart LR
     end
     subgraph COL3[" "]
         direction TB
-        D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Locations</td></tr></table>"]:::store
-        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
-        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
-        D5["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D5</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Claims and Returns</td></tr></table>"]:::store
-        D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescues and Holding</td></tr></table>"]:::store
-        D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Messages and Notifications</td></tr></table>"]:::store
-        D10["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D10</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Announcements</td></tr></table>"]:::store
+        D2["D2 | Locations"]:::store
+        D3["D3 | Pets"]:::store
+        D4["D4 | Reports"]:::store
+        D5["D5 | Claims and Returns"]:::store
+        D7["D7 | Rescues and Holding"]:::store
+        D9["D9 | Messages and Notifications"]:::store
+        D10["D10 | Announcements"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     P3 -->|"report escalated for rescue"| P5
     D7 -->|"rescue and holding records"| P5
@@ -385,8 +394,8 @@ flowchart LR
     P6 -->|"released animal status"| D7
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
-    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
 
     style COL1 fill:transparent,stroke:none
@@ -437,8 +446,9 @@ flowchart LR
     subgraph COL1[" "]
         direction TB
         STF["Barangay Staff"]:::ent
-        EML["Email Service"]:::ent
-        CLD["Cloudinary<br/>Media Storage"]:::ent
+        RES["Resident"]:::ent
+        LDR["Subdivision Leader"]:::ent
+        ADM["Administrator"]:::ent
     end
     subgraph COL2[" "]
         direction TB
@@ -449,17 +459,17 @@ flowchart LR
     end
     subgraph COL3[" "]
         direction TB
-        D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Users</td></tr></table>"]:::store
-        D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Locations</td></tr></table>"]:::store
-        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
-        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
-        D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescues and Holding</td></tr></table>"]:::store
+        D1["D1 | Users"]:::store
+        D2["D2 | Locations"]:::store
+        D3["D3 | Pets"]:::store
+        D4["D4 | Reports"]:::store
+        D7["D7 | Rescues and Holding"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     STF -->|"login credentials; personnel account details from Head Officer"| P1
-    P1 -->|"account invitation"| EML
     P1 -->|"staff account"| D1
     STF -->|"pet record updates, owner warnings"| P2
     P2 -->|"pet record, warning"| D3
@@ -470,21 +480,28 @@ flowchart LR
     P3 -->|"timeline entry"| D4
     STF -->|"rescue dispatch, responders, intake, care logs"| P5
     D2 -->|"holding facilities"| P5
-    P5 -->|"care photos"| CLD
     P5 -->|"rescue and holding records"| D7
     P5 -->|"status update"| D4
     P5 -->|"rescue requests, holding records"| STF
     D3 -->|"pet records and ownership history"| P2
-    CLD -->|"stored evidence links"| P5
     D1 -->|"account, role and personnel records"| P1
     P1 -->|"access result and personnel account status"| STF
     D1 -->|"authorized responders"| P5
     D4 -->|"report location and case details"| P5
     D7 -->|"rescue assignments and holding records"| P5
 
+
+    %% Shared account process includes every authenticated human role.
+    RES -->|"registration details, login credentials and profile updates"| P1
+    P1 -->|"account verification and access result"| RES
+    LDR -->|"login credentials and profile updates"| P1
+    P1 -->|"account status and subdivision access"| LDR
+    ADM -->|"login credentials, user account and role changes"| P1
+    P1 -->|"access result, user accounts and role records"| ADM
+
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
-    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
 
     style COL1 fill:transparent,stroke:none
@@ -545,16 +562,17 @@ flowchart LR
     end
     subgraph COL3[" "]
         direction TB
-        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
-        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
-        D5["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D5</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Claims and Returns</td></tr></table>"]:::store
-        D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescues and Holding</td></tr></table>"]:::store
-        D8["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D8</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Adoptions</td></tr></table>"]:::store
-        D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Messages and Notifications</td></tr></table>"]:::store
-        D10["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D10</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Announcements</td></tr></table>"]:::store
+        D3["D3 | Pets"]:::store
+        D4["D4 | Reports"]:::store
+        D5["D5 | Claims and Returns"]:::store
+        D7["D7 | Rescues and Holding"]:::store
+        D8["D8 | Adoptions"]:::store
+        D9["D9 | Messages and Notifications"]:::store
+        D10["D10 | Announcements"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     STF -->|"claim decision, handover record"| P6
     D7 -->|"holding record"| P6
@@ -583,8 +601,8 @@ flowchart LR
     P7 -->|"adopted animal and custody status"| D7
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
-    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
 
     style COL1 fill:transparent,stroke:none
@@ -635,8 +653,9 @@ flowchart LR
     subgraph COL1[" "]
         direction TB
         ADM["Administrator"]:::ent
-        EML["Email Service"]:::ent
-        MAP["OpenStreetMap<br/>Services"]:::ent
+        RES["Resident"]:::ent
+        LDR["Subdivision Leader"]:::ent
+        STF["Barangay Staff"]:::ent
     end
     subgraph COL2[" "]
         direction TB
@@ -646,15 +665,15 @@ flowchart LR
     end
     subgraph COL3[" "]
         direction TB
-        D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Users</td></tr></table>"]:::store
-        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
-        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
+        D1["D1 | Users"]:::store
+        D3["D3 | Pets"]:::store
+        D4["D4 | Reports"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     ADM -->|"login credentials, user accounts, role and status changes"| P1
-    P1 -->|"invitations, admin sign-in code"| EML
     P1 -->|"user records"| D1
     D1 -->|"user list"| P1
     P1 -->|"user accounts"| ADM
@@ -666,11 +685,19 @@ flowchart LR
     D4 -->|"all reports"| P3
     P3 -->|"reports"| ADM
     D3 -->|"pet records and ownership history"| P2
-    P3 -->|"location coordinates"| MAP
+
+
+    %% Shared account process includes every authenticated human role.
+    RES -->|"registration details, login credentials and profile updates"| P1
+    P1 -->|"account verification and access result"| RES
+    LDR -->|"login credentials and profile updates"| P1
+    P1 -->|"account status and subdivision access"| LDR
+    STF -->|"login credentials and profile updates; personnel account details from Head Officer"| P1
+    P1 -->|"access result and personnel account status"| STF
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
-    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
 
     style COL1 fill:transparent,stroke:none
@@ -720,8 +747,6 @@ flowchart LR
     subgraph COL1[" "]
         direction TB
         ADM["Administrator"]:::ent
-        GEM["Google Gemini AI"]:::ent
-        MAP["OpenStreetMap<br/>Services"]:::ent
     end
     subgraph COL2[" "]
         direction TB
@@ -731,20 +756,19 @@ flowchart LR
     end
     subgraph COL3[" "]
         direction TB
-        D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Users</td></tr></table>"]:::store
-        D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Locations</td></tr></table>"]:::store
-        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
-        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
-        D6["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D6</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>AI Matches</td></tr></table>"]:::store
-        D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Messages and Notifications</td></tr></table>"]:::store
-        D11["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D11</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Audit and Settings</td></tr></table>"]:::store
+        D1["D1 | Users"]:::store
+        D2["D2 | Locations"]:::store
+        D3["D3 | Pets"]:::store
+        D4["D4 | Reports"]:::store
+        D6["D6 | AI Matches"]:::store
+        D9["D9 | Messages and Notifications"]:::store
+        D11["D11 | Audit and Settings"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     ADM -->|"AI matching setting, rescan request"| P4
-    P4 -->|"photo pairs"| GEM
-    GEM -->|"comparison results"| P4
     P4 -->|"match suggestions"| D6
     D11 -->|"AI matching setting"| P4
     ADM -->|"settings, landmarks, coverage area"| P10
@@ -754,7 +778,6 @@ flowchart LR
     D1 -->|"user figures"| P10
     D3 -->|"pet figures"| P10
     D4 -->|"report figures"| P10
-    MAP -->|"map tiles"| P10
     P10 -->|"dashboard statistics, heat map, audit logs"| ADM
     D9 -->|"admin notifications"| P8
     P8 -->|"notifications"| ADM
@@ -762,12 +785,11 @@ flowchart LR
     D3 -->|"registered pet candidates"| P4
     P4 -->|"AI engine mode and configuration audit entry"| D11
     P4 -->|"AI mode and rescan job status"| ADM
-    P10 -->|"map extent and report coordinates"| MAP
     D2 -->|"current landmarks and coverage"| P10
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
-    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
 
     style COL1 fill:transparent,stroke:none

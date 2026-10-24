@@ -21,7 +21,9 @@ flowchart LR
     subgraph COL1[" "]
         direction TB
         LDR["Subdivision Leader"]:::ent
-        CLD["Cloudinary<br/>Media Storage"]:::ent
+        RES["Resident"]:::ent
+        STF["Barangay Staff"]:::ent
+        ADM["Administrator"]:::ent
     end
     subgraph COL2[" "]
         direction TB
@@ -33,13 +35,14 @@ flowchart LR
     end
     subgraph COL3[" "]
         direction TB
-        D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Users</td></tr></table>"]:::store
-        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
-        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
-        D6["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D6</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>AI Matches</td></tr></table>"]:::store
+        D1["D1 | Users"]:::store
+        D3["D3 | Pets"]:::store
+        D4["D4 | Reports"]:::store
+        D6["D6 | AI Matches"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     LDR -->|"sign-in"| P1
     D1 -->|"role and subdivision"| P1
@@ -51,18 +54,25 @@ flowchart LR
     D4 -->|"subdivision reports"| P3
     P3 -->|"report queue"| LDR
     LDR -->|"report assignment, verification, visibility, transfer, status, endorsement and dispute decisions"| P3
-    P3 -->|"evidence photos"| CLD
     P3 -->|"updated report, timeline, letter"| D4
     D6 -->|"AI match suggestions"| P4
     P4 -->|"suggestions with evidence"| LDR
     LDR -->|"match decision, review remarks and owner-verification request"| P4
     P4 -->|"review decision"| D6
     P3 -->|"report escalated for rescue"| P5
-    CLD -->|"stored evidence links"| P3
+
+
+    %% Shared account process includes every authenticated human role.
+    RES -->|"registration details, login credentials and profile updates"| P1
+    P1 -->|"account verification and access result"| RES
+    STF -->|"login credentials and profile updates; personnel account details from Head Officer"| P1
+    P1 -->|"access result and personnel account status"| STF
+    ADM -->|"login credentials, user account and role changes"| P1
+    P1 -->|"access result, user accounts and role records"| ADM
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
-    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
 
     style COL1 fill:transparent,stroke:none

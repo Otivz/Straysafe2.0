@@ -24,6 +24,7 @@ flowchart LR
     PUB["Public Visitor<br/>(no account)"]:::ent
     P0("0<br/>StraySafe 2.0"):::proc
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     RES -->|"Registration, Credentials, Pet Records, Reports and Disputes, Claims, Adoption Evidence, Messages and Preferences"| P0
     P0 -->|"Access Results, Pet QR and Profile, Case Results, Adoption Catalog and Certificate, Messages and Advisories"| RES
@@ -37,6 +38,6 @@ flowchart LR
     P0 -->|"Public Pet Profile, Emergency Contact and Certificate Validity"| PUB
 
     classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
-    classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#d9d9d9,stroke:#000000,stroke-width:1px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

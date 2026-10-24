@@ -7,7 +7,7 @@ from datetime import datetime
 from app.schemas.report import effective_priority
 from app.database import get_db
 from app.models.user import User, Subdivision
-from app.models.report import Report, HoldingAnimal, Adoption, Rescue
+from app.models.report import Report, HoldingAnimal, Adoption, Rescue, ReportMedia
 from app.models.pet import Pet
 from app.models.warning import OwnerWarning
 from app.models.audit_log import AuditLog
@@ -225,6 +225,24 @@ def get_admin_dashboard_stats(
     )
 
     listed_ids = {inc.report_id for inc in active_incidents}
+
+    # Fetch primary photo for each active incident
+    active_ids = list(listed_ids)
+    photo_map = {}
+    if active_ids:
+        media_rows = (
+            db.query(ReportMedia.report_id, ReportMedia.file_url)
+            .filter(
+                ReportMedia.report_id.in_(active_ids),
+                ReportMedia.media_type == 'Image'
+            )
+            .order_by(ReportMedia.media_id.asc())
+            .all()
+        )
+        for r_id, f_url in media_rows:
+            if r_id not in photo_map:
+                photo_map[r_id] = f_url
+
     active_map_reports = [
         {
             "report_id": inc.report_id,
@@ -234,7 +252,9 @@ def get_admin_dashboard_stats(
             "priority_level": effective_priority(inc.ai_suggested_priority, inc.ai_suggested_risk_level, inc.priority_level),
             "animal_type": inc.animal_type or "Stray Animal",
             "status_id": inc.current_status_id,
-            "created_at": inc.created_at.isoformat() if inc.created_at else None
+            "created_at": inc.created_at.isoformat() if inc.created_at else None,
+            "photo_url": photo_map.get(inc.report_id),
+            "media": [{"file_url": photo_map[inc.report_id]}] if inc.report_id in photo_map else []
         }
         for inc in active_incidents
         # one pin per incident: an animal record is shown through its group report when the group is listed

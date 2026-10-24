@@ -1,11 +1,13 @@
 # Corrected DFDs (based on your Level 0 and Level 1)
 
+> [Exact editable DFD symbols](../drawio/README.md) are available in the native `.drawio` files. The Mermaid blocks below are simplified previews with portable labels.
+
 This is the nine-process **logical alternative** to the ten-process system in `../mermaid/`. Process numbers are
 retained within this alternative and names use verb phrases. Do not mix its process/store numbers with the main
 set. Each diagram has a flow checklist generated from its Mermaid source. See [the review](../04_DFD_REVIEW.md).
 
 The logical boundary includes managed media, AI processing, email and push delivery. These facilities are internal
-process details here; the main ten-process set instead draws external providers explicitly. The four Level 1 pages
+process details in both proposed sets, together with mapping support. Only human actors are external entities. The four Level 1 pages
 are parts of one decomposition. Dashed processes continue on another page.
 
 **Data stores after correction**
@@ -25,7 +27,7 @@ are parts of one decomposition. Dashed processes continue on another page.
 
 **Drawing conventions (Gane–Sarson, use one style throughout):** external entity = rectangle · process = rounded
 rectangle with its number on top · data store = open-ended rectangle "D# | Name" · arrow = data flow with a label.
-Data stores have a grey ID compartment and a yellow name area, with the right edge left open. HTML labels must be enabled when rendering.
+The native draw.io diagrams have a grey ID compartment and yellow name area with the right edge left open. Their processes use a numbered top band, white name band and blank yellow bottom band. Mermaid previews use simplified boxes.
 
 ## Level 0 — Context Diagram
 
@@ -66,6 +68,7 @@ flowchart LR
     PUB["Public Visitor<br/>(no account)"]:::ent
     P0("0<br/>StraySafe 2.0"):::proc
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     RES -->|"Registration, Credentials, Pet Records, Reports and Disputes, Claims, Adoption Evidence, Messages and Preferences"| P0
     P0 -->|"Access Results, Pet QR and Profile, Case Results, Adoption Catalog and Certificate, Messages and Advisories"| RES
@@ -79,8 +82,8 @@ flowchart LR
     P0 -->|"Public Pet Profile, Emergency Contact and Certificate Validity"| PUB
 
     classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
-    classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#d9d9d9,stroke:#000000,stroke-width:1px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
 ```
 
@@ -139,11 +142,12 @@ flowchart LR
     PUB["Public Visitor<br/>(no account)"]:::ent
     P1("1.0<br/>Manage Users<br/>& Access"):::proc
     P2("2.0<br/>Register &<br/>Identify Pets"):::proc
-    D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>User & Account Data</td></tr></table>"]:::store
-    D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pet Records</td></tr></table>"]:::store
-    D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Media Data</td></tr></table>"]:::store
-    D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Communication & Announcement Records</td></tr></table>"]:::store
+    D1["D1 | User & Account Data"]:::store
+    D2["D2 | Pet Records"]:::store
+    D4["D4 | Media Data"]:::store
+    D9["D9 | Communication & Announcement Records"]:::store
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     RES -->|"Registration Data, Login Credentials, Profile Information"| P1
     LDR -->|"Login Credentials, Profile Information"| P1
@@ -169,8 +173,8 @@ flowchart LR
     P2 -->|"QR Scan Notification Record"| D9
 
     classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
-    classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
 ```
 
@@ -240,15 +244,16 @@ flowchart LR
     P3("3.0<br/>Process Reports<br/>& Disputes"):::proc
     P4("4.0<br/>Verify Reports<br/>& Escalate Cases"):::proc
     P5("5.0<br/>Review Matches<br/>& Process Claims"):::proc
-    D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pet Records</td></tr></table>"]:::store
-    D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Animal Report Records</td></tr></table>"]:::store
-    D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Media Data</td></tr></table>"]:::store
-    D6["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D6</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>AI Match & Claim Records</td></tr></table>"]:::store
-    D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Communication & Announcement Records</td></tr></table>"]:::store
+    D2["D2 | Pet Records"]:::store
+    D3["D3 | Animal Report Records"]:::store
+    D4["D4 | Media Data"]:::store
+    D6["D6 | AI Match & Claim Records"]:::store
+    D9["D9 | Communication & Announcement Records"]:::store
     P6(["6.0<br/>Manage Rescue<br/>& Animal Custody<br/>(see other page)"]):::off
     STF["Barangay Staff"]:::ent
-    D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescue & Facility Records</td></tr></table>"]:::store
+    D7["D7 | Rescue & Facility Records"]:::store
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     RES -->|"Report Details, GPS Location, Photos, Disputes and Evidence"| P3
     P3 -->|"Report Confirmation, Report Status and Dispute Outcome"| RES
@@ -286,8 +291,8 @@ flowchart LR
     D4 -->|"Stored Ownership Evidence"| P5
 
     classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
-    classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
 ```
 
@@ -368,14 +373,15 @@ flowchart LR
     LDR["Subdivision Leader"]:::ent
     P6("6.0<br/>Manage Rescue<br/>& Animal Custody"):::proc
     P8("8.0<br/>Handle Communication<br/>& Announcements"):::proc
-    D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Animal Report Records</td></tr></table>"]:::store
-    D5["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D5</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Location & Landmark Data</td></tr></table>"]:::store
-    D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescue & Facility Records</td></tr></table>"]:::store
-    D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Communication & Announcement Records</td></tr></table>"]:::store
-    D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>User & Account Data</td></tr></table>"]:::store
+    D3["D3 | Animal Report Records"]:::store
+    D5["D5 | Location & Landmark Data"]:::store
+    D7["D7 | Rescue & Facility Records"]:::store
+    D9["D9 | Communication & Announcement Records"]:::store
+    D1["D1 | User & Account Data"]:::store
     ADM["System Administrator"]:::ent
-    D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Media Data</td></tr></table>"]:::store
+    D4["D4 | Media Data"]:::store
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     P4 -->|"Verified Report and Rescue Escalation Details"| P6
     STF -->|"Dispatch Information, Rescue Update, Facility Information"| P6
@@ -404,8 +410,8 @@ flowchart LR
     D4 -->|"Stored Care Media"| P6
 
     classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
-    classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
 ```
 
@@ -477,17 +483,18 @@ flowchart LR
     ADM["System Administrator"]:::ent
     P7("7.0<br/>Manage<br/>Adoptions"):::proc
     P9("9.0<br/>Administer System<br/>& Monitor Records"):::proc
-    D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>User & Account Data</td></tr></table>"]:::store
-    D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pet Records</td></tr></table>"]:::store
-    D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Animal Report Records</td></tr></table>"]:::store
-    D5["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D5</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Location & Landmark Data</td></tr></table>"]:::store
-    D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescue & Facility Records</td></tr></table>"]:::store
-    D8["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D8</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Adoption Records</td></tr></table>"]:::store
-    D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Communication & Announcement Records</td></tr></table>"]:::store
-    D10["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D10</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Audit & System Settings</td></tr></table>"]:::store
+    D1["D1 | User & Account Data"]:::store
+    D2["D2 | Pet Records"]:::store
+    D3["D3 | Animal Report Records"]:::store
+    D5["D5 | Location & Landmark Data"]:::store
+    D7["D7 | Rescue & Facility Records"]:::store
+    D8["D8 | Adoption Records"]:::store
+    D9["D9 | Communication & Announcement Records"]:::store
+    D10["D10 | Audit & System Settings"]:::store
     PUB["Public Visitor<br/>(no account)"]:::ent
-    D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Media Data</td></tr></table>"]:::store
+    D4["D4 | Media Data"]:::store
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     RES -->|"Adoption Application, Adopter Information, Required Documents"| P7
     P7 -->|"Application Status, Approval / Confirmation"| RES
@@ -520,8 +527,8 @@ flowchart LR
     D4 -->|"Stored Adoption Evidence"| P7
 
     classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
-    classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
 ```
 

@@ -23,6 +23,7 @@ const AdminHeatMap = lazy(() => import('../pages/Admin/AdminHeatMap'));
 const AdminLogs = lazy(() => import('../pages/Admin/AdminLogs'));
 const AdminWarnings = lazy(() => import('../pages/Admin/AdminWarnings'));
 const PetRecords = lazy(() => import('../pages/Admin/PetRecords'));
+const AdminAnalytics = lazy(() => import('../pages/Admin/AdminAnalytics'));
 import ProtectedRoute from '../components/ProtectedRoute';
 import RoleThemeSync from '../components/RoleThemeSync';
 
@@ -42,6 +43,7 @@ const SubdHazardAlert = lazy(() => import('../pages/Subd_Leaders/SubdHazardAlert
 const SubdMessages = lazy(() => import('../pages/Subd_Leaders/SubdMessages'));
 const SubdSettings = lazy(() => import('../pages/Subd_Leaders/SubdSettings'));
 const SubdHoldingFacility = lazy(() => import('../pages/Subd_Leaders/SubdHoldingFacility'));
+const SubdAnalytics = lazy(() => import('../pages/Subd_Leaders/SubdAnalytics'));
 
 const LandingPage = lazy(() => import('../pages/citizen/LandingPage'));
 const ResidentsLogin = lazy(() => import('../pages/citizen/ResidentsLogin'));
@@ -141,6 +143,7 @@ const AppRoutes = () => {
             {/* Protected Subdivision Leader Routes (Role ID = 2) */}
             <Route element={<ProtectedRoute allowedRoles={[2]} />}>
                 <Route path="/subd/dashboard" element={<SubdDashboard />} />
+                <Route path="/subd/analytics" element={<SubdAnalytics />} />
                 <Route path="/subd/messages" element={<SubdMessages />} />
                 <Route path="/subd-messages" element={<SubdMessages />} />
                 <Route path="/subd/reports" element={<SubdReports />} />
@@ -182,6 +185,7 @@ const AppRoutes = () => {
             {/* Protected Admin Routes (Role ID = 4) */}
             <Route element={<ProtectedRoute allowedRoles={[4]} />}>
                 <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                <Route path="/admin/analytics" element={<AdminAnalytics />} />
                 <Route path="/admin/pet-records" element={<PetRecords />} />
                 <Route path="/admin/users" element={<AdminUserManagement />} />
                 <Route path="/admin/account-settings" element={<AdminAccountSettings />} />

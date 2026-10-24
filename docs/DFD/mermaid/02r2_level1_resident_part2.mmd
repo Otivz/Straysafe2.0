@@ -21,8 +21,6 @@ flowchart LR
     subgraph COL1[" "]
         direction TB
         RES["Resident"]:::ent
-        CLD["Cloudinary<br/>Media Storage"]:::ent
-        PSH["Web Push Service"]:::ent
     end
     subgraph COL2[" "]
         direction TB
@@ -33,16 +31,17 @@ flowchart LR
     end
     subgraph COL3[" "]
         direction TB
-        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
-        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
-        D5["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D5</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Claims and Returns</td></tr></table>"]:::store
-        D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescues and Holding</td></tr></table>"]:::store
-        D8["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D8</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Adoptions</td></tr></table>"]:::store
-        D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Messages and Notifications</td></tr></table>"]:::store
-        D10["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D10</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Announcements</td></tr></table>"]:::store
+        D3["D3 | Pets"]:::store
+        D4["D4 | Reports"]:::store
+        D5["D5 | Claims and Returns"]:::store
+        D7["D7 | Rescues and Holding"]:::store
+        D8["D8 | Adoptions"]:::store
+        D9["D9 | Messages and Notifications"]:::store
+        D10["D10 | Announcements"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     RES -->|"claim, proof, recovery confirmation"| P6
     P6 -->|"claim"| D5
@@ -55,7 +54,6 @@ flowchart LR
     RES -->|"messages, notification settings"| P8
     P8 -->|"messages, preferences"| D9
     P8 -->|"notifications, replies"| RES
-    P8 -->|"push notifications"| PSH
     D10 -->|"published alerts"| P9
     P9 -->|"community alerts"| RES
     RES -->|"comments, reactions"| P9
@@ -67,14 +65,10 @@ flowchart LR
     P6 -->|"claim and recovery status"| D4
     D3 -->|"registered pet and ownership records"| P6
     D4 -->|"report and recovery records"| P6
-    P6 -->|"claim proof and recovery photos"| CLD
-    CLD -->|"stored proof links"| P6
-    P7 -->|"application documents and check-in photos"| CLD
-    CLD -->|"stored adoption media links"| P7
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
-    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
 
     style COL1 fill:transparent,stroke:none
