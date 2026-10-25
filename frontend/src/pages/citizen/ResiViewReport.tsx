@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { SIGHTING_TITLE, sightingLandmark } from '../../utils/sighting';
+import { SIGHTING_TITLE, sightingLandmark, reverseGeocodeStreet } from '../../utils/sighting';
+import { getOriginalSighting } from '../../utils/originalSighting';
 import { useNavigate, useParams, useSearchParams, useLocation, Link } from 'react-router-dom';
 import api from '../../utils/api';
 import { nominatimReverse } from '../../utils/geocode';
@@ -130,6 +131,17 @@ const ResiViewReport = () => {
     const location = useLocation();
 
     const [report, setReport] = useState<any | null>(null);
+    const savedOriginalSighting = getOriginalSighting(report);
+    const originalLat = savedOriginalSighting.point?.[0] ?? null;
+    const originalLng = savedOriginalSighting.point?.[1] ?? null;
+    const originalLandmark = savedOriginalSighting.landmark;
+    const originalPointKey = `${originalLat},${originalLng}`;
+    const [originalStreet, setOriginalStreet] = useState<{ key: string; address: string | null } | null>(null);
+    const originalStreetAddress = originalStreet?.key === originalPointKey ? originalStreet.address : null;
+    const originalSighting = {
+        ...savedOriginalSighting,
+        label: originalLandmark || originalStreetAddress || savedOriginalSighting.label,
+    };
     const [loading, setLoading] = useState(true);
     const [holdingAnimal, setHoldingAnimal] = useState<any | null>(null);
     const [isNavbarMenuOpen, setIsNavbarMenuOpen] = useState(false);
@@ -504,6 +516,16 @@ const ResiViewReport = () => {
             setIsReunitedModalOpen(true);
         }
     }, [searchParams, location]);
+
+    useEffect(() => {
+        if (originalLandmark || originalLat === null || originalLng === null) return;
+        let active = true;
+        const key = `${originalLat},${originalLng}`;
+        reverseGeocodeStreet(originalLat, originalLng).then(address => {
+            if (active) setOriginalStreet({ key, address });
+        });
+        return () => { active = false; };
+    }, [originalLat, originalLng, originalLandmark]);
 
     useEffect(() => {
         if (!report) return;
@@ -1604,22 +1626,18 @@ const ResiViewReport = () => {
                                     reporterName={report.reporter_name}
                                     reportCreatedAt={report.created_at}
                                     animalType={report.animal_type}
-                                    landmark={report.landmark}
+                                    landmark={originalSighting.landmark || undefined}
                                     endorsementLetter={report.endorsement_letter}
                                     placeChips
                                     reunionCard={{ confirmedBy: (report as any).reunion_confirmed_by || null }}
                                     order={timelineOrder}
                                     onEventCount={setShownEventCount}
-                                    sightingPlace={(() => {
-                                        const lat = Number(report.initial_latitude ?? report.latitude);
-                                        const lng = Number(report.initial_longitude ?? report.longitude);
-                                        return {
-                                            label: sightingLandmark(report) || 'Sighting spot',
-                                            lat: Number.isFinite(lat) ? lat : null,
-                                            lng: Number.isFinite(lng) ? lng : null,
-                                            kind: 'sighting' as const,
-                                        };
-                                    })()}
+                                    sightingPlace={originalSighting.label ? {
+                                        label: originalSighting.label,
+                                        lat: originalSighting.point?.[0] ?? null,
+                                        lng: originalSighting.point?.[1] ?? null,
+                                        kind: 'sighting',
+                                    } : null}
                                     onPlaceClick={(pl) => {
                                         if (pl.lat == null || pl.lng == null) return;
                                         setMapFocus([pl.lat, pl.lng]);
@@ -1689,10 +1707,10 @@ const ResiViewReport = () => {
                                             </div>
                                             <div className="overflow-hidden">
                                                 <p className="text-[9px] font-black text-white/50 uppercase tracking-widest">
-                                                    {isResolvedCase ? 'Incident Sighting Origin (Resolved)' : isSecuredInHolding ? 'Current Facility Holding Location' : 'Incident Sighting Location'}
+                                                    {isResolvedCase ? 'Original sighting location (resolved)' : isSecuredInHolding ? 'Current location' : 'Reported sighting location'}
                                                 </p>
                                                 <p className="text-sm font-black tracking-tight text-white truncate">
-                                                    {isSecuredInHolding ? (report.facility?.name || report.landmark || 'Holding Facility') : (sightingLandmark(report) || SIGHTING_TITLE)}
+                                                    {isSecuredInHolding ? (report.facility?.name || report.landmark || 'Holding Facility') : (isResolvedCase ? originalSighting.label || 'Original sighting location unavailable' : sightingLandmark(report) || SIGHTING_TITLE)}
                                                 </p>
                                                 <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-0.5">
                                                     {isResolvedCase ? 'Preserved incident location • Pet no longer loose on active map' : (isGeocoding ? 'Resolving street...' : resolvedAddress || 'Santa Maria, Bulacan • Selera Homes')}
@@ -1773,12 +1791,12 @@ const ResiViewReport = () => {
                                                     <Flag className="w-5 h-5" />
                                                 </div>
                                                 <div className="overflow-hidden">
-                                                    <p className="text-[9px] font-black text-white/50 uppercase tracking-widest">Initial Found / Sighting Spot</p>
-                                                    <p className="text-sm font-black tracking-tight text-slate-200 truncate">
-                                                        {sightingLandmark(report) || resolvedAddress || 'Original Reported Location'}
+                                                    <p className="text-[9px] font-black text-white/50 uppercase tracking-widest">Original sighting location</p>
+                                                    <p className="text-sm font-black tracking-tight text-slate-200 break-words">
+                                                        {originalSighting.label || 'Original sighting location unavailable'}
                                                     </p>
                                                     <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-0.5">
-                                                        Preserved Incident Origin
+                                                        {originalSighting.landmark ? 'Location recorded when the report was submitted' : originalStreetAddress ? 'Street address from the original report pin' : originalSighting.point ? 'Original report pin (no landmark recorded)' : 'Not recorded in the original report'}
                                                     </p>
                                                 </div>
                                             </div>
@@ -1919,7 +1937,7 @@ const ResiViewReport = () => {
                                 const currentLat = (isRelocated && activeFacLat != null) ? activeFacLat : initLat;
                                 const currentLng = (isRelocated && activeFacLng != null) ? activeFacLng : initLng;
                                 const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
-                                const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && (Math.abs(initLat - currentLat) > 0.0001 || Math.abs(initLng - currentLng) > 0.0001);
+                                const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && originalSighting.point !== null && (Math.abs(initLat - currentLat) > 0.0001 || Math.abs(initLng - currentLng) > 0.0001);
 
                                 const hadHoldingHistory = report.history?.some((h: any) => 
                                     [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
@@ -1931,7 +1949,7 @@ const ResiViewReport = () => {
                                 const histFacName = 'Barangay Holding Pen';
 
                                 const resiMarkers = isResolvedCase ? [
-                                    {
+                                    ...(originalSighting.point ? [{
                                         id: report.report_id,
                                         lat: initLat,
                                         lng: initLng,
@@ -1940,8 +1958,8 @@ const ResiViewReport = () => {
                                         priority: report.priority_level || 'Medium',
                                         color: 'slate',
                                         time: 'Incident Origin',
-                                        rawData: { ...report, landmark: report.initial_landmark || report.landmark, is_resolved: true }
-                                    },
+                                        rawData: { ...report, landmark: originalSighting.label || 'Original sighting location unavailable', is_resolved: true }
+                                    }] : []),
                                     ...(hadHoldingHistory ? [{
                                         id: -999,
                                         lat: histFacLat,
@@ -1992,7 +2010,7 @@ const ResiViewReport = () => {
                                         title: SIGHTING_TITLE,
                                         category: 'Initial Sighting',
                                         priority: 'Medium',
-                                        rawData: { ...report, landmark: report.initial_landmark || 'Initial Sighting Spot' }
+                                        rawData: { ...report, landmark: originalSighting.label || 'Original sighting location unavailable' }
                                     }] : [])
                                 ];
 
@@ -2152,7 +2170,7 @@ const ResiViewReport = () => {
                                     const currentLat = (isRelocated && activeFacLat != null) ? activeFacLat : initLat;
                                     const currentLng = (isRelocated && activeFacLng != null) ? activeFacLng : initLng;
                                     const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
-                                    const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && (Math.abs(initLat - currentLat) > 0.0001 || Math.abs(initLng - currentLng) > 0.0001);
+                                    const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && originalSighting.point !== null && (Math.abs(initLat - currentLat) > 0.0001 || Math.abs(initLng - currentLng) > 0.0001);
 
                                     const hadHoldingHistory = report.history?.some((h: any) => 
                                         [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
@@ -2164,7 +2182,7 @@ const ResiViewReport = () => {
                                     const histFacName = 'Barangay Holding Pen';
 
                                     const resiMarkers = isResolvedCase ? [
-                                        {
+                                        ...(originalSighting.point ? [{
                                             id: report.report_id,
                                             lat: initLat,
                                             lng: initLng,
@@ -2173,8 +2191,8 @@ const ResiViewReport = () => {
                                             priority: report.priority_level || 'Medium',
                                             color: 'slate',
                                             time: 'Incident Origin',
-                                            rawData: { ...report, landmark: report.initial_landmark || report.landmark, is_resolved: true }
-                                        },
+                                            rawData: { ...report, landmark: originalSighting.label || 'Original sighting location unavailable', is_resolved: true }
+                                        }] : []),
                                         ...(hadHoldingHistory ? [{
                                             id: -999,
                                             lat: histFacLat,
@@ -2225,7 +2243,7 @@ const ResiViewReport = () => {
                                             title: SIGHTING_TITLE,
                                             category: 'Initial Sighting',
                                             priority: 'Medium',
-                                            rawData: { ...report, landmark: report.initial_landmark || 'Initial Sighting Spot' }
+                                            rawData: { ...report, landmark: originalSighting.label || 'Original sighting location unavailable' }
                                         }] : [])
                                     ];
 

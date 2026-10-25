@@ -1,3 +1,4 @@
+import { whenVisible } from '../../utils/visibleInterval';
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -339,9 +340,9 @@ const ResiHomePage = () => {
     const [reports, setReports] = useState<any[]>([]);
     const [announcements, setAnnouncements] = useState<any[]>([]);
     const [notifications, setNotifications] = useState<any[]>([]);
+    const [isMarkingAllNotifications, setIsMarkingAllNotifications] = useState(false);
+    const [notificationActionError, setNotificationActionError] = useState('');
     const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Set<number>>(new Set());
-    const [visibleNotifLimit, setVisibleNotifLimit] = useState(5);
-    const [hasClickedViewAll, setHasClickedViewAll] = useState(false);
     const [announcementsLimit, setAnnouncementsLimit] = useState(10);
     const [annCommentInputs, setAnnCommentInputs] = useState<Record<number, string>>({});
     const [annReplyingTo, setAnnReplyingTo] = useState<Record<number, { commentId: number, userName: string } | null>>({});
@@ -1080,19 +1081,25 @@ const ResiHomePage = () => {
     };
 
     const handleMarkAllNotificationsRead = async () => {
-        if (!currentUserId) return;
+        if (!currentUserId || isMarkingAllNotifications) return;
+        setIsMarkingAllNotifications(true);
+        setNotificationActionError('');
         try {
             await api.post(`/notifications/mark-all-read/${currentUserId}`);
-            fetchNotifications();
+            setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
         } catch (error) {
             console.error('Failed to mark all notifications as read:', error);
+            setNotificationActionError('Could not mark notifications as read. Please try again.');
+            throw error;
+        } finally {
+            setIsMarkingAllNotifications(false);
         }
     };
 
     const handleMarkNotificationRead = async (id: number) => {
         try {
             await api.patch(`/notifications/${id}`, { is_read: true });
-            fetchNotifications();
+            setNotifications(prev => prev.map(n => n.notification_id === id ? { ...n, is_read: true } : n));
         } catch (error) {
             console.error('Failed to mark notification as read:', error);
         }
@@ -1217,7 +1224,12 @@ const ResiHomePage = () => {
     useEffect(() => {
         fetchReports();
         fetchAnnouncements();
+    }, [currentUserId]);
+
+    useEffect(() => {
         fetchNotifications();
+        const interval = setInterval(whenVisible(fetchNotifications), 8000);
+        return () => clearInterval(interval);
     }, [currentUserId]);
 
     const handleAddComment = async (reportId: number) => {
@@ -3759,9 +3771,9 @@ const ResiHomePage = () => {
                                 </div>
                             </div>
 
-                            <div className="space-y-3 overflow-y-auto custom-scrollbar pr-1 flex-1">
+                            <div data-notification-list className="space-y-3 overflow-y-auto overflow-x-hidden overscroll-y-contain custom-scrollbar pr-1 flex-1 min-h-0">
                                 {(() => {
-                                    const displayedNotifications = activeNotifications.slice(0, visibleNotifLimit);
+                                    const displayedNotifications = activeNotifications;
 
                                     if (displayedNotifications.length === 0) {
                                         return (
@@ -3799,7 +3811,7 @@ const ResiHomePage = () => {
 
                                                 <div className={!notif.is_read ? 'pl-4' : ''}>
                                                     <div className="flex items-start justify-between gap-2">
-                                                        <div className="flex-1">
+                                                        <div className="flex-1 min-w-0 [overflow-wrap:anywhere]">
                                                             <h4 className="text-xs font-black text-gray-900 dark:text-white leading-snug">
                                                                 {(notif.title || '').replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]+\s*/u, '')}
                                                             </h4>
@@ -3844,26 +3856,18 @@ const ResiHomePage = () => {
                                 })()}
                             </div>
 
-                            {/* Bottom Footer: Mark All Read & View All / View More Notifications */}
+                            {/* Mark All Read remains outside the scrollable list. */}
                             <div className="pt-3.5 mt-2 border-t border-gray-100/80 dark:border-gray-800 flex items-center justify-between shrink-0">
                                 <button
-                                    onClick={handleMarkAllNotificationsRead}
+                                    onClick={() => { void handleMarkAllNotificationsRead().catch(() => {}); }}
+                                    disabled={isMarkingAllNotifications || !activeNotifications.some(n => !n.is_read)}
                                     className="text-xs font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white underline underline-offset-2 transition-colors cursor-pointer"
                                 >
-                                    Mark All Read
+                                    {isMarkingAllNotifications ? 'Marking read…' : 'Mark All Read'}
                                 </button>
-                                {visibleNotifLimit < activeNotifications.length && (
-                                    <button
-                                        onClick={() => {
-                                            setVisibleNotifLimit(prev => prev + 10);
-                                            setHasClickedViewAll(true);
-                                        }}
-                                        className="text-xs font-bold text-[#F97316] dark:text-orange-400 hover:text-orange-600 dark:hover:text-orange-300 transition-colors flex items-center gap-1 font-sans cursor-pointer"
-                                    >
-                                        {hasClickedViewAll ? 'View More Notifications →' : 'View All Notifications →'}
-                                    </button>
-                                )}
+
                             </div>
+                            {notificationActionError && <p role="alert" className="text-xs text-red-600 mt-2">{notificationActionError}</p>}
                         </div>
 
                         {/* Announcements Card */}

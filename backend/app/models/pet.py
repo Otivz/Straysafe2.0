@@ -51,6 +51,10 @@ class Pet(Base):
     bite_incident_count: Mapped[int] = mapped_column(Integer, default=0)
     chase_behavior: Mapped[bool] = mapped_column(Boolean, default=False)
     chase_incident_count: Mapped[int] = mapped_column(Integer, default=0)
+    # The four fields above are counted only from verified incident reports (case_groups.refresh_pet_behavior); nobody
+    # edits them. What an owner, or the officer registering the pet, says about its past is kept here instead.
+    declared_bite_history: Mapped[bool] = mapped_column(Boolean, default=False)
+    declared_chase_behavior: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     status: Mapped[Optional[str]] = mapped_column(

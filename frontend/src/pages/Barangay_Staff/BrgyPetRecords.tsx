@@ -1,3 +1,4 @@
+import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import React, { useState, useEffect } from 'react';
 import { DEFAULT_PET_AVATAR } from '../../utils/avatar';
 import { cloudinaryResized } from '../../utils/cloudinaryImage';
@@ -54,6 +55,7 @@ const BrgyPetRecords: React.FC = () => {
             const mappedPets: PetRecord[] = response.data.map((pet: any) => mapRawPetToPetRecord(pet));
 
             setPets(mappedPets);
+            setSelectedPet(current => current ? mappedPets.find(pet => pet.id === current.id) || current : null);
             setCachedData('brgy_pet_records', mappedPets);
         } catch (error) {
             console.error('Error fetching barangay pets:', error);
@@ -66,9 +68,9 @@ const BrgyPetRecords: React.FC = () => {
     };
 
     // Fetch Removed / Archived Pets
-    const fetchRemovedPets = async () => {
+    const fetchRemovedPets = async (silent = false) => {
         try {
-            setLoadingRemoved(true);
+            if (!silent) setLoadingRemoved(true);
             const response = await api.get('/pets/removed');
 
             const mapped: PetRecord[] = (response.data || []).map((pet: any) => ({
@@ -77,6 +79,7 @@ const BrgyPetRecords: React.FC = () => {
             }));
 
             setRemovedPets(mapped);
+            setSelectedPet(current => current ? mapped.find(pet => pet.id === current.id) || current : null);
         } catch (error) {
             console.error('Error fetching removed pets:', error);
         } finally {
@@ -88,6 +91,10 @@ const BrgyPetRecords: React.FC = () => {
         fetchRegisteredPets();
         fetchRemovedPets();
     }, []);
+
+    useAutoRefresh(async () => {
+        await Promise.all([fetchRegisteredPets(), fetchRemovedPets(true)]);
+    });
 
     const handleSelectPet = (pet: PetRecord) => {
         setSelectedPet(pet);
@@ -330,7 +337,7 @@ const BrgyPetRecords: React.FC = () => {
                                         </div>
 
                                         <button
-                                            onClick={fetchRemovedPets}
+                                            onClick={() => fetchRemovedPets()}
                                             className="w-10 h-10 shrink-0 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-all cursor-pointer"
                                             title="Refresh Archived Pets"
                                             aria-label="Refresh archived pets"

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import PushSettingsCard from '../../components/PushSettingsCard';
 import PhoneInput from '../../components/PhoneInput';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -391,8 +391,8 @@ const ResidentSettings = () => {
             return;
         }
 
-        const isMatchInquiry = typeStr === 'match_message' || 
-                               titleStr.includes('match inquiry') || 
+        const isMatchInquiry = typeStr === 'match_message' ||
+                               titleStr.includes('match inquiry') ||
                                (titleStr.includes('💬') && (titleStr.includes('look-alike') || msgStr.includes('look-alike')));
 
         const isMatch = typeStr === 'potential_match' ||
@@ -538,80 +538,15 @@ const ResidentSettings = () => {
         }
     };
 
-    const navItems: { id: SettingCategory; label: string; icon: ReactNode }[] = [
-        {
-            id: 'account',
-            label: 'Account',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-            )
-        },
-        {
-            id: 'my-pets',
-            label: 'My Pets',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h.01M10 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-4l-4 4-1-4z" />
-                </svg>
-            )
-        },
-        {
-            id: 'notifications',
-            label: 'Notifications',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-            )
-        },
-        {
-            id: 'privacy',
-            label: 'Privacy',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-            )
-        },
-        {
-            id: 'location',
-            label: 'Location',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-            )
-        },
-        {
-            id: 'appearance',
-            label: 'Appearance',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-                </svg>
-            )
-        },
-        {
-            id: 'help',
-            label: 'Help & Support',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-            )
-        },
-        {
-            id: 'about',
-            label: 'About',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-            )
-        }
+    const navItems: { id: SettingCategory; label: string }[] = [
+        { id: 'account', label: 'Account' },
+        { id: 'my-pets', label: 'My Pets' },
+        { id: 'notifications', label: 'Notifications' },
+        { id: 'privacy', label: 'Privacy' },
+        { id: 'location', label: 'Location' },
+        { id: 'appearance', label: 'Appearance' },
+        { id: 'help', label: 'Help & Support' },
+        { id: 'about', label: 'About' },
     ];
 
     return (
@@ -629,46 +564,35 @@ const ResidentSettings = () => {
                     const storedUser = localStorage.getItem('resident_user');
                     const userId = storedUser ? JSON.parse(storedUser).user_id : initialUser.user_id;
                     await api.post(`/notifications/mark-all-read/${userId}`);
-                    fetchUserNotifications();
+                    setNotificationsList(prev => prev.map(n => ({ ...n, is_read: true })));
                 }}
             />
-
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-32">
                 {/* Header Title with Global Save Button */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 bg-white dark:bg-[#151C2C] p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
                     <div>
                         <h1 className="text-2xl font-black text-[#1a1208] dark:text-white flex items-center gap-3">
-                            <span className="p-2.5 bg-orange-50 dark:bg-orange-950/50 text-[#F97316] rounded-xl">
-                                ⚙️
-                            </span>
                             Settings
                         </h1>
                         <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold mt-1">Manage your account preferences, privacy, pet options, and notifications</p>
                     </div>
-
                     <Button
                         variant="primary"
                         onClick={handleSaveChanges}
                         className="py-3 px-6 gap-2 shadow-lg shadow-orange-100 uppercase tracking-widest text-xs font-black"
                     >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                        </svg>
                         Save Changes
                     </Button>
                 </div>
-
                 {/* Success / Error Alerts */}
                 {saveSuccessMsg && (
                     <div className="mb-6 p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-xl text-emerald-800 dark:text-emerald-200 text-xs font-bold flex items-center gap-2 animate-in fade-in">
-                        <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         {saveSuccessMsg}
                     </div>
                 )}
 
                 {saveErrorMsg && (
                     <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50 rounded-xl text-red-800 dark:text-red-200 text-xs font-bold flex items-center gap-2 animate-in fade-in">
-                        <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         {saveErrorMsg}
                     </div>
                 )}
@@ -689,27 +613,23 @@ const ResidentSettings = () => {
                                                 : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#1E2738] hover:text-gray-900 dark:hover:text-white'
                                             }`}
                                     >
-                                        <span className={isActive ? 'text-white' : 'text-gray-400'}>{item.icon}</span>
                                         {item.label}
                                     </button>
                                 );
                             })}
                         </div>
                     </div>
-
                     {/* Right Panel Content */}
                     <div className="flex-1 bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-800 rounded-2xl p-6 sm:p-8 shadow-sm">
-
                         {/* 1. ACCOUNT CATEGORY */}
                         {activeTab === 'account' && (
                             <div className="space-y-8 animate-in fade-in duration-200">
                                 <div>
                                     <h2 className="text-lg font-black text-[#1a1208] flex items-center gap-2">
-                                        👤 Personal Information
+                                         Personal Information
                                     </h2>
                                     <p className="text-xs text-gray-500 font-semibold mt-1">Update your basic profile info and security settings</p>
                                 </div>
-
                                 {/* Profile Picture Section */}
                                 <div className="flex items-center gap-6 p-4 bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-100 dark:border-gray-800">
                                     <div className="relative group">
@@ -723,7 +643,7 @@ const ResidentSettings = () => {
                                         </div>
                                         {isUploadingPhoto && (
                                             <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center">
-                                                <svg className="animate-spin h-6 w-6 text-white" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                                                <span className="text-[10px] font-bold text-white">Uploading...</span>
                                             </div>
                                         )}
                                     </div>
@@ -740,7 +660,6 @@ const ResidentSettings = () => {
                                         <input type="file" ref={fileInputRef} onChange={handlePhotoUpload} className="hidden" accept="image/*" />
                                     </div>
                                 </div>
-
                                 {/* Form Inputs */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                     <div>
@@ -749,43 +668,39 @@ const ResidentSettings = () => {
                                             type="text"
                                             value={editData.name || ''}
                                             onChange={(e) => setEditData({ ...editData, name: e.target.value })}
-                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
+                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-200 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
                                         />
                                     </div>
-
                                     <div>
                                         <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Email Address</label>
                                         <input
                                             type="email"
                                             value={editData.email || ''}
                                             onChange={(e) => setEditData({ ...editData, email: e.target.value })}
-                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
+                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-200 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
                                         />
                                     </div>
-
                                     <div>
                                         <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Phone Number</label>
                                         <PhoneInput
                                             value={editData.phone || ''}
                                             onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
-                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
+                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-200 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
                                         />
                                     </div>
-
                                     <div>
                                         <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Address / Subdivision</label>
                                         <input
                                             type="text"
                                             value={editData.address || ''}
                                             onChange={(e) => setEditData({ ...editData, address: e.target.value })}
-                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
+                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-200 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
                                         />
                                     </div>
                                 </div>
-
                                 <div className="pt-6 border-t border-gray-100 dark:border-gray-800">
                                     <h3 className="text-sm font-black text-[#1a1208] dark:text-white mb-4 flex items-center gap-2">
-                                        🔒 Change Password
+                                         Change Password
                                     </h3>
                                     <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
                                         <div>
@@ -794,7 +709,7 @@ const ResidentSettings = () => {
                                                 type="password"
                                                 value={passwords.currentPassword}
                                                 onChange={(e) => setPasswords({ ...passwords, currentPassword: e.target.value })}
-                                                className="w-full h-10 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-3.5 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
+                                                className="w-full h-10 bg-gray-50 dark:bg-[#1E2738] border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
                                             />
                                         </div>
                                         <div>
@@ -804,7 +719,7 @@ const ResidentSettings = () => {
                                                 value={passwords.newPassword}
                                                 onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })}
                                                 maxLength={128}
-                                                className="w-full h-10 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-3.5 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
+                                                className="w-full h-10 bg-gray-50 dark:bg-[#1E2738] border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
                                             />
                                             <PasswordRequirements password={passwords.newPassword} className="pt-2" />
                                         </div>
@@ -814,7 +729,7 @@ const ResidentSettings = () => {
                                                 type="password"
                                                 value={passwords.confirmPassword}
                                                 onChange={(e) => setPasswords({ ...passwords, confirmPassword: e.target.value })}
-                                                className="w-full h-10 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-3.5 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
+                                                className="w-full h-10 bg-gray-50 dark:bg-[#1E2738] border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
                                             />
                                         </div>
                                         <button
@@ -833,11 +748,10 @@ const ResidentSettings = () => {
                             <div className="space-y-8 animate-in fade-in duration-200">
                                 <div>
                                     <h2 className="text-lg font-black text-[#1a1208] dark:text-white flex items-center gap-2">
-                                        🐾 Pet Preferences & Records History
+                                         Pet Preferences & Records History
                                     </h2>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold mt-1">Manage pet preferences, QR settings, and view all created & removed pet records</p>
                                 </div>
-
                                 {/* Pet Management Shortcut Card */}
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-5 bg-orange-50/60 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900/40 rounded-2xl">
                                     <div>
@@ -849,17 +763,12 @@ const ResidentSettings = () => {
                                         onClick={() => navigate('/resident/pets')}
                                         className="py-2.5 px-5 text-xs font-black uppercase tracking-widest gap-2"
                                     >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                         View My Pets Page
                                     </Button>
                                 </div>
-
                                 {/* Quick Stats Counters */}
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     <div className="p-4 bg-gray-50 dark:bg-[#1E2738] border border-gray-100 dark:border-gray-800 rounded-2xl flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 flex items-center justify-center font-black text-lg">
-                                            🐾
-                                        </div>
                                         <div>
                                             <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Created</div>
                                             <div className="text-base font-black text-gray-900 dark:text-white">
@@ -868,9 +777,6 @@ const ResidentSettings = () => {
                                         </div>
                                     </div>
                                     <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/25 border border-emerald-100 dark:border-emerald-800/40 rounded-2xl flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-black text-lg">
-                                            ✅
-                                        </div>
                                         <div>
                                             <div className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Currently Active</div>
                                             <div className="text-base font-black text-emerald-950 dark:text-emerald-200">
@@ -879,9 +785,6 @@ const ResidentSettings = () => {
                                         </div>
                                     </div>
                                     <div className="p-4 bg-rose-50/60 dark:bg-rose-950/25 border border-rose-100 dark:border-rose-800/40 rounded-2xl flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center font-black text-lg">
-                                            🗑️
-                                        </div>
                                         <div>
                                             <div className="text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest">Removed Pets</div>
                                             <div className="text-base font-black text-rose-950 dark:text-rose-200">
@@ -890,34 +793,28 @@ const ResidentSettings = () => {
                                         </div>
                                     </div>
                                 </div>
-
                                 {/* Pet History & Removed Pets Section */}
                                 <div className="pt-2 border-t border-gray-100 dark:border-gray-800 space-y-4">
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                         <div>
                                             <h3 className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-2">
-                                                📜 Pet Records History & Archives
+                                                 Pet Records History & Archives
                                             </h3>
                                             <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">
                                                 All pets ever registered or removed under your account
                                             </p>
                                         </div>
-                                        
                                         {/* Refresh Button */}
                                         <button
                                             onClick={fetchPetHistory}
                                             disabled={isPetHistoryLoading}
                                             className="self-start sm:self-auto px-3 py-1.5 bg-gray-100 dark:bg-[#1E2738] hover:bg-gray-200 dark:hover:bg-[#2A374F] text-gray-700 dark:text-gray-300 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
                                         >
-                                            <svg className={`w-3.5 h-3.5 ${isPetHistoryLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                            </svg>
                                             Refresh
                                         </button>
                                     </div>
-
                                     {/* Sub-tabs & Search */}
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50 dark:bg-[#1E2738] p-2 rounded-2xl border border-gray-150 dark:border-gray-800">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50 dark:bg-[#1E2738] p-2 rounded-2xl border border-gray-200 dark:border-gray-800">
                                         <div className="flex flex-wrap items-center gap-1">
                                             <button
                                                 type="button"
@@ -928,7 +825,7 @@ const ResidentSettings = () => {
                                                         : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                                 }`}
                                             >
-                                                🐾 All Created Pets
+                                                 All Created Pets
                                                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${petHistorySubTab === 'all-created' ? 'bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-400' : 'bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}>
                                                     {petHistoryData.created_pets_history.length || petHistoryData.current_pets.length}
                                                 </span>
@@ -942,7 +839,7 @@ const ResidentSettings = () => {
                                                         : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                                 }`}
                                             >
-                                                🗑️ Removed Pets
+                                                 Removed Pets
                                                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${petHistorySubTab === 'removed' ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400' : 'bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}>
                                                     {petHistoryData.removed_pets.length}
                                                 </span>
@@ -956,13 +853,12 @@ const ResidentSettings = () => {
                                                         : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                                 }`}
                                             >
-                                                ⏱️ Activity Timeline
+                                                 Activity Timeline
                                                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${petHistorySubTab === 'activity' ? 'bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-400' : 'bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}>
                                                     {petHistoryData.all_logs.length}
                                                 </span>
                                             </button>
                                         </div>
-
                                         {/* Search Filter */}
                                         <div className="relative min-w-[180px]">
                                             <input
@@ -970,18 +866,13 @@ const ResidentSettings = () => {
                                                 value={petHistorySearch}
                                                 onChange={(e) => setPetHistorySearch(e.target.value)}
                                                 placeholder="Filter records..."
-                                                className="w-full h-8 pl-8 pr-3 text-xs font-semibold bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl focus:outline-none focus:border-[#F97316]"
+                                                className="w-full h-8 px-3 text-xs font-semibold bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl focus:outline-none focus:border-[#F97316]"
                                             />
-                                            <svg className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                            </svg>
                                         </div>
                                     </div>
-
                                     {/* History Content Display */}
                                     {isPetHistoryLoading ? (
                                         <div className="p-8 text-center bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-100 dark:border-gray-800 animate-pulse">
-                                            <div className="text-2xl mb-2">🐾</div>
                                             <p className="text-xs font-bold text-gray-500 dark:text-gray-400">Loading pet history records...</p>
                                         </div>
                                     ) : (
@@ -991,7 +882,6 @@ const ResidentSettings = () => {
                                                 <>
                                                     {petHistoryData.created_pets_history.length === 0 && petHistoryData.current_pets.length === 0 ? (
                                                         <div className="p-8 text-center bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-100 dark:border-gray-800">
-                                                            <span className="text-2xl block mb-2">🐾</span>
                                                             <p className="text-xs font-bold text-gray-700 dark:text-gray-300">No pet registration records found</p>
                                                             <p className="text-[11px] text-gray-400 mt-1">When you register pets, their creation log will appear here.</p>
                                                         </div>
@@ -1009,11 +899,11 @@ const ResidentSettings = () => {
                                                                         <div
                                                                             key={p.log_id || p.pet_id || idx}
                                                                             onClick={() => setSelectedHistoryPet(p)}
-                                                                            className="p-4 bg-white dark:bg-[#1E2738] border border-gray-150 dark:border-gray-800 hover:border-orange-300 dark:hover:border-orange-500 rounded-2xl hover:shadow-md transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm cursor-pointer hover:scale-[1.005]"
+                                                                            className="p-4 bg-white dark:bg-[#1E2738] border border-gray-200 dark:border-gray-800 hover:border-orange-300 dark:hover:border-orange-500 rounded-2xl hover:shadow-md transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm cursor-pointer hover:scale-[1.005]"
                                                                         >
                                                                             <div className="flex items-center gap-3">
                                                                                 <div className="w-11 h-11 rounded-2xl bg-orange-100 dark:bg-orange-950/50 flex items-center justify-center text-xl shrink-0">
-                                                                                    {p.pet_type === 'Cat' ? '🐱' : '🐶'}
+                                                                                    {p.pet_type === 'Cat' ? 'Cat' : 'Dog'}
                                                                                 </div>
                                                                                 <div>
                                                                                     <div className="flex items-center gap-2">
@@ -1070,7 +960,6 @@ const ResidentSettings = () => {
                                                 <>
                                                     {petHistoryData.removed_pets.length === 0 ? (
                                                         <div className="p-8 text-center bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-100 dark:border-gray-800">
-                                                            <span className="text-2xl block mb-2">✨</span>
                                                             <p className="text-xs font-bold text-gray-700 dark:text-gray-300">No removed pets</p>
                                                             <p className="text-[11px] text-gray-400 mt-1">You haven't removed any pets from your account.</p>
                                                         </div>
@@ -1092,7 +981,8 @@ const ResidentSettings = () => {
                                                                                 {p.photo_url ? (
                                                                                     <img src={getPetPicture(p.photo_url)} alt={p.pet_name} className="w-full h-full object-cover rounded-2xl" />
                                                                                 ) : (
-                                                                                    <span>🗑️</span>
+
+                                                                                    <span className="text-xs font-bold">Pet</span>
                                                                                 )}
                                                                             </div>
                                                                             <div>
@@ -1125,16 +1015,10 @@ const ResidentSettings = () => {
                                                                             >
                                                                                 {restoringPetId === (p.pet_id || p.log_id || p.pet_name) ? (
                                                                                     <>
-                                                                                        <svg className="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                                                                        </svg>
                                                                                         Restoring...
                                                                                     </>
                                                                                 ) : (
                                                                                     <>
-                                                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                                                                        </svg>
                                                                                         Restore Pet
                                                                                     </>
                                                                                 )}
@@ -1152,7 +1036,6 @@ const ResidentSettings = () => {
                                                 <>
                                                     {petHistoryData.all_logs.length === 0 ? (
                                                         <div className="p-8 text-center bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-100 dark:border-gray-800">
-                                                            <span className="text-2xl block mb-2">📋</span>
                                                             <p className="text-xs font-bold text-gray-700 dark:text-gray-300">No activity logs recorded yet</p>
                                                         </div>
                                                     ) : (
@@ -1188,7 +1071,6 @@ const ResidentSettings = () => {
                                         </div>
                                     )}
                                 </div>
-
                                 {/* QR Preferences */}
                                 <div className="pt-6 border-t border-gray-100 dark:border-gray-800">
                                     <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Default QR Card Download Options</h3>
@@ -1213,7 +1095,6 @@ const ResidentSettings = () => {
                                         </label>
                                     </div>
                                 </div>
-
                                 {/* Reminders */}
                                 <div className="pt-6 border-t border-gray-100 dark:border-gray-800">
                                     <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Auto Reminders</h3>
@@ -1246,50 +1127,40 @@ const ResidentSettings = () => {
                             <div className="space-y-8 animate-in fade-in duration-200">
                                 <div>
                                     <h2 className="text-lg font-black text-[#1a1208] dark:text-white flex items-center gap-2">
-                                        🔔 Notification Preferences
+                                         Notification Preferences
                                     </h2>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold mt-1">Choose what updates you want to receive</p>
                                 </div>
-
                                 <div className="space-y-4">
                                     <label className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer">
                                         <span className="text-xs font-bold text-gray-800 dark:text-gray-200">New comments on my reports</span>
                                         <input type="checkbox" checked={notifComments} onChange={(e) => setNotifComments(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
                                     </label>
-
                                     <label className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer">
                                         <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Report status updates</span>
                                         <input type="checkbox" checked={notifStatusUpdates} onChange={(e) => setNotifStatusUpdates(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
                                     </label>
-
                                     <label className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer">
                                         <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Rescue completed alerts</span>
                                         <input type="checkbox" checked={notifRescueCompleted} onChange={(e) => setNotifRescueCompleted(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
                                     </label>
-
                                     <label className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer">
                                         <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Hazard announcements in my area</span>
                                         <input type="checkbox" checked={notifHazardAlerts} onChange={(e) => setNotifHazardAlerts(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
                                     </label>
-
                                     <label className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer">
                                         <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Lost pet alerts nearby</span>
                                         <input type="checkbox" checked={notifLostPet} onChange={(e) => setNotifLostPet(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
                                     </label>
-
                                     <label className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer">
                                         <span className="text-xs font-bold text-gray-800 dark:text-gray-200">QR code scan alerts</span>
                                         <input type="checkbox" checked={notifQrScan} onChange={(e) => setNotifQrScan(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
                                     </label>
                                 </div>
-
                                 {/* EMAIL NOTIFICATIONS PANEL */}
                                 <div className="p-6 bg-gradient-to-br from-orange-50/60 via-white to-amber-50/30 dark:from-[#1A2234] dark:to-[#151C2C] rounded-2xl border border-orange-200/70 dark:border-gray-800 shadow-sm space-y-6">
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-orange-100 dark:border-gray-800">
                                         <div className="flex items-start gap-3">
-                                            <div className="w-10 h-10 rounded-xl bg-[#F97316] text-white flex items-center justify-center text-lg shadow-md shadow-orange-500/20 shrink-0">
-                                                ✉️
-                                            </div>
                                             <div>
                                                 <div className="flex items-center gap-2">
                                                     <h3 className="text-base font-black text-[#1a1208] dark:text-white">Email Notification Channels</h3>
@@ -1304,7 +1175,6 @@ const ResidentSettings = () => {
                                                 </p>
                                             </div>
                                         </div>
-
                                         <button
                                             type="button"
                                             onClick={handleToggleAllEmail}
@@ -1319,13 +1189,11 @@ const ResidentSettings = () => {
                                             {isAllEmailEnabled ? 'ALL ACTIVE' : 'ALL PAUSED'}
                                         </button>
                                     </div>
-
                                     {/* Granular Preferences Grid */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                                         {/* 1. Reports */}
-                                        <div className="p-4 bg-white dark:bg-[#1E2738] rounded-xl border border-gray-150 dark:border-gray-800 flex items-start justify-between gap-3 shadow-xs hover:border-orange-300 dark:hover:border-orange-500/40 transition-colors">
+                                        <div className="p-4 bg-white dark:bg-[#1E2738] rounded-xl border border-gray-200 dark:border-gray-800 flex items-start justify-between gap-3 shadow-xs hover:border-orange-300 dark:hover:border-orange-500/40 transition-colors">
                                             <div className="flex items-start gap-3">
-                                                <span className="text-xl">📋</span>
                                                 <div>
                                                     <p className="text-xs font-black text-gray-900 dark:text-white">Reports & Submissions</p>
                                                     <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium leading-relaxed mt-0.5">
@@ -1344,11 +1212,9 @@ const ResidentSettings = () => {
                                                 <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-[#F97316]"></div>
                                             </label>
                                         </div>
-
                                         {/* 2. AI Pet Matches */}
-                                        <div className="p-4 bg-white dark:bg-[#1E2738] rounded-xl border border-gray-150 dark:border-gray-800 flex items-start justify-between gap-3 shadow-xs hover:border-orange-300 dark:hover:border-orange-500/40 transition-colors">
+                                        <div className="p-4 bg-white dark:bg-[#1E2738] rounded-xl border border-gray-200 dark:border-gray-800 flex items-start justify-between gap-3 shadow-xs hover:border-orange-300 dark:hover:border-orange-500/40 transition-colors">
                                             <div className="flex items-start gap-3">
-                                                <span className="text-xl">🐾</span>
                                                 <div>
                                                     <p className="text-xs font-black text-gray-900 dark:text-white">AI Pet Matches & Sightings</p>
                                                     <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium leading-relaxed mt-0.5">
@@ -1367,11 +1233,9 @@ const ResidentSettings = () => {
                                                 <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-[#F97316]"></div>
                                             </label>
                                         </div>
-
                                         {/* 3. Pet Claims & Reunited */}
-                                        <div className="p-4 bg-white dark:bg-[#1E2738] rounded-xl border border-gray-150 dark:border-gray-800 flex items-start justify-between gap-3 shadow-xs hover:border-orange-300 dark:border-orange-500/40 transition-colors">
+                                        <div className="p-4 bg-white dark:bg-[#1E2738] rounded-xl border border-gray-200 dark:border-gray-800 flex items-start justify-between gap-3 shadow-xs hover:border-orange-300 dark:border-orange-500/40 transition-colors">
                                             <div className="flex items-start gap-3">
-                                                <span className="text-xl">🏷️</span>
                                                 <div>
                                                     <p className="text-xs font-black text-gray-900 dark:text-white">Pet Claims & Ownership</p>
                                                     <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium leading-relaxed mt-0.5">
@@ -1390,11 +1254,9 @@ const ResidentSettings = () => {
                                                 <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-[#F97316]"></div>
                                             </label>
                                         </div>
-
                                         {/* 4. Rescues & Field Ops */}
-                                        <div className="p-4 bg-white dark:bg-[#1E2738] rounded-xl border border-gray-150 dark:border-gray-800 flex items-start justify-between gap-3 shadow-xs hover:border-orange-300 dark:border-orange-500/40 transition-colors">
+                                        <div className="p-4 bg-white dark:bg-[#1E2738] rounded-xl border border-gray-200 dark:border-gray-800 flex items-start justify-between gap-3 shadow-xs hover:border-orange-300 dark:border-orange-500/40 transition-colors">
                                             <div className="flex items-start gap-3">
-                                                <span className="text-xl">🚑</span>
                                                 <div>
                                                     <p className="text-xs font-black text-gray-900 dark:text-white">Rescue Dispatches & Field Ops</p>
                                                     <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium leading-relaxed mt-0.5">
@@ -1413,11 +1275,9 @@ const ResidentSettings = () => {
                                                 <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-[#F97316]"></div>
                                             </label>
                                         </div>
-
                                         {/* 5. Reminders & Collar Scans */}
-                                        <div className="p-4 bg-white dark:bg-[#1E2738] rounded-xl border border-gray-150 dark:border-gray-800 flex items-start justify-between gap-3 shadow-xs hover:border-orange-300 dark:border-orange-500/40 transition-colors md:col-span-2">
+                                        <div className="p-4 bg-white dark:bg-[#1E2738] rounded-xl border border-gray-200 dark:border-gray-800 flex items-start justify-between gap-3 shadow-xs hover:border-orange-300 dark:border-orange-500/40 transition-colors md:col-span-2">
                                             <div className="flex items-start gap-3">
-                                                <span className="text-xl">⏰</span>
                                                 <div>
                                                     <p className="text-xs font-black text-gray-900 dark:text-white">Reminders & QR Tag Scans</p>
                                                     <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium leading-relaxed mt-0.5">
@@ -1438,25 +1298,19 @@ const ResidentSettings = () => {
                                         </div>
                                     </div>
                                 </div>
-
                                 {/* Push Notifications (this device + categories) */}
-                                <PushSettingsCard userId={getUserId()} />
-
+                                <PushSettingsCard userId={getUserId()} showIcons={false} />
                                 {/* ARCHIVED & CLOSED NOTIFICATIONS SECTION */}
                                 <div className="pt-8 border-t border-gray-200 space-y-6">
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                         <div>
                                             <h3 className="text-base font-black text-[#1a1208] flex items-center gap-2">
-                                                <span className="p-2 bg-orange-100/70 text-[#F97316] rounded-xl text-sm">
-                                                    📁
-                                                </span>
                                                 Archived & Closed Notifications
                                             </h3>
                                             <p className="text-xs text-gray-500 font-semibold mt-1">
                                                 View, manage, restore, or clear notifications that were closed or archived
                                             </p>
                                         </div>
-
                                         <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                                             {notificationsList.some(n => !n.is_archived) && (
                                                 <button
@@ -1464,7 +1318,7 @@ const ResidentSettings = () => {
                                                     onClick={handleArchiveAll}
                                                     className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5"
                                                 >
-                                                    📥 Archive All Active
+                                                     Archive All Active
                                                 </button>
                                             )}
                                             {notificationsList.some(n => n.is_archived) && (
@@ -1473,12 +1327,11 @@ const ResidentSettings = () => {
                                                     onClick={handleClearArchived}
                                                     className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5"
                                                 >
-                                                    🗑️ Clear Archived
+                                                     Clear Archived
                                                 </button>
                                             )}
                                         </div>
                                     </div>
-
                                     {/* Filter Pills & Search bar */}
                                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-gray-50/70 dark:bg-[#1E2738] p-3 rounded-2xl border border-gray-100 dark:border-gray-800">
                                         <div className="flex flex-wrap items-center gap-1">
@@ -1513,21 +1366,16 @@ const ResidentSettings = () => {
                                                 All History ({notificationsList.length})
                                             </button>
                                         </div>
-
                                         <div className="relative flex-1 sm:max-w-xs">
                                             <input
                                                 type="text"
                                                 placeholder="Search notifications..."
                                                 value={notifSearch}
                                                 onChange={(e) => setNotifSearch(e.target.value)}
-                                                className="w-full pl-9 pr-3 py-1.5 bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none focus:border-[#F97316]"
+                                                className="w-full px-3 py-1.5 bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none focus:border-[#F97316]"
                                             />
-                                            <svg className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                            </svg>
                                         </div>
                                     </div>
-
                                     {/* Notifications List */}
                                     {notificationsList.filter(n => {
                                         if (notifFilterTab === 'archived' && !n.is_archived) return false;
@@ -1541,9 +1389,6 @@ const ResidentSettings = () => {
                                         return true;
                                     }).length === 0 ? (
                                         <div className="text-center py-12 bg-gray-50/50 dark:bg-[#1E2738]/50 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-6">
-                                            <div className="w-12 h-12 rounded-full bg-orange-50 dark:bg-orange-950/50 text-[#F97316] mx-auto flex items-center justify-center text-xl mb-3">
-                                                📭
-                                            </div>
                                             <h4 className="text-sm font-black text-[#1a1208] dark:text-white">No notifications found</h4>
                                             <p className="text-xs text-gray-400 font-semibold mt-1">
                                                 {notifFilterTab === 'archived'
@@ -1575,12 +1420,6 @@ const ResidentSettings = () => {
                                                         }`}
                                                 >
                                                     <div className="flex items-start gap-3 flex-1">
-                                                        <div className={`p-2.5 rounded-xl text-lg shrink-0 ${notif.type === 'alert' ? 'bg-red-50 dark:bg-red-950/50 text-red-500' :
-                                                                notif.type === 'potential_match' ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400' :
-                                                                    'bg-orange-50 dark:bg-orange-950/50 text-[#F97316]'
-                                                            }`}>
-                                                            {notif.type === 'alert' ? '🚨' : notif.type === 'potential_match' ? '🔍' : '🔔'}
-                                                        </div>
                                                         <div className="space-y-1 flex-1">
                                                             <div className="flex items-center gap-2 flex-wrap">
                                                                 <h4 className="text-xs font-black text-[#1a1208] dark:text-white">{notif.title}</h4>
@@ -1596,7 +1435,6 @@ const ResidentSettings = () => {
                                                             </span>
                                                         </div>
                                                     </div>
-
                                                     <div className="flex items-center gap-2 shrink-0 self-end sm:self-center border-t sm:border-t-0 pt-2 sm:pt-0 border-gray-100 dark:border-gray-800" onClick={(e) => e.stopPropagation()}>
                                                         {notif.is_archived ? (
                                                             <button
@@ -1605,7 +1443,7 @@ const ResidentSettings = () => {
                                                                 className="px-3 py-1.5 bg-white dark:bg-[#151C2C] hover:bg-orange-50 dark:hover:bg-orange-950/40 border border-gray-200 dark:border-gray-700 hover:border-orange-200 dark:hover:border-orange-800 text-[#F97316] text-xs font-bold rounded-xl transition-all flex items-center gap-1 shadow-sm cursor-pointer"
                                                                 title="Restore to Inbox"
                                                             >
-                                                                📤 Restore
+                                                                 Restore
                                                             </button>
                                                         ) : (
                                                             <button
@@ -1614,11 +1452,9 @@ const ResidentSettings = () => {
                                                                 className="px-3 py-1.5 bg-gray-100 dark:bg-[#1E2738] hover:bg-gray-200 dark:hover:bg-[#253248] text-gray-700 dark:text-gray-300 text-xs font-bold rounded-xl transition-all flex items-center gap-1 cursor-pointer"
                                                                 title="Archive Notification"
                                                             >
-                                                                📁 Archive
+                                                                 Archive
                                                             </button>
                                                         )}
-
-
 
                                                         <button
                                                             type="button"
@@ -1626,7 +1462,7 @@ const ResidentSettings = () => {
                                                             className="p-2 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl text-red-500 text-xs transition-colors cursor-pointer"
                                                             title="Delete Permanently"
                                                         >
-                                                            🗑️
+                                                            Delete
                                                         </button>
                                                     </div>
                                                 </div>
@@ -1642,11 +1478,10 @@ const ResidentSettings = () => {
                             <div className="space-y-8 animate-in fade-in duration-200">
                                 <div>
                                     <h2 className="text-lg font-black text-[#1a1208] flex items-center gap-2">
-                                        🔒 Privacy & Visibility Settings
+                                         Privacy & Visibility Settings
                                     </h2>
                                     <p className="text-xs text-gray-500 font-semibold mt-1">Configure report visibility and who can contact you</p>
                                 </div>
-
                                 <div>
                                     <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Default Report Visibility</h3>
                                     <div className="grid grid-cols-2 gap-4 max-w-md">
@@ -1657,10 +1492,9 @@ const ResidentSettings = () => {
                                                     : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1E2738] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#253248]'
                                                 }`}
                                         >
-                                            <span className="text-xs block">🌐 Public</span>
+                                            <span className="text-xs block"> Public</span>
                                             <span className="text-[10px] text-gray-400 font-normal">Visible to community members</span>
                                         </button>
-
                                         <button
                                             onClick={() => setReportVisibility('Private')}
                                             className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${reportVisibility === 'Private'
@@ -1668,12 +1502,11 @@ const ResidentSettings = () => {
                                                     : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1E2738] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#253248]'
                                                 }`}
                                         >
-                                            <span className="text-xs block">🔒 Private</span>
+                                            <span className="text-xs block"> Private</span>
                                             <span className="text-[10px] text-gray-400 font-normal">Visible to leaders & staff only</span>
                                         </button>
                                     </div>
                                 </div>
-
                                 <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-800">
                                     <label className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer">
                                         <div>
@@ -1682,7 +1515,6 @@ const ResidentSettings = () => {
                                         </div>
                                         <input type="checkbox" checked={hideIdentity} onChange={(e) => setHideIdentity(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
                                     </label>
-
                                     <label className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer">
                                         <div>
                                             <span className="text-xs font-bold text-gray-800 dark:text-gray-200 block">Allow other users to contact me</span>
@@ -1690,7 +1522,6 @@ const ResidentSettings = () => {
                                         </div>
                                         <input type="checkbox" checked={allowContact} onChange={(e) => setAllowContact(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
                                     </label>
-
                                     <label className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer">
                                         <div>
                                             <span className="text-xs font-bold text-gray-800 dark:text-gray-200 block">Show phone number to rescuers only</span>
@@ -1707,21 +1538,19 @@ const ResidentSettings = () => {
                             <div className="space-y-8 animate-in fade-in duration-200">
                                 <div>
                                     <h2 className="text-lg font-black text-[#1a1208] dark:text-white flex items-center gap-2">
-                                        📍 Location & Mapping Settings
+                                         Location & Mapping Settings
                                     </h2>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold mt-1">Set default address and location permissions</p>
                                 </div>
-
                                 <div>
                                     <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Default Address</label>
                                     <input
                                         type="text"
                                         value={editData.address || ''}
                                         onChange={(e) => setEditData({ ...editData, address: e.target.value })}
-                                        className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316]"
+                                        className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-200 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316]"
                                     />
                                 </div>
-
                                 {/* Leaflet Map Pinpoint */}
                                 <div>
                                     <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Pinpoint Coordinates</label>
@@ -1755,7 +1584,6 @@ const ResidentSettings = () => {
                                         </MapContainer>
                                     </div>
                                 </div>
-
                                 <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-800">
                                     <div className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800">
                                         <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Allow GPS Permission</span>
@@ -1763,20 +1591,18 @@ const ResidentSettings = () => {
                                             {allowGPS ? 'ON' : 'OFF'}
                                         </button>
                                     </div>
-
                                     <div className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800">
                                         <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Use Current Location Automatically when Reporting</span>
                                         <button onClick={() => setAutoLocation(!autoLocation)} className={`px-3 py-1.5 rounded-full text-xs font-black uppercase cursor-pointer ${autoLocation ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
                                             {autoLocation ? 'ON' : 'OFF'}
                                         </button>
                                     </div>
-
                                     <div>
                                         <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Location Accuracy</label>
                                         <select
                                             value={locationAccuracy}
                                             onChange={(e) => setLocationAccuracy(e.target.value)}
-                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316]"
+                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-200 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316]"
                                         >
                                             <option value="High">High (GPS + Network)</option>
                                             <option value="Medium">Balanced Power</option>
@@ -1792,11 +1618,10 @@ const ResidentSettings = () => {
                             <div className="space-y-8 animate-in fade-in duration-200">
                                 <div>
                                     <h2 className="text-lg font-black text-[#1a1208] dark:text-white flex items-center gap-2">
-                                        🎨 Appearance & Display
+                                         Appearance & Display
                                     </h2>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold mt-1">Customize app themes, map styles, and language</p>
                                 </div>
-
                                 <div>
                                     <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Theme</h3>
                                     <div className="grid grid-cols-2 gap-4 max-w-md">
@@ -1807,10 +1632,9 @@ const ResidentSettings = () => {
                                                     : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
                                                 }`}
                                         >
-                                            <span className="text-xs block font-bold">☀️ Light Mode</span>
+                                            <span className="text-xs block font-bold"> Light Mode</span>
                                             <span className="text-[10px] text-gray-400 font-normal">Clean bright interface</span>
                                         </button>
-
                                         <button
                                             onClick={() => setGlobalTheme('dark')}
                                             className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${globalTheme === 'dark'
@@ -1818,32 +1642,30 @@ const ResidentSettings = () => {
                                                     : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
                                                 }`}
                                         >
-                                            <span className="text-xs block font-bold">🌙 Dark Mode</span>
+                                            <span className="text-xs block font-bold"> Dark Mode</span>
                                             <span className="text-[10px] text-gray-400 font-normal">Sleek dark interface</span>
                                         </button>
                                     </div>
                                 </div>
-
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-gray-100 dark:border-gray-800">
                                     <div>
                                         <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Map Style</label>
                                         <select
                                             value={mapStyle}
                                             onChange={(e) => setMapStyle(e.target.value)}
-                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316]"
+                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-200 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316]"
                                         >
                                             <option value="Default">Default OpenStreetMap</option>
                                             <option value="Satellite">Satellite View</option>
                                             <option value="Terrain">Terrain View</option>
                                         </select>
                                     </div>
-
                                     <div>
                                         <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Language</label>
                                         <select
                                             value={language}
                                             onChange={(e) => setLanguage(e.target.value)}
-                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316]"
+                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-200 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316]"
                                         >
                                             <option value="English">English</option>
                                             <option value="Filipino">Filipino (Tagalog)</option>
@@ -1858,71 +1680,58 @@ const ResidentSettings = () => {
                             <div className="space-y-8 animate-in fade-in duration-200">
                                 <div>
                                     <h2 className="text-lg font-black text-[#1a1208] dark:text-white flex items-center gap-2">
-                                        ❓ Help & Support
+                                         Help & Support
                                     </h2>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold mt-1">Frequently asked questions and direct contact support</p>
                                 </div>
-
                                 {/* FAQ Section */}
                                 <div className="space-y-4">
                                     <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Frequently Asked Questions</h3>
-
-                                    <details className="bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-800 rounded-2xl p-4 group">
+                                    <details className="bg-gray-50 dark:bg-[#1E2738] border border-gray-200 dark:border-gray-800 rounded-2xl p-4 group">
                                         <summary className="font-bold text-xs text-gray-800 dark:text-gray-200 cursor-pointer flex justify-between items-center">
                                             How to report a stray animal?
-                                            <span className="text-gray-400 group-open:rotate-180 transition-transform">▼</span>
                                         </summary>
                                         <p className="text-xs text-gray-600 dark:text-gray-300 mt-3 leading-relaxed">
                                             Go to your Home feed and click "Report Stray". Fill out the animal details, photo/video, landmark, priority, and visibility. Your subdivision leader will verify it promptly.
                                         </p>
                                     </details>
-
-                                    <details className="bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-800 rounded-2xl p-4 group">
+                                    <details className="bg-gray-50 dark:bg-[#1E2738] border border-gray-200 dark:border-gray-800 rounded-2xl p-4 group">
                                         <summary className="font-bold text-xs text-gray-800 dark:text-gray-200 cursor-pointer flex justify-between items-center">
                                             How does pet QR Code scanning work?
-                                            <span className="text-gray-400 group-open:rotate-180 transition-transform">▼</span>
                                         </summary>
                                         <p className="text-xs text-gray-600 dark:text-gray-300 mt-3 leading-relaxed">
                                             Register your pet under "My Pets". Download and print the generated QR card for your pet's collar. If your pet is found lost, anyone scanning the tag can view contact info or notify you with their location.
                                         </p>
                                     </details>
-
-                                    <details className="bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-800 rounded-2xl p-4 group">
+                                    <details className="bg-gray-50 dark:bg-[#1E2738] border border-gray-200 dark:border-gray-800 rounded-2xl p-4 group">
                                         <summary className="font-bold text-xs text-gray-800 dark:text-gray-200 cursor-pointer flex justify-between items-center">
                                             What is the difference between Public and Private reports?
-                                            <span className="text-gray-400 group-open:rotate-180 transition-transform">▼</span>
                                         </summary>
                                         <p className="text-xs text-gray-600 dark:text-gray-300 mt-3 leading-relaxed">
                                             Public reports are visible to all registered residents in your community feed. Private reports are strictly routed to your Subdivision Leader and Barangay Staff for discreet rescue actions.
                                         </p>
                                     </details>
                                 </div>
-
                                 {/* Support Actions */}
                                 <div className="pt-6 border-t border-gray-100 dark:border-gray-800 grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     <button
                                         onClick={() => alert('Barangay Emergency Hotline: (045) 982-1234')}
                                         className="p-4 bg-orange-50 dark:bg-orange-950/30 border border-orange-150 dark:border-orange-900/40 rounded-2xl text-center group hover:bg-orange-100 dark:hover:bg-orange-950/50 transition-all cursor-pointer"
                                     >
-                                        <span className="text-xl block mb-1">📞</span>
                                         <span className="text-xs font-black text-[#F97316] uppercase block">Contact Barangay</span>
                                         <span className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold">Direct hotline info</span>
                                     </button>
-
                                     <button
                                         onClick={() => alert('Bug report feature submitted to system administrators.')}
-                                        className="p-4 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-800 rounded-2xl text-center group hover:bg-gray-100 dark:hover:bg-[#253248] transition-all cursor-pointer"
+                                        className="p-4 bg-gray-50 dark:bg-[#1E2738] border border-gray-200 dark:border-gray-800 rounded-2xl text-center group hover:bg-gray-100 dark:hover:bg-[#253248] transition-all cursor-pointer"
                                     >
-                                        <span className="text-xl block mb-1">🐛</span>
                                         <span className="text-xs font-black text-gray-800 dark:text-gray-200 uppercase block">Report a Bug</span>
                                         <span className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold">Submit technical issue</span>
                                     </button>
-
                                     <button
                                         onClick={() => alert('Thank you! Your feedback will help improve StraySafe.')}
-                                        className="p-4 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-800 rounded-2xl text-center group hover:bg-gray-100 dark:hover:bg-[#253248] transition-all cursor-pointer"
+                                        className="p-4 bg-gray-50 dark:bg-[#1E2738] border border-gray-200 dark:border-gray-800 rounded-2xl text-center group hover:bg-gray-100 dark:hover:bg-[#253248] transition-all cursor-pointer"
                                     >
-                                        <span className="text-xl block mb-1">💬</span>
                                         <span className="text-xs font-black text-gray-800 dark:text-gray-200 uppercase block">Send Feedback</span>
                                         <span className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold">Share your suggestions</span>
                                     </button>
@@ -1935,11 +1744,10 @@ const ResidentSettings = () => {
                             <div className="space-y-8 animate-in fade-in duration-200">
                                 <div>
                                     <h2 className="text-lg font-black text-[#1a1208] dark:text-white flex items-center gap-2">
-                                        ℹ️ About STRAY-SAFE
+                                         About STRAY-SAFE
                                     </h2>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold mt-1">System version and legal documentation</p>
                                 </div>
-
                                 <div className="text-center p-8 bg-gradient-to-b from-orange-50/50 to-white dark:from-[#1E2738] dark:to-[#151C2C] rounded-3xl border border-orange-100 dark:border-gray-800">
                                     <img src="/SSLOGO-128.png" alt="StraySafe Logo" className="h-16 w-auto mx-auto mb-3 drop-shadow-sm" />
                                     <h3 className="text-xl font-black text-[#1a1208] dark:text-white uppercase tracking-wider">STRAY-SAFE</h3>
@@ -1950,30 +1758,24 @@ const ResidentSettings = () => {
                                         A smart community-driven stray management and animal welfare platform empowering residents, subdivision leaders, and barangay staff.
                                     </p>
                                 </div>
-
                                 <div className="space-y-3 pt-4 border-t border-gray-100 dark:border-gray-800">
                                     <button
                                         onClick={() => alert('Privacy Policy: StraySafe protects your location and personal identity in accordance with Philippine Data Privacy Act of 2012.')}
-                                        className="w-full flex justify-between items-center p-4 bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-150 dark:border-gray-800 text-xs font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#253248] transition-all cursor-pointer"
+                                        className="w-full flex justify-between items-center p-4 bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-200 dark:border-gray-800 text-xs font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#253248] transition-all cursor-pointer"
                                     >
-                                        <span>🔒 Privacy Policy</span>
-                                        <span className="text-gray-400">→</span>
+                                        <span>Privacy Policy</span>
                                     </button>
-
                                     <button
                                         onClick={() => alert('Terms & Conditions: Users agree to submit truthful reports regarding stray animals and pet registrations.')}
-                                        className="w-full flex justify-between items-center p-4 bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-150 dark:border-gray-800 text-xs font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#253248] transition-all cursor-pointer"
+                                        className="w-full flex justify-between items-center p-4 bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-200 dark:border-gray-800 text-xs font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#253248] transition-all cursor-pointer"
                                     >
-                                        <span>📄 Terms & Conditions</span>
-                                        <span className="text-gray-400">→</span>
+                                        <span>Terms & Conditions</span>
                                     </button>
-
                                     <button
                                         onClick={() => alert('Open Source Licenses: React, Vite, Leaflet, FastAPI, Tailwind CSS, Lucide icons.')}
-                                        className="w-full flex justify-between items-center p-4 bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-150 dark:border-gray-800 text-xs font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#253248] transition-all cursor-pointer"
+                                        className="w-full flex justify-between items-center p-4 bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-200 dark:border-gray-800 text-xs font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#253248] transition-all cursor-pointer"
                                     >
-                                        <span>📜 Open Source Licenses</span>
-                                        <span className="text-gray-400">→</span>
+                                        <span>Open Source Licenses</span>
                                     </button>
                                 </div>
                             </div>
@@ -1981,32 +1783,31 @@ const ResidentSettings = () => {
                     </div>
                 </div>
             </main>
-
             {/* REMOVED / HISTORY PET DETAIL MODAL */}
             {selectedHistoryPet && (
-                <div 
+                <div
                     className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
                     onClick={() => setSelectedHistoryPet(null)}
                 >
-                    <div 
+                    <div
                         className="bg-white dark:bg-[#151C2C] rounded-3xl max-w-lg w-full max-h-[90vh] overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-800 flex flex-col animate-in zoom-in-95 duration-200"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Modal Header */}
-                        <div className="p-6 bg-gradient-to-br from-orange-50/80 via-white to-gray-50 dark:from-[#1E2738] dark:via-[#151C2C] dark:to-[#151C2C] border-b border-gray-150 dark:border-gray-800 relative">
+                        <div className="p-6 bg-gradient-to-br from-orange-50/80 via-white to-gray-50 dark:from-[#1E2738] dark:via-[#151C2C] dark:to-[#151C2C] border-b border-gray-200 dark:border-gray-800 relative">
                             <button
                                 type="button"
                                 onClick={() => setSelectedHistoryPet(null)}
-                                className="absolute right-5 top-5 w-8 h-8 rounded-full bg-white/80 dark:bg-[#1E2738] hover:bg-white dark:hover:bg-[#253248] text-gray-400 hover:text-gray-700 dark:hover:text-white flex items-center justify-center shadow-xs transition-all cursor-pointer font-bold"
+                                className="absolute right-5 top-5 px-3 py-1.5 rounded-lg bg-white/80 dark:bg-[#1E2738] hover:bg-white dark:hover:bg-[#253248] text-gray-400 hover:text-gray-700 dark:hover:text-white flex items-center justify-center shadow-xs transition-all cursor-pointer font-bold"
                             >
-                                ✕
+                                Close
                             </button>
                             <div className="flex items-center gap-4">
                                 <div className="w-16 h-16 rounded-2xl bg-orange-100 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 flex items-center justify-center text-3xl shrink-0 shadow-inner overflow-hidden border-2 border-white dark:border-gray-700">
                                     {selectedHistoryPet.photo_url ? (
                                         <img src={getPetPicture(selectedHistoryPet.photo_url)} alt={selectedHistoryPet.pet_name} className="w-full h-full object-cover" />
                                     ) : (
-                                        <span>{selectedHistoryPet.pet_type === 'Cat' ? '🐱' : '🐶'}</span>
+                                        <span className="text-xs font-bold">{selectedHistoryPet.pet_type === 'Cat' ? 'Cat' : 'Dog'}</span>
                                     )}
                                 </div>
                                 <div>
@@ -2026,7 +1827,6 @@ const ResidentSettings = () => {
                                 </div>
                             </div>
                         </div>
-
                         {/* Modal Body */}
                         <div className="p-6 overflow-y-auto space-y-5 custom-scrollbar text-xs">
                             {/* Details Grid */}
@@ -2059,11 +1859,10 @@ const ResidentSettings = () => {
                                     </div>
                                     <div className="p-3 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800">
                                         <span className="text-[10px] font-bold text-gray-400 block uppercase">Vaccination</span>
-                                        <span className="font-bold text-gray-800 dark:text-gray-200 text-xs">{selectedHistoryPet.is_vaccinated ? '✅ Vaccinated' : '⚠️ Not Vaccinated'}</span>
+                                        <span className="font-bold text-gray-800 dark:text-gray-200 text-xs">{selectedHistoryPet.is_vaccinated ? "Vaccinated" : "Not Vaccinated"}</span>
                                     </div>
                                 </div>
                             </div>
-
                             {/* Audit & Removal Info */}
                             <div>
                                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Record Information</h4>
@@ -2086,14 +1885,13 @@ const ResidentSettings = () => {
                                     </div>
                                 </div>
                             </div>
-
                             {/* Historical Timeline if available */}
                             {selectedHistoryPet.timeline && selectedHistoryPet.timeline.length > 0 && (
                                 <div>
                                     <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Activity Timeline</h4>
                                     <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                                         {selectedHistoryPet.timeline.map((log: any, idx: number) => (
-                                            <div key={idx} className="p-2.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-150 dark:border-gray-800 flex items-center justify-between text-[11px]">
+                                            <div key={idx} className="p-2.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-200 dark:border-gray-800 flex items-center justify-between text-[11px]">
                                                 <div className="flex items-center gap-2">
                                                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
                                                         log.action === 'CREATE_PET' ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400' :
@@ -2110,9 +1908,8 @@ const ResidentSettings = () => {
                                 </div>
                             )}
                         </div>
-
                         {/* Modal Footer */}
-                        <div className="p-4 bg-gray-50 dark:bg-[#1E2738] border-t border-gray-150 dark:border-gray-800 flex items-center justify-between gap-3">
+                        <div className="p-4 bg-gray-50 dark:bg-[#1E2738] border-t border-gray-200 dark:border-gray-800 flex items-center justify-between gap-3">
                             <button
                                 type="button"
                                 onClick={() => setSelectedHistoryPet(null)}
@@ -2132,16 +1929,10 @@ const ResidentSettings = () => {
                                 >
                                     {restoringPetId === (selectedHistoryPet.pet_id || selectedHistoryPet.log_id || selectedHistoryPet.pet_name) ? (
                                         <>
-                                            <svg className="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                            </svg>
                                             Restoring Pet...
                                         </>
                                     ) : (
                                         <>
-                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                            </svg>
                                             Restore Pet
                                         </>
                                     )}

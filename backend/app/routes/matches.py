@@ -1595,6 +1595,21 @@ def get_case_match_review(
 
     target_pet_id = target_pet.pet_id if target_pet else None
 
+    # Explicit pet_id parameters must refer to a pet actually linked to this case,
+    # not merely any pet owned by the caller. The review includes the incident pin.
+    if not is_staff and not (
+        any(member.pet_id == target_pet_id for member in members)
+        or db.query(ReportMatch.match_id).filter(
+            ReportMatch.source_report_id.in_(member_ids),
+            ReportMatch.matched_pet_id == target_pet_id,
+            ReportMatch.status != SUPERSEDED_STATUS,
+        ).first()
+        or db.query(PetClaim.claim_id).filter(
+            PetClaim.report_id.in_(member_ids), PetClaim.pet_id == target_pet_id,
+        ).first()
+    ):
+        raise HTTPException(status_code=403, detail="Access denied: This pet is not linked to the requested case.")
+
     # Resolve canonical claim report from active PetClaims across the case
     active_claim: Optional[PetClaim] = None
     if target_pet_id:
@@ -1748,6 +1763,10 @@ def get_case_match_review(
             "landmark": rep_item.landmark,
             "latitude": float(rep_item.latitude) if rep_item.latitude is not None else None,
             "longitude": float(rep_item.longitude) if rep_item.longitude is not None else None,
+            "initial_latitude": float(rep_item.initial_latitude) if rep_item.initial_latitude is not None else None,
+            "initial_longitude": float(rep_item.initial_longitude) if rep_item.initial_longitude is not None else None,
+            "initial_landmark": rep_item.initial_landmark,
+            "custody_status": rep_item.custody_status,
             "street_address": getattr(rep_item, "street_address", None) or rep_item.landmark,
             "animal_type": rep_item.animal_type or rep_item.ai_animal_type or "Dog",
             "animal_breed": rep_item.animal_breed or rep_item.ai_possible_breed or "Unknown",
@@ -1767,7 +1786,8 @@ def get_case_match_review(
         }
         if not is_staff:
             # Another resident's identity is never shown (rule 3); a report the owner may not open is only the
-            # minimum match card: no free-text description, merge notes or exact spot (rule 6)
+            # minimum match card: no free-text description or merge notes. The exact
+            # incident pin is retained for the authorized pet owner's location review.
             if rep_item.user_id != current_user.user_id:
                 rep_dict["reporter_name"] = report_visibility.COMMUNITY_REPORTER
                 rep_dict["reporter_photo"] = None
@@ -1775,9 +1795,6 @@ def get_case_match_review(
             if vis_scope is not None and vis_scope.access(rep_item) == report_visibility.NONE:
                 rep_dict["description"] = None
                 rep_dict["street_address"] = rep_item.landmark
-                for k in ("latitude", "longitude"):
-                    if rep_dict[k] is not None:
-                        rep_dict[k] = round(rep_dict[k], 3)
                 rep_dict["match_card_only"] = True
 
         tabs.append({

@@ -1,3 +1,4 @@
+import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, API_BASE_URL } from '../../utils/api';
@@ -35,7 +36,6 @@ import {
     ClipboardCheck,
     Video,
     ArrowLeft,
-    Printer,
     Plus,
     Camera,
     MessageCircle,
@@ -44,7 +44,9 @@ import {
 import MaskedIdDisplay from '../../components/MaskedIdDisplay';
 import AdoptionStageStepper from '../../components/AdoptionStageStepper';
 import AdoptionCasePanel from '../../components/Adoption/AdoptionCasePanel';
-import CertificateSyncBar from '../../components/Adoption/CertificateSyncBar';
+import AdoptionCertificatePanel from '../../components/Adoption/AdoptionCertificatePanel';
+import AdoptionCertificateViewer from '../../components/Adoption/AdoptionCertificateViewer';
+import '../../components/Adoption/adoptionDetails.css';
 import {
     AdoptionVerificationModal,
     AdoptionInterviewModal,
@@ -55,8 +57,6 @@ import {
     AdoptionDossierModal,
     HOME_ENVIRONMENT_CHECKLIST_ITEMS,
 } from '../../components/Modals/AdoptionStaffStageModals';
-import AdoptionCertificateModal from '../../components/Modals/AdoptionCertificateModal';
-import AdoptionCertificateDocument from '../../components/Adoption/AdoptionCertificateDocument';
 import AdoptionMonitoringModal from '../../components/Modals/AdoptionMonitoringModal';
 import {
     getUnifiedAdoptionStatus,
@@ -270,8 +270,8 @@ const BrgyAdoptions = () => {
     const [monitoringDashboard, setMonitoringDashboard] = useState<any>(null);
     const [monitoringLoading, setMonitoringLoading] = useState(false);
 
-    const fetchMonitoringDashboard = async () => {
-        setMonitoringLoading(true);
+    const fetchMonitoringDashboard = async (silent = false) => {
+        if (!silent) setMonitoringLoading(true);
         try {
             const res = await api.get('/adoptions/monitoring/dashboard');
             setMonitoringDashboard(res.data);
@@ -291,6 +291,9 @@ const BrgyAdoptions = () => {
     // Modal state
     const [selectedApp, setSelectedApp] = useState<AdoptionApp | null>(null);
     const [viewAppModal, setViewAppModal] = useState<AdoptionApp | null>(null);
+    const [detailTab, setDetailTab] = useState<'overview' | 'process' | 'certificate'>('overview');
+    const [certificatePreview, setCertificatePreview] = useState<{ print: boolean } | null>(null);
+    useEffect(() => { setDetailTab('overview'); setCertificatePreview(null); }, [viewAppModal?.adoption_id]);
 
     // Adoption chat (adopter <-> Barangay): a chat box that slides in from the side, right on this page
     const { counts: chatUnread, refresh: refreshChatUnread } = useAdoptionChatUnread();
@@ -341,6 +344,7 @@ const BrgyAdoptions = () => {
                 };
             });
             await fetchApplications(true);
+            setDetailTab('certificate');
             showToast("Proceeded to Stage 7 Certificate!");
             setTimeout(() => {
                 const target = document.getElementById('dossier-current-stage-section');
@@ -390,6 +394,7 @@ const BrgyAdoptions = () => {
                     application_stage_status: 'Handover_Ready',
                 };
             });
+            setDetailTab('process');
             await fetchApplications(true);
             showToast("Proceeded to Stage 8 Handover!");
         } catch (err: any) {
@@ -699,22 +704,11 @@ const BrgyAdoptions = () => {
         fetchCatalog();
         fetchMonitoringDashboard();
 
-        // Automatic synchronization polling (every 8 seconds)
-        const pollInterval = setInterval(() => {
-            if (document.visibilityState === 'visible') fetchApplications(true);
-        }, 8000);
-
-        // Immediate refresh when returning to this tab
-        const handleFocus = () => {
-            fetchApplications(true);
-        };
-        window.addEventListener('focus', handleFocus);
-
-        return () => {
-            clearInterval(pollInterval);
-            window.removeEventListener('focus', handleFocus);
-        };
     }, []);
+
+    useAutoRefresh(async () => {
+        await Promise.all([fetchApplications(true), fetchCatalog(), fetchMonitoringDashboard(true)]);
+    });
 
     const filteredApplications = useMemo(() => {
         return applications.filter((app) => {
@@ -892,8 +886,8 @@ const BrgyAdoptions = () => {
                     <AdminNavbar
                         leftContent={
                             <div className="flex flex-col">
-                                <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Adoption Management</h1>
-                                <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">
+                                <h1 className="text-sm sm:text-xl font-black text-gray-900 tracking-tight leading-tight uppercase">Adoption Management</h1>
+                                <p className="hidden sm:block text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-tight">
                                     Centralized Barangay management for public adoption applications and adoptable animal records
                                 </p>
                             </div>
@@ -904,8 +898,8 @@ const BrgyAdoptions = () => {
                         onMenuToggle={() => setMobileOpen(!mobileOpen)}
                         leftContent={
                             <div className="flex flex-col">
-                                <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Adoption Management</h1>
-                                <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">
+                                <h1 className="text-sm sm:text-xl font-black text-gray-900 tracking-tight leading-tight uppercase">Adoption Management</h1>
+                                <p className="hidden sm:block text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-tight">
                                     Centralized Barangay management for public adoption applications and adoptable animal records
                                 </p>
                             </div>
@@ -915,209 +909,39 @@ const BrgyAdoptions = () => {
 
                 {viewAppModal ? (
                     /* ─── COMPLETE IN-PAGE ADOPTION REPORT & DOSSIER VIEW ─── */
-                    <main className="p-4 sm:p-8 pb-32 lg:pb-8 max-w-7xl w-full mx-auto space-y-6 animate-in fade-in duration-200">
-                        {/* ─── Top Action & Navigation Banner ─── */}
-                        <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                            {/* Left: Back button & Title */}
-                            <div className="flex items-center gap-3.5 min-w-0">
-                                <button
-                                    type="button"
-                                    onClick={() => setViewAppModal(null)}
-                                    className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs rounded-xl transition-all cursor-pointer shadow-2xs hover:-translate-x-0.5 active:scale-95 shrink-0"
-                                    title="Return to adoption applications list"
-                                >
-                                    <ArrowLeft className="w-4 h-4 text-slate-600" />
-                                    <span className="hidden sm:inline">Back to Applications</span>
-                                    <span className="sm:hidden">Back</span>
-                                </button>
-
-                                <div className="h-6 w-px bg-slate-200 hidden sm:block" />
-
-                                <div className="min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight truncate">
-                                            Adoption Report & Dossier #{viewAppModal.adoption_id}
-                                        </h2>
-                                        {(() => {
-                                            const modalInfo = getUnifiedAdoptionStatus(viewAppModal);
-                                            return (
-                                                <>
-                                                    <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${modalInfo.badgeClasses}`}>
-                                                        {modalInfo.label}
-                                                    </span>
-                                                    <span className="text-[10px] font-bold text-role-strong bg-role-soft border border-role-border/80 px-2.5 py-0.5 rounded-full">
-                                                        Stage {modalInfo.consolidatedStageIndex + 1} of 6: {modalInfo.consolidatedStageName} • {modalInfo.activeSubtask}
-                                                    </span>
-                                                </>
-                                            );
-                                        })()}
-                                    </div>
-                                    <p className="text-[11px] text-slate-400 font-medium">
-                                        Submitted on {new Date(viewAppModal.created_at).toLocaleString('en-PH', {
-                                            year: 'numeric', month: 'short', day: 'numeric',
-                                            hour: '2-digit', minute: '2-digit'
-                                        })} • Resident Applicant: <strong className="text-slate-700">{viewAppModal.full_name}</strong>
-                                    </p>
-                                </div>
+                    <main className="adoption-detail-page p-3 sm:p-6 pb-32 lg:pb-8 max-w-7xl w-full min-w-0 mx-auto space-y-4 animate-in fade-in duration-200">
+                        <section className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-4" aria-label="Adoption overview">
+                            <div className="grid grid-cols-[44px_minmax(0,1fr)] sm:flex items-center gap-3">
+                                <button type="button" onClick={() => setViewAppModal(null)} className="adoption-detail-action border border-slate-200 text-slate-700 shrink-0" aria-label="Back to applications"><ArrowLeft className="w-4 h-4" /><span className="hidden sm:inline">Applications</span></button>
+                                <div className="min-w-0 flex-1"><h2 className="text-base sm:text-lg font-black">Adoption #{viewAppModal.adoption_id}</h2><p className="text-xs text-slate-500">Animal #{viewAppModal.holding_id}</p></div>
+                                <span className={`col-span-2 justify-self-start sm:ml-auto text-[10px] font-black px-2 py-1 rounded-full border ${getUnifiedAdoptionStatus(viewAppModal).badgeClasses}`}>{getUnifiedAdoptionStatus(viewAppModal).label}</span>
                             </div>
-
-                            {/* Right: Quick actions */}
-                            <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                                <button
-                                    type="button"
-                                    onClick={() => openAdoptionChat(viewAppModal.adoption_id)}
-                                    className="relative px-3.5 py-2 bg-white hover:bg-role-soft text-role-strong border border-role-border rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                                    title="Chat with the adopter about this application"
-                                >
-                                    <MessageCircle className="w-3.5 h-3.5" />
-                                    <span>Chat with Adopter</span>
-                                    {(chatUnread[viewAppModal.adoption_id] || 0) > 0 && (
-                                        <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm">
-                                            {chatUnread[viewAppModal.adoption_id] > 9 ? '9+' : chatUnread[viewAppModal.adoption_id]}
-                                        </span>
-                                    )}
-                                </button>
-                                <Link
-                                    to={`/brgy/adopt/journey/${viewAppModal.holding_id}`}
-                                    className="px-3.5 py-2 bg-role-soft hover:bg-role-muted text-role-strong border border-role-border rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs"
-                                >
-                                    <span>Journey Trail</span>
-                                    <ExternalLink className="w-3.5 h-3.5 text-role" />
-                                </Link>
-
-                                {viewAppModal.status === 'Pending' && isHeadOfficer && (!viewAppModal.current_stage || viewAppModal.current_stage === 'Application' || viewAppModal.current_stage === 'Verification') && (
-                                    <>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const app = viewAppModal;
-                                                handleOpenReviewModal(app, 'reject');
-                                            }}
-                                            className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1"
-                                        >
-                                            <XCircle className="w-3.5 h-3.5" />
-                                            <span>Reject</span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const app = viewAppModal;
-                                                handleOpenReviewModal(app, 'approve');
-                                            }}
-                                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all shadow-xs cursor-pointer flex items-center gap-1"
-                                        >
-                                            <CheckCircle2 className="w-3.5 h-3.5" />
-                                            <span>Approve & Proceed</span>
-                                        </button>
-                                    </>
-                                )}
-
-                                <button
-                                    type="button"
-                                    onClick={() => setViewAppModal(null)}
-                                    className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-                                    title="Close dossier"
-                                >
-                                    <X className="w-5 h-5" />
-                                </button>
+                            <div className="flex items-center gap-3">
+                                <img src={getPetThumb(viewAppModal.animal_photo)} alt={viewAppModal.animal_name || 'Animal'} className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover shrink-0 bg-slate-100" />
+                                <div className="min-w-0"><h3 className="font-black text-base sm:text-xl line-clamp-2" title={viewAppModal.animal_name || undefined}>{viewAppModal.animal_name || `Rescue Animal #${viewAppModal.holding_id}`}</h3><p className="text-xs text-slate-500 mt-1">{[viewAppModal.animal_type, viewAppModal.animal_breed].filter(Boolean).join(' \u00b7 ')}</p></div>
                             </div>
+                            <dl className="grid grid-cols-2 gap-3 text-xs">
+                                <div><dt className="text-slate-500">Applicant</dt><dd className="font-bold mt-1 line-clamp-2" title={viewAppModal.full_name}>{viewAppModal.full_name}</dd></div>
+                                <div><dt className="text-slate-500">Current stage</dt><dd className="font-bold text-role-strong mt-1">{getUnifiedAdoptionStatus(viewAppModal).consolidatedStageIndex + 1}. {getUnifiedAdoptionStatus(viewAppModal).consolidatedStageName}</dd></div>
+                            </dl>
+                            <div className="rounded-xl bg-role-soft border border-role-border p-3 flex flex-col sm:flex-row sm:items-center gap-2">
+                                <p className="text-xs flex-1"><span className="font-bold">Current focus: </span>{getUnifiedAdoptionStatus(viewAppModal).activeSubtask}</p>
+                                {isStage1 && viewAppModal.status === 'Pending' && isHeadOfficer ? <button type="button" onClick={() => handleOpenReviewModal(viewAppModal, 'approve')} className="adoption-detail-action bg-role text-white">Review application</button> : <button type="button" onClick={() => setDetailTab(['Certificate', 'Payment'].includes(viewAppModal.current_stage || '') ? 'certificate' : 'process')} className="adoption-detail-action bg-role text-white">View current actions</button>}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button type="button" onClick={() => openAdoptionChat(viewAppModal.adoption_id)} className="adoption-detail-action border border-role-border text-role-strong"><MessageCircle className="w-4 h-4" /> Chat with Adopter{(chatUnread[viewAppModal.adoption_id] || 0) > 0 && <span className="rounded-full bg-red-600 px-1.5 text-white">{chatUnread[viewAppModal.adoption_id]}</span>}</button>
+                                <Link to={`/brgy/adopt/journey/${viewAppModal.holding_id}`} className="adoption-detail-action border border-slate-200 text-slate-700"><ExternalLink className="w-4 h-4" /> Journey Trail</Link>
+                            </div>
+                        </section>
+                        <div className="adoption-detail-tabs" role="tablist" aria-label="Adoption details sections" onKeyDown={event => {
+                            const tabs = ['overview', 'process', 'certificate'] as const;
+                            const index = tabs.indexOf(detailTab);
+                            const next = event.key === 'ArrowRight' ? (index + 1) % 3 : event.key === 'ArrowLeft' ? (index + 2) % 3 : event.key === 'Home' ? 0 : event.key === 'End' ? 2 : -1;
+                            if (next >= 0) { event.preventDefault(); setDetailTab(tabs[next]); document.getElementById(`adoption-tab-${tabs[next]}`)?.focus(); }
+                        }}>
+                            {([{ id: 'overview', label: 'Overview' }, { id: 'process', label: 'Process & Assignments' }, { id: 'certificate', label: 'Certificate' }] as const).map(tab => <button key={tab.id} id={`adoption-tab-${tab.id}`} type="button" role="tab" aria-selected={detailTab === tab.id} aria-controls={`adoption-panel-${tab.id}`} tabIndex={detailTab === tab.id ? 0 : -1} onClick={() => setDetailTab(tab.id)}>{tab.label}</button>)}
                         </div>
-
-                        {/* ─── ANIMAL SUMMARY ─── */}
-                        <div className="bg-gradient-to-r from-role-soft via-amber-50 to-role-soft/70 rounded-3xl p-5 sm:p-6 border border-role-border/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                            <div className="flex items-center gap-4 min-w-0">
-                                <img loading="lazy" decoding="async"
-                                    src={getPetThumb(viewAppModal.animal_photo)}
-                                    alt={viewAppModal.animal_name || 'Pet'}
-                                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-white shadow-md shrink-0"
-                                />
-                                <div className="min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                                        <span className="text-[10px] font-black uppercase tracking-wider text-role-strong bg-white/80 px-2.5 py-0.5 rounded-full border border-role-border">
-                                            Animal Summary
-                                        </span>
-                                        <span className="text-[11px] font-bold text-gray-500 bg-white/70 px-2.5 py-0.5 rounded-full border border-gray-200">
-                                            Animal ID: #{viewAppModal.holding_id}
-                                        </span>
-                                        {(() => {
-                                            const modalStatus = getUnifiedAdoptionStatus(viewAppModal);
-                                            return (
-                                                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${modalStatus.badgeClasses}`}>
-                                                    Status: {modalStatus.label}
-                                                </span>
-                                            );
-                                        })()}
-                                    </div>
-                                    <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight truncate">
-                                        {viewAppModal.animal_name || `Rescue Animal #${viewAppModal.holding_id}`}
-                                    </h2>
-                                    <p className="text-xs sm:text-sm text-slate-600 font-semibold mt-0.5 flex items-center gap-2 flex-wrap">
-                                        <span>{viewAppModal.animal_type || 'Rescue'}</span>
-                                        {viewAppModal.animal_breed && <span>• Breed: {viewAppModal.animal_breed}</span>}
-                                        {(() => {
-                                            const matchCat = catalogAnimals.find(a => a.holding_id === viewAppModal.holding_id);
-                                            return (
-                                                <>
-                                                    {matchCat?.color && <span>• Color: {matchCat.color}</span>}
-                                                    {matchCat?.estimated_size && <span>• Size: {matchCat.estimated_size}</span>}
-                                                </>
-                                            );
-                                        })()}
-                                    </p>
-                                </div>
-                            </div>
-
-
-                        </div>
-
-                        {/* ─── COMPACT APPLICANT / ADOPTER SUMMARY (STAGES 2–10 ONLY) ─── */}
-                        {!isStage1 && (
-                            <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 min-w-0">
-                                    <div className="flex items-center gap-3 shrink-0">
-                                        <div className="w-10 h-10 rounded-2xl bg-role-muted text-role-hover flex items-center justify-center font-black text-sm border border-role-border shrink-0 shadow-2xs">
-                                            <User className="w-5 h-5" />
-                                        </div>
-                                        <div>
-                                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block leading-none mb-1">
-                                                Applicant / Adopter
-                                            </span>
-                                            <h3 className="text-sm sm:text-base font-black text-slate-900 leading-none truncate">
-                                                {viewAppModal.full_name}
-                                            </h3>
-                                        </div>
-                                    </div>
-
-                                    <div className="hidden sm:block h-8 w-px bg-slate-200" />
-
-                                    <div className="flex flex-wrap items-center gap-y-2 gap-x-5 text-xs font-bold text-slate-600 min-w-0">
-                                        <div className="flex items-center gap-1.5 text-slate-700">
-                                            <Phone className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                                            <span>{viewAppModal.contact_no || 'No contact number'}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5 text-slate-700 min-w-0">
-                                            <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                                            <span className="truncate max-w-[280px]" title={viewAppModal.address || ''}>
-                                                {viewAppModal.address || 'Santa Maria, Bulacan'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="shrink-0 flex items-center">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowApplicantInfoModal(true)}
-                                        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-role-soft hover:bg-role-muted text-role-strong border border-role-border/90 rounded-2xl text-xs font-black transition-all shadow-2xs cursor-pointer hover:-translate-y-0.5 active:scale-95"
-                                        title="View complete applicant details, ID verification, and motivation"
-                                    >
-                                        <User className="w-4 h-4 text-role" />
-                                        <span>View Applicant Information</span>
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
+                        <div role="tabpanel" id="adoption-panel-process" aria-labelledby="adoption-tab-process" hidden={detailTab !== 'process'} className="space-y-4">
                         {/* ─── ADOPTION LIFECYCLE ─── */}
                         <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/90 shadow-xs space-y-4">
                             <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
@@ -1142,6 +966,7 @@ const BrgyAdoptions = () => {
                                 </button>
                             </div>
                             <AdoptionStageStepper
+                                responsive
                                 currentStage={viewAppModal.current_stage}
                                 stageStatus={viewAppModal.application_stage_status}
                                 status={viewAppModal.status}
@@ -1275,6 +1100,7 @@ const BrgyAdoptions = () => {
 
                         {/* Case owner + task assignments (who handles each step) */}
                         <AdoptionCasePanel
+                            compactHistory
                             key={`case-${viewAppModal.adoption_id}`}
                             adoptionId={viewAppModal.adoption_id}
                             currentStage={viewAppModal.current_stage}
@@ -1599,173 +1425,10 @@ const BrgyAdoptions = () => {
                                     </div>
                                 )}
 
-                                {/* Stage 7: Certificate */}
-                                {(viewAppModal.current_stage === 'Certificate' || viewAppModal.current_stage === 'Payment') && (
-                                    <div className="space-y-6">
-                                        {/* Print styles for direct page printing */}
-                                        <style>{`
-                                        @media print {
-                                            body * {
-                                                visibility: hidden !important;
-                                            }
-                                            #straysafe-adoption-certificate-root,
-                                            #straysafe-adoption-certificate-root * {
-                                                visibility: visible !important;
-                                            }
-                                            #straysafe-adoption-certificate-root {
-                                                position: absolute !important;
-                                                left: 0 !important;
-                                                top: 0 !important;
-                                                /* shrink to fit ONE page on any paper size (A4 / Letter / Legal) */
-                                                width: 920px !important;
-                                                max-width: 920px !important;
-                                                zoom: 0.8 !important;
-                                                margin: 0 !important;
-                                                padding: 8mm 10mm !important;
-                                                background: #FEFCF8 !important;
-                                                box-shadow: none !important;
-                                                border: none !important;
-                                                break-inside: avoid !important;
-                                                page-break-inside: avoid !important;
-                                                -webkit-print-color-adjust: exact !important;
-                                                print-color-adjust: exact !important;
-                                            }
-                                            @page {
-                                                margin: 6mm;
-                                            }
-                                            html, body {
-                                                height: 0 !important;
-                                                min-height: 0 !important;
-                                                overflow: hidden !important;
-                                            }
-                                        }
-                                    `}</style>
-
-                                        {/* Stage 7 Header Banner */}
-                                        <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-xs sm:text-sm text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                            <div className="space-y-0.5">
-                                                <div className="font-black text-amber-950 flex items-center gap-1.5 text-sm">
-                                                    <Award className="w-4 h-4 text-amber-600" />
-                                                    <span>STAGE 7 — CERTIFICATE OF ADOPTION</span>
-                                                </div>
-                                                <div className="text-xs text-amber-800 font-semibold">
-                                                    Status: <strong>Adoption Certificate Ready</strong>
-                                                </div>
-                                            </div>
-                                            {viewAppModal.certificate_number && (
-                                                <span className="font-mono font-bold text-xs bg-amber-100 text-amber-900 px-3 py-1.5 rounded-xl border border-amber-300">
-                                                    Cert #: {viewAppModal.certificate_number}
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        {/* Certificate Controls & Delivery Status Card */}
-                                        <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4 shadow-2xs">
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
-                                                <div>
-                                                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                                                        <Award className="w-4 h-4 text-role" /> Certificate Management
-                                                    </h4>
-                                                    <p className="text-[11px] text-slate-500 font-medium">
-                                                        Official StraySafe adoption certificate with digital QR verification and Punong Barangay authorization.
-                                                    </p>
-                                                </div>
-
-                                                {/* Action Buttons Top */}
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => window.print()}
-                                                        className="px-4 py-2.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
-                                                    >
-                                                        <Printer className="w-3.5 h-3.5 text-slate-600" />
-                                                        <span>Print Certificate</span>
-                                                    </button>
-
-                                                    {!viewAppModal.is_certificate_sent ? (
-                                                        <>
-                                                            {headOnlyNote(viewAppModal.case_owner_name)}
-                                                            <button
-                                                                type="button"
-                                                                disabled={actionLoading || !isHeadOfficer}
-                                                                title={!isHeadOfficer ? HEAD_ONLY_HINT : undefined}
-                                                                onClick={() => handleSendDigitalCertificate(viewAppModal.adoption_id)}
-                                                                className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50 active:scale-95"
-                                                            >
-                                                                <Sparkles className="w-3.5 h-3.5" />
-                                                                <span>{actionLoading ? 'Sending...' : 'Send Digital Certificate'}</span>
-                                                            </button>
-                                                        </>
-                                                    ) : (
-                                                        <button
-                                                            type="button"
-                                                            disabled={actionLoading}
-                                                            onClick={() => handleProceedToHandover(viewAppModal.adoption_id)}
-                                                            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50 active:scale-95"
-                                                        >
-                                                            <HeartHandshake className="w-3.5 h-3.5" />
-                                                            <span>{actionLoading ? 'Proceeding...' : 'Proceed to Handover'}</span>
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Delivery Info */}
-                                            {viewAppModal.is_certificate_sent ? (
-                                                <div className="p-4 rounded-xl bg-emerald-50/90 border border-emerald-300 text-xs text-emerald-950 space-y-2 shadow-2xs">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="font-black uppercase tracking-wider text-[11px] text-emerald-800 flex items-center gap-1.5">
-                                                            <CheckCircle2 className="w-4 h-4 text-emerald-600" /> DIGITAL CERTIFICATE SENT
-                                                        </span>
-                                                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-200 text-emerald-900">
-                                                            ✓ Sent to Resident
-                                                        </span>
-                                                    </div>
-                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 font-medium">
-                                                        <div>
-                                                            <span className="text-slate-500 block text-[10px]">Sent To:</span>
-                                                            <strong className="text-slate-900 text-xs">{viewAppModal.full_name}</strong>
-                                                        </div>
-                                                        <div>
-                                                            <span className="text-slate-500 block text-[10px]">Date Sent:</span>
-                                                            <strong className="text-slate-900 text-xs">
-                                                                {viewAppModal.certificate_sent_at ? new Date(viewAppModal.certificate_sent_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'Sent'}
-                                                            </strong>
-                                                        </div>
-                                                        <div>
-                                                            <span className="text-slate-500 block text-[10px]">Certificate No.:</span>
-                                                            <strong className="text-slate-900 font-mono text-xs">{viewAppModal.certificate_number || 'N/A'}</strong>
-                                                        </div>
-                                                    </div>
-                                                    <p className="text-[11px] text-emerald-700 font-bold pt-1">
-                                                        ✓ Certificate successfully sent to resident. You may now proceed to Stage 8: Handover.
-                                                    </p>
-                                                </div>
-                                            ) : (
-                                                <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-xs text-amber-900 flex items-center justify-between gap-2">
-                                                    <span>Click <strong>Send Digital Certificate</strong> to deliver this official certificate to the resident's StraySafe account.</span>
-                                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-200/80 text-amber-900 shrink-0">
-                                                        Awaiting Delivery
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* ─── FULL OFFICIAL CERTIFICATE DOCUMENT INLINE ─── */}
-                                        <div className="py-2 space-y-3">
-                                            <CertificateSyncBar
-                                                adoptionId={viewAppModal.adoption_id}
-                                                canUpdate={isHeadOfficer}
-                                                refreshKey={certificateRefreshKey}
-                                                onUpdated={() => setCertificateRefreshKey((k) => k + 1)}
-                                            />
-                                            <AdoptionCertificateDocument
-                                                key={`cert-${viewAppModal.adoption_id}-${certificateRefreshKey}`}
-                                                adoptionId={viewAppModal.adoption_id}
-                                                applicationData={viewAppModal}
-                                            />
-                                        </div>
-                                    </div>
+                                {['Certificate', 'Payment'].includes(viewAppModal.current_stage || '') && (
+                                    <button type="button" onClick={() => setDetailTab('certificate')} className="adoption-detail-action bg-role text-white">
+                                        <Award className="w-4 h-4" /> Open certificate management
+                                    </button>
                                 )}
 
                                 {/* Stage 8: Handover */}
@@ -2609,7 +2272,7 @@ const BrgyAdoptions = () => {
                                                 </span>
                                                 <button
                                                     type="button"
-                                                    onClick={() => setStageModalState({ app: viewAppModal, modal: 'certificate' })}
+                                                    onClick={() => setCertificatePreview({ print: false })}
                                                     className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
                                                 >
                                                     <Award className="w-4 h-4 text-amber-400" />
@@ -3092,6 +2755,33 @@ const BrgyAdoptions = () => {
                             </div>
                         )}
 
+                        </div>
+                        <div role="tabpanel" id="adoption-panel-certificate" aria-labelledby="adoption-tab-certificate" hidden={detailTab !== 'certificate'}>
+                            {detailTab === 'certificate' && <AdoptionCertificatePanel
+                                application={viewAppModal} canSend={isHeadOfficer} busy={actionLoading}
+                                refreshKey={certificateRefreshKey} onUpdated={() => setCertificateRefreshKey(k => k + 1)}
+                                onPreview={(print = false) => setCertificatePreview({ print })}
+                                onSend={() => handleSendDigitalCertificate(viewAppModal.adoption_id)}
+                                onProceed={() => handleProceedToHandover(viewAppModal.adoption_id)}
+                            />}
+                        </div>
+                        <div role="tabpanel" id="adoption-panel-overview" aria-labelledby="adoption-tab-overview" hidden={detailTab !== 'overview'} className="space-y-4">
+                            <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 space-y-4">
+                                <h3 className="text-sm font-black">Applicant & application</h3>
+                                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                                    <div><dt className="text-xs text-slate-500">Applicant</dt><dd className="font-bold mt-1">{viewAppModal.full_name}</dd></div>
+                                    <div><dt className="text-xs text-slate-500">Contact</dt><dd className="font-bold mt-1">{viewAppModal.contact_no || 'Not recorded'}</dd></div>
+                                    <div className="sm:col-span-2"><dt className="text-xs text-slate-500">Address</dt><dd className="font-semibold mt-1">{viewAppModal.address || 'Not recorded'}</dd></div>
+                                    <div><dt className="text-xs text-slate-500">Submitted</dt><dd className="font-semibold mt-1">{new Date(viewAppModal.created_at).toLocaleDateString()}</dd></div>
+                                    <div><dt className="text-xs text-slate-500">Case owner</dt><dd className="font-semibold mt-1">{viewAppModal.case_owner_name || 'Not claimed yet'}</dd></div>
+                                    <div className="sm:col-span-2"><dt className="text-xs text-slate-500">Animal</dt><dd className="font-semibold mt-1">{viewAppModal.animal_name || `Rescue Animal #${viewAppModal.holding_id}`}</dd></div>
+                                    {catalogAnimals.find(animal => animal.holding_id === viewAppModal.holding_id)?.color && <div><dt className="text-xs text-slate-500">Animal color</dt><dd className="font-semibold mt-1">{catalogAnimals.find(animal => animal.holding_id === viewAppModal.holding_id)?.color}</dd></div>}
+                                    {catalogAnimals.find(animal => animal.holding_id === viewAppModal.holding_id)?.estimated_size && <div><dt className="text-xs text-slate-500">Animal size</dt><dd className="font-semibold mt-1">{catalogAnimals.find(animal => animal.holding_id === viewAppModal.holding_id)?.estimated_size}</dd></div>}
+                                </dl>
+                                <button type="button" onClick={() => setShowApplicantInfoModal(true)} className="adoption-detail-action border border-role-border bg-role-soft text-role-strong w-full sm:w-auto"><User className="w-4 h-4" /> View Applicant Information</button>
+                            </section>
+                            {(isStage1 || viewAppModal.status === 'Cancelled') && <details className="rounded-2xl border border-slate-200 bg-white p-4">
+                                <summary className="min-h-11 flex items-center cursor-pointer text-sm font-bold">Application details & decisions</summary>
                         {/* ─── FULL APPLICANT / ADOPTER INFORMATION (STAGE 1 ONLY) ─── */}
                         {isStage1 && (
                             <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/90 shadow-xs space-y-6">
@@ -3263,6 +2953,11 @@ const BrgyAdoptions = () => {
                                 </div>
                             </div>
                         )}
+                            </details>}
+                        </div>
+                        {certificatePreview && <AdoptionCertificateViewer adoptionId={viewAppModal.adoption_id}
+                            applicationData={viewAppModal} refreshKey={certificateRefreshKey} printOnOpen={certificatePreview.print}
+                            onClose={() => setCertificatePreview(null)} />}
                     </main>
                 ) : (
                     /* ─── MAIN ADOPTION MANAGEMENT LIST VIEW ─── */
@@ -4249,10 +3944,10 @@ const BrgyAdoptions = () => {
 
                     {/* Stage 7: Official Certificate & QR Modal */}
                     {stageModalState.modal === 'certificate' && (
-                        <AdoptionCertificateModal
-                            isOpen={true}
+                        <AdoptionCertificateViewer
                             adoptionId={stageModalState.app.adoption_id}
                             applicationData={stageModalState.app}
+                            refreshKey={0}
                             onClose={() => setStageModalState(null)}
                         />
                     )}
@@ -4301,7 +3996,7 @@ const BrgyAdoptions = () => {
                     onClick={() => setShowApplicantInfoModal(false)}
                 >
                     <div
-                        className="bg-white rounded-3xl max-w-2xl w-full border border-slate-200/90 shadow-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
+                        className="adoption-applicant-dialog bg-white rounded-3xl max-w-2xl w-full border border-slate-200/90 shadow-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
                         role="dialog"
                         aria-modal="true"
                         onClick={e => e.stopPropagation()}
@@ -4324,6 +4019,7 @@ const BrgyAdoptions = () => {
                             <button
                                 type="button"
                                 onClick={() => setShowApplicantInfoModal(false)}
+                                aria-label="Close applicant information"
                                 className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer shrink-0"
                                 title="Close modal"
                             >

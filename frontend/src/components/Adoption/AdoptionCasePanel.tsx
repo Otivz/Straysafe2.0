@@ -98,6 +98,7 @@ const stageAlreadyDone = (taskType: string, currentStage?: string | null) => {
 
 interface Props {
     adoptionId: number;
+    compactHistory?: boolean;
     /** The application's current stage; steps before it are shown as completed. */
     currentStage?: string | null;
     applicationStageStatus?: string | null;
@@ -107,7 +108,7 @@ interface Props {
     onRejectRequested?: () => void;
 }
 
-export default function AdoptionCasePanel({ adoptionId, currentStage, applicationStageStatus, refreshToken, onChanged, onRejectRequested }: Props) {
+export default function AdoptionCasePanel({ adoptionId, compactHistory = false, currentStage, applicationStageStatus, refreshToken, onChanged, onRejectRequested }: Props) {
     const [info, setInfo] = useState<CaseInfo | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -189,6 +190,135 @@ export default function AdoptionCasePanel({ adoptionId, currentStage, applicatio
     const byTask = (type: string) => info.assignments.filter((a) => a.task_type === type);
     const decisionNote = applicationStageStatus ? PENDING_DECISION[applicationStageStatus] : undefined;
 
+    const isTaskDone = (type: string) => stageAlreadyDone(type, currentStage) || byTask(type).some(a => a.status === 'Completed' && !a.milestone_name);
+    const completed = TASKS.filter(task => isTaskDone(task.type));
+    const pending = TASKS.filter(task => !isTaskDone(task.type));
+    const renderTask = (task: typeof TASKS[number]) => {
+        const rows = byTask(task.type);
+        const current = rows.filter((a) => OPEN.includes(a.status)).slice(-1)[0];
+        const last = current || rows.slice(-1)[0];
+        const stageDone = stageAlreadyDone(task.type, currentStage);
+        const isDone = stageDone || rows.some((a) => a.status === 'Completed' && !a.milestone_name);
+        return (
+            <li key={task.type} className={`px-4 py-3 flex flex-col gap-2 ${compactHistory && current ? 'bg-amber-50/50' : ''}`}>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="min-w-0">
+                        <p className="text-xs font-black text-slate-900">{task.label}</p>
+                        {isDone && (
+                            <p className="text-[11px] font-black text-emerald-700 mt-0.5 flex items-center gap-1" data-testid="task-done">
+                                <span className="w-4 h-4 rounded-full bg-emerald-600 text-white inline-flex items-center justify-center text-[10px] leading-none">✓</span>
+                                Completed{last?.assigned_to_name && last.status === 'Completed' ? ` by ${last.assigned_to_name}` : ''}
+                            </p>
+                        )}
+                        {/* A finished step shows only who completed it, never a leftover waiting / closed task */}
+                        {last && !(isDone && last.status !== 'Completed') ? (
+                            <p className="text-[11px] text-slate-600 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold">{last.assigned_to_name || 'Staff'}</span>
+                                <span className={`px-1.5 py-0.5 rounded-md border text-[10px] font-black ${STATUS_STYLES[last.status] || STATUS_STYLES.Cancelled}`}>
+                                    {STATUS_LABELS[last.status] || last.status}
+                                </span>
+                                {last.milestone_name && <span>· {last.milestone_name}</span>}
+                                {last.scheduled_at && <span>· {fmt(last.scheduled_at)}</span>}
+                                {last.status === 'Declined' && last.decline_reason && <span className="text-rose-700">· “{last.decline_reason}”</span>}
+                            </p>
+                        ) : !isDone ? (
+                            <p className="text-[11px] text-slate-400 mt-0.5">Not assigned · {task.hint}</p>
+                        ) : null}
+                    </div>
+                    {info.can_assign && !isDone && (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                            {current && (
+                                <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => run(() => api.post(`/adoption-tasks/${current.assignment_id}/cancel`, { reason: 'Withdrawn by case owner' }))}
+                                    className="px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-[11px] font-bold cursor-pointer disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => openAssign(task.type)}
+                                className="px-2.5 py-1 rounded-lg bg-role hover:bg-role-hover text-white text-[11px] font-black flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                            >
+                                <UserPlus className="w-3.5 h-3.5" />
+                                {current ? 'Reassign' : 'Assign'}
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                {assigning === task.type && (
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                        <div className="flex items-center justify-between">
+                            <p className="text-[11px] font-black text-slate-800">Assign {task.label}</p>
+                            <button type="button" onClick={() => setAssigning(null)} className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer" aria-label="Close">
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                        <select
+                            value={target}
+                            onChange={(e) => setTarget(e.target.value ? Number(e.target.value) : '')}
+                            className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold"
+                            aria-label={`Staff for ${task.label}`}
+                        >
+                            <option value="">-- Select Barangay Staff --</option>
+                            {staff.map((s) => (
+                                <option key={s.user_id} value={s.user_id}>
+                                    {s.name}{s.position_name ? ` (${s.position_name})` : ''}{s.open_tasks ? ` · ${s.open_tasks} open` : ''}
+                                </option>
+                            ))}
+                        </select>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <label className="text-[11px] text-slate-600 font-bold">
+                                Due (optional)
+                                <input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)}
+                                    className="mt-1 w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium" />
+                            </label>
+                            <label className="text-[11px] text-slate-600 font-bold">
+                                Note for the assignee (optional)
+                                <input type="text" value={remarks} onChange={(e) => setRemarks(e.target.value)} maxLength={500}
+                                    className="mt-1 w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium" />
+                            </label>
+                        </div>
+                        <p className="text-[10px] text-slate-500">
+                            {task.type === 'Interview' || task.type === 'Home_Visit'
+                                ? 'Tip: you can also assign while scheduling. The assignee accepts the task, then conducts and records it.'
+                                : 'The assignee accepts the task on their Adoption Tasks page, then records it.'}
+                        </p>
+                        <button
+                            type="button"
+                            disabled={busy || target === ''}
+                            onClick={submitAssign}
+                            className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black cursor-pointer disabled:opacity-50"
+                        >
+                            {busy ? 'Assigning...' : 'Assign task'}
+                        </button>
+                    </div>
+                )}
+                {compactHistory && rows.length > 0 && (
+                    <details className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs">
+                        <summary className="cursor-pointer font-semibold min-h-8 flex items-center">Assignment history ({rows.length})</summary>
+                        <ul className="space-y-2 pt-2">
+                            {rows.map(row => <li key={row.assignment_id} className="border-t border-slate-200 pt-2 space-y-1 break-words">
+                                <p className="font-bold">{row.assigned_to_name || 'Staff'} &middot; {STATUS_LABELS[row.status] || row.status}</p>
+                                {row.assigned_by_name && <p>Assigned by {row.assigned_by_name}</p>}
+                                {row.assigned_at && <p>Assigned: {fmt(row.assigned_at)}</p>}
+                                {row.accepted_at && <p>Accepted: {fmt(row.accepted_at)}</p>}
+                                {row.due_at && <p>Due: {fmt(row.due_at)}</p>}
+                                {row.completed_at && <p>Completed: {fmt(row.completed_at)}</p>}
+                                {row.remarks && <p>{row.remarks}</p>}
+                                {row.decline_reason && <p className="text-rose-700">{row.decline_reason}</p>}
+                            </li>)}
+                        </ul>
+                    </details>
+                )}
+            </li>
+        );
+    };
+
     return (
         <div className="rounded-2xl border border-slate-200 bg-white shadow-2xs overflow-hidden" data-testid="adoption-case-panel">
             <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/80 flex items-center justify-between gap-3 flex-wrap">
@@ -240,115 +370,12 @@ export default function AdoptionCasePanel({ adoptionId, currentStage, applicatio
             {error && <div className="mx-4 mt-3 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-800">{error}</div>}
 
             <ul className="divide-y divide-slate-100">
-                {TASKS.map((task) => {
-                    const rows = byTask(task.type);
-                    const current = rows.filter((a) => OPEN.includes(a.status)).slice(-1)[0];
-                    const last = current || rows.slice(-1)[0];
-                    const stageDone = stageAlreadyDone(task.type, currentStage);
-                    const isDone = stageDone || rows.some((a) => a.status === 'Completed' && !a.milestone_name);
-                    return (
-                        <li key={task.type} className="px-4 py-3 flex flex-col gap-2">
-                            <div className="flex items-center justify-between gap-3 flex-wrap">
-                                <div className="min-w-0">
-                                    <p className="text-xs font-black text-slate-900">{task.label}</p>
-                                    {isDone && (
-                                        <p className="text-[11px] font-black text-emerald-700 mt-0.5 flex items-center gap-1" data-testid="task-done">
-                                            <span className="w-4 h-4 rounded-full bg-emerald-600 text-white inline-flex items-center justify-center text-[10px] leading-none">✓</span>
-                                            Completed{last?.assigned_to_name && last.status === 'Completed' ? ` by ${last.assigned_to_name}` : ''}
-                                        </p>
-                                    )}
-                                    {/* A finished step shows only who completed it, never a leftover waiting / closed task */}
-                                    {last && !(isDone && last.status !== 'Completed') ? (
-                                        <p className="text-[11px] text-slate-600 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                                            <span className="font-bold">{last.assigned_to_name || 'Staff'}</span>
-                                            <span className={`px-1.5 py-0.5 rounded-md border text-[10px] font-black ${STATUS_STYLES[last.status] || STATUS_STYLES.Cancelled}`}>
-                                                {STATUS_LABELS[last.status] || last.status}
-                                            </span>
-                                            {last.milestone_name && <span>· {last.milestone_name}</span>}
-                                            {last.scheduled_at && <span>· {fmt(last.scheduled_at)}</span>}
-                                            {last.status === 'Declined' && last.decline_reason && <span className="text-rose-700">· “{last.decline_reason}”</span>}
-                                        </p>
-                                    ) : !isDone ? (
-                                        <p className="text-[11px] text-slate-400 mt-0.5">Not assigned · {task.hint}</p>
-                                    ) : null}
-                                </div>
-                                {info.can_assign && !isDone && (
-                                    <div className="flex items-center gap-1.5 shrink-0">
-                                        {current && (
-                                            <button
-                                                type="button"
-                                                disabled={busy}
-                                                onClick={() => run(() => api.post(`/adoption-tasks/${current.assignment_id}/cancel`, { reason: 'Withdrawn by case owner' }))}
-                                                className="px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-[11px] font-bold cursor-pointer disabled:opacity-50"
-                                            >
-                                                Cancel
-                                            </button>
-                                        )}
-                                        <button
-                                            type="button"
-                                            disabled={busy}
-                                            onClick={() => openAssign(task.type)}
-                                            className="px-2.5 py-1 rounded-lg bg-role hover:bg-role-hover text-white text-[11px] font-black flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                                        >
-                                            <UserPlus className="w-3.5 h-3.5" />
-                                            {current ? 'Reassign' : 'Assign'}
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-
-                            {assigning === task.type && (
-                                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                                    <div className="flex items-center justify-between">
-                                        <p className="text-[11px] font-black text-slate-800">Assign {task.label}</p>
-                                        <button type="button" onClick={() => setAssigning(null)} className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer" aria-label="Close">
-                                            <X className="w-3.5 h-3.5" />
-                                        </button>
-                                    </div>
-                                    <select
-                                        value={target}
-                                        onChange={(e) => setTarget(e.target.value ? Number(e.target.value) : '')}
-                                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold"
-                                        aria-label={`Staff for ${task.label}`}
-                                    >
-                                        <option value="">-- Select Barangay Staff --</option>
-                                        {staff.map((s) => (
-                                            <option key={s.user_id} value={s.user_id}>
-                                                {s.name}{s.position_name ? ` (${s.position_name})` : ''}{s.open_tasks ? ` · ${s.open_tasks} open` : ''}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                        <label className="text-[11px] text-slate-600 font-bold">
-                                            Due (optional)
-                                            <input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)}
-                                                className="mt-1 w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium" />
-                                        </label>
-                                        <label className="text-[11px] text-slate-600 font-bold">
-                                            Note for the assignee (optional)
-                                            <input type="text" value={remarks} onChange={(e) => setRemarks(e.target.value)} maxLength={500}
-                                                className="mt-1 w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium" />
-                                        </label>
-                                    </div>
-                                    <p className="text-[10px] text-slate-500">
-                                        {task.type === 'Interview' || task.type === 'Home_Visit'
-                                            ? 'Tip: you can also assign while scheduling. The assignee accepts the task, then conducts and records it.'
-                                            : 'The assignee accepts the task on their Adoption Tasks page, then records it.'}
-                                    </p>
-                                    <button
-                                        type="button"
-                                        disabled={busy || target === ''}
-                                        onClick={submitAssign}
-                                        className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black cursor-pointer disabled:opacity-50"
-                                    >
-                                        {busy ? 'Assigning...' : 'Assign task'}
-                                    </button>
-                                </div>
-                            )}
-                        </li>
-                    );
-                })}
+                {(compactHistory ? pending : TASKS).map(renderTask)}
             </ul>
+            {compactHistory && completed.length > 0 && <details className="border-t border-slate-200">
+                <summary className="px-4 py-3 min-h-11 cursor-pointer text-xs font-bold text-emerald-800">Completed tasks ({completed.length})</summary>
+                <ul className="divide-y divide-slate-100">{completed.map(renderTask)}</ul>
+            </details>}
         </div>
     );
 }

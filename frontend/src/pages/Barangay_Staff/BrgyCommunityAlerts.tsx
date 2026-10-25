@@ -1,3 +1,4 @@
+import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BrgySidebar from '../../components/BrgySidebar';
@@ -92,6 +93,8 @@ const BrgyCommunityAlerts = () => {
             fetchAlerts();
         }
     }, [currentUser]);
+
+    useAutoRefresh(fetchAlerts, Boolean(currentUser));
 
     const handleCreateAlert = async (e: React.FormEvent) => {
         e.preventDefault();

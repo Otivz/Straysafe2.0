@@ -101,7 +101,6 @@ const BrgyProfile = () => {
     const [gettingLocation, setGettingLocation] = useState(false);
     const [successMsg, setSuccessMsg] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
-    const [dynamicPositions, setDynamicPositions] = useState<{position_id: number, position_name: string}[]>([]);
 
     const fetchUserProfile = async () => {
         if (!initialUserObj || !initialUserObj.user_id) {
@@ -132,18 +131,8 @@ const BrgyProfile = () => {
     };
 
 
-    const fetchPositions = async () => {
-        try {
-            const res = await api.get('/users/positions/list');
-            setDynamicPositions(res.data);
-        } catch (err) {
-            console.error('Failed to fetch positions:', err);
-        }
-    };
-
     useEffect(() => {
         fetchUserProfile();
-        fetchPositions();
     }, []);
 
     // Reverse geocode when coordinates change
@@ -252,7 +241,6 @@ const BrgyProfile = () => {
                 name,
                 phone: phone || null,
                 address: address || null,
-                position: position || null,
                 latitude: latitude ? parseFloat(latitude.toString()) : null,
                 longitude: longitude ? parseFloat(longitude.toString()) : null
             };
@@ -504,59 +492,16 @@ const BrgyProfile = () => {
                                                 <div className="min-w-0 sm:col-span-2">
                                                     <label htmlFor="profile-position" className="block text-xs font-bold text-gray-700 mb-1">Position / designation</label>
                                                     <div className="relative">
-                                                {(() => {
-                                                    const standardPositions = [
-                                                        'Barangay Captain / Punong Barangay',
-                                                        'Barangay Animal Rescuer / Field Handler',
-                                                        'Barangay Tanod / Peace & Order Officer',
-                                                        'Barangay Staff / Action Officer',
-                                                        'Barangay Kagawad',
-                                                        'Subdivision President / Leader',
-                                                        'Subdivision Secretary'
-                                                    ];
-                                                    const allPositions = Array.from(new Set([
-                                                        ...standardPositions,
-                                                        ...dynamicPositions.map(dp => dp.position_name)
-                                                    ]));
-                                                    
-                                                    return (
-                                                        <>
-                                                            <select
-                                                                value={allPositions.includes(position) ? position : (position ? 'Other' : '')}
-                                                                onChange={(e) => {
-                                                                    const val = e.target.value;
-                                                                    if (val === 'Other') {
-                                                                        setPosition('');
-                                                                    } else {
-                                                                        setPosition(val);
-                                                                    }
-                                                                }}
-                                                                id="profile-position" className={`${FIELD} pr-9 cursor-pointer truncate`}
-                                                            >
-                                                                <option value="">Select Official Position...</option>
-                                                                {allPositions.map(pos => (
-                                                                    <option key={pos} value={pos}>{pos}</option>
-                                                                ))}
-                                                                <option value="Other">Other (Custom Designation...)</option>
-                                                            </select>
-
-                                                            {(!allPositions.includes(position)) && (
-                                                                <div className="pt-2">
-                                                                    <label className="text-[11px] font-bold text-gray-600 block mb-1">
-                                                                        Specify Custom Position Title
-                                                                    </label>
-                                                                    <input 
-                                                                        type="text" 
-                                                                        value={position} 
-                                                                        onChange={e => setPosition(e.target.value)} 
-                                                                        placeholder="e.g. Purok Coordinator, Veterinary Aid, Patrol Officer..." 
-                                                                        className={FIELD}
-                                                                    />
-                                                                </div>
-                                                            )}
-                                                        </>
-                                                    );
-                                                })()}
+                                                {/* Positions are assigned by the Head Officer or the administrator (Personnel page);
+                                                    the server refuses a self-change */}
+                                                <input
+                                                    id="profile-position"
+                                                    type="text"
+                                                    value={position || 'Not assigned yet'}
+                                                    readOnly
+                                                    className="w-full min-w-0 h-11 px-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-600 cursor-not-allowed"
+                                                />
+                                                <p className="text-[11px] text-gray-400 mt-1">Assigned by your Head Officer or the administrator.</p>
                                                     </div>
                                                 </div>
                                                 <div className="min-w-0 sm:col-span-2">

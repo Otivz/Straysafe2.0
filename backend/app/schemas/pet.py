@@ -30,6 +30,8 @@ class PetBase(BaseModel):
     bite_incident_count: Optional[int] = 0
     chase_behavior: Optional[bool] = False
     chase_incident_count: Optional[int] = 0
+    declared_bite_history: Optional[bool] = False
+    declared_chase_behavior: Optional[bool] = False
     notes: Optional[str] = None
     status: Optional[str] = "Active"
     is_verified: Optional[bool] = False
@@ -98,6 +100,8 @@ class PetUpdate(BaseModel):
     bite_incident_count: Optional[int] = None
     chase_behavior: Optional[bool] = None
     chase_incident_count: Optional[int] = None
+    declared_bite_history: Optional[bool] = None
+    declared_chase_behavior: Optional[bool] = None
     notes: Optional[str] = None
     status: Optional[str] = None
     is_verified: Optional[bool] = None
@@ -134,6 +138,8 @@ class UserMini(BaseModel):
         from_attributes = True
 
 class PetResponse(PetBase):
+    can_edit_record: Optional[bool] = None
+    record_edit_restriction: Optional[str] = None
     ai_detection_confidence: Optional[float] = None  # YOLOv8 confidence of the animal in the photo
     display_name: Optional[str] = None
     reference_code: Optional[str] = None

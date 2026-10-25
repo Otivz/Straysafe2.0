@@ -1,5 +1,6 @@
 import { petDescription, petName } from '../../utils/petName';
 import { getPetPicture } from '../../utils/avatar';
+import { calculateAge } from '../../utils/petAge';
 
 export interface PetRecord {
     id: string;
@@ -12,6 +13,8 @@ export interface PetRecord {
     description?: string;
     gender: string;
     age: string;
+    birthDate?: string;
+    birth_date?: string;
     breed: string;
     species: string;
     ownerName: string;
@@ -52,6 +55,9 @@ export interface PetRecord {
     chase_behavior?: boolean;
     chaseIncidentCount?: number;
     chase_incident_count?: number;
+    // what the owner or registering officer declared (not verified by an incident report)
+    declared_bite_history?: boolean;
+    declared_chase_behavior?: boolean;
     healthCondition?: string;
     health_condition?: string;
     notes?: string;
@@ -85,7 +91,9 @@ export const mapRawPetToPetRecord = (pet: any): PetRecord => {
         referenceCode: pet.reference_code ?? pet.referenceCode,
         description: petDescription(pet),
         gender: pet.gender || 'Unknown',
-        age: pet.estimated_age || pet.age || 'Unknown',
+        age: calculateAge(pet.birth_date, pet.estimated_age || pet.age) || 'Unknown',
+        birthDate: pet.birth_date || undefined,
+        birth_date: pet.birth_date || undefined,
         breed: pet.breed || 'Unknown',
         species: pet.pet_type || pet.species || 'Dog',
         ownerName: ownerObj.name || pet.owner_name || (pet.owner_id ? 'Unknown Owner' : (pet.emergency_contact_name ? `${pet.emergency_contact_name} (No StraySafe Account)` : 'No Owner (Community Animal)')),
@@ -113,6 +121,8 @@ export const mapRawPetToPetRecord = (pet: any): PetRecord => {
         biteIncidentCount: pet.bite_incident_count ?? pet.biteIncidentCount ?? 0,
         chaseBehavior: pet.chase_behavior ?? pet.chaseBehavior ?? false,
         chaseIncidentCount: pet.chase_incident_count ?? pet.chaseIncidentCount ?? 0,
+        declared_bite_history: !!pet.declared_bite_history,
+        declared_chase_behavior: !!pet.declared_chase_behavior,
         healthCondition: pet.health_condition || pet.healthCondition || 'Healthy and active',
         notes: pet.notes || '',
         vaccineCardUrl: pet.vaccine_card_url || pet.vaccineCardUrl || null,

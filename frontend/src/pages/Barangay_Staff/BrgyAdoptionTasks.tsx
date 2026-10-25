@@ -1,3 +1,4 @@
+import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarClock, CheckCircle2, ClipboardList, Home, MapPin, Phone, RefreshCw, XCircle } from 'lucide-react';
@@ -16,7 +17,6 @@ import {
 import AdoptionMonitoringModal from '../../components/Modals/AdoptionMonitoringModal';
 import { STATUS_LABELS, STATUS_STYLES } from '../../components/Adoption/AdoptionCasePanel';
 import { petName } from '../../utils/petName';
-import { whenVisible } from '../../utils/visibleInterval';
 import { useCachedState, hasCachedData } from '../../utils/useCachedState';
 
 // "My Adoption Tasks": tasks assigned to the signed-in Barangay staff member.
@@ -115,9 +115,8 @@ export default function BrgyAdoptionTasks() {
 
     useEffect(() => {
         load();
-        const t = setInterval(whenVisible(load), 30000);
-        return () => clearInterval(t);
     }, [load]);
+    useAutoRefresh(load);
 
     const groups = useMemo(() => ({
         new: tasks.filter((t) => t.status === 'Assigned'),

@@ -423,17 +423,27 @@ def trusted_link_filter():
                and_(Report.identity_rechecked_at.isnot(None), ~pending))
 
 
-def refresh_pet_behavior(db: Session, pet: Pet) -> None:
-    """Bite / chase / aggression profile from verified incident reports with a trusted link to this pet."""
+def verified_pet_behavior(db: Session, pet: Pet) -> tuple[int, int, bool]:
+    """(bites, chases, aggressive) from verified incident reports with a trusted link to this pet."""
     base = db.query(Report).filter(Report.pet_id == pet.pet_id, Report.verification_status == 'verified_true', trusted_link_filter())
     bite_count = base.filter(Report.verified_actual_bite == True).count()  # noqa: E712
     chase_count = base.filter(Report.verified_chasing == True).count()  # noqa: E712
     aggressive = base.filter(Report.verified_aggressive == True).count() > 0  # noqa: E712
+    return bite_count, chase_count, aggressive
+
+
+def refresh_pet_behavior(db: Session, pet: Pet) -> None:
+    """Bite / chase / aggression profile from verified incident reports. This is the only writer of the verified
+    fields; an owner's own account (declared_*) is never touched here."""
+    bite_count, chase_count, aggressive = verified_pet_behavior(db, pet)
     pet.has_bite_history = bite_count > 0
     pet.bite_incident_count = bite_count
     pet.chase_behavior = chase_count > 0
     pet.chase_incident_count = chase_count
-    pet.temperament = 'Aggressive' if (aggressive or bite_count > 0) else 'Friendly'
+    # Verified aggression or a verified bite makes the pet Aggressive. Otherwise the temperament people chose is kept
+    # (it used to be reset to Friendly on every report change, erasing an owner's "Anxious" or "Aggressive").
+    if aggressive or bite_count > 0:
+        pet.temperament = 'Aggressive'
 
 
 # --- One confirmed pet identity shared by every report of a case -------------------------------------------------

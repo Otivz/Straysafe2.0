@@ -17,6 +17,25 @@ from app.models.report import Adoption, HoldingAnimal, Report
 BLOCKING_STATES = ("adopted", "in_progress")
 
 
+def owned_through_later_adoption(db: Session, pet_id: Optional[int], user_id: int, since) -> bool:
+    """
+    Does user_id own this pet only because they adopted it after `since` (e.g. when a report was filed)?
+    Finishing an adoption merges the animal's community record into the adopter's new pet, so the old stray report
+    and its look-alike suggestions point to the adopter's pet. That ownership must not open what happened before
+    the animal was theirs: the reporter's private conversation, match chats, or actions on the old case. A report
+    filed after the adoption (the adopted pet goes missing later) is the adopter's own business and is not affected.
+    """
+    from app.models.pet import Pet
+    if not pet_id:
+        return False
+    if not db.query(Adoption.adoption_id).filter(Adoption.created_pet_id == pet_id, Adoption.applicant_id == user_id).first():
+        return False
+    owner_since = db.query(Pet.created_at).filter(Pet.pet_id == pet_id).scalar()
+    if since is None or owner_since is None:
+        return True  # can't tell when: don't open the older case
+    return since < owner_since
+
+
 def adoption_info_for_pets(db: Session, pet_ids: Iterable[int]) -> Dict[int, dict]:
     pet_ids = {p for p in pet_ids if p}
     if not pet_ids:

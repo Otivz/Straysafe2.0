@@ -263,11 +263,15 @@ def create_user(
         user_data["is_verified"] = False
         user_data["status"] = "Active"
     
-    # Resolve position string if provided
+    # Resolve position string if provided (only an administrator or Head Officer assigns positions; a public
+    # sign-up has none and can't add titles to the official list)
     pos_input = user_data.pop("position", None) or user_data.pop("position_name", None)
     user_data.pop("position", None)
     user_data.pop("position_name", None)
-    if pos_input and not user_data.get("position_id"):
+    may_assign_position = bool(creator and (creator.role_id == 4 or (creator.role_id == 3 and creator.is_head_officer)))
+    if not may_assign_position:
+        user_data["position_id"] = None
+    elif pos_input and not user_data.get("position_id"):
         user_data["position_id"] = _resolve_position_id(db, pos_input)
 
     
@@ -415,6 +419,39 @@ def resend_invite(
         "message": f"Setup email sent to {target.email}." if invite_sent else "The email couldn't be sent. Check the email settings and try again."
     }
 
+# Who may change which account fields through PUT /users/{id}. Anything else is refused (403) when its value changes;
+# unchanged values are accepted because the profile pages send the whole record back.
+SELF_EDITABLE_FIELDS = {"name", "email", "phone", "address", "latitude", "longitude"}
+# A barangay Head Officer managing a staff member of their own barangay (Personnel page)
+HEAD_OFFICER_EDITABLE_FIELDS = {"name", "phone", "address", "position_id", "status", "is_head_officer"}
+FIELD_LABELS = {"role_id": "role", "is_head_officer": "Head Officer status", "barangay_id": "barangay",
+                "subdivision_id": "subdivision", "status": "account status", "is_verified": "verification",
+                "position_id": "position", "email": "email address", "latitude": "map pin", "longitude": "map pin"}
+
+
+def is_subdivision_position(name: Optional[str]) -> bool:
+    """Subdivision (homeowners' association) titles, which barangay staff can't hold."""
+    n = (name or "").strip().lower()
+    return n in ("president", "secretary") or n.startswith("subdivision")
+
+
+def _lookup_position(db: Session, position_input) -> tuple[Optional[int], Optional[str]]:
+    """(existing position id, None) or (None, a new title to create once the change is authorized)."""
+    text_in = str(position_input).strip()
+    if text_in.isdigit():
+        return int(text_in), None
+    pos = db.query(Position).filter(func.lower(Position.position_name) == text_in.lower()).first()
+    return (pos.position_id, None) if pos else (None, text_in)
+
+
+def _value_changed(current, value) -> bool:
+    if isinstance(current, bool) or isinstance(value, bool):
+        return bool(value) != bool(current)
+    if current is not None and value is not None and isinstance(value, (int, float)) and not isinstance(current, (int, str)):
+        return abs(float(value) - float(current)) > 1e-9  # Decimal coordinates
+    return value != current
+
+
 @router.put("/{user_id}", response_model=UserResponse)
 def update_user(
     user_id: int,
@@ -430,7 +467,7 @@ def update_user(
     is_admin = current_user.role_id == 4
     is_self = current_user.user_id == user_id
     is_brgy_head = bool(
-        (current_user.is_head_officer or current_user.role_id == 5) and
+        current_user.role_id == 3 and current_user.is_head_officer and
         current_user.barangay_id and
         current_user.barangay_id == db_user.barangay_id
     )
@@ -441,7 +478,9 @@ def update_user(
             detail="Access denied: Cannot modify another user's profile"
         )
     
-    old_snapshot = {"name": db_user.name, "email": db_user.email, "role_id": db_user.role_id, "status": db_user.status, "is_head_officer": db_user.is_head_officer}
+    old_snapshot = {"name": db_user.name, "email": db_user.email, "role_id": db_user.role_id, "status": db_user.status,
+                    "is_head_officer": db_user.is_head_officer, "position_id": db_user.position_id,
+                    "barangay_id": db_user.barangay_id, "subdivision_id": db_user.subdivision_id}
     update_data = user_in.model_dump(exclude_unset=True)
     
     if "password" in update_data:
@@ -457,10 +496,42 @@ def update_user(
             update_data["password"] = get_password_hash(update_data["password"])
             update_data["password_changed_at"] = datetime.now()
     
-    # Resolve position string if provided
+    # A position given by name (an existing title, or a new one created only after the change is authorized)
     pos_input = update_data.pop("position", None) or update_data.pop("position_name", None)
-    if pos_input is not None:
-        update_data["position_id"] = _resolve_position_id(db, pos_input)
+    update_data.pop("position", None)
+    update_data.pop("position_name", None)
+    new_position_name = None
+    if pos_input:
+        update_data["position_id"], new_position_name = _lookup_position(db, pos_input)
+
+    changed = {f for f, v in update_data.items() if f != "password" and _value_changed(getattr(db_user, f, None), v)}
+    if new_position_name:
+        changed.add("position_id")
+    if is_admin:
+        allowed = None  # the administrator manages every account field
+    elif is_self:
+        # Role, Head Officer status, barangay, subdivision, position, account status and verification are given by
+        # others; a person can't grant them to themselves
+        allowed = SELF_EDITABLE_FIELDS
+    else:  # a Head Officer managing someone in their barangay
+        if db_user.role_id != 3:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail="Head Officers can only manage barangay staff accounts.")
+        allowed = HEAD_OFFICER_EDITABLE_FIELDS
+    refused = sorted({FIELD_LABELS.get(f, f) for f in changed if allowed is not None and f not in allowed})
+    if refused:
+        who = "your Head Officer or the administrator" if is_self and current_user.role_id == 3 else "the administrator"
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail=f"You can't change {', '.join(refused)} here. Ask {who}.")
+    if "position_id" in changed and db_user.role_id == 3:
+        title = new_position_name or (db.get(Position, update_data["position_id"]).position_name
+                                      if update_data.get("position_id") and db.get(Position, update_data["position_id"]) else None)
+        if is_subdivision_position(title):
+            raise HTTPException(status_code=400, detail=f"'{title}' is a subdivision position; barangay staff can't hold it.")
+    if new_position_name:
+        update_data["position_id"] = _resolve_position_id(db, new_position_name)
+    # Only what really changes is written (the pages send the whole record)
+    update_data = {f: v for f, v in update_data.items() if f in changed or f in ("password", "password_changed_at")}
     
     for field, value in update_data.items():
         setattr(db_user, field, value)

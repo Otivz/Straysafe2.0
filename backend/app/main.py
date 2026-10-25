@@ -343,6 +343,21 @@ def ensure_pet_side_photos_columns():
         if res.scalar() == 0:
             conn.execute(text("ALTER TABLE pets ADD COLUMN chase_incident_count INT DEFAULT 0 AFTER chase_behavior"))
 
+def ensure_pet_declared_behavior_columns():
+    """Add declared_bite_history and declared_chase_behavior to the pets table if missing (no data is changed)."""
+    try:
+        with engine.begin() as conn:
+            for col_name, after in [("declared_bite_history", "chase_incident_count"), ("declared_chase_behavior", "declared_bite_history")]:
+                result = conn.execute(text(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pets' "
+                    f"AND COLUMN_NAME = '{col_name}'"
+                ))
+                if result.scalar() == 0:
+                    conn.execute(text(f"ALTER TABLE pets ADD COLUMN {col_name} TINYINT(1) NOT NULL DEFAULT 0 AFTER {after}"))
+    except Exception as e:
+        print(f"Notice in ensure_pet_declared_behavior_columns: {e}")
+
 def ensure_user_default_address_columns():
     """Add latitude and longitude columns to the users table if missing."""
     with engine.begin() as conn:
@@ -613,6 +628,7 @@ ensure_report_priority_enum()
 ensure_holding_tables()
 ensure_pet_claims_status_enum()
 ensure_pet_side_photos_columns()
+ensure_pet_declared_behavior_columns()
 ensure_endorsement_letters_columns()
 
 try:

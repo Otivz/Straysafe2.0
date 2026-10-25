@@ -8,6 +8,7 @@ import type { ChatThreadSummary } from '../../utils/useUnreadMessageCount';
 import MessagesDropdown from '../Chat/MessagesDropdown';
 import ReportChatDrawer from '../Chat/ReportChatDrawer';
 import QRScannerModal from '../Modals/QRScannerModal';
+import NotificationPanel from '../Notifications/NotificationPanel';
 import { whenVisible } from '../../utils/visibleInterval';
 
 export interface NotificationItem {
@@ -77,16 +78,8 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
     const [notifFilter, setNotifFilter] = useState<'all' | 'unread'>('all');
     const [isLoadingNotifs, setIsLoadingNotifs] = useState(false);
     const [isMarkingAll, setIsMarkingAll] = useState(false);
+    const [notificationError, setNotificationError] = useState('');
     const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
-    const [isMobile, setIsMobile] = useState(false);
-
-    useEffect(() => {
-        const checkMobile = () => setIsMobile(window.innerWidth < 640);
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
-    }, []);
-
     const notifRef = useRef<HTMLDivElement>(null);
     const messagesRef = useRef<HTMLDivElement>(null);
 
@@ -98,7 +91,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
         return t === 'message' || t === 'match_message' || title.includes('💬') || title.includes('match inquiry');
     };
 
-    const effectiveNotifications = (propNotifications || localNotifications).filter(n => !isMessageNotif(n));
+    const effectiveNotifications = localNotifications.filter(n => !n.is_archived && !isMessageNotif(n));
     const unreadCount = effectiveNotifications.filter(n => !n.is_read).length;
 
     // Fetch notifications for the logged-in staff user
@@ -123,7 +116,9 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
     };
 
     useEffect(() => {
-        if (!propNotifications) {
+        if (propNotifications !== undefined) {
+            setLocalNotifications(propNotifications);
+        } else {
             setIsLoadingNotifs(true);
             fetchNotifications().finally(() => setIsLoadingNotifs(false));
 
@@ -137,9 +132,6 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             const target = event.target as Element | null;
-            if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
-                setIsNotifOpen(false);
-            }
             const isInsideMessages = (messagesRef.current && messagesRef.current.contains(event.target as Node)) ||
                                      Boolean(target?.closest?.('[data-messages-dropdown="true"]'));
             if (!isInsideMessages) {
@@ -149,7 +141,6 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
 
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
-                setIsNotifOpen(false);
                 setIsMessagesOpen(false);
             }
         };
@@ -164,13 +155,15 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
 
     // Mark all notifications as read
     const handleMarkAllRead = async () => {
-        if (!user?.user_id || unreadCount === 0) return;
+        if (!user?.user_id || isMarkingAll || unreadCount === 0) return;
         setIsMarkingAll(true);
+        setNotificationError('');
         try {
             await api.post(`/notifications/mark-all-read/${user.user_id}`);
             setLocalNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
         } catch (err) {
             console.error("Failed to mark all notifications as read:", err);
+            setNotificationError('Could not mark notifications as read. Please try again.');
         } finally {
             setIsMarkingAll(false);
         }
@@ -203,9 +196,11 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
 
     // Open full detail modal for notification
     const openNotificationDetail = async (notif: NotificationItem) => {
+        let detail = notif;
         if (!notif.is_read) {
             try {
                 await api.patch(`/notifications/${notif.notification_id}`, { is_read: true });
+                detail = { ...notif, is_read: true };
                 setLocalNotifications(prev =>
                     prev.map(n => n.notification_id === notif.notification_id ? { ...n, is_read: true } : n)
                 );
@@ -214,7 +209,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
             }
         }
         setIsNotifOpen(false);
-        setSelectedNotifForDetail(notif);
+        setSelectedNotifForDetail(detail);
     };
 
     // Handle clicking a notification item
@@ -484,6 +479,8 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                             }`}
                         title="Notifications"
                         aria-label="Notifications"
+                        aria-haspopup="dialog"
+                        aria-expanded={isNotifOpen}
                     >
                         <svg className="w-5 h-5 transition-transform group-hover:scale-105" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -498,16 +495,9 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                     </button>
 
                     {/* Notification Dropdown Panel */}
-                    {isNotifOpen && (() => {
-                        const notifPanel = (
-                            <div className={
-                                isMobile
-                                    ? "fixed inset-0 w-full h-[100dvh] bg-white z-[999999] flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-200"
-                                    : "absolute right-0 sm:-right-8 md:right-0 mt-3 w-[25rem] bg-white rounded-2xl shadow-2xl border border-gray-100/90 overflow-hidden z-50 flex flex-col animate-in fade-in zoom-in-95 duration-200"
-                            }>
-
-                                {/* Panel Header */}
-                                <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-role-soft/40 via-white to-white shrink-0">
+                    <NotificationPanel isOpen={isNotifOpen} onClose={() => setIsNotifOpen(false)} triggerRef={notifRef}>
+                            {/* Panel Header */}
+                                <div className="px-4 py-3 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2 bg-gradient-to-r from-role-soft/40 via-white to-white shrink-0">
                                     <div className="flex items-center gap-2.5">
                                         <div className="w-8 h-8 rounded-lg bg-role-muted/80 text-role flex items-center justify-center">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -522,23 +512,21 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-1.5">
-                                        {unreadCount > 0 && (
-                                            <button
-                                                onClick={handleMarkAllRead}
-                                                disabled={isMarkingAll}
-                                                className="text-[11px] font-bold text-role hover:text-role-hover hover:bg-role-soft px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50 cursor-pointer"
-                                                title="Mark all as read"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                                                </svg>
-                                                <span>Mark all read</span>
-                                            </button>
-                                        )}
+                                    <div className="flex items-center justify-end gap-1.5 w-full sm:w-auto">
+                                        <button
+                                            onClick={handleMarkAllRead}
+                                            disabled={isMarkingAll || unreadCount === 0}
+                                            className="text-[11px] font-bold text-role hover:text-role-hover hover:bg-role-soft px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                                            title="Mark all as read"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            <span>Mark all read</span>
+                                        </button>
                                         <button
                                             onClick={fetchNotifications}
-                                            className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
                                             title="Refresh notifications"
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -547,7 +535,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                                         </button>
                                         <button
                                             onClick={() => setIsNotifOpen(false)}
-                                            className="sm:hidden p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer ml-1"
+                                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer ml-1"
                                             title="Close notifications"
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -557,7 +545,8 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                                     </div>
                                 </div>
 
-                                {/* Filter Tabs */}
+                                {notificationError && <p role="alert" className="px-4 py-2 text-xs text-red-600 shrink-0">{notificationError}</p>}
+                            {/* Filter Tabs */}
                                 <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50/70 flex items-center gap-2 shrink-0">
                                     <button
                                         onClick={() => setNotifFilter('all')}
@@ -580,7 +569,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                                 </div>
 
                                 {/* Notifications Scrollable List */}
-                                <div className="flex-1 sm:flex-initial sm:max-h-[22rem] overflow-y-auto divide-y divide-gray-50">
+                                <div data-notification-list className="flex-1 sm:max-h-[28rem] divide-y divide-gray-50">
                                     {isLoadingNotifs ? (
                                         <div className="py-12 flex flex-col items-center justify-center text-gray-400">
                                             <div className="w-7 h-7 border-2 border-role border-t-transparent rounded-full animate-spin"></div>
@@ -638,7 +627,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
 
                                                     {/* Notification Content */}
                                                     <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center justify-between gap-2">
+                                                        <div className="flex flex-col items-start gap-1">
                                                             <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                                                                 {isTransferAccepted && (
                                                                     <span className="px-2 py-0.5 rounded-md bg-emerald-600 text-white font-black text-[9px] uppercase tracking-wider shadow-xs shrink-0 flex items-center gap-1">
@@ -658,7 +647,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                                                                         <span>TRANSFER REQUEST</span>
                                                                     </span>
                                                                 )}
-                                                                <h4 className={`text-xs tracking-tight truncate ${isTransferAccepted
+                                                                <h4 className={`text-xs tracking-tight whitespace-normal [overflow-wrap:anywhere] ${isTransferAccepted
                                                                         ? 'font-black text-emerald-950'
                                                                         : isTransferRejected
                                                                             ? 'font-black text-rose-950'
@@ -676,7 +665,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                                                             </span>
                                                         </div>
 
-                                                        <p className={`text-xs mt-1 leading-relaxed line-clamp-2 ${isTransferAccepted
+                                                        <p className={`text-xs mt-1 leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] ${isTransferAccepted
                                                                 ? 'font-bold text-emerald-900'
                                                                 : isTransferRejected
                                                                     ? 'font-bold text-rose-900'
@@ -750,11 +739,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                                         </svg>
                                     </button>
                                 </div>
-                            </div>
-                        );
-
-                        return isMobile ? createPortal(notifPanel, document.body) : notifPanel;
-                    })()}
+                    </NotificationPanel>
                 </div>
 
 
@@ -863,7 +848,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                         />
 
                         {/* Modal Dialog Card */}
-                        <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden z-10 animate-in zoom-in-95 duration-200">
+                        <div role="dialog" aria-label="Notification details" className="relative w-full min-w-0 max-w-lg max-h-[calc(100dvh-2rem)] bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-x-hidden overflow-y-auto overscroll-contain [overflow-wrap:anywhere] z-10 animate-in zoom-in-95 duration-200">
                             {/* Header Banner */}
                             <div className={`p-6 bg-gradient-to-r ${bannerGrad} text-white relative overflow-hidden`}>
                                 <div className="absolute -right-6 -bottom-6 w-28 h-28 bg-white/10 rounded-full blur-xl pointer-events-none"></div>

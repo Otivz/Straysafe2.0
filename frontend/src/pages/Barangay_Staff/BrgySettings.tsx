@@ -113,7 +113,8 @@ const BrgySettings: React.FC = () => {
     const [name, setName] = useState(initialUserObj?.name || '');
     const [phone, setPhone] = useState(initialUserObj?.phone || '');
     const [email] = useState(initialUserObj?.email || '');
-    const [position, setPosition] = useState(initialUserObj?.position_name || initialUserObj?.position || '');
+    // shown read-only: positions are assigned by the Head Officer or the administrator
+    const [position] = useState(initialUserObj?.position_name || initialUserObj?.position || '');
     const [address, setAddress] = useState(initialUserObj?.address || '');
     const [latitude] = useState<number | string | null>(initialUserObj?.latitude || null);
     const [longitude] = useState<number | string | null>(initialUserObj?.longitude || null);
@@ -386,7 +387,6 @@ const BrgySettings: React.FC = () => {
                 name,
                 phone: phone || null,
                 address: address || null,
-                position: position || null,
                 latitude: latitude ? parseFloat(latitude.toString()) : null,
                 longitude: longitude ? parseFloat(longitude.toString()) : null
             };
@@ -712,11 +712,11 @@ const BrgySettings: React.FC = () => {
                                                 <label className="block text-xs font-bold text-gray-700 mb-1">Position / Rank</label>
                                                 <input
                                                     type="text"
-                                                    value={position}
-                                                    onChange={(e) => setPosition(e.target.value)}
-                                                    placeholder="e.g. Barangay Action Officer"
-                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-role outline-none"
+                                                    value={position || 'Not assigned yet'}
+                                                    readOnly
+                                                    className="w-full px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 cursor-not-allowed outline-none"
                                                 />
+                                                <p className="text-[11px] text-gray-400 mt-1">Assigned by your Head Officer or the administrator.</p>
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-bold text-gray-700 mb-1">Official Hotline / Mobile</label>

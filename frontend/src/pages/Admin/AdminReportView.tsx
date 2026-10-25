@@ -1,3 +1,4 @@
+import { getPersonnelAvailability } from '../../utils/personnelAvailability';
 import React, { useState, useEffect } from 'react';
 import { sightingLandmark } from '../../utils/sighting';
 import { useNavigate, useParams, Link } from 'react-router-dom';
@@ -423,11 +424,9 @@ export const AdminReportView: React.FC = () => {
         try {
             const res = await api.get('/users/');
             const users = Array.isArray(res.data) ? res.data : [];
-            const staff = users.filter((u: any) => u.role_id === 3 || u.role_id === 2);
-            setStaffList(staff.length > 0 ? staff : users);
-            if (staff.length > 0 && !selectedStaffId) {
-                setSelectedStaffId(staff[0].user_id);
-            }
+            const staff = users.filter((u: any) => (u.role_id === 3 || u.role_id === 2) && getPersonnelAvailability(u, false) === 'available');
+            setStaffList(staff);
+            setSelectedStaffId(current => staff.some((s: any) => s.user_id === current) ? current : (staff[0]?.user_id ?? ''));
         } catch (e) {
             console.error('Error fetching staff list:', e);
         }

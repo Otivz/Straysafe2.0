@@ -1,3 +1,4 @@
+import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -319,6 +320,8 @@ const BrgyPetClaims = () => {
         }
     };
 
+    useAutoRefresh(fetchBackendClaims);
+
     const handleUpdateStatus = async (status: 'Approved' | 'Rejected' | 'Evidence Requested' | 'Handover Complete') => {
         if (!selectedClaim) return;
         setIsSubmitting(true);
@@ -333,7 +336,7 @@ const BrgyPetClaims = () => {
             setRemarks('');
         } catch (err) {
             console.error("Failed to update status", err);
-            alert("Failed to update claim status. Please try again.");
+            alert((err as any).response?.data?.detail || "Failed to update claim status. Please try again.");
         } finally {
             setIsSubmitting(false);
         }

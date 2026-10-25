@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 2,
+  "documentationRoot": "docs",
+  "documentationReports": "docs/03-development/audits",
+  "securityReports": "docs/04-testing/security-audits",
+  "engineeringReports": "docs/03-development/engineering-reviews",
+  "templateOutput": "docs",
+  "interactionStyle": "standard",
+  "maxAgeDays": 180,
+  "requireMetadata": false,
+  "timezone": "UTC",
+  "attribution": "",
+  "agents": ["codex","claude","gemini","cursor","copilot"],
+  "requiredDocuments": ["docs/README.md", "docs/01-system/overview.md", "docs/02-project/README.md", "docs/05-operations/README.md"]
+}

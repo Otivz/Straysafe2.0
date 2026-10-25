@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import HTTPException, status
+from app.utils.staff_assignment import require_active_assignee
 from sqlalchemy.orm import Session
 
 from app.models.report import (
@@ -171,6 +172,10 @@ def require_task_actor(app: Adoption, user: User, db: Session, task_type: str,
     task_label = task_type.replace("_", " ").lower()
     asg = open_assignment(app, task_type, db, monitoring_log_id=monitoring_log_id)
     if asg is not None:
+        try:
+            require_active_assignee(db.get(User, asg.assigned_to))
+        except HTTPException as error:
+            raise HTTPException(status_code=409, detail=f"The {task_label} assignee is inactive or unavailable. Reassign this task to active staff before continuing.") from error
         if asg.assigned_to == user.user_id:
             if asg.status == "Assigned":
                 raise HTTPException(status_code=409, detail=f"Accept this {task_label} task first (Adoption Tasks page).")
@@ -204,8 +209,25 @@ def validate_assignee(target: Optional[User], app: Adoption, db: Session) -> Use
     barangay_id = adoption_barangay_id(app, db)
     if target.role_id != 3 or barangay_id is None or target.barangay_id != barangay_id:
         raise HTTPException(status_code=400, detail="Tasks can only be assigned to Barangay Staff of this application's barangay.")
-    if (target.status or "Active") != "Active":
+    if (target.status or "").strip().lower() != "active":
         raise HTTPException(status_code=400, detail=f"{target.name} is not an active staff member.")
     if target.user_id == app.applicant_id:
         raise HTTPException(status_code=400, detail="The applicant cannot be assigned to their own application.")
     return target
+
+
+def resolve_handover_staff(app: Adoption, actor: User, db: Session,
+                          staff_id: Optional[int] = None, staff_name: Optional[str] = None) -> User:
+    """Resolve new ID selections and older name-based clients against the current staff roster."""
+    if staff_id is not None:
+        return validate_assignee(db.get(User, staff_id), app, db)
+    name = (staff_name or "").strip()
+    if not name or name == actor.name:
+        return require_active_assignee(actor)
+    candidates = db.query(User).filter(
+        User.name == name, User.role_id == 3,
+        User.barangay_id == adoption_barangay_id(app, db),
+    ).all()
+    if len(candidates) != 1:
+        raise HTTPException(status_code=400, detail="Select an active staff member from this application's barangay.")
+    return validate_assignee(candidates[0], app, db)

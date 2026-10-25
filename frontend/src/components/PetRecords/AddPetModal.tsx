@@ -1,10 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import PhoneInput from '../PhoneInput';
+import BehaviorHistoryField from './BehaviorHistoryField';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import api from '../../utils/api';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import { usePetPhotoGuard, PetPhotoGuardPanel, RegisterAnotherPrompt } from '../PetPhotoGuard';
 import { isUnnamedPet } from '../../utils/petName';
+import {
+    COAT_PATTERN_PRESETS,
+    calculateAge,
+    approximateBirthDateFromAge,
+    parseAgeToYearsMonths,
+    parseCoatPattern,
+    composeCoatMarkings
+} from '../../utils/petAge';
 
 interface AddPetModalProps {
     isOpen: boolean;
@@ -58,7 +67,6 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
     const [petName, setPetName] = useState('');
     const [species, setSpecies] = useState<'Dog' | 'Cat'>('Dog');
     const [breed, setBreed] = useState('');
-    const [estimatedAge, setEstimatedAge] = useState('');
     const [sizeCategory, setSizeCategory] = useState<string>('Medium');
     const [status, setStatus] = useState<string>('Active');
     const [gender, setGender] = useState<string>('Unknown');
@@ -71,7 +79,15 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
     const [customSecondaryColor, setCustomSecondaryColor] = useState<string>('');
     const [tertiaryColor, setTertiaryColor] = useState<string>('');
     const [customTertiaryColor, setCustomTertiaryColor] = useState<string>('');
+    const [pattern, setPattern] = useState<string>('');
+    const [markingsDetails, setMarkingsDetails] = useState<string>('');
     const [colorMarkings, setColorMarkings] = useState('');
+
+    // Smart Age Mode
+    const [ageMode, setAgeMode] = useState<'approximate' | 'exact'>('approximate');
+    const [approxYears, setApproxYears] = useState<number | ''>('');
+    const [approxMonths, setApproxMonths] = useState<number | ''>('');
+    const [birthDate, setBirthDate] = useState<string>('');
 
     // Section 3: Health & Vaccination Details
     const [isVaccinated, setIsVaccinated] = useState<boolean>(false);
@@ -83,8 +99,11 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
 
     // Section 4: Behavior Information
     const [temperament, setTemperament] = useState<string>('Friendly');
-    const [hasBiteHistory, setHasBiteHistory] = useState<boolean>(false);
-    const [chaseBehavior, setChaseBehavior] = useState<boolean>(false);
+    // Declared bite / chasing history (a person's account); the verified counts come from incident reports, read-only
+    const [declaredBite, setDeclaredBite] = useState<boolean>(false);
+    const [declaredChase, setDeclaredChase] = useState<boolean>(false);
+    const [verifiedBites, setVerifiedBites] = useState<number>(0);
+    const [verifiedChases, setVerifiedChases] = useState<number>(0);
 
     // Step 2: Owner Information
     const [ownerMode, setOwnerMode] = useState<'existing' | 'new' | 'none'>('existing');
@@ -104,13 +123,22 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
     useEffect(() => {
         if (isOpen) {
             fetchRegisteredUsers();
+            setAgeMode('approximate');
+            setApproxYears('');
+            setApproxMonths('');
+            setBirthDate('');
             if (editPetData) {
                 const pet = editPetData;
                 const storedName = pet.rawName ?? pet.pet_name ?? pet.name;
                 setPetName(isUnnamedPet(storedName) ? '' : storedName);
                 setSpecies((pet.species || pet.pet_type || 'Dog') === 'Cat' ? 'Cat' : 'Dog');
-                setBreed(pet.breed || '');
-                setEstimatedAge(pet.age || pet.estimated_age || '');
+                const rawBirthDate = pet.birth_date || pet.birthDate || pet.rawPetObj?.birth_date;
+                const rawAgeStr = pet.age || pet.estimated_age || pet.rawPetObj?.estimated_age;
+                const parsedAge = parseAgeToYearsMonths(rawBirthDate, rawAgeStr);
+                setAgeMode(parsedAge.hasExactDate ? 'exact' : 'approximate');
+                setApproxYears(parsedAge.years);
+                setApproxMonths(parsedAge.months);
+                setBirthDate(parsedAge.birthDate || '');
                 setSizeCategory(pet.sizeCategory || pet.size_category || 'Medium');
                 setStatus(pet.status || 'Active');
                 setGender(pet.gender || 'Unknown');
@@ -118,14 +146,20 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                 setPrimaryColor(pet.primaryColor || pet.primary_color || 'Brown');
                 setSecondaryColor(pet.secondaryColor || pet.secondary_color || '');
                 setTertiaryColor(pet.tertiaryColor || pet.tertiary_color || '');
-                setColorMarkings(pet.colorMarkings || pet.color_markings || '');
+                const rawCoat = pet.colorMarkings || pet.color_markings || pet.distinctive_markings || pet.rawPetObj?.color_markings || '';
+                const parsedCoat = parseCoatPattern(rawCoat);
+                setPattern(parsedCoat.pattern);
+                setMarkingsDetails(parsedCoat.details);
+                setColorMarkings(rawCoat);
                 setIsVaccinated(!!pet.isVaccinated || !!pet.is_vaccinated);
                 setVaccinationDate(pet.vaccinationDate || pet.vaccination_date || '');
                 setIsNeutered(!!pet.isNeutered || !!pet.is_neutered);
                 setHealthNotes(pet.healthCondition || pet.health_condition || pet.notes || '');
                 setTemperament(pet.temperament || 'Friendly');
-                setHasBiteHistory(!!pet.hasBiteHistory || !!pet.has_bite_history);
-                setChaseBehavior(!!pet.chaseBehavior || !!pet.chase_behavior);
+                setDeclaredBite(!!pet.declared_bite_history);
+                setDeclaredChase(!!pet.declared_chase_behavior);
+                setVerifiedBites((pet.hasBiteHistory ?? pet.has_bite_history) ? ((pet.biteIncidentCount ?? pet.bite_incident_count) || 1) : 0);
+                setVerifiedChases((pet.chaseBehavior ?? pet.chase_behavior) ? ((pet.chaseIncidentCount ?? pet.chase_incident_count) || 1) : 0);
 
                 // Previews
                 setPhotoPreview(pet.avatar || pet.photo_url || null);
@@ -168,8 +202,13 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                 else setGender('Unknown');
 
                 // 6. Estimated Age
-                if (rep.estimated_age || rep.age) {
-                    setEstimatedAge(rep.estimated_age || rep.age);
+                if (rep.birth_date || rep.estimated_age || rep.age) {
+                    const rawAge = rep.estimated_age || rep.age;
+                    const parsedAge = parseAgeToYearsMonths(rep.birth_date, rawAge);
+                    setAgeMode(parsedAge.hasExactDate ? 'exact' : 'approximate');
+                    setApproxYears(parsedAge.years);
+                    setApproxMonths(parsedAge.months);
+                    setBirthDate(parsedAge.birthDate || '');
                 }
 
                 // 7. Status
@@ -239,6 +278,9 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                 if (effectivePattern && effectivePattern !== 'Solid' && effectivePattern !== 'None') {
                     markingsText = markingsText ? `${markingsText} (${effectivePattern} pattern)` : `${effectivePattern} pattern`;
                 }
+                const parsedRepCoat = parseCoatPattern(markingsText || effectivePattern);
+                setPattern(parsedRepCoat.pattern || (effectivePattern && effectivePattern !== 'None' ? effectivePattern : ''));
+                setMarkingsDetails(parsedRepCoat.details);
                 setColorMarkings(markingsText);
 
                 // 9. Temperament & Behavior
@@ -247,14 +289,10 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                     setTemperament('Friendly');
                 } else if (reasoning.includes('aggressive') || reasoning.includes('growling') || reasoning.includes('bites')) {
                     setTemperament('Aggressive');
-                    setHasBiteHistory(true);
                 } else if (reasoning.includes('crying') || reasoning.includes('scared') || reasoning.includes('anxious') || reasoning.includes('distress')) {
                     setTemperament('Anxious');
                 } else if (reasoning.includes('protective')) {
                     setTemperament('Protective');
-                }
-                if (reasoning.includes('chase') || reasoning.includes('chasing')) {
-                    setChaseBehavior(true);
                 }
 
                 // 10. Health Notes (Leave blank for actual veterinary/health notes)
@@ -351,7 +389,6 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
         setPetName('');
         setSpecies('Dog');
         setBreed('');
-        setEstimatedAge('');
         setSizeCategory('Medium');
         setStatus('Active');
         setGender('Unknown');
@@ -362,14 +399,22 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
         setCustomSecondaryColor('');
         setTertiaryColor('');
         setCustomTertiaryColor('');
+        setPattern('');
+        setMarkingsDetails('');
         setColorMarkings('');
+        setAgeMode('approximate');
+        setApproxYears('');
+        setApproxMonths('');
+        setBirthDate('');
         setIsVaccinated(false);
         setVaccinationDate('');
         setIsNeutered(false);
         setHealthNotes('');
         setTemperament('Friendly');
-        setHasBiteHistory(false);
-        setChaseBehavior(false);
+        setDeclaredBite(false);
+        setDeclaredChase(false);
+        setVerifiedBites(0);
+        setVerifiedChases(0);
         setPhotoFile(null);
         setPhotoPreview(null);
         setInheritedReportPhoto(null);
@@ -492,14 +537,32 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                 await Promise.all(uploadTasks);
             }
 
+            let finalBirthDate: string | null = null;
+            let finalEstimatedAge: string | null = null;
+            if (ageMode === 'exact' && birthDate) {
+                finalBirthDate = birthDate;
+                finalEstimatedAge = calculateAge(birthDate);
+            } else if (ageMode === 'approximate') {
+                finalBirthDate = approximateBirthDateFromAge(approxYears, approxMonths) || null;
+                finalEstimatedAge = finalBirthDate ? calculateAge(finalBirthDate) : null;
+            }
+
+            const composedMarkings = composeCoatMarkings(
+                pattern,
+                markingsDetails || colorMarkings
+            );
+
             const petPayload = {
                 owner_id: targetOwnerId,
-                registered_by_user_id: currentRegistrant?.user_id || currentRegistrant?.id || null,
-                registered_by_name: currentRegistrant?.name || currentRegistrant?.full_name || (currentRegistrant?.role_id === 4 ? 'System Administrator' : 'Subdivision Leader'),
+                ...(!editPetData ? {
+                    registered_by_user_id: currentRegistrant?.user_id || currentRegistrant?.id || null,
+                    registered_by_name: currentRegistrant?.name || currentRegistrant?.full_name || (currentRegistrant?.role_id === 4 ? 'System Administrator' : 'Subdivision Leader'),
+                } : {}),
                 pet_name: petName.trim() || 'No Name',
                 pet_type: species,
                 breed: breed.trim() || null,
-                estimated_age: estimatedAge.trim() || null,
+                birth_date: finalBirthDate,
+                estimated_age: finalEstimatedAge || null,
                 size_category: sizeCategory,
                 status: status,
                 gender: gender,
@@ -507,7 +570,8 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                 primary_color: finalPrimaryColor,
                 secondary_color: finalSecondaryColor,
                 tertiary_color: finalTertiaryColor,
-                color_markings: colorMarkings.trim() || null,
+                color_markings: composedMarkings || null,
+                distinctive_markings: composedMarkings || null,
                 photo_url: photoUrl,
                 photo_front_url: photoFrontUrl,
                 photo_left_url: photoLeftUrl,
@@ -519,8 +583,8 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                 health_condition: healthNotes.trim() || null,
                 notes: healthNotes.trim() || null,
                 temperament: temperament,
-                has_bite_history: hasBiteHistory,
-                chase_behavior: chaseBehavior,
+                declared_bite_history: declaredBite,
+                declared_chase_behavior: declaredChase,
                 // A person's confirmation of a photo the AI check doubted (validated and logged on the server)
                 ...(photoFile && photoGuard.overridePayload ? { photo_override: photoGuard.overridePayload } : {}),
                 // the next animal registered from the same photo as the previous pet (logged on the server)
@@ -894,47 +958,132 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         </datalist>
                                     </div>
 
-                                    {/* Estimated Age */}
+                                    {/* Smart Age Selector (Auto-advancing) */}
                                     <div className="space-y-3">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">
-                                            Age (Estimated Age) <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span>
-                                        </label>
-                                        <input 
-                                            type="text" 
-                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role-border"
-                                            placeholder="Leave blank if unknown, or pick below"
-                                            value={estimatedAge}
-                                            onChange={(e) => setEstimatedAge(e.target.value)}
-                                        />
-                                        {/* A rough guess is fine for strays: pick an age group instead of typing */}
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {[
-                                                [species === 'Cat' ? 'Kitten (under 1 yr)' : 'Puppy (under 1 yr)', 'Under 1 year'],
-                                                ['Young (1–3 yrs)', '1–3 years'],
-                                                ['Adult (3–7 yrs)', '3–7 years'],
-                                                ['Senior (7+ yrs)', '7+ years'],
-                                            ].map(([label, value]) => (
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest flex items-center gap-1.5">
+                                                <span>Age & Birthday</span>
+                                                <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">(Optional)</span>
+                                            </label>
+                                            {/* Mode Switcher */}
+                                            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
                                                 <button
-                                                    key={value}
                                                     type="button"
-                                                    onClick={() => setEstimatedAge(value)}
-                                                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold border cursor-pointer transition-colors ${
-                                                        estimatedAge === value ? 'bg-role-soft border-role-border text-role-hover' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+                                                    onClick={() => setAgeMode('approximate')}
+                                                    className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                                                        ageMode === 'approximate'
+                                                            ? 'bg-white text-role shadow-xs'
+                                                            : 'text-gray-500 hover:text-gray-800'
                                                     }`}
                                                 >
-                                                    {label}
+                                                    Approximate Age
                                                 </button>
-                                            ))}
-                                            <button
-                                                type="button"
-                                                onClick={() => setEstimatedAge('')}
-                                                className={`px-2.5 py-1 rounded-full text-[10px] font-bold border cursor-pointer transition-colors ${
-                                                    estimatedAge === '' ? 'bg-gray-100 border-gray-300 text-gray-700' : 'bg-white border-gray-200 text-gray-400 hover:border-gray-300'
-                                                }`}
-                                            >
-                                                Not sure
-                                            </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setAgeMode('exact')}
+                                                    className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                                                        ageMode === 'exact'
+                                                            ? 'bg-white text-role shadow-xs'
+                                                            : 'text-gray-500 hover:text-gray-800'
+                                                    }`}
+                                                >
+                                                    Exact Birthday
+                                                </button>
+                                            </div>
                                         </div>
+
+                                        {ageMode === 'approximate' ? (
+                                            <div className="space-y-2.5">
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div>
+                                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Years</label>
+                                                        <select
+                                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-4 text-sm font-bold focus:outline-none focus:border-role-border cursor-pointer"
+                                                            value={approxYears}
+                                                            onChange={(e) => setApproxYears(e.target.value === '' ? '' : Number(e.target.value))}
+                                                        >
+                                                            <option value="">Select years</option>
+                                                            {Array.from({ length: 21 }, (_, i) => (
+                                                                <option key={i} value={i}>{i} {i === 1 ? 'Year' : 'Years'}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Months</label>
+                                                        <select
+                                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-4 text-sm font-bold focus:outline-none focus:border-role-border cursor-pointer"
+                                                            value={approxMonths}
+                                                            onChange={(e) => setApproxMonths(e.target.value === '' ? '' : Number(e.target.value))}
+                                                        >
+                                                            <option value="">Select months</option>
+                                                            {Array.from({ length: 12 }, (_, i) => (
+                                                                <option key={i} value={i}>{i} {i === 1 ? 'Month' : 'Months'}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                {/* Quick pick chips */}
+                                                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                                    {[
+                                                        { label: species === 'Cat' ? 'Kitten (4 mos)' : 'Puppy (4 mos)', y: 0, m: 4 },
+                                                        { label: 'Young (1 yr)', y: 1, m: 0 },
+                                                        { label: 'Adult (3 yrs)', y: 3, m: 0 },
+                                                        { label: 'Senior (7 yrs)', y: 7, m: 0 },
+                                                    ].map(chip => (
+                                                        <button
+                                                            key={chip.label}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setApproxYears(chip.y);
+                                                                setApproxMonths(chip.m);
+                                                            }}
+                                                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
+                                                                approxYears === chip.y && approxMonths === chip.m
+                                                                    ? 'bg-role-soft border-role-border text-role-hover'
+                                                                    : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+                                                            }`}
+                                                        >
+                                                            {chip.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+
+                                                {/* Live preview banner */}
+                                                {(approxYears !== '' || approxMonths !== '') && (
+                                                    <div className="p-3 bg-role-soft/30 border border-role-border/50 rounded-2xl flex items-center justify-between text-xs font-bold text-gray-700">
+                                                        <span className="flex items-center gap-1.5">
+                                                            <span className="text-role">✨</span>
+                                                            <span>Calculated Age: <strong className="text-role-hover">{calculateAge(approximateBirthDateFromAge(approxYears, approxMonths))}</strong></span>
+                                                        </span>
+                                                        <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
+                                                            Auto-advances over time
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2.5">
+                                                <input
+                                                    type="date"
+                                                    max={new Date().toISOString().slice(0, 10)}
+                                                    className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role-border cursor-pointer"
+                                                    value={birthDate}
+                                                    onChange={(e) => setBirthDate(e.target.value)}
+                                                />
+                                                {birthDate && (
+                                                    <div className="p-3 bg-role-soft/30 border border-role-border/50 rounded-2xl flex items-center justify-between text-xs font-bold text-gray-700">
+                                                        <span className="flex items-center gap-1.5">
+                                                            <span className="text-role">🎂</span>
+                                                            <span>Age Today: <strong className="text-role-hover">{calculateAge(birthDate)}</strong></span>
+                                                        </span>
+                                                        <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
+                                                            Exact birthday saved
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Pet Size (Buttons) */}
@@ -1079,16 +1228,74 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         )}
                                     </div>
 
-                                    {/* Color Markings / Patterns */}
+                                    {/* Coat Pattern & Markings */}
                                     <div className="space-y-3 md:col-span-2">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Color Markings / Patterns <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
-                                        <input 
-                                            type="text" 
-                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role-border"
-                                            placeholder="e.g. Black with white patches on chest, tan muzzle"
-                                            value={colorMarkings}
-                                            onChange={(e) => setColorMarkings(e.target.value)}
-                                        />
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">
+                                                Coat Pattern & Markings <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span>
+                                            </label>
+                                            {pattern && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setPattern('');
+                                                        setMarkingsDetails('');
+                                                    }}
+                                                    className="text-[9px] font-black text-gray-400 hover:text-red-500 uppercase tracking-wider transition-colors cursor-pointer"
+                                                >
+                                                    Clear Pattern
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Coat Pattern Dropdown */}
+                                        <select
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role-border cursor-pointer"
+                                            value={pattern}
+                                            onChange={(e) => setPattern(e.target.value)}
+                                        >
+                                            <option value="">Select Coat Pattern (e.g. Solid, Bicolor, Tabby, Tuxedo...)</option>
+                                            {COAT_PATTERN_PRESETS
+                                                .filter(p => !p.suggestedFor || p.suggestedFor === 'Both' || p.suggestedFor === species)
+                                                .map(p => (
+                                                    <option key={p.id} value={p.id}>
+                                                        {p.label}
+                                                    </option>
+                                                ))
+                                            }
+                                        </select>
+
+                                        {/* Pattern description card if selected */}
+                                        {(() => {
+                                            const selectedPreset = COAT_PATTERN_PRESETS.find(p => p.id === pattern);
+                                            if (!selectedPreset) return null;
+                                            return (
+                                                <div className="p-3.5 bg-role-soft/30 border border-role-border/50 rounded-2xl flex items-start gap-2.5 animate-in fade-in duration-200">
+                                                    <span className="text-base leading-none">💡</span>
+                                                    <div className="text-xs">
+                                                        <span className="font-black text-[#1a1208]">{selectedPreset.label}: </span>
+                                                        <span className="text-gray-600 font-semibold">{selectedPreset.description}</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* Specific markings & details */}
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block">
+                                                Specific Markings or Details (Optional)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role-border"
+                                                placeholder="e.g. White chest patch, left front white sock, scar on ear"
+                                                value={markingsDetails || colorMarkings}
+                                                onChange={(e) => {
+                                                    setMarkingsDetails(e.target.value);
+                                                    setColorMarkings(e.target.value);
+                                                }}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1216,57 +1423,23 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         </select>
                                     </div>
 
-                                    <div className="space-y-3">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Has Bite History?</label>
-                                        <div className="flex gap-6 h-14 items-center">
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input 
-                                                    type="radio" 
-                                                    name="subdBiteHistory" 
-                                                    className="w-4 h-4 accent-role" 
-                                                    checked={hasBiteHistory === true} 
-                                                    onChange={() => setHasBiteHistory(true)}
-                                                />
-                                                <span className="text-xs font-bold text-gray-700">Yes</span>
-                                            </label>
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input 
-                                                    type="radio" 
-                                                    name="subdBiteHistory" 
-                                                    className="w-4 h-4 accent-role" 
-                                                    checked={hasBiteHistory === false} 
-                                                    onChange={() => setHasBiteHistory(false)}
-                                                />
-                                                <span className="text-xs font-bold text-gray-700">No</span>
-                                            </label>
-                                        </div>
-                                    </div>
+                                    <BehaviorHistoryField
+                                        label="Bite history"
+                                        question="Declared: has bitten a person or another animal before"
+                                        verifiedCount={verifiedBites}
+                                        declared={declaredBite}
+                                        accent="accent-role"
+                                        onChange={setDeclaredBite}
+                                    />
 
-                                    <div className="space-y-3">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Chase Behavior?</label>
-                                        <div className="flex gap-6 h-14 items-center">
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input 
-                                                    type="radio" 
-                                                    name="subdChaseBehavior" 
-                                                    className="w-4 h-4 accent-role" 
-                                                    checked={chaseBehavior === true} 
-                                                    onChange={() => setChaseBehavior(true)}
-                                                />
-                                                <span className="text-xs font-bold text-gray-700">Yes</span>
-                                            </label>
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input 
-                                                    type="radio" 
-                                                    name="subdChaseBehavior" 
-                                                    className="w-4 h-4 accent-role" 
-                                                    checked={chaseBehavior === false} 
-                                                    onChange={() => setChaseBehavior(false)}
-                                                />
-                                                <span className="text-xs font-bold text-gray-700">No</span>
-                                            </label>
-                                        </div>
-                                    </div>
+                                    <BehaviorHistoryField
+                                        label="Chasing"
+                                        question="Declared: chases people, animals or vehicles"
+                                        verifiedCount={verifiedChases}
+                                        declared={declaredChase}
+                                        accent="accent-role"
+                                        onChange={setDeclaredChase}
+                                    />
                                 </div>
                             </div>
                         </div>

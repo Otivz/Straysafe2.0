@@ -17,6 +17,7 @@ from app.schemas.chat import (
     ChatStatsResponse
 )
 from app.utils.auth import get_current_user
+from app.utils.pet_adoption import owned_through_later_adoption
 from app.utils.uploads import validate_cloudinary_url
 
 router = APIRouter(
@@ -198,16 +199,23 @@ def is_report_escalated_to_barangay(report: Optional[Report], db: Session) -> bo
     return False
 
 
+def find_report_thread(report_id: int, db: Session) -> Optional[ChatThread]:
+    """The report's case conversation, if one exists (the oldest, if duplicates were ever created)."""
+    return db.query(ChatThread).filter(ChatThread.thread_type == "Report", ChatThread.related_id == report_id) \
+        .order_by(ChatThread.thread_id.asc()).first()
+
+
 def get_or_create_report_thread(report_id: int, current_user: User, db: Session) -> ChatThread:
     report = db.query(Report).filter(Report.report_id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
     # Look for existing thread
-    thread = db.query(ChatThread).filter(
-        ChatThread.thread_type == "Report",
-        ChatThread.related_id == report_id
-    ).first()
+    thread = find_report_thread(report_id, db)
+    if not thread:
+        # Serialize concurrent first messages so a single thread is created per report (the same lock as adoption chats)
+        db.query(Report.report_id).filter(Report.report_id == report_id).with_for_update().first()
+        thread = find_report_thread(report_id, db)
 
     if not thread:
         # Determine creator and recipient
@@ -238,7 +246,7 @@ def get_or_create_report_thread(report_id: int, current_user: User, db: Session)
     return thread
 
 
-def check_user_report_chat_access(report_id: int, current_user: User, thread: ChatThread, db: Session) -> bool:
+def check_user_report_chat_access(report_id: int, current_user: User, thread: Optional[ChatThread], db: Session) -> bool:
     if current_user.role_id == 4:
         return True  # Admin oversight
 
@@ -281,21 +289,24 @@ def check_user_report_chat_access(report_id: int, current_user: User, thread: Ch
 
     # Citizen (role_id == 1): the case chat is confidential between the reporter and staff (message.md Ruling 2, B6).
     # Living in the same subdivision or the report being public does NOT open it.
-    if thread.created_by == current_user.user_id or thread.recipient_id == current_user.user_id:
+    if thread is not None and (thread.created_by == current_user.user_id or thread.recipient_id == current_user.user_id):
         return True
     if report.user_id == current_user.user_id:
         return True
     # ...and the owner of the pet the report really is: linked to their pet, or staff confirmed the match and the
     # owner hasn't rejected it. A mere AI suggestion doesn't (the owner has the look-alike match chat for that).
-    if report.pet_id and db.query(Pet.pet_id).filter(Pet.pet_id == report.pet_id, Pet.owner_id == current_user.user_id).first():
+    # (Not when the pet became theirs by adopting it after this report was filed: the conversation between the
+    # reporter and the officials is not the adopter's.)
+    if report.pet_id and db.query(Pet.pet_id).filter(Pet.pet_id == report.pet_id, Pet.owner_id == current_user.user_id).first() \
+            and not owned_through_later_adoption(db, report.pet_id, current_user.user_id, report.created_at):
         return True
-    confirmed = db.query(ReportMatch.match_id).join(Pet, ReportMatch.matched_pet_id == Pet.pet_id).filter(
+    confirmed_pet_ids = [pid for (pid,) in db.query(ReportMatch.matched_pet_id).join(Pet, ReportMatch.matched_pet_id == Pet.pet_id).filter(
         ReportMatch.source_report_id == report_id,
         Pet.owner_id == current_user.user_id,
         ReportMatch.status.in_(("CONFIRMED_MATCH", "COVERED_BY_CASE")),
         ReportMatch.owner_confirmation_status != "OWNER_REJECTED",
-    ).first()
-    return confirmed is not None
+    ).all()]
+    return any(not owned_through_later_adoption(db, pid, current_user.user_id, report.created_at) for pid in confirmed_pet_ids)
 
 
 def is_user_assigned_to_report(report_id: int, user_id: int, db: Session) -> bool:
@@ -356,6 +367,18 @@ def can_user_interact_with_report_chat(report_id: int, current_user: User, db: S
         return is_user_assigned_to_report(report_id, current_user.user_id, db)
 
     return False
+
+
+def _is_participant(thread: Optional[ChatThread], user: User) -> bool:
+    return thread is not None and (thread.created_by == user.user_id or thread.recipient_id == user.user_id)
+
+
+def existing_match_thread(match_id: int, db: Session) -> Optional[ChatThread]:
+    """The match's conversation if one exists, without creating it (for the access check)."""
+    match = db.query(ReportMatch).filter(ReportMatch.match_id == match_id).first()
+    if match is not None:
+        return find_match_thread(match, db)
+    return db.query(ChatThread).filter(ChatThread.thread_type == "Direct", ChatThread.related_id == match_id).first()
 
 
 def find_match_thread(match: ReportMatch, db: Session) -> Optional[ChatThread]:
@@ -441,13 +464,13 @@ def get_or_create_match_thread(match_id: int, current_user: User, db: Session) -
     return thread
 
 
-def check_user_match_chat_access(match_id: int, current_user: User, thread: ChatThread, db: Session) -> bool:
+def check_user_match_chat_access(match_id: int, current_user: User, thread: Optional[ChatThread], db: Session) -> bool:
     if current_user.role_id == 4:
         return True  # Staff, leaders, admin have access
 
     match = db.query(ReportMatch).filter(ReportMatch.match_id == match_id).first()
     if not match:
-        return thread.created_by == current_user.user_id or thread.recipient_id == current_user.user_id
+        return _is_participant(thread, current_user)
 
     source_report = db.query(Report).filter(Report.report_id == match.source_report_id).first()
 
@@ -456,7 +479,7 @@ def check_user_match_chat_access(match_id: int, current_user: User, thread: Chat
             return True
         if source_report and source_report.assigned_leader_id == current_user.user_id:
             return True
-        return thread.created_by == current_user.user_id or thread.recipient_id == current_user.user_id
+        return _is_participant(thread, current_user)
 
     if current_user.role_id == 3:
         # Barangay Staff: Source report must be escalated to Barangay!
@@ -473,11 +496,12 @@ def check_user_match_chat_access(match_id: int, current_user: User, thread: Chat
         return is_user_assigned_to_report(match.source_report_id, current_user.user_id, db)
 
     # Citizen (role_id == 1)
-    if thread.created_by == current_user.user_id or thread.recipient_id == current_user.user_id:
+    if _is_participant(thread, current_user):
         return True
 
     pet = db.query(Pet).filter(Pet.pet_id == match.matched_pet_id).first() if match.matched_pet_id else None
-    if pet and pet.owner_id == current_user.user_id:
+    if pet and pet.owner_id == current_user.user_id and not owned_through_later_adoption(
+            db, pet.pet_id, current_user.user_id, source_report.created_at if source_report else None):
         return True
     if source_report and source_report.user_id == current_user.user_id:
         return True
@@ -621,11 +645,10 @@ def get_report_thread_endpoint(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    thread = get_or_create_report_thread(report_id, current_user, db)
-    
-    # Check access: reporter, staff/leader/admin, look-alike pet owner, or resident
-    if not check_user_report_chat_access(report_id, current_user, thread, db):
+    # Check access first (reporter, staff/leader/admin, the pet's owner): a refused caller creates nothing
+    if not check_user_report_chat_access(report_id, current_user, find_report_thread(report_id, db), db):
         raise HTTPException(status_code=403, detail="Access denied to this case chat")
+    thread = get_or_create_report_thread(report_id, current_user, db)
 
     messages = db.query(ChatMessage).filter(ChatMessage.thread_id == thread.thread_id).order_by(ChatMessage.sent_at.asc()).all()
     formatted_messages = [format_message_dict(m, db) for m in messages]
@@ -657,10 +680,9 @@ def get_report_messages(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    thread = get_or_create_report_thread(report_id, current_user, db)
-    
-    if not check_user_report_chat_access(report_id, current_user, thread, db):
+    if not check_user_report_chat_access(report_id, current_user, find_report_thread(report_id, db), db):
         raise HTTPException(status_code=403, detail="Access denied to this case chat")
+    thread = get_or_create_report_thread(report_id, current_user, db)
 
     messages = db.query(ChatMessage).filter(ChatMessage.thread_id == thread.thread_id).order_by(ChatMessage.sent_at.asc()).all()
     return [format_message_dict(m, db) for m in messages]
@@ -673,13 +695,12 @@ def send_report_message(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    if not check_user_report_chat_access(report_id, current_user, find_report_thread(report_id, db), db):
+        raise HTTPException(status_code=403, detail="Access denied to this case chat")
     thread = get_or_create_report_thread(report_id, current_user, db)
 
     if thread.is_closed:
         raise HTTPException(status_code=400, detail="This case has been solved and archived. Chat is in read-only mode.")
-
-    if not check_user_report_chat_access(report_id, current_user, thread, db):
-        raise HTTPException(status_code=403, detail="Access denied to this case chat")
 
     if not can_user_interact_with_report_chat(report_id, current_user, db):
         raise HTTPException(status_code=403, detail=report_chat_send_denied_message(current_user))
@@ -779,12 +800,10 @@ def get_report_chat_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    thread = db.query(ChatThread).filter(
-        ChatThread.thread_type == "Report",
-        ChatThread.related_id == report_id
-    ).first()
+    thread = find_report_thread(report_id, db)
 
-    if not thread:
+    # Someone who may not read the conversation learns nothing about it (not even that it exists)
+    if not thread or not check_user_report_chat_access(report_id, current_user, thread, db):
         return {
             "thread_id": None,
             "total_messages": 0,
@@ -871,9 +890,10 @@ def get_match_thread_endpoint(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    thread = get_or_create_match_thread(match_id, current_user, db)
-    if not check_user_match_chat_access(match_id, current_user, thread, db):
+    # Check access before a thread exists: a new thread names its caller as creator, which would pass the check
+    if not check_user_match_chat_access(match_id, current_user, existing_match_thread(match_id, db), db):
         raise HTTPException(status_code=403, detail="Access denied to this match verification chat")
+    thread = get_or_create_match_thread(match_id, current_user, db)
 
     messages = db.query(ChatMessage).filter(ChatMessage.thread_id == thread.thread_id).order_by(ChatMessage.sent_at.asc()).all()
     formatted_messages = [format_message_dict(m, db) for m in messages]
@@ -903,9 +923,10 @@ def get_match_messages(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    thread = get_or_create_match_thread(match_id, current_user, db)
-    if not check_user_match_chat_access(match_id, current_user, thread, db):
+    # Check access before a thread exists: a new thread names its caller as creator, which would pass the check
+    if not check_user_match_chat_access(match_id, current_user, existing_match_thread(match_id, db), db):
         raise HTTPException(status_code=403, detail="Access denied to this match verification chat")
+    thread = get_or_create_match_thread(match_id, current_user, db)
 
     messages = db.query(ChatMessage).filter(ChatMessage.thread_id == thread.thread_id).order_by(ChatMessage.sent_at.asc()).all()
     return [format_message_dict(m, db) for m in messages]
@@ -918,12 +939,11 @@ def send_match_message(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    if not check_user_match_chat_access(match_id, current_user, existing_match_thread(match_id, db), db):
+        raise HTTPException(status_code=403, detail="Access denied to this match verification chat")
     thread = get_or_create_match_thread(match_id, current_user, db)
     if thread.is_closed:
         raise HTTPException(status_code=400, detail="This pet claim/case has been completed and archived. Chat is in read-only mode.")
-
-    if not check_user_match_chat_access(match_id, current_user, thread, db):
-        raise HTTPException(status_code=403, detail="Access denied to this match verification chat")
 
     message_text = payload.message_text
     is_system = False  # a person's message is never a system notice: only the server posts those (message.md Ruling 8)

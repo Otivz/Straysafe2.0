@@ -209,6 +209,26 @@ def _apply_reused_proof(db: Session, claim: PetClaim, pet_id: int, source_claim_
     claim.remarks = f"{claim.remarks}\n{note}" if claim.remarks else note
 
 
+def _notify_claim_evidence(db: Session, claim: PetClaim, actor: User) -> None:
+    """Keep leader evidence alerts consistent for single-file and report/pet saves."""
+    rep = claim.report or db.query(Report).filter(Report.report_id == claim.report_id).first()
+    if not rep or not rep.subdivision_id:
+        return
+    try:
+        leaders = db.query(User).filter(User.subdivision_id == rep.subdivision_id, User.role_id == 2).all()
+        for leader in leaders:
+            db.add(Notification(
+                user_id=leader.user_id,
+                title="Pet Claim Evidence Submitted",
+                message=f"Resident {actor.name} submitted ownership evidence for Report #{claim.report_id} ({claim.pet.display_name if claim.pet else 'Pet'}).",
+                type="claim", related_id=claim.report_id,
+            ))
+        db.commit()
+    except Exception as error:
+        db.rollback()
+        print(f"Notice: Failed to create leader evidence notification: {error}")
+
+
 @router.get("/{claim_id}", response_model=PetClaimResponse)
 def get_claim(claim_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     claim = db.query(PetClaim).options(
@@ -270,6 +290,13 @@ def create_or_update_claim(
             detail="Permission Denied: You can only submit claims for your own registered pet."
         )
 
+    # The report/pet save path accepts the same proof files as the evidence route.
+    # Validate every supplied document before changing an existing claim.
+    for field in PROOF_FIELDS:
+        file_url = getattr(claim_in, field, None)
+        if file_url and field != 'additional_photos_url':
+            validate_cloudinary_url(file_url, allowed={'Image', 'Video', 'Document'})
+
     # Fetch corresponding match score from report_matches if available
     match_rec = db.query(ReportMatch).filter(
         ReportMatch.source_report_id == claim_in.report_id,
@@ -288,6 +315,8 @@ def create_or_update_claim(
             or next((c for c in case_claims if c.status != "Merged"), None)
 
     if db_claim:
+        evidence_fields = (*PROOF_FIELDS, 'distinctive_markings', 'remarks')
+        previous_evidence = tuple(getattr(db_claim, field) for field in evidence_fields)
         # Update the existing match claim to a submitted state
         db_claim.status = "Pending Review"
         db_claim.remarks = claim_in.remarks or db_claim.remarks
@@ -306,9 +335,12 @@ def create_or_update_claim(
             db_claim.match_score = match_score_val
         if claim_in.reuse_proof_from_claim_id and claim_in.reuse_proof_from_claim_id != db_claim.claim_id:
             _apply_reused_proof(db, db_claim, claim_in.pet_id, claim_in.reuse_proof_from_claim_id)
+        evidence_changed = previous_evidence != tuple(getattr(db_claim, field) for field in evidence_fields)
         db.commit()
         db.refresh(db_claim)
         _attach_case_reports(db, db_claim)
+        if evidence_changed:
+            _notify_claim_evidence(db, db_claim, current_user)
         return db_claim
 
     # Otherwise, create a new claim (on the case's first report, so it represents the whole case)
@@ -404,26 +436,7 @@ def upload_claim_evidence(
         db.refresh(claim)
         _attach_case_reports(db, claim)
 
-        # Notify leaders of evidence submission
-        rep = claim.report or db.query(Report).filter(Report.report_id == claim.report_id).first()
-        if rep and rep.subdivision_id:
-            try:
-                leaders = db.query(User).filter(
-                    User.subdivision_id == rep.subdivision_id,
-                    User.role_id == 2
-                ).all()
-                for leader in leaders:
-                    subd_notif = Notification(
-                        user_id=leader.user_id,
-                        title="Pet Claim Evidence Submitted",
-                        message=f"Resident {current_user.name} submitted ownership evidence for Report #{claim.report_id} ({claim.pet.display_name if claim.pet else 'Pet'}).",
-                        type="claim",
-                        related_id=claim.report_id
-                    )
-                    db.add(subd_notif)
-                db.commit()
-            except Exception as notif_err:
-                print(f"Notice: Failed to create leader evidence notification: {notif_err}")
+        _notify_claim_evidence(db, claim, current_user)
 
         return claim
     except HTTPException:
@@ -487,6 +500,7 @@ def update_claim_status(
             history_entry = StatusHistory(
                 report_id=claim.report_id,
                 report_status_id=9,
+                updated_by=current_user.user_id,
                 remarks=f"Claim approved. Owner identified: {claim.pet.display_name if claim.pet else 'Pet'}. Coordinate handover with owner."
             )
             db.add(history_entry)
@@ -727,6 +741,13 @@ def update_claim_status(
                 ))
         except Exception as l_notif_err:
             print(f"Notice: Failed to notify leader on pet received: {l_notif_err}")
+
+    # The claim decision itself verifies ownership; a second approval in the
+    # report's Potential Matches panel must not be necessary for pet records.
+    # Do this before notifications (which may commit), in the same transaction.
+    if is_staff_or_admin and status_update.status in ('Approved', 'Handover Complete', 'Pet Received'):
+        from app.utils.claim_identity import sync_approved_claim_identity
+        sync_approved_claim_identity(db, claim, current_user)
 
     # Create a notification for the pet owner
     if claim.pet and claim.pet.owner_id:
