@@ -1,3 +1,5 @@
+import { getPersonnelAvailability } from '../../utils/personnelAvailability';
+import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { useState, useEffect } from 'react';
 import SectionJumpNav from '../../components/SectionJumpNav';
 import { SIGHTING_TITLE, sightingLandmark } from '../../utils/sighting';
@@ -275,6 +277,7 @@ const BrgyReportView = () => {
     }, [(report as any)?.report_id, (report as any)?.status_id, (report as any)?.history?.length]);
     const [isGeocoding, setIsGeocoding] = useState(false);
     const [personnel, setPersonnel] = useState<any[]>(() => getCachedData<any[]>('brgy_dashboard_personnel') || []);
+    const eligiblePersonnel = personnel.filter(p => getPersonnelAvailability(p, false) === 'available');
     const [roadDistance, setRoadDistance] = useState<number | null>(null);
     // Subdivision Leaders review duplicates, matches and animal records; the Barangay may act only on cases in its hands
     // (or where the subdivision has no active leader). The server decides; this just hides buttons that would be refused.
@@ -513,11 +516,13 @@ const BrgyReportView = () => {
     const fetchPersonnel = async () => {
         try {
             const response = await api.get('/users/?role_id=3');
-            setPersonnel(response.data || []);
+            setPersonnel((response.data || []).filter((p: any) => getPersonnelAvailability(p, false) === 'available'));
         } catch (error) {
             console.error('Error fetching personnel:', error);
         }
     };
+
+    useAutoRefresh(async () => { await Promise.all([fetchReportDetails(), fetchPersonnel()]); }, Boolean(id));
 
     const fetchFacilities = async () => {
         setIsLoadingFacilities(true);
@@ -812,8 +817,8 @@ const BrgyReportView = () => {
         if (activeIds.length === 0 && rescueRequest?.staff_id) {
             activeIds.push(rescueRequest.staff_id);
         }
-        setStatusSelectedStaffIds(activeIds);
-        setSelectedPersonnelId(activeIds[0] || null);
+        setStatusSelectedStaffIds(activeIds.filter(id => eligiblePersonnel.some(p => p.user_id === id)));
+        setSelectedPersonnelId(activeIds.find(id => eligiblePersonnel.some(p => p.user_id === id)) || null);
         setStatusPersonnelSearch('');
         setStatusFiles([]);
         setIsConfirmModalOpen(false);
@@ -1035,7 +1040,7 @@ const BrgyReportView = () => {
         if (activeIds.length === 0 && rescueRequest?.staff_id) {
             activeIds.push(rescueRequest.staff_id);
         }
-        setSelectedStaffIds(activeIds);
+        setSelectedStaffIds(activeIds.filter(id => eligiblePersonnel.some(p => p.user_id === id)));
         setAssignRemarks('');
         setPersonnelSearch('');
         setIsAssignModalOpen(true);
@@ -2725,7 +2730,7 @@ const BrgyReportView = () => {
 
                                     {/* Personnel Selectable Cards List */}
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto custom-scrollbar pr-1">
-                                        {personnel
+                                        {eligiblePersonnel
                                             .filter((p: any) => {
                                                 if (!statusPersonnelSearch.trim()) return true;
                                                 const q = statusPersonnelSearch.toLowerCase();
@@ -3105,7 +3110,7 @@ const BrgyReportView = () => {
                                 </label>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto custom-scrollbar pr-1">
-                                    {personnel
+                                    {eligiblePersonnel
                                         .filter((p: any) => {
                                             const q = personnelSearch.toLowerCase();
                                             const fullName = `${p.first_name || ''} ${p.last_name || ''}`.toLowerCase();

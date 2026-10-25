@@ -1,3 +1,4 @@
+import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { useState, useEffect } from 'react';
 import { SIGHTING_TITLE } from '../../utils/sighting';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
@@ -347,6 +348,7 @@ const BrgyViewHistory = () => {
     useEffect(() => {
         fetchData();
     }, [id]);
+    useAutoRefresh(fetchData, Boolean(id));
 
     useEffect(() => {
         if (!report) return;

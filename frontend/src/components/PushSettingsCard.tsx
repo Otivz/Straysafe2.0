@@ -28,7 +28,7 @@ const STATE_TEXT: Record<PushState, string> = {
     untrusted: 'This connection\'s security certificate isn\'t trusted, so the browser won\'t allow push here. Use a trusted HTTPS address, or localhost on the PC.',
 };
 
-export default function PushSettingsCard({ userId, className = '' }: { userId?: number | string; className?: string }) {
+export default function PushSettingsCard({ userId, className = '', showIcons = true }: { userId?: number | string; className?: string; showIcons?: boolean }) {
     const [state, setState] = useState<PushState | null>(null);
     const [prefs, setPrefs] = useState<PushPrefs | null>(null);
     const [busy, setBusy] = useState(false);
@@ -85,9 +85,9 @@ export default function PushSettingsCard({ userId, className = '' }: { userId?: 
         <div className={`p-5 bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4 ${className}`}>
             <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-950/60 text-[#F97316] flex items-center justify-center shrink-0">
+                    {showIcons && <div className="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-950/60 text-[#F97316] flex items-center justify-center shrink-0">
                         <BellRing className="w-4 h-4" />
-                    </div>
+                    </div>}
                     <div>
                         <span className="text-xs font-black text-gray-800 dark:text-gray-200 block">Push Notifications</span>
                         <span className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold leading-snug block">
@@ -121,7 +121,7 @@ export default function PushSettingsCard({ userId, className = '' }: { userId?: 
                     </label>
                     <button type="button" onClick={sendTest}
                         className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-orange-300 rounded-lg text-[10px] font-black uppercase tracking-wider text-gray-700 dark:text-gray-200 cursor-pointer">
-                        <Send className="w-3 h-3" /> Send test notification
+                        {showIcons && <Send className="w-3 h-3" />} Send test notification
                     </button>
                 </div>
             )}

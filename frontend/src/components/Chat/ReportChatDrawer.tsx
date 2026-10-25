@@ -258,6 +258,8 @@ export default function ReportChatDrawer({
     // Adoption chats are keyed by the application only; the server derives everything else from the session.
     const isAdoptionMode = threadMode === 'adoption' && !!adoptionId;
     const [adoptionInfo, setAdoptionInfo] = useState<AdoptionChatInfo | null>(null);
+    // The server refused this conversation (403 / 404): nothing cached is shown and nothing can be sent
+    const [accessDenied, setAccessDenied] = useState(false);
     const isMatchMode = !isAdoptionMode && ((threadMode === 'match') || (threadMode !== 'report' && effectiveMatchId > 0 && !isReporter));
 
     // Terminal statuses (same lists as the server, backend/app/routes/chat.py)
@@ -432,6 +434,7 @@ export default function ReportChatDrawer({
         if (!isMatchMode && !isAdoptionMode && !reportId) return;
         if (isMatchMode && !effectiveMatchId) return;
 
+        setAccessDenied(false);
         // Mark unread messages as seen immediately upon opening drawer
         markThreadSeen();
 
@@ -452,6 +455,7 @@ export default function ReportChatDrawer({
         const fetchLiveMessages = async () => {
             try {
                 const response = await api.get(messagesGetUrl);
+                setAccessDenied(false);
                 if (response.data && Array.isArray(response.data) && response.data.length > 0) {
                     const mapped: ChatMessage[] = response.data.map((m: any) => ({
                         id: `msg-${m.message_id}`,
@@ -475,8 +479,9 @@ export default function ReportChatDrawer({
                         localStorage.setItem(storageKey, JSON.stringify(mapped));
                         markThreadSeen();
                     }
-                } else if (!stored) {
-                    // Default initial welcome if empty
+                } else if (lastPollSigRef.current !== 'empty') {
+                    // The server has no messages: show the welcome note, replacing any older cached copy
+                    lastPollSigRef.current = 'empty';
                     const defaultMessages: ChatMessage[] = [
                         {
                             id: 'sys-1',
@@ -497,7 +502,16 @@ export default function ReportChatDrawer({
                     localStorage.setItem(storageKey, JSON.stringify(defaultMessages));
                     markThreadSeen();
                 }
-            } catch (error) {
+            } catch (error: any) {
+                const status = error?.response?.status;
+                if (status === 403 || status === 404) {
+                    // Not this person's conversation: never show a cached copy of it
+                    localStorage.removeItem(storageKey);
+                    lastPollSigRef.current = 'denied';
+                    setAccessDenied(true);
+                    setMessages([]);
+                    return;
+                }
                 console.warn('Live chat fetch fallback to local:', error);
             }
         };
@@ -547,7 +561,7 @@ export default function ReportChatDrawer({
         if (e) e.preventDefault();
         const trimmed = inputText.trim();
         if (!trimmed && !selectedImageFile) return;
-        if (isResolved || !canInteract) return;
+        if (accessDenied || isResolved || !canInteract) return;
         if (isAdoptionMode && !trimmed) return; // adoption chat is text-only
 
         const currentInput = trimmed;
@@ -1227,7 +1241,17 @@ export default function ReportChatDrawer({
 
                     {/* Input Footer */}
                     <div className="p-3 sm:p-3.5 bg-white dark:bg-[#151C2C] border-t border-gray-200 dark:border-gray-800 shrink-0 pb-6 sm:pb-3.5">
-                        {isResolved ? (
+                        {accessDenied ? (
+                            <div role="alert" className="p-3.5 bg-gray-50 dark:bg-[#0E131F] rounded-2xl border border-gray-200 dark:border-gray-800 text-center space-y-1">
+                                <div className="flex items-center justify-center gap-1.5 text-gray-900 dark:text-gray-100 font-black text-xs">
+                                    <span>🔒</span>
+                                    <span>You don't have access to this conversation</span>
+                                </div>
+                                <p className="text-[10.5px] text-gray-600 dark:text-gray-400 leading-relaxed">
+                                    It belongs to other participants. If you think this is wrong, contact your barangay.
+                                </p>
+                            </div>
+                        ) : isResolved ? (
                             <div className="p-3.5 bg-rose-50/80 dark:bg-[#0E131F] rounded-2xl border border-rose-200 dark:border-rose-900/60 text-center space-y-1">
                                 <div className="flex items-center justify-center gap-1.5 text-rose-900 dark:text-rose-200 font-black text-xs">
                                     <span>🔒</span>

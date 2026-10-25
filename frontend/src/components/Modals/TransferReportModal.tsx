@@ -1,3 +1,4 @@
+import { getPersonnelAvailability } from '../../utils/personnelAvailability';
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
@@ -9,6 +10,7 @@ interface Officer {
     phone?: string;
     profile_picture?: string;
     role_id: number;
+    status?: string | null;
     subdivision_id?: number;
     position?: {
         position_name: string;
@@ -58,7 +60,7 @@ const TransferReportModal: React.FC<TransferReportModalProps> = ({
             }
             const res = await api.get('/users', { params });
             const list: Officer[] = (res.data || []).filter(
-                (u: Officer) => u.user_id !== currentUserId
+                (u: Officer) => u.user_id !== currentUserId && getPersonnelAvailability(u, false) === 'available'
             );
             setOfficers(list);
             if (list.length > 0) {

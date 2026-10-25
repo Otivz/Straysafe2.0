@@ -1,3 +1,4 @@
+import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import AnimalRecordsPanel from '../../components/AnimalRecordsPanel';
 import type { ReactNode } from 'react';
@@ -596,6 +597,7 @@ const BrgyHoldingFacility = () => {
                 api.get('/holding/metrics', { params }),
             ]);
             setAnimals(animalsRes.data || []);
+            setSelected(current => current ? (animalsRes.data || []).find((animal: HoldingAnimal) => animal.holding_id === current.holding_id) || current : null);
             setMetrics(metricsRes.data || { total: 0, need_treatment: 0, healthy: 0, nearing_expiry: 0, resolved_today: 0, needs_impoundment: 0 });
         } catch (err) {
             console.error('Error fetching holding facility data:', err);
@@ -605,6 +607,7 @@ const BrgyHoldingFacility = () => {
     }, [isAdmin, isSubdLeader, defaultSubdId, defaultBrgyId, selectedScope, selectedFacilityId, impoundStayDuration]);
 
     useEffect(() => { fetchAll(); }, [fetchAll]);
+    useAutoRefresh(fetchAll);
 
     // ── Active facility object ─────────────────────────────────────────────────
     const activeFacility = selectedFacilityId !== 'all'
@@ -1671,8 +1674,8 @@ const BrgyHoldingFacility = () => {
                                             </div>
                                         )}
 
-                                        {/* Promote to adoption catalog (Barangay) */}
-                                        {!RESOLVED_IDS.has(selected.facility_status) && !isForAdoptionSel && !isSubdLeader && (
+                                        {/* Before the stay limit; overdue animals use the action panel below. */}
+                                        {!isResolved && !isForAdoptionSel && !isOverdueSel && !isSubdLeader && (
                                             <div className="border border-emerald-200 bg-emerald-50/70 rounded-2xl p-3 space-y-2.5">
                                                 <div className="flex items-start gap-2.5">
                                                     <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
@@ -1681,31 +1684,20 @@ const BrgyHoldingFacility = () => {
                                                     <div className="min-w-0">
                                                         <p className="text-sm font-black text-emerald-950 flex items-center gap-2 flex-wrap">
                                                             Promote to adoption catalog
-                                                            {heldDays >= impoundStayDuration ? (
-                                                                <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full">Ready ({impoundStayDuration}+ days)</span>
-                                                            ) : (
-                                                                <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full">Day {heldDays} of {impoundStayDuration}</span>
-                                                            )}
+                                                            <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full">Day {heldDays} of {impoundStayDuration}</span>
                                                         </p>
                                                         <p className="text-xs text-emerald-800 mt-0.5 leading-relaxed">
-                                                            {heldDays >= impoundStayDuration
-                                                                ? `${impoundStayDuration}-day stay limit reached. Make this pet available for public citizen adoption.`
-                                                                : `Holding period in progress (stay limit: ${impoundStayDuration} days). Head Officers can promote early if medical evaluation is complete.`}
+                                                            {`Holding period in progress (stay limit: ${impoundStayDuration} days). Head Officers can promote early if medical evaluation is complete.`}
                                                         </p>
                                                     </div>
                                                 </div>
-                                                {(isHeadOfficer || heldDays >= impoundStayDuration) ? (
+                                                {isHeadOfficer ? (
                                                     <button
                                                         type="button"
-                                                        onClick={() => {
-                                                            setPromoteNotes(selected.medical_notes || '');
-                                                            setPromoteError(null);
-                                                            setPromoteSuccess(null);
-                                                            setPromoteModalOpen(true);
-                                                        }}
+                                                        onClick={() => openPromoteModalForAnimal(selected)}
                                                         className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                                                     >
-                                                        <Rocket className="w-3.5 h-3.5" /> Promote now
+                                                        <Rocket className="w-3.5 h-3.5" /> Promote to adoption
                                                     </button>
                                                 ) : (
                                                     <p className="text-[11px] font-bold text-gray-500 bg-white px-3 py-2 rounded-xl border border-gray-200 text-center">
@@ -1730,13 +1722,13 @@ const BrgyHoldingFacility = () => {
                                                     </div>
                                                 </div>
                                                 {!isSubdLeader && (
-                                                    <div className="grid grid-cols-2 gap-2">
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                                         <button
                                                             type="button"
                                                             onClick={() => openPromoteModalForAnimal(selected)}
                                                             className="h-10 px-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                                                         >
-                                                            <Rocket className="w-3.5 h-3.5" /> Promote
+                                                            <Rocket className="w-3.5 h-3.5" /> Promote to adoption
                                                         </button>
                                                         <button
                                                             type="button"

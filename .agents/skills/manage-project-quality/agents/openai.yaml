@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Docs & Quality"
+  short_description: "Guide and review project quality workflows"
+  default_prompt: "Use $manage-project-quality to inspect this repository, determine its current Agent Docs stage, and guide the next safe documentation, security, or engineering step using repository evidence."

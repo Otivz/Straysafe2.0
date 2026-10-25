@@ -196,6 +196,7 @@ interface AdoptionStageStepperProps {
     postMonitoringStatus?: string;
     compact?: boolean;
     useTenStages?: boolean;
+    responsive?: boolean;
 }
 
 export const AdoptionStageStepper: React.FC<AdoptionStageStepperProps> = ({
@@ -205,6 +206,7 @@ export const AdoptionStageStepper: React.FC<AdoptionStageStepperProps> = ({
     postMonitoringStatus,
     compact = false,
     useTenStages = false,
+    responsive = false,
 }) => {
     const isRejected = status === 'Rejected';
     const isCancelled = status === 'Cancelled';
@@ -262,8 +264,21 @@ export const AdoptionStageStepper: React.FC<AdoptionStageStepperProps> = ({
                 )}
             </div>
 
-            {/* Visual Stepper Track */}
-            <div className="relative overflow-x-auto pb-1 scrollbar-none">
+            {responsive && (
+                <ol className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2" aria-label="Adoption lifecycle stages">
+                    {stages.map((stage, idx) => {
+                        const done = !isCancelled && (idx < currentIndex || isCompleted);
+                        const active = idx === currentIndex && !isCancelled && !isCompleted;
+                        const failed = active && isRejected;
+                        return <li key={stage.id} aria-current={active ? 'step' : undefined} className={`min-w-0 rounded-xl border p-2.5 ${failed ? 'bg-red-50 border-red-200' : active ? 'bg-role-soft border-role-border' : done ? 'bg-emerald-50 border-emerald-200' : 'border-slate-200 bg-white'}`}>
+                            <span className="block text-xs font-bold">{idx + 1}. {stage.shortLabel}</span>
+                            <span className={`block mt-1 text-[11px] ${done ? 'text-emerald-700' : active ? 'font-bold text-role-strong' : 'text-slate-500'}`}>{isCancelled ? 'Cancelled' : failed ? 'Not approved' : done ? 'Completed' : active ? 'Current stage' : 'Pending'}</span>
+                        </li>;
+                    })}
+                </ol>
+            )}
+            {/* The responsive layout wraps at every width; legacy callers retain their track. */}
+            {!responsive && <div className="relative overflow-x-auto pb-1 scrollbar-none">
                 <div className={`${useTenStages ? 'min-w-[560px] sm:min-w-[680px]' : 'min-w-[480px] sm:min-w-[560px]'} flex items-center justify-between relative py-2`}>
                     {/* Connecting Bar */}
                     <div className="absolute top-1/2 left-4 right-4 -translate-y-1/2 h-1 bg-slate-200 dark:bg-slate-800 rounded-full z-0" />
@@ -326,7 +341,7 @@ export const AdoptionStageStepper: React.FC<AdoptionStageStepperProps> = ({
                         );
                     })}
                 </div>
-            </div>
+            </div>}
 
             {/* Quick Context Tip */}
             {!compact && !isCancelled && !isRejected && (

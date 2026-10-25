@@ -1,6 +1,7 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.utils.auth import get_current_staff_or_admin, get_current_user
+from app.utils.staff_assignment import load_active_assignees
 
 logger = logging.getLogger(__name__)
 from decimal import Decimal
@@ -163,6 +164,7 @@ def create_rescue_request(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_staff_or_admin)
 ):
+    load_active_assignees(db, [user_id for user_id in (request_in.leader_id, request_in.staff_id) if user_id])
     # Creating a rescue request escalates a Reported/Verified case to the Barangay: the animal needs a record first.
     pre_report = db.query(Report).filter(Report.report_id == request_in.report_id).first()
     if pre_report and pre_report.current_status_id in (1, 2) and not (pre_report.duplicate_of_report_id or pre_report.current_status_id == 18):
@@ -439,6 +441,12 @@ def update_rescue_request(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access forbidden: Staff or Admin role required"
             )
+
+        # Validate all targets before replacing the primary responder or cancelling a team.
+        if assigned_ids:
+            load_active_assignees(db, assigned_ids)
+        if update_data.get("barangay_staff_id"):
+            load_active_assignees(db, [update_data["barangay_staff_id"]])
 
         # Map barangay_staff_id → staff_id (DB column name) if it exists in update_data
         if "barangay_staff_id" in update_data:
@@ -983,6 +991,10 @@ def assign_rescue_team(
 ):
     """Assign 1 to 5 field responders to a rescue mission."""
     try:
+        assigned_ids = list(dict.fromkeys(payload.assigned_personnel_ids))
+        if not assigned_ids:
+            raise HTTPException(status_code=400, detail="Please select at least one field responder.")
+        load_active_assignees(db, assigned_ids)
         db_rescue = None
         if payload.rescue_id:
             db_rescue = db.query(Rescue).filter(Rescue.rescue_id == payload.rescue_id).first()
@@ -1006,7 +1018,7 @@ def assign_rescue_team(
             if gate_report is not None and gate_report.current_status_id == 4:
                 raise HTTPException(status_code=403, detail="Approve this rescue request first. A response team cannot be assigned until it is approved.")
 
-        assigned_ids = payload.assigned_personnel_ids
+        assigned_ids = list(dict.fromkeys(payload.assigned_personnel_ids))
         if not assigned_ids or len(assigned_ids) == 0:
             raise HTTPException(status_code=400, detail="Please select at least one field responder.")
 

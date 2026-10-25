@@ -61,7 +61,10 @@ INSERT INTO `positions` (`position_id`, `position_name`) VALUES
 (3, 'Barangay Staff'),
 (4, 'Tanod'),
 (5, 'Animal Rescuer'),
-(6, 'Barangay Captain');
+(6, 'Barangay Captain'),
+(7, 'Subdivision President / Leader'),
+(8, 'Barangay Head Officer'),
+(9, 'Field Rescuer');
 
 -- =========================================
 -- TABLE: BARANGAYS
@@ -438,6 +441,8 @@ CREATE TABLE `pets` (
   `bite_incident_count` int DEFAULT '0',
   `chase_behavior` tinyint(1) DEFAULT '0',
   `chase_incident_count` int DEFAULT '0',
+  `declared_bite_history` tinyint(1) NOT NULL DEFAULT '0',
+  `declared_chase_behavior` tinyint(1) NOT NULL DEFAULT '0',
   `notes` text,
   `status` enum('Active','Lost','Found','Rescued','Deceased','Archived','Inactive') DEFAULT 'Active',
   `is_verified` tinyint(1) DEFAULT '0',

@@ -152,10 +152,12 @@ foreign key** in the model or the database, so it is not drawn as a self-relatio
 | `is_neutered` | Boolean | NOT NULL |  |
 | `vaccine_card_url` | String(255) | NULL |  |
 | `temperament` | Enum (Friendly, Aggressive, Anxious, Scared, Protective) | NULL |  |
-| `has_bite_history` | Boolean | NOT NULL |  |
-| `bite_incident_count` | Integer | NOT NULL |  |
-| `chase_behavior` | Boolean | NOT NULL |  |
-| `chase_incident_count` | Integer | NOT NULL |  |
+| `has_bite_history` | Boolean | NOT NULL | Verified: counted only from verified incident reports, never edited directly |
+| `bite_incident_count` | Integer | NOT NULL | Verified (as above) |
+| `chase_behavior` | Boolean | NOT NULL | Verified (as above) |
+| `chase_incident_count` | Integer | NOT NULL | Verified (as above) |
+| `declared_bite_history` | Boolean | NOT NULL | Declared by the owner or registering officer; a resident can add it, only staff can remove it |
+| `declared_chase_behavior` | Boolean | NOT NULL | Declared (as above) |
 | `notes` | Text | NULL |  |
 | `status` | Enum (Active, Lost, Found, Rescued, Deceased, Archived, Inactive) | NULL |  |
 | `merged_into_pet_id` | Integer | NULL |  |

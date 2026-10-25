@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 import app.models  # noqa: E402,F401
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
+from app.models.notification import Notification  # noqa: E402
 from app.models.pet_claim import PetClaim  # noqa: E402
 from app.models.report import Report, ReportStatus  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
@@ -71,6 +72,45 @@ check("a link that isn't one of our Cloudinary uploads is refused", r.status_cod
 r = client.post("/claims/", json={"report_id": rep.report_id, "pet_id": pet.pet_id, "additional_photos_url": "https://evil.example/x.jpg"}, headers=H)
 check("...also when filing the claim (that path didn't check links before)", r.status_code == 400, r.text[:200])
 check("the shown list is the stored one, in order", claims.claim_photo_list(db.get(PetClaim, CID).additional_photos_url)[:2] == [U(1), U(2, 'mp4', 'video')])
+
+# A cached claim ID may no longer exist after the database has changed. The UI
+# saves by the current report/pet, allowing the server to select the live claim.
+rep2 = Report(user_id=owner.user_id, subdivision_id=1, category_id=1, latitude=14.8, longitude=121.0,
+              current_status_id=2, animal_type='Dog')
+leader = User(name='Leader', email='leader@test-mail.com', password='x', role_id=2, is_verified=True,
+              status='Active', subdivision_id=1, barangay_id=1)
+db.add_all([rep2, leader])
+db.commit()
+missing = client.post('/claims/999999/evidence', json={'file_url': U(10), 'document_type': 'additional_photo'}, headers=H)
+check('a stale evidence URL really is a missing claim, not a missing route', missing.status_code == 404 and missing.json().get('detail') == 'Claim not found')
+payload = {'report_id': rep2.report_id, 'pet_id': pet.pet_id, 'additional_photos_url': U(10),
+           'vaccine_card_url': U(11), 'distinctive_markings': 'Left ear notch'}
+recovered = client.post('/claims/', json=payload, headers=H)
+recovered_id = recovered.json().get('claim_id')
+check('report/pet submission creates the real claim with the selected proof', recovered.status_code == 200
+      and recovered_id and recovered.json().get('additional_photos_url') == U(10)
+      and recovered.json().get('vaccine_card_url') == U(11)
+      and recovered.json().get('distinctive_markings') == 'Left ear notch', recovered.text[:300])
+repeated = client.post('/claims/', json=payload, headers=H)
+check('retrying uses the same live claim and does not duplicate photos', repeated.status_code == 200
+      and repeated.json().get('claim_id') == recovered_id
+      and claims.claim_photo_list(repeated.json().get('additional_photos_url')) == [U(10)])
+merged = Report(user_id=owner.user_id, subdivision_id=1, category_id=1, latitude=14.8, longitude=121.0,
+                current_status_id=18, duplicate_of_report_id=rep2.report_id, animal_type='Dog')
+db.add(merged)
+db.commit()
+via_merged = client.post('/claims/', json={'report_id': merged.report_id, 'pet_id': pet.pet_id, 'additional_photos_url': U(12)}, headers=H)
+check('evidence from a merged report goes to the existing case claim', via_merged.status_code == 200
+      and via_merged.json().get('claim_id') == recovered_id
+      and claims.claim_photo_list(via_merged.json().get('additional_photos_url')) == [U(10), U(12)], via_merged.text[:300])
+alerts = lambda: db.query(Notification).filter(Notification.user_id == leader.user_id, Notification.title == 'Pet Claim Evidence Submitted').count()
+check('the leader is still notified when new proof is added', alerts() == 1)
+client.post('/claims/', json={'report_id': merged.report_id, 'pet_id': pet.pet_id, 'additional_photos_url': U(12)}, headers=H)
+check('retrying already-saved proof does not create duplicate leader alerts', alerts() == 1)
+bad_document = client.post('/claims/', json={'report_id': rep2.report_id, 'pet_id': pet.pet_id, 'vaccine_card_url': 'https://example.com/fake.jpg'}, headers=H)
+check('report/pet saves validate documents like the individual evidence endpoint', bad_document.status_code == 400, bad_document.text[:200])
+db.expire_all()
+check('a rejected document cannot overwrite the saved vaccination proof', db.get(PetClaim, recovered_id).vaccine_card_url == U(11))
 
 db.close()
 print(f"\n{sum(results)}/{len(results)} checks passed")

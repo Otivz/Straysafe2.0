@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import BehaviorHistoryField from '../../components/PetRecords/BehaviorHistoryField';
 import { usePetPhotoGuard, PetPhotoGuardPanel, RegisterAnotherPrompt } from '../../components/PetPhotoGuard';
 import PhoneInput from '../../components/PhoneInput';
 import { useNavigate } from 'react-router-dom';
@@ -21,6 +22,14 @@ import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
 import { isUnnamedPet, petName } from '../../utils/petName';
 import { getCachedData, setCachedData } from '../../utils/cache';
 import { reverseGeocodeStreet } from '../../utils/sighting';
+import {
+    COAT_PATTERN_PRESETS,
+    calculateAge,
+    approximateBirthDateFromAge,
+    parseAgeToYearsMonths,
+    parseCoatPattern,
+    composeCoatMarkings
+} from '../../utils/petAge';
 // The last-seen map only loads when an owner opens the lost-pet form (keeps the pets page light)
 const MapComponent = lazy(() => import('../../components/MapComponent'));
 
@@ -149,8 +158,14 @@ interface PetFormData {
     customSecondaryColor: string;
     tertiaryColor: string;
     customTertiaryColor: string;
+    pattern: string;
+    markingsDetails: string;
     color: string;
     age: string;
+    ageMode: 'approximate' | 'exact';
+    approxYears: number | '';
+    approxMonths: number | '';
+    birthDate: string;
     status: string;
     weight: string;
     mediaFiles: File[];
@@ -163,8 +178,13 @@ interface PetFormData {
     healthNotes: string;
     vaccineCardFiles: File[];
     temperament: string;
-    hasBiteHistory: boolean | null;
-    chaseBehavior: boolean | null;
+    // the owner's own account of the pet (declared); verified history comes from incident reports
+    declaredBite: boolean;
+    declaredChase: boolean;
+    savedDeclaredBite: boolean;
+    savedDeclaredChase: boolean;
+    verifiedBites: number;
+    verifiedChases: number;
     existingVaccineCardUrl: string | null;
 }
 
@@ -180,8 +200,14 @@ const INITIAL_PET_FORM_DATA: PetFormData = {
     customSecondaryColor: '',
     tertiaryColor: '',
     customTertiaryColor: '',
+    pattern: '',
+    markingsDetails: '',
     color: '',
     age: '',
+    ageMode: 'approximate',
+    approxYears: '',
+    approxMonths: '',
+    birthDate: '',
     status: 'Active',
     weight: '',
     mediaFiles: [],
@@ -194,8 +220,12 @@ const INITIAL_PET_FORM_DATA: PetFormData = {
     healthNotes: '',
     vaccineCardFiles: [],
     temperament: 'Friendly',
-    hasBiteHistory: null,
-    chaseBehavior: null,
+    declaredBite: false,
+    declaredChase: false,
+    savedDeclaredBite: false,
+    savedDeclaredChase: false,
+    verifiedBites: 0,
+    verifiedChases: 0,
     existingVaccineCardUrl: null
 };
 
@@ -293,7 +323,9 @@ const ResidentPet = () => {
             id: pet.pet_id?.toString() || '0',
             name: petName(pet),
             gender: pet.gender || 'Male',
-            age: pet.estimated_age || 'Unknown',
+            age: calculateAge(pet.birth_date, pet.estimated_age) || 'Unknown',
+            birthDate: pet.birth_date || undefined,
+            birth_date: pet.birth_date || undefined,
             breed: pet.breed || pet.pet_type || 'Unknown',
             species: pet.pet_type || 'Unknown',
             ownerName: currentUser ? currentUser.name : 'Unknown Owner',
@@ -427,6 +459,8 @@ const ResidentPet = () => {
                             ? (colorSummaryList.length >= 3 ? 'Tricolor' : colorSummaryList.length === 2 ? 'Bicolor' : '')
                             : aiPattern;
 
+                        const parsedPattern = parseCoatPattern(coatPattern);
+
                         setFormData(prev => ({
                             ...prev,
                             species: normSpecies,
@@ -438,6 +472,8 @@ const ResidentPet = () => {
                             customSecondaryColor: p2Match.custom,
                             tertiaryColor: p3Match.selected,
                             customTertiaryColor: p3Match.custom,
+                            pattern: parsedPattern.pattern || (coatPattern ? 'Other' : ''),
+                            markingsDetails: parsedPattern.details,
                             color: coatPattern ? `${coatPattern} coat` : prev.color
                         }));
 
@@ -780,6 +816,22 @@ const ResidentPet = () => {
                 ? (formData.customTertiaryColor.trim() || 'Other')
                 : formData.tertiaryColor;
 
+            // Calculate dynamic birth_date and estimated_age
+            let finalBirthDate: string | null = null;
+            let finalEstimatedAge: string | null = null;
+            if (formData.ageMode === 'exact' && formData.birthDate) {
+                finalBirthDate = formData.birthDate;
+                finalEstimatedAge = calculateAge(formData.birthDate);
+            } else if (formData.ageMode === 'approximate') {
+                finalBirthDate = approximateBirthDateFromAge(formData.approxYears, formData.approxMonths) || null;
+                finalEstimatedAge = finalBirthDate ? calculateAge(finalBirthDate) : null;
+            }
+
+            const composedMarkings = composeCoatMarkings(
+                formData.pattern,
+                formData.markingsDetails || formData.color
+            );
+
             const petData: any = {
                 pet_name: formData.name,
                 pet_type: formData.species,
@@ -789,9 +841,10 @@ const ResidentPet = () => {
                 primary_color: effectivePrimary,
                 secondary_color: effectiveSecondary || null,
                 tertiary_color: effectiveTertiary || null,
-                color_markings: formData.color.trim() || null,
-                distinctive_markings: formData.color.trim() || null,
-                estimated_age: formData.age.trim() || null,   // optional: empty = not recorded
+                color_markings: composedMarkings || null,
+                distinctive_markings: composedMarkings || null,
+                birth_date: finalBirthDate,
+                estimated_age: finalEstimatedAge || null,   // dynamic auto-advancing age
                 status: formData.status,
                 health_condition: formData.healthNotes.trim() || 'Healthy and active',
                 weight: formData.weight ? parseFloat(formData.weight) : null,
@@ -800,8 +853,8 @@ const ResidentPet = () => {
                 is_neutered: formData.isNeutered,
                 notes: null,
                 temperament: formData.temperament,
-                has_bite_history: formData.hasBiteHistory,
-                chase_behavior: formData.chaseBehavior,
+                declared_bite_history: formData.declaredBite,
+                declared_chase_behavior: formData.declaredChase,
                 owner_id: currentUser.user_id,
                 emergency_contact_phone: currentUser.phone,
                 ...(confirmNewPet === true ? { confirm_new_pet: true } : {})
@@ -898,6 +951,9 @@ const ResidentPet = () => {
         const isTertiaryPreset = !rawTertiary || rawTertiary === 'None' || presetTertiary.includes(rawTertiary);
 
         setEditingPetId(petObj.pet_id);
+        const parsedAge = parseAgeToYearsMonths(petObj.birth_date, petObj.estimated_age);
+        const parsedCoat = parseCoatPattern(petObj.color_markings || petObj.distinctive_markings);
+
         setFormData({
             name: isUnnamedPet(petObj.pet_name) ? '' : petObj.pet_name,
             species: petObj.pet_type || 'Dog',
@@ -910,8 +966,14 @@ const ResidentPet = () => {
             customSecondaryColor: isSecondaryPreset ? '' : rawSecondary,
             tertiaryColor: isTertiaryPreset ? (rawTertiary === 'None' ? '' : rawTertiary) : (rawTertiary ? 'Other' : ''),
             customTertiaryColor: isTertiaryPreset ? '' : rawTertiary,
+            pattern: parsedCoat.pattern,
+            markingsDetails: parsedCoat.details,
             color: petObj.color_markings || petObj.distinctive_markings || '',
             age: petObj.estimated_age || '',
+            ageMode: parsedAge.hasExactDate ? 'exact' : 'approximate',
+            approxYears: parsedAge.years,
+            approxMonths: parsedAge.months,
+            birthDate: parsedAge.birthDate || '',
             status: petObj.status || 'Active',
             weight: petObj.weight ? petObj.weight.toString() : '',
             mediaFiles: [],
@@ -924,8 +986,12 @@ const ResidentPet = () => {
             healthNotes: petObj.health_condition === 'Healthy and active' ? '' : petObj.health_condition || '',
             vaccineCardFiles: [],
             temperament: petObj.temperament || 'Friendly',
-            hasBiteHistory: petObj.has_bite_history === null ? null : petObj.has_bite_history,
-            chaseBehavior: petObj.chase_behavior === null ? null : petObj.chase_behavior,
+            declaredBite: !!petObj.declared_bite_history,
+            declaredChase: !!petObj.declared_chase_behavior,
+            savedDeclaredBite: !!petObj.declared_bite_history,
+            savedDeclaredChase: !!petObj.declared_chase_behavior,
+            verifiedBites: petObj.has_bite_history ? (petObj.bite_incident_count || 1) : 0,
+            verifiedChases: petObj.chase_behavior ? (petObj.chase_incident_count || 1) : 0,
             existingVaccineCardUrl: petObj.vaccine_card_url || null
         });
 
@@ -2005,21 +2071,127 @@ const ResidentPet = () => {
                                         })()}
                                     </div>
                                     <div className="space-y-4">
-                                        <label htmlFor="pet-field-age" className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Age (Estimated Age) <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
-                                        <input
-                                            id="pet-field-age"
-                                            type="text"
-                                            className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${formErrors.age
-                                                ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10'
-                                                : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
-                                                }`}
-                                            placeholder="e.g. 2 years / Puppy"
-                                            value={formData.age}
-                                            onChange={(e) => {
-                                                setFormData({ ...formData, age: e.target.value });
-                                                if (formErrors.age) setFormErrors({ ...formErrors, age: false });
-                                            }}
-                                        />
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest flex items-center gap-1.5">
+                                                <span>Age & Birthday</span>
+                                                <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">(Optional)</span>
+                                            </label>
+                                            {/* Mode Switcher */}
+                                            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFormData(prev => ({ ...prev, ageMode: 'approximate' }))}
+                                                    className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                                                        formData.ageMode === 'approximate'
+                                                            ? 'bg-white text-[#F97316] shadow-xs'
+                                                            : 'text-gray-500 hover:text-gray-800'
+                                                    }`}
+                                                >
+                                                    Approximate Age
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFormData(prev => ({ ...prev, ageMode: 'exact' }))}
+                                                    className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                                                        formData.ageMode === 'exact'
+                                                            ? 'bg-white text-[#F97316] shadow-xs'
+                                                            : 'text-gray-500 hover:text-gray-800'
+                                                    }`}
+                                                >
+                                                    Exact Birthday
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {formData.ageMode === 'approximate' ? (
+                                            <div className="space-y-2.5">
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div>
+                                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Years</label>
+                                                        <select
+                                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-4 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
+                                                            value={formData.approxYears}
+                                                            onChange={(e) => setFormData(prev => ({ ...prev, approxYears: e.target.value === '' ? '' : Number(e.target.value) }))}
+                                                        >
+                                                            <option value="">Select years</option>
+                                                            {Array.from({ length: 21 }, (_, i) => (
+                                                                <option key={i} value={i}>{i} {i === 1 ? 'Year' : 'Years'}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Months</label>
+                                                        <select
+                                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-4 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
+                                                            value={formData.approxMonths}
+                                                            onChange={(e) => setFormData(prev => ({ ...prev, approxMonths: e.target.value === '' ? '' : Number(e.target.value) }))}
+                                                        >
+                                                            <option value="">Select months</option>
+                                                            {Array.from({ length: 12 }, (_, i) => (
+                                                                <option key={i} value={i}>{i} {i === 1 ? 'Month' : 'Months'}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                {/* Quick pick chips */}
+                                                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                                    {[
+                                                        { label: formData.species === 'Cat' ? 'Kitten (4 mos)' : 'Puppy (4 mos)', y: 0, m: 4 },
+                                                        { label: 'Young (1 yr)', y: 1, m: 0 },
+                                                        { label: 'Adult (3 yrs)', y: 3, m: 0 },
+                                                        { label: 'Senior (7 yrs)', y: 7, m: 0 },
+                                                    ].map(chip => (
+                                                        <button
+                                                            key={chip.label}
+                                                            type="button"
+                                                            onClick={() => setFormData(prev => ({ ...prev, approxYears: chip.y, approxMonths: chip.m }))}
+                                                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
+                                                                formData.approxYears === chip.y && formData.approxMonths === chip.m
+                                                                    ? 'bg-orange-50 border-[#F97316] text-[#F97316]'
+                                                                    : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+                                                            }`}
+                                                        >
+                                                            {chip.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+
+                                                {/* Live preview banner */}
+                                                {(formData.approxYears !== '' || formData.approxMonths !== '') && (
+                                                    <div className="p-3 bg-orange-50/50 border border-orange-100 rounded-2xl flex items-center justify-between text-xs font-bold text-gray-700">
+                                                        <span className="flex items-center gap-1.5">
+                                                            <span className="text-[#F97316]">✨</span>
+                                                            <span>Calculated Age: <strong className="text-[#F97316]">{calculateAge(approximateBirthDateFromAge(formData.approxYears, formData.approxMonths))}</strong></span>
+                                                        </span>
+                                                        <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
+                                                            Auto-advances over time
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2.5">
+                                                <input
+                                                    type="date"
+                                                    max={new Date().toISOString().slice(0, 10)}
+                                                    className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
+                                                    value={formData.birthDate}
+                                                    onChange={(e) => setFormData(prev => ({ ...prev, birthDate: e.target.value }))}
+                                                />
+                                                {formData.birthDate && (
+                                                    <div className="p-3 bg-orange-50/50 border border-orange-100 rounded-2xl flex items-center justify-between text-xs font-bold text-gray-700">
+                                                        <span className="flex items-center gap-1.5">
+                                                            <span className="text-[#F97316]">🎂</span>
+                                                            <span>Age Today: <strong className="text-[#F97316]">{calculateAge(formData.birthDate)}</strong></span>
+                                                        </span>
+                                                        <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
+                                                            Exact birthday saved
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="space-y-4">
@@ -2138,14 +2310,66 @@ const ResidentPet = () => {
                                         )}
                                     </div>
                                     <div className="space-y-4">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Color Markings / Patterns <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
-                                        <input
-                                            type="text"
-                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
-                                            placeholder="e.g. Black with white patches on chest"
-                                            value={formData.color}
-                                            onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                                        />
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">
+                                                Coat Pattern & Markings <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span>
+                                            </label>
+                                            {formData.pattern && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFormData(prev => ({ ...prev, pattern: '', markingsDetails: '' }))}
+                                                    className="text-[9px] font-black text-gray-400 hover:text-red-500 uppercase tracking-wider transition-colors cursor-pointer"
+                                                >
+                                                    Clear Pattern
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Coat Pattern Dropdown with Human-Friendly Descriptions */}
+                                        <select
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
+                                            value={formData.pattern}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, pattern: e.target.value }))}
+                                        >
+                                            <option value="">Select Coat Pattern (e.g. Solid, Bicolor, Tabby, Tuxedo...)</option>
+                                            {COAT_PATTERN_PRESETS
+                                                .filter(p => !p.suggestedFor || p.suggestedFor === 'Both' || p.suggestedFor === formData.species)
+                                                .map(p => (
+                                                    <option key={p.id} value={p.id}>
+                                                        {p.label}
+                                                    </option>
+                                                ))
+                                            }
+                                        </select>
+
+                                        {/* Pattern description card if selected */}
+                                        {(() => {
+                                            const selectedPreset = COAT_PATTERN_PRESETS.find(p => p.id === formData.pattern);
+                                            if (!selectedPreset) return null;
+                                            return (
+                                                <div className="p-3.5 bg-orange-50/60 border border-orange-100 rounded-2xl flex items-start gap-2.5 animate-in fade-in duration-200">
+                                                    <span className="text-base leading-none">💡</span>
+                                                    <div className="text-xs">
+                                                        <span className="font-black text-[#1a1208]">{selectedPreset.label}: </span>
+                                                        <span className="text-gray-600 font-semibold">{selectedPreset.description}</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* Specific markings & details */}
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block">
+                                                Specific Markings or Details (Optional)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
+                                                placeholder="e.g. White chest patch, left front white sock, scar on ear"
+                                                value={formData.markingsDetails || formData.color}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, markingsDetails: e.target.value, color: e.target.value }))}
+                                            />
+                                        </div>
                                     </div>
                                     <div className="space-y-4">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Weight <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
@@ -2291,77 +2515,23 @@ const ResidentPet = () => {
                                         </select>
                                     </div>
 
-                                    <div className="space-y-4">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Has Bite History?</label>
-                                        <div className="flex gap-4 h-14 items-center">
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input
-                                                    type="radio"
-                                                    name="hasBiteHistory"
-                                                    className="w-4 h-4 accent-[#F97316]"
-                                                    checked={formData.hasBiteHistory === true}
-                                                    onChange={() => setFormData({ ...formData, hasBiteHistory: true })}
-                                                />
-                                                <span className="text-xs font-bold text-gray-700">Yes</span>
-                                            </label>
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input
-                                                    type="radio"
-                                                    name="hasBiteHistory"
-                                                    className="w-4 h-4 accent-[#F97316]"
-                                                    checked={formData.hasBiteHistory === false}
-                                                    onChange={() => setFormData({ ...formData, hasBiteHistory: false })}
-                                                />
-                                                <span className="text-xs font-bold text-gray-700">No</span>
-                                            </label>
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input
-                                                    type="radio"
-                                                    name="hasBiteHistory"
-                                                    className="w-4 h-4 accent-[#F97316]"
-                                                    checked={formData.hasBiteHistory === null}
-                                                    onChange={() => setFormData({ ...formData, hasBiteHistory: null })}
-                                                />
-                                                <span className="text-xs font-bold text-gray-700">Not sure</span>
-                                            </label>
-                                        </div>
-                                    </div>
+                                    <BehaviorHistoryField
+                                        label="Bite history"
+                                        question="My pet has bitten a person or another animal before"
+                                        verifiedCount={formData.verifiedBites}
+                                        declared={formData.declaredBite}
+                                        locked={formData.savedDeclaredBite}
+                                        onChange={(v) => setFormData({ ...formData, declaredBite: v })}
+                                    />
 
-                                    <div className="space-y-4">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Chase Behavior?</label>
-                                        <div className="flex gap-4 h-14 items-center">
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input
-                                                    type="radio"
-                                                    name="chaseBehavior"
-                                                    className="w-4 h-4 accent-[#F97316]"
-                                                    checked={formData.chaseBehavior === true}
-                                                    onChange={() => setFormData({ ...formData, chaseBehavior: true })}
-                                                />
-                                                <span className="text-xs font-bold text-gray-700">Yes</span>
-                                            </label>
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input
-                                                    type="radio"
-                                                    name="chaseBehavior"
-                                                    className="w-4 h-4 accent-[#F97316]"
-                                                    checked={formData.chaseBehavior === false}
-                                                    onChange={() => setFormData({ ...formData, chaseBehavior: false })}
-                                                />
-                                                <span className="text-xs font-bold text-gray-700">No</span>
-                                            </label>
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input
-                                                    type="radio"
-                                                    name="chaseBehavior"
-                                                    className="w-4 h-4 accent-[#F97316]"
-                                                    checked={formData.chaseBehavior === null}
-                                                    onChange={() => setFormData({ ...formData, chaseBehavior: null })}
-                                                />
-                                                <span className="text-xs font-bold text-gray-700">Not sure</span>
-                                            </label>
-                                        </div>
-                                    </div>
+                                    <BehaviorHistoryField
+                                        label="Chasing"
+                                        question="My pet chases people, animals or vehicles"
+                                        verifiedCount={formData.verifiedChases}
+                                        declared={formData.declaredChase}
+                                        locked={formData.savedDeclaredChase}
+                                        onChange={(v) => setFormData({ ...formData, declaredChase: v })}
+                                    />
                                 </div>
                             </div>
                         </div>

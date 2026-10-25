@@ -451,65 +451,20 @@ const SubdMessages: React.FC = () => {
                                 </span>
                             </div>
 
-                            {/* Case Tabs Switcher */}
-                            <div className="flex bg-gray-100/80 p-1 rounded-2xl gap-1">
-                                <button
-                                    onClick={() => setActiveTab('my')}
-                                    className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                                        activeTab === 'my' 
-                                            ? 'bg-white text-role shadow-sm font-black' 
-                                            : 'text-gray-500 hover:text-gray-900'
-                                    }`}
+                            {/* Conversation filter, matching the barangay inbox */}
+                            <label className="flex items-center gap-2">
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest shrink-0">Show</span>
+                                <select
+                                    value={activeTab}
+                                    onChange={(e) => setActiveTab(e.target.value as typeof activeTab)}
+                                    className="flex-1 min-w-0 px-3 py-2 text-xs font-bold text-gray-800 bg-white border border-gray-200 rounded-xl shadow-2xs focus:outline-hidden focus:border-role cursor-pointer"
+                                    aria-label="Filter conversations"
                                 >
-                                    <span>My Cases</span>
-                                    <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
-                                        activeTab === 'my' ? 'bg-role-muted text-role' : 'bg-gray-200 text-gray-600'
-                                    }`}>
-                                        {myCases.length}
-                                    </span>
-                                    {myUnreadCount > 0 && (
-                                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                                    )}
-                                </button>
-
-                                <button
-                                    onClick={() => setActiveTab('unassigned')}
-                                    className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                                        activeTab === 'unassigned' 
-                                            ? 'bg-white text-role shadow-sm font-black' 
-                                            : 'text-gray-500 hover:text-gray-900'
-                                    }`}
-                                >
-                                    <span>Unassigned</span>
-                                    <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
-                                        activeTab === 'unassigned' ? 'bg-role-muted text-role' : 'bg-gray-200 text-gray-600'
-                                    }`}>
-                                        {unassignedCases.length}
-                                    </span>
-                                    {unassignedUnreadCount > 0 && (
-                                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                                    )}
-                                </button>
-
-                                <button
-                                    onClick={() => setActiveTab('past')}
-                                    className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                                        activeTab === 'past' 
-                                            ? 'bg-white text-role shadow-sm font-black' 
-                                            : 'text-gray-500 hover:text-gray-900'
-                                    }`}
-                                >
-                                    <span>Past Reports</span>
-                                    <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
-                                        activeTab === 'past' ? 'bg-role-muted text-role' : 'bg-gray-200 text-gray-600'
-                                    }`}>
-                                        {pastCases.length}
-                                    </span>
-                                    {pastUnreadCount > 0 && (
-                                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                                    )}
-                                </button>
-                            </div>
+                                    <option value="my">My Cases ({myCases.length}){myUnreadCount > 0 ? ` - ${myUnreadCount} unread` : ''}</option>
+                                    <option value="unassigned">Unassigned ({unassignedCases.length}){unassignedUnreadCount > 0 ? ` - ${unassignedUnreadCount} unread` : ''}</option>
+                                    <option value="past">Past Reports ({pastCases.length}){pastUnreadCount > 0 ? ` - ${pastUnreadCount} unread` : ''}</option>
+                                </select>
+                            </label>
 
                             {/* Search */}
                             <div className="relative">
@@ -544,7 +499,7 @@ const SubdMessages: React.FC = () => {
                                     </p>
                                     <p className="text-[11px] max-w-xs mx-auto">
                                         {activeTab === 'my' 
-                                            ? 'Claim reports in the Unassigned tab to coordinate with reporters.' 
+                                            ? 'Choose Unassigned from the dropdown to find reports to claim and coordinate with reporters.'
                                             : activeTab === 'unassigned' 
                                                 ? 'Incoming resident inquiries and reported strays will appear here.' 
                                                 : 'Completed, resolved, or dismissed report messages will appear here.'}

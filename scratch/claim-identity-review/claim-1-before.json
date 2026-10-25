@@ -1,0 +1,18 @@
+{
+  "claim_id": 1,
+  "claim_status": "Handover Complete",
+  "report_id": 1,
+  "report_pet_id": null,
+  "pet_id": 2,
+  "matches": [
+    {
+      "match_id": 1,
+      "status": "AI_SUGGESTED",
+      "owner_confirmation_status": "OWNER_CONFIRMED",
+      "reviewed_by": null,
+      "reviewer_role": null,
+      "verification_notes": null,
+      "verified_at": null
+    }
+  ]
+}

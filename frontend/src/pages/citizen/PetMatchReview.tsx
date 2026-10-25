@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, getAuthenticatedUser } from '../../utils/api';
 import { nominatimReverse } from '../../utils/geocode';
@@ -13,9 +13,11 @@ import MapComponent from '../../components/MapComponent';
 import { Camera, X, CheckCircle2, Loader2, Sparkles, PawPrint } from 'lucide-react';
 
 
-import { SELERA_DEFAULT_CENTER, isValidLatLng } from '../../utils/coverageArea';
+import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
 import { petName } from '../../utils/petName';
 import { compressImageFile } from '../../utils/imageCompress';
+import { getReportSighting } from '../../utils/originalSighting';
+import { saveClaimEvidence, type ClaimEvidenceFile } from '../../utils/claimEvidence';
 const parseReportDescription = (description: string) => {
     if (!description) return { cleanNotes: '', pattern: '', conditions: '', markings: '' };
     
@@ -87,6 +89,7 @@ const PetMatchReview = () => {
     const [petLat, setPetLat] = useState<number | null>(null);
     const [petLng, setPetLng] = useState<number | null>(null);
     const [roadDistance, setRoadDistance] = useState<number | null>(null);
+    const uploadedEvidenceUrls = useRef(new WeakMap<File, string>());
 
     // Confirmation & Proof upload states
     const [isMyPetConfirmed, setIsMyPetConfirmed] = useState(false);
@@ -141,7 +144,7 @@ const PetMatchReview = () => {
 
     useEffect(() => {
         setRoadDistance(null);
-    }, [selectedPetId, reportId]);
+    }, [selectedPetId, reportId, activeTabReportId]);
 
     useEffect(() => {
         if (!currentUser) {
@@ -197,17 +200,6 @@ const PetMatchReview = () => {
             // 2. Fetch Report details (fallback / augmentation)
             const reportRes = await api.get(`/reports/${reportId}`);
             const repData = reportRes.data;
-
-            if (repData.latitude && repData.longitude) {
-                try {
-                    const geoData = await nominatimReverse(repData.latitude, repData.longitude, { format: 'jsonv2' });
-                    if (geoData && geoData.display_name) {
-                        repData.street_address = geoData.display_name;
-                    }
-                } catch (e) {
-                    console.warn("Reverse geocode failed", e);
-                }
-            }
 
             setReport(repData);
 
@@ -270,17 +262,9 @@ const PetMatchReview = () => {
                 }
             }
 
-            // Fallback to local storage only if backend has no record of this claim
-            if (!matchingClaim) {
-                const localClaimsStr = localStorage.getItem('straysafe_claims_submitted');
-                if (localClaimsStr) {
-                    const localClaims = JSON.parse(localClaimsStr);
-                    matchingClaim = localClaims.find((c: any) => c.report_id === parseInt(reportId || '0') && c.pet.owner?.email === currentUser?.email && c.pet?.status?.toLowerCase() !== 'deceased');
-                }
-            }
-
+            // Only server records are live claims; a cached ID can outlive a database reset.
+            setExistingClaim(matchingClaim);
             if (matchingClaim) {
-                setExistingClaim(matchingClaim);
                 setSelectedPetId(matchingClaim.pet_id);
                 if (matchingClaim.pet?.registered_latitude && matchingClaim.pet?.registered_longitude) {
                     setPetLat(parseFloat(matchingClaim.pet.registered_latitude));
@@ -609,69 +593,58 @@ const PetMatchReview = () => {
     };
 
     const handleUploadEvidence = async () => {
-        if (!existingClaim?.claim_id) return;
+        if (isSubmitting || !selectedPetId) return;
 
-        const filesToUpload: { file: File; documentType: string; label: string }[] = [];
+        const filesToUpload: ClaimEvidenceFile[] = [];
         if (vaccineCardFile) filesToUpload.push({ file: vaccineCardFile, documentType: 'vaccine_card', label: 'Vaccination Card' });
         if (vetRecordFile) filesToUpload.push({ file: vetRecordFile, documentType: 'vet_record', label: 'Veterinary Records' });
         if (petRegRecordFile) filesToUpload.push({ file: petRegRecordFile, documentType: 'registration_record', label: 'Registration Certificate' });
-        additionalPhotosFiles.forEach((f) => filesToUpload.push({ file: f, documentType: 'additional_photo', label: `Additional Photos (${f.name})` }));
+        additionalPhotosFiles.forEach(file => filesToUpload.push({ file, documentType: 'additional_photo', label: `Additional Photos (${file.name})` }));
         if (evidenceFile) filesToUpload.push({ file: evidenceFile, documentType: 'evidence', label: 'Supporting Evidence' });
 
-        if (filesToUpload.length === 0 && !distinctiveMarkings.trim() && !remarks.trim()) {
-            alert("Please select at least one proof of ownership file (Vaccination Card, Vet Records, Registration, or Photos) or enter distinctive markings.");
+        if (!filesToUpload.length && !distinctiveMarkings.trim() && !remarks.trim()) {
+            alert('Please select a proof of ownership file or enter distinctive markings or notes.');
             return;
         }
 
         setIsSubmitting(true);
-        let updatedClaim = existingClaim;
-        const uploadErrors: string[] = [];
-
         try {
-            for (const item of filesToUpload) {
-                try {
-                    const { url } = await uploadDirectToCloudinary(item.file, 'claims');
-                    const res = await api.post(`/claims/${existingClaim.claim_id}/evidence`, {
-                        file_url: url,
-                        document_type: item.documentType,
-                        distinctive_markings: distinctiveMarkings.trim() || undefined,
-                        remarks: remarks.trim() || undefined
-                    });
-                    updatedClaim = res.data;
-                } catch (upErr: any) {
-                    console.error(`Failed to upload ${item.label}:`, upErr);
-                    uploadErrors.push(`${item.label}: ${upErr.response?.data?.detail || upErr.message}`);
+            const result = await saveClaimEvidence({
+                reportId: Number(reportId), petId: selectedPetId, files: filesToUpload,
+                distinctiveMarkings, remarks,
+            }, file => uploadDirectToCloudinary(file, 'claims'),
+            async payload => (await api.post('/claims/', payload)).data, uploadedEvidenceUrls.current);
+
+            if (result.claim) {
+                setExistingClaim(result.claim);
+                const saved = new Set(result.savedFiles);
+                if (evidenceFile && saved.has(evidenceFile)) setEvidenceFile(null);
+                if (vaccineCardFile && saved.has(vaccineCardFile)) {
+                    setVaccineCardFile(null);
+                    setVaccineCardName('');
                 }
+                if (vetRecordFile && saved.has(vetRecordFile)) {
+                    setVetRecordFile(null);
+                    setVetRecordName('');
+                }
+                if (petRegRecordFile && saved.has(petRegRecordFile)) {
+                    setPetRegRecordFile(null);
+                    setPetRegRecordName('');
+                }
+                const remaining = additionalPhotosFiles.filter(file => !saved.has(file));
+                setAdditionalPhotosFiles(remaining);
+                setPrevPhotoName(remaining.map(file => file.name).join(', '));
             }
-
-            if (filesToUpload.length === 0 && (distinctiveMarkings.trim() || remarks.trim())) {
-                const res = await api.patch(`/claims/${existingClaim.claim_id}/status`, {
-                    status: existingClaim.status === 'Evidence Requested' ? 'Pending Review' : existingClaim.status,
-                    remarks: remarks.trim() || existingClaim.remarks
-                });
-                updatedClaim = res.data;
+            if (result.errors.length) {
+                setShowUploadForm(true);
+                alert('Some files could not be saved. They remain selected so you can retry:\n- ' + result.errors.join('\n- '));
+            } else if (result.claim) {
+                alert('Proof of ownership submitted successfully!');
             }
-
-            setExistingClaim(updatedClaim);
-            setEvidenceFile(null);
-            setVaccineCardFile(null);
-            setVaccineCardName('');
-            setVetRecordFile(null);
-            setVetRecordName('');
-            setPetRegRecordFile(null);
-            setPetRegRecordName('');
-            setAdditionalPhotosFiles([]);
-            setPrevPhotoName('');
-
-            if (uploadErrors.length > 0) {
-                alert("Some files failed to upload:\n- " + uploadErrors.join("\n- "));
-            } else {
-                alert("Proof of ownership submitted successfully! Subdivision leaders have been notified and can now verify your claim.");
-            }
-            await fetchDetails();
-        } catch (err: any) {
-            console.error("Evidence upload error:", err);
-            alert("Failed to submit evidence: " + (err.response?.data?.detail || err.message));
+            if (result.claim) await fetchDetails();
+        } catch (error: any) {
+            console.error('Evidence submission error:', error);
+            alert('Could not save your evidence. Your selected files have been kept for retry. ' + (error.response?.data?.detail || error.message));
         } finally {
             setIsSubmitting(false);
         }
@@ -804,7 +777,8 @@ const PetMatchReview = () => {
     const shownReport = (caseReports.length > 0
         ? ((activeTabReportId && caseReports.find((r: any) => r.report_id === activeTabReportId)) || caseReports[0])?.report
         : null) || report;
-    const streetKey = isValidLatLng(shownReport?.latitude, shownReport?.longitude) ? `${shownReport.latitude},${shownReport.longitude}` : '';
+    const sighting = getReportSighting(shownReport);
+    const streetKey = sighting.point?.join(',') || '';
     useEffect(() => {
         if (!streetKey) return;
         let cancelled = false;
@@ -936,10 +910,10 @@ const PetMatchReview = () => {
     const matchedPet = myPets.find(p => p.pet_id === selectedPetId) || (caseData?.pet?.owner_id === currentUser?.user_id ? caseData?.pet : null);
     
     // Sighting & Registered Coordinates
-    const hasSightingLocation = isValidLatLng(currentReport?.latitude, currentReport?.longitude);
+    const hasSightingLocation = sighting.point !== null;
     // Without a saved sighting location the map is centred on Selera Homes but no sighting pin is drawn.
-    const sightingLat = hasSightingLocation ? parseFloat(currentReport.latitude) : SELERA_DEFAULT_CENTER[0];
-    const sightingLng = hasSightingLocation ? parseFloat(currentReport.longitude) : SELERA_DEFAULT_CENTER[1];
+    const sightingLat = sighting.point?.[0] ?? SELERA_DEFAULT_CENTER[0];
+    const sightingLng = sighting.point?.[1] ?? SELERA_DEFAULT_CENTER[1];
 
     const rawRegisteredLat = petLat !== null ? petLat : (
         matchedPet?.registered_latitude ? parseFloat(matchedPet.registered_latitude) : (
@@ -963,7 +937,7 @@ const PetMatchReview = () => {
     const registeredLng = hasRegisteredLocation ? (rawRegisteredLng as number) : sightingLng;
 
     const registeredAddress = matchedPet?.registered_address || matchedPet?.owner?.address || currentUser?.address || "Registered Owner Address";
-    const sightingAddress = currentReport?.street_address || currentReport?.address || (currentReport?.landmark ? `${currentReport.landmark}, Selera Homes` : "Selera Homes");
+    const sightingAddress = (sightingStreet?.key === streetKey && sightingStreet.text) || sighting.landmark || 'Original sighting location';
 
     const calculateHaversine = (lat1: number, lon1: number, lat2: number, lon2: number) => {
         const R = 6371e3;
@@ -1473,6 +1447,9 @@ const PetMatchReview = () => {
                                                 time: currentReport?.created_at ? new Date(currentReport.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Recently',
                                                 rawData: {
                                                     ...currentReport,
+                                                    latitude: sightingLat,
+                                                    longitude: sightingLng,
+                                                    landmark: sightingAddress,
                                                     report_id: currentReport?.report_id || (reportId ? parseInt(reportId) : 1),
                                                     media: currentReport?.media || (currentReport?.media?.[0]?.file_url ? [{ file_url: currentReport.media[0].file_url }] : []),
                                                 },
@@ -1497,7 +1474,7 @@ const PetMatchReview = () => {
                                             <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest">Sighting Location</p>
                                             <span className="text-[9px] font-bold text-orange-400 group-hover:text-orange-600 transition-colors">Hover pin on map 📍</span>
                                         </div>
-                                        <p className="text-xs font-bold text-[#1a1208] mt-1">{currentReport?.landmark || 'Selera Homes'}</p>
+                                        <p className="text-xs font-bold text-[#1a1208] mt-1">{sighting.landmark || 'Original sighting location'}</p>
                                         {hasSightingLocation && (
                                             <p className="text-[11px] font-semibold text-gray-600 mt-0.5 leading-snug">
                                                 {sightingStreet?.key !== streetKey ? 'Finding the street…'
@@ -1512,7 +1489,7 @@ const PetMatchReview = () => {
                                     <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
                                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Calculated Distance</p>
                                         <p className="text-xl font-black text-green-600 mt-1">{displayDistanceStr}</p>
-                                        <p className="text-[9px] font-bold text-gray-400 uppercase mt-0.5">Via subdivision streets</p>
+                                        <p className="text-[9px] font-bold text-gray-400 uppercase mt-0.5">{!hasRegisteredLocation || !hasSightingLocation ? 'Location required to calculate distance' : roadDistance !== null ? 'Via subdivision streets' : 'Straight-line distance'}</p>
                                     </div>
                                 </div>
                             </div>
@@ -2271,6 +2248,7 @@ const PetMatchReview = () => {
                                                     <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block">Vaccination Card</label>
                                                     <input
                                                         type="file"
+                                                        disabled={isSubmitting}
                                                         accept={UPLOAD_ACCEPT.imageVideoDocument}
                                                         onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setVaccineCardFile, setVaccineCardName)}
                                                         className="w-full text-xs font-bold text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
@@ -2283,6 +2261,7 @@ const PetMatchReview = () => {
                                                     <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block">Veterinary Medical Records</label>
                                                     <input
                                                         type="file"
+                                                        disabled={isSubmitting}
                                                         accept={UPLOAD_ACCEPT.imageVideoDocument}
                                                         onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setVetRecordFile, setVetRecordName)}
                                                         className="w-full text-xs font-bold text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
@@ -2295,6 +2274,7 @@ const PetMatchReview = () => {
                                                     <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block">Pet Registration Record (Optional)</label>
                                                     <input
                                                         type="file"
+                                                        disabled={isSubmitting}
                                                         accept={UPLOAD_ACCEPT.imageVideoDocument}
                                                         onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setPetRegRecordFile, setPetRegRecordName)}
                                                         className="w-full text-xs font-bold text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
@@ -2307,6 +2287,7 @@ const PetMatchReview = () => {
                                                     <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block">Additional Pet Photos or Video</label>
                                                     <input
                                                         type="file"
+                                                        disabled={isSubmitting}
                                                         multiple
                                                         accept={UPLOAD_ACCEPT.imageVideo}
                                                         onChange={(e) => {
@@ -2731,6 +2712,7 @@ const PetMatchReview = () => {
                                                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Vaccination Card</label>
                                                     <input
                                                         type="file"
+                                                        disabled={isSubmitting}
                                                         accept={UPLOAD_ACCEPT.imageVideoDocument}
                                                         onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setVaccineCardFile, setVaccineCardName)}
                                                         className="w-full text-xs font-bold text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
@@ -2743,6 +2725,7 @@ const PetMatchReview = () => {
                                                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Veterinary Medical Records</label>
                                                     <input
                                                         type="file"
+                                                        disabled={isSubmitting}
                                                         accept={UPLOAD_ACCEPT.imageVideoDocument}
                                                         onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setVetRecordFile, setVetRecordName)}
                                                         className="w-full text-xs font-bold text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
@@ -2755,6 +2738,7 @@ const PetMatchReview = () => {
                                                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Pet Registration Record (Optional)</label>
                                                     <input
                                                         type="file"
+                                                        disabled={isSubmitting}
                                                         accept={UPLOAD_ACCEPT.imageVideoDocument}
                                                         onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setPetRegRecordFile, setPetRegRecordName)}
                                                         className="w-full text-xs font-bold text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
@@ -2767,6 +2751,7 @@ const PetMatchReview = () => {
                                                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Additional Pet Photos or Video (Before going missing)</label>
                                                     <input
                                                         type="file"
+                                                        disabled={isSubmitting}
                                                         multiple
                                                         accept={UPLOAD_ACCEPT.imageVideo}
                                                         onChange={(e) => {
@@ -3099,6 +3084,7 @@ const PetMatchReview = () => {
                                         </span>
                                         <input
                                             type="file"
+                                            disabled={isSubmitting}
                                             accept="image/*"
                                             capture="environment"
                                             onChange={handleReunionPhotoChange}

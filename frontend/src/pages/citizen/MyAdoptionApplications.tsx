@@ -36,7 +36,7 @@ import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import AdoptionStageStepper from '../../components/AdoptionStageStepper';
 import AdoptionAgreementModal from '../../components/Modals/AdoptionAgreementModal';
-import AdoptionCertificateModal from '../../components/Modals/AdoptionCertificateModal';
+import AdoptionCertificateViewer from '../../components/Adoption/AdoptionCertificateViewer';
 import AdoptionMonitoringModal from '../../components/Modals/AdoptionMonitoringModal';
 import { AdoptionDossierModal } from '../../components/Modals/AdoptionStaffStageModals';
 import { getUnifiedAdoptionStatus } from '../../utils/adoptionStatus';
@@ -2479,12 +2479,12 @@ const MyAdoptionApplications = () => {
                 />
             )}
 
-            {/* Official Adoption Certificate Modal */}
+            {/* Official Adoption Certificate: the real page layout scaled to the screen (same viewer as the barangay) */}
             {selectedCertificateAdoptionId && (
-                <AdoptionCertificateModal
+                <AdoptionCertificateViewer
                     adoptionId={selectedCertificateAdoptionId}
                     applicationData={applications.find(a => a.adoption_id === selectedCertificateAdoptionId)}
-                    isOpen={Boolean(selectedCertificateAdoptionId)}
+                    refreshKey={0}
                     onClose={() => setSelectedCertificateAdoptionId(null)}
                 />
             )}

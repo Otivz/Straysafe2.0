@@ -1,3 +1,4 @@
+import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { useState, useEffect, useRef } from 'react';
 import PhoneInput from '../../components/PhoneInput';
 import NoticeModal from '../../components/Modals/NoticeModal';
@@ -48,6 +49,12 @@ interface UserPermissions {
     tactical_command: boolean;
     command_dispatch: boolean;
 }
+
+// Subdivision (homeowners' association) titles: barangay staff can't hold them (the server refuses them too)
+const isSubdivisionPosition = (name: string) => {
+    const n = (name || '').trim().toLowerCase();
+    return n === 'president' || n === 'secretary' || n.startsWith('subdivision');
+};
 
 const DEFAULT_POSITIONS = [
     'Field Rescuer',
@@ -181,6 +188,8 @@ const BrgyPersonnelManagement = () => {
         fetchPersonnel();
         fetchPositions();
     }, [barangayId]);
+
+    useAutoRefresh(async () => { await Promise.all([fetchPersonnel(), fetchPositions()]); });
 
     // Helper to determine exact permissions for any user
     const getUserPermissions = (user: UserProfile): UserPermissions => {
@@ -1332,7 +1341,7 @@ const BrgyPersonnelManagement = () => {
                                                         <option key={pos} value={pos}>{pos}</option>
                                                     ))}
                                                     {positionsList
-                                                        .filter(p => !DEFAULT_POSITIONS.includes(p.position_name))
+                                                        .filter(p => !DEFAULT_POSITIONS.includes(p.position_name) && !isSubdivisionPosition(p.position_name))
                                                         .map(p => (
                                                             <option key={p.position_id} value={p.position_name}>{p.position_name}</option>
                                                         ))

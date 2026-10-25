@@ -175,7 +175,7 @@ def transfer_adoption_case(adoption_id: int, req: TransferRequest, request: Requ
     if not (current_user.role_id == 4 or app.case_owner_id == current_user.user_id):
         raise HTTPException(status_code=403, detail="Only the case owner or an Administrator can transfer this case.")
     target = db.query(User).filter(User.user_id == req.to_user_id).first()
-    if (not target or target.role_id != 3 or not target.is_head_officer or (target.status or "Active") != "Active"
+    if (not target or target.role_id != 3 or not target.is_head_officer or (target.status or "").strip().lower() != "active"
             or target.barangay_id != adoption_barangay_id(app, db) or target.user_id == app.applicant_id):
         raise HTTPException(status_code=400, detail="A case can only be transferred to an active Head Officer of this barangay.")
     lock_adoption(app, db)

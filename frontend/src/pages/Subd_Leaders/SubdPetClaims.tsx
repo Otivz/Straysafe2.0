@@ -354,7 +354,7 @@ const SubdPetClaims = () => {
             setRemarks('');
         } catch (err) {
             console.error("Failed to update status", err);
-            alert("Failed to update claim status. Please try again.");
+            alert((err as any).response?.data?.detail || "Failed to update claim status. Please try again.");
         } finally {
             setIsSubmitting(false);
         }

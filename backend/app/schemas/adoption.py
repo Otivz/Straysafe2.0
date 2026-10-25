@@ -223,6 +223,7 @@ class AdoptionHandoverScheduleRequest(BaseModel):
     handover_time: Optional[str] = "10:00 AM"
     handover_location: Optional[str] = "Barangay Holding Facility"
     assigned_staff: Optional[str] = None
+    assigned_staff_id: Optional[int] = None
     notes: Optional[str] = None
 
 

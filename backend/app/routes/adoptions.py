@@ -24,6 +24,7 @@ from app.utils.adoption_authority import (
     open_assignment,
     require_base_access,
     require_task_actor,
+    resolve_handover_staff,
 )
 from app.utils.adoption_assignments import (
     assign_task,
@@ -531,7 +532,8 @@ def _certificate_signatory(app: Adoption, db: Session) -> Optional[User]:
             return owner
     return (
         db.query(User).options(joinedload(User.position))
-        .filter(User.role_id == 3, User.barangay_id == barangay_id, (User.is_head_officer == True) | (User.position_id == 6))
+        # the Head Officer flag (set by the administrator), never a position title a person could pick
+        .filter(User.role_id == 3, User.barangay_id == barangay_id, User.is_head_officer == True)  # noqa: E712
         .order_by(User.is_head_officer.desc())
         .first()
     )
@@ -3600,13 +3602,14 @@ def schedule_adoption_handover(
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
     asg = require_task_actor(app, current_user, db, "Handover")
+    handover_staff = resolve_handover_staff(app, current_user, db, req.assigned_staff_id, req.assigned_staff)
     mark_in_progress(asg)
 
     app.current_stage = "Handover"
     app.handover_scheduled_date = req.handover_date
     app.handover_scheduled_time = req.handover_time or "10:00 AM"
     app.handover_location = req.handover_location or "Barangay Holding Facility"
-    app.handover_assigned_staff = req.assigned_staff or current_user.name
+    app.handover_assigned_staff = handover_staff.name
     app.handover_notes = req.notes
     app.handover_status = "Scheduled"
     app.application_stage_status = "Handover_Scheduled"

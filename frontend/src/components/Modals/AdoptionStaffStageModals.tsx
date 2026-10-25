@@ -2110,7 +2110,7 @@ export const AdoptionHandoverScheduleModal: React.FC<HandoverScheduleModalProps>
     const [handoverLocation, setHandoverLocation] = useState('Barangay Animal Welfare Center / Holding Facility');
     const [assignedStaff, setAssignedStaff] = useState('');
     const [notes, setNotes] = useState('');
-    const [personnelList, setPersonnelList] = useState<any[]>([]);
+    const [personnelList, setPersonnelList] = useState<StaffOption[]>([]);
     const [loadingPersonnel, setLoadingPersonnel] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -2120,28 +2120,24 @@ export const AdoptionHandoverScheduleModal: React.FC<HandoverScheduleModalProps>
             const fetchPersonnel = async () => {
                 try {
                     setLoadingPersonnel(true);
-                    const res = await api.get('/users/?role_id=3');
+                    const res = await api.get(`/adoptions/${adoptionId}/assignable-staff`);
                     if (Array.isArray(res.data)) {
-                        setPersonnelList(res.data);
+                        const list: StaffOption[] = res.data;
+                        setPersonnelList(list);
+                        const current = readStaffUser();
+                        const previous = list.find(person => person.name === existingData?.handover_assigned_staff);
+                        const own = list.find(person => person.user_id === current?.user_id);
+                        setAssignedStaff(previous ? String(previous.user_id) : own ? String(own.user_id) : '');
                     }
                 } catch (err) {
+                    setPersonnelList([]);
+                    setAssignedStaff('');
                     console.warn("Could not load personnel list:", err);
                 } finally {
                     setLoadingPersonnel(false);
                 }
             };
             fetchPersonnel();
-
-            const rawUser = localStorage.getItem('staff_user') || localStorage.getItem('user') || sessionStorage.getItem('staff_user') || sessionStorage.getItem('user');
-            let currentUserName = '';
-            try {
-                if (rawUser) {
-                    const parsed = JSON.parse(rawUser);
-                    currentUserName = parsed?.name || '';
-                }
-            } catch (e) {
-                console.warn('Error reading current user', e);
-            }
 
             if (existingData?.handover_scheduled_date) {
                 try {
@@ -2164,12 +2160,6 @@ export const AdoptionHandoverScheduleModal: React.FC<HandoverScheduleModalProps>
 
             if (existingData?.handover_location) {
                 setHandoverLocation(existingData.handover_location);
-            }
-
-            if (existingData?.handover_assigned_staff) {
-                setAssignedStaff(existingData.handover_assigned_staff);
-            } else if (currentUserName) {
-                setAssignedStaff(currentUserName);
             }
 
             if (existingData?.handover_notes) {
@@ -2196,7 +2186,7 @@ export const AdoptionHandoverScheduleModal: React.FC<HandoverScheduleModalProps>
                 handover_date: combinedDateTime,
                 handover_time: to12hString(timeVal),
                 handover_location: handoverLocation,
-                assigned_staff: assignedStaff || undefined,
+                assigned_staff_id: assignedStaff ? Number(assignedStaff) : undefined,
                 notes: notes || undefined,
             });
             onSuccess();
@@ -2280,19 +2270,19 @@ export const AdoptionHandoverScheduleModal: React.FC<HandoverScheduleModalProps>
                         <label className="block font-bold mb-1">Assigned Barangay Staff</label>
                         <select
                             value={assignedStaff}
+                            required
+                            disabled={loadingPersonnel}
                             onChange={(e) => setAssignedStaff(e.target.value)}
                             className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] font-medium text-slate-900 dark:text-white cursor-pointer"
                         >
                             <option value="">{loadingPersonnel ? "Loading personnel..." : "-- Select Barangay Staff --"}</option>
                             {personnelList.map((person) => (
-                                <option key={person.user_id} value={person.name}>
+                                <option key={person.user_id} value={String(person.user_id)}>
                                     {person.name} {person.position_name ? `(${person.position_name})` : ''}
                                 </option>
                             ))}
-                            {assignedStaff && !personnelList.some((p) => p.name === assignedStaff) && (
-                                <option value={assignedStaff}>{assignedStaff}</option>
-                            )}
                         </select>
+                        <p className="mt-1 text-xs text-slate-500">Only active staff from this application's barangay are listed.</p>
                     </div>
 
                     <div>

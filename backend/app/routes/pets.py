@@ -6,6 +6,7 @@ from typing import List, cast, Any, Optional
 from sqlalchemy import or_, and_
 from app.database import get_db
 from app.utils.pet_adoption import attach_adoption_info, ownership_blocked_by_adoption
+from app.utils.pet_record_access import attach_record_edit_permissions, require_pet_record_edit
 from app.models.pet import Pet
 from app.models.report import Report
 from app.models.user import User, Subdivision
@@ -182,6 +183,7 @@ def get_pets(
     query = query.order_by(Pet.created_at.desc(), Pet.pet_id.desc())
     pets = query.all()
     attach_adoption_info(db, pets)  # "in the adoption process" indicator for Pet Records
+    attach_record_edit_permissions(db, pets, current_user)
     return pets
 
 @router.get("/removed", response_model=List[PetResponse])
@@ -457,6 +459,7 @@ def get_pet(
         raise HTTPException(status_code=404, detail="Pet not found")
     check_pet_access(current_user, pet, db, for_write=False)
     attach_adoption_info(db, pet)
+    attach_record_edit_permissions(db, pet, current_user)
     return pet
 
 @router.get("/owner/{owner_id}", response_model=List[PetResponse])
@@ -704,6 +707,12 @@ def create_pet(
     current_user: User = Depends(get_current_user)
 ):
     pet_dict = pet.model_dump()
+    # What the registering person says about bites / chasing is a declaration. The verified history starts empty and
+    # is counted only from verified incident reports (refresh_pet_behavior).
+    pet_dict["declared_bite_history"] = bool(pet_dict.pop("has_bite_history", False) or pet_dict.get("declared_bite_history"))
+    pet_dict["declared_chase_behavior"] = bool(pet_dict.pop("chase_behavior", False) or pet_dict.get("declared_chase_behavior"))
+    pet_dict.pop("bite_incident_count", None)
+    pet_dict.pop("chase_incident_count", None)
     confirm_new_pet = bool(pet_dict.pop("confirm_new_pet", None))
     photo_override = pet_dict.pop("photo_override", None)
     from_photo_of = pet_dict.pop("registered_from_photo_of_pet_id", None)
@@ -898,6 +907,41 @@ def create_pet(
     )
     return db_pet
 
+VERIFIED_BEHAVIOR_FIELDS = ("has_bite_history", "bite_incident_count", "chase_behavior", "chase_incident_count")
+
+
+def check_behavior_edit(db: Session, pet: Pet, update: PetUpdate, user: User) -> None:
+    """
+    Bite and chasing history protect people, so a record edit may not lower it:
+    - the verified history and counts come only from verified incident reports (nobody edits them here);
+    - a resident may declare a bite or chasing history but not remove it (staff who may edit the record can);
+    - while verified reports show a bite or aggression, the temperament stays Aggressive.
+    Values sent unchanged are accepted, because the forms send the whole record.
+    """
+    from app.utils.case_groups import verified_pet_behavior
+    sent = update.model_fields_set
+    for field in VERIFIED_BEHAVIOR_FIELDS:
+        value = getattr(update, field)
+        if field not in sent or value is None:
+            continue
+        current = getattr(pet, field)
+        changed = (int(value or 0) != int(current or 0)) if field.endswith('_count') else (bool(value) != bool(current))
+        if changed:
+            raise HTTPException(status_code=403, detail=(
+                "Bite and chasing history come from verified incident reports and can't be edited on the pet record. "
+                "If a report is wrong, dispute that report."))
+    if user.role_id == 1:
+        for field in ("declared_bite_history", "declared_chase_behavior"):
+            if field in sent and getattr(update, field) is False and getattr(pet, field):
+                raise HTTPException(status_code=403, detail=(
+                    "A declared bite or chasing history can only be removed by the subdivision leader or barangay staff."))
+    if "temperament" in sent and update.temperament and update.temperament != pet.temperament and pet.temperament == "Aggressive":
+        bites, _, aggressive = verified_pet_behavior(db, pet)
+        if bites or aggressive:
+            raise HTTPException(status_code=403, detail=(
+                "The temperament stays Aggressive while verified incident reports show a bite or aggression."))
+
+
 @router.put("/{pet_id}", response_model=PetResponse)
 def update_pet(
     pet_id: int,
@@ -912,7 +956,11 @@ def update_pet(
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
 
-    check_pet_access(current_user, db_pet, db, for_write=True)
+    require_pet_record_edit(db, db_pet, current_user)
+    if current_user.role_id in (2, 3):
+        for field in ('owner_id', 'registered_by_user_id', 'registered_by_name'):
+            if field in pet_update.model_fields_set and getattr(pet_update, field) != getattr(db_pet, field):
+                raise HTTPException(status_code=403, detail='Record editing cannot change ownership or the original registrant. Use the ownership process instead.')
     
     # Validation: Prevent marking a deceased pet as Lost
     if pet_update.status and pet_update.status.lower() == "lost":
@@ -922,9 +970,18 @@ def update_pet(
                 detail="This pet is marked as deceased and cannot be reported as lost."
             )
     
-    old_snapshot = {"pet_name": db_pet.pet_name, "pet_type": db_pet.pet_type, "status": db_pet.status}
+    check_behavior_edit(db, db_pet, pet_update, current_user)
+
+    old_snapshot = {"pet_name": db_pet.pet_name, "pet_type": db_pet.pet_type, "status": db_pet.status,
+                    "temperament": db_pet.temperament, "declared_bite_history": bool(db_pet.declared_bite_history),
+                    "declared_chase_behavior": bool(db_pet.declared_chase_behavior)}
     old_photo_urls = pet_photo_urls(db_pet)
     update_data = pet_update.model_dump(exclude_unset=True)
+    for key in VERIFIED_BEHAVIOR_FIELDS:
+        update_data.pop(key, None)  # checked above: unchanged, so nothing to write
+    for key in ("declared_bite_history", "declared_chase_behavior"):
+        if key in update_data and update_data[key] is None:
+            update_data.pop(key)
     for key, value in update_data.items():
         setattr(db_pet, key, value)
     
@@ -939,6 +996,8 @@ def update_pet(
     db.refresh(db_pet)
     if pet_photo_urls(db_pet) != old_photo_urls:
         background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
+    attach_adoption_info(db, db_pet)
+    attach_record_edit_permissions(db, db_pet, current_user)
 
     log_activity(
         db=db,
@@ -948,7 +1007,9 @@ def update_pet(
         description=f"Updated pet record: {db_pet.pet_name} (pet_id={pet_id})",
         log_type="operation",
         old_values=old_snapshot,
-        new_values={"pet_name": db_pet.pet_name, "pet_type": db_pet.pet_type, "status": db_pet.status},
+        new_values={"pet_name": db_pet.pet_name, "pet_type": db_pet.pet_type, "status": db_pet.status,
+                    "temperament": db_pet.temperament, "declared_bite_history": bool(db_pet.declared_bite_history),
+                    "declared_chase_behavior": bool(db_pet.declared_chase_behavior)},
         request=req
     )
     return db_pet
@@ -1438,6 +1499,11 @@ def merge_pet_records(db: Session, dup: Pet, keep: Pet, actor: User, reason: str
             setattr(keep, col, getattr(dup, col))
             filled.append(col)
 
+    for col in ("declared_bite_history", "declared_chase_behavior"):
+        if getattr(dup, col, False) and not getattr(keep, col, False):
+            setattr(keep, col, True)
+            filled.append(col)
+
     old_status = dup.status
     dup.status = "Archived"
     dup.merged_into_pet_id = keep.pet_id
@@ -1664,7 +1730,7 @@ async def upload_pet_photo(
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
-    check_pet_access(current_user, db_pet, db, for_write=True)
+    require_pet_record_edit(db, db_pet, current_user)
     
     target_url = photo_url or url
     try:
@@ -1703,7 +1769,7 @@ async def upload_vaccine_card(
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
-    check_pet_access(current_user, db_pet, db, for_write=True)
+    require_pet_record_edit(db, db_pet, current_user)
     
     target_url = card_url or url
     try:
@@ -1740,7 +1806,7 @@ async def upload_pet_photo_front(
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
-    check_pet_access(current_user, db_pet, db, for_write=True)
+    require_pet_record_edit(db, db_pet, current_user)
     
     target_url = photo_front_url or url
     try:
@@ -1779,7 +1845,7 @@ async def upload_pet_photo_left(
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
-    check_pet_access(current_user, db_pet, db, for_write=True)
+    require_pet_record_edit(db, db_pet, current_user)
     
     target_url = photo_left_url or url
     try:
@@ -1818,7 +1884,7 @@ async def upload_pet_photo_right(
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
-    check_pet_access(current_user, db_pet, db, for_write=True)
+    require_pet_record_edit(db, db_pet, current_user)
     
     target_url = photo_right_url or url
     try:

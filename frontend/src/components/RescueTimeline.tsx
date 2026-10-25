@@ -174,18 +174,17 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
 
     // Initial Report Entry
     const initialTimestamp = reportCreatedAt || (history && history.length > 0 ? history[0].created_at : undefined);
+    const initialLocation = placeChips ? sightingPlace?.label : landmark;
     const initialEntry: TimelineItem = {
         id: 'initial',
         actionTitle: 'REPORT SUBMITTED',
         author: reporterName ? `by ${reporterName}` : 'by Resident',
         timestamp: initialTimestamp,
-        description: `Incident filed for ${animalType || 'animal'}${landmark ? ` at ${landmark}` : ''}.`,
+        description: `Incident filed for ${animalType || 'animal'}${initialLocation ? ` at ${initialLocation}` : ''}.${placeChips && !initialLocation ? ' Original sighting location unavailable.' : ''}`,
         type: 'blue',
         IconComponent: FileText,
-        // a facility name saved as the sighting landmark is not where the animal was seen
-        place: placeChips && sightingPlace
-            ? (FACILITY_LIKE.test(sightingPlace.label) ? { ...sightingPlace, label: 'Sighting spot' } : sightingPlace)
-            : null
+        // This is the saved original sighting, which can legitimately be at a facility.
+        place: placeChips ? sightingPlace : null
     };
 
     // Filter out redundant initial report remarks from backend history

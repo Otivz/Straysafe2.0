@@ -1,3 +1,5 @@
+import { getPersonnelAvailability } from '../../utils/personnelAvailability';
+import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { useState, useEffect, useRef } from 'react';
 import { SIGHTING_TITLE } from '../../utils/sighting';
 import { useNavigate } from 'react-router-dom';
@@ -304,7 +306,10 @@ const BrgyRescueRequests = () => {
             const filtered = (response.data || []).filter((u: any) => 
                 !currentUser?.barangay_id || Number(u.barangay_id) === Number(currentUser.barangay_id)
             );
-            setPersonnel(filtered);
+            const active = filtered.filter((p: any) => getPersonnelAvailability(p, false) === 'available');
+            setPersonnel(active);
+            setSelectedPersonnelIds(current => current.filter(id => active.some((p: any) => p.user_id === id)));
+            setSelectedPersonnelId(current => active.some((p: any) => p.user_id === current) ? current : null);
         } catch (error) {
             console.error('Error fetching personnel:', error);
         }
@@ -323,7 +328,7 @@ const BrgyRescueRequests = () => {
             const list = (res.data || []).filter((f: any) => f.subdivision_id == null);
             setFacilities(list);
             if (list.length > 0) {
-                setSelectedFacilityId(list[0].landmark_id);
+                setSelectedFacilityId(current => list.some((f: { landmark_id: number }) => f.landmark_id === current) ? current : list[0].landmark_id);
             }
         } catch (err) {
             console.warn('Could not fetch holding facilities:', err);
@@ -337,6 +342,10 @@ const BrgyRescueRequests = () => {
         fetchPersonnel();
         fetchFacilities();
     }, []);
+
+    useAutoRefresh(async () => {
+        await Promise.all([fetchRequests(), fetchPersonnel(), fetchFacilities()]);
+    });
 
     const handleUpdateStatus = async () => {
         if (!statusToUpdate || !currentUser) return;
@@ -518,7 +527,7 @@ const BrgyRescueRequests = () => {
         if (activeIds.length === 0 && reqToUse?.staff_id) {
             activeIds.push(reqToUse.staff_id);
         }
-        setSelectedPersonnelIds(activeIds);
+        setSelectedPersonnelIds(activeIds.filter(id => personnel.some(p => p.user_id === id && getPersonnelAvailability(p, false) === 'available')));
         setSelectedPersonnelId(activeIds[0] || null);
 
         if (statusId === 7 || statusId === 8) {

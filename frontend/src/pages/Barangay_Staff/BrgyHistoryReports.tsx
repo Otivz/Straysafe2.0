@@ -1,3 +1,4 @@
+import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { useState, useEffect } from 'react';
 import { onePerIncident } from '../../utils/incidents';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
@@ -96,6 +97,8 @@ const BrgyHistoryReports = () => {
     useEffect(() => {
         fetchReports();
     }, []);
+
+    useAutoRefresh(fetchReports);
 
     const isReportEscalated = (rep: any) => {
         if (!rep) return false;

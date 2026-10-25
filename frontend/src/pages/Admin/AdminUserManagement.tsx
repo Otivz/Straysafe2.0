@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../../utils/api';
+import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { getCachedData, setCachedData, invalidateCache } from '../../utils/cache';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
@@ -409,25 +410,39 @@ const AdminUserManagement = () => {
                                 {
                                     header: "User Details",
                                     key: "details",
-                                    render: (user) => (
-                                        <div className="flex items-center space-x-3">
-                                            <div className="w-10 h-10 rounded-full bg-[#FFF7ED] flex items-center justify-center text-[#F97316] font-bold border border-orange-100">
-                                                {user.name.charAt(0)}
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center space-x-2">
-                                                    <p className="text-sm font-semibold text-gray-900 leading-none">{user.name}</p>
-                                                    {user.position_name && user.role_id !== 1 && (
-                                                        <span className="text-[9px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded uppercase font-black tracking-tighter border border-gray-200">
-                                                            {user.position_name}
-                                                        </span>
+                                    render: (user) => {
+                                        const profilePicture = getProfilePicture(user.profile_picture, 80);
+                                        return (
+                                            <div className="flex items-center space-x-3">
+                                                <div className="relative w-10 h-10 shrink-0 overflow-hidden rounded-full bg-[#FFF7ED] flex items-center justify-center text-[#F97316] font-bold border border-orange-100">
+                                                    <span aria-hidden="true">{user.name.trim().charAt(0).toUpperCase()}</span>
+                                                    {profilePicture !== DEFAULT_AVATAR && (
+                                                        <img
+                                                            key={profilePicture}
+                                                            src={profilePicture}
+                                                            alt={`${user.name}'s profile photo`}
+                                                            loading="lazy"
+                                                            decoding="async"
+                                                            className="absolute inset-0 w-full h-full object-cover"
+                                                            onError={(event) => { event.currentTarget.style.display = 'none'; }}
+                                                        />
                                                     )}
-
                                                 </div>
-                                                <p className="text-xs text-gray-400 mt-1">{user.email}</p>
+                                                <div>
+                                                    <div className="flex items-center space-x-2">
+                                                        <p className="text-sm font-semibold text-gray-900 leading-none">{user.name}</p>
+                                                        {user.position_name && user.role_id !== 1 && (
+                                                            <span className="text-[9px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded uppercase font-black tracking-tighter border border-gray-200">
+                                                                {user.position_name}
+                                                            </span>
+                                                        )}
+
+                                                    </div>
+                                                    <p className="text-xs text-gray-400 mt-1">{user.email}</p>
+                                                </div>
                                             </div>
-                                        </div>
-                                    )
+                                        );
+                                    }
                                 },
                                 {
                                     header: "Jurisdiction / Location",

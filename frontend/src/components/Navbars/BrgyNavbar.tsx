@@ -8,6 +8,7 @@ import type { ChatThreadSummary } from '../../utils/useUnreadMessageCount';
 import MessagesDropdown from '../Chat/MessagesDropdown';
 import ReportChatDrawer from '../Chat/ReportChatDrawer';
 import QRScannerModal from '../Modals/QRScannerModal';
+import NotificationPanel from '../Notifications/NotificationPanel';
 import { whenVisible } from '../../utils/visibleInterval';
 import { useCachedState } from '../../utils/useCachedState';
 
@@ -52,6 +53,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
     const [notifFilter, setNotifFilter] = useState<'all' | 'unread'>('all');
     const [isLoadingNotifs, setIsLoadingNotifs] = useState(false);
     const [isMarkingAll, setIsMarkingAll] = useState(false);
+    const [notificationError, setNotificationError] = useState('');
     const notifRef = useRef<HTMLDivElement>(null);
 
     // Get user from storage
@@ -76,7 +78,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
         return t === 'message' || t === 'match_message' || title.includes('💬') || title.includes('match inquiry');
     };
 
-    const effectiveNotifications = localNotifications.filter(n => !isMessageNotif(n));
+    const effectiveNotifications = localNotifications.filter(n => !n.is_archived && !isMessageNotif(n));
     const unreadNotifCount = effectiveNotifications.filter(n => !n.is_read).length;
 
     const fetchNotifications = async () => {
@@ -106,14 +108,10 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
             if (!isInsideMessages) {
                 setIsMessagesOpen(false);
             }
-            if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
-                setIsNotifOpen(false);
-            }
         };
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
                 setIsMessagesOpen(false);
-                setIsNotifOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -125,13 +123,15 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
     }, []);
 
     const handleMarkAllRead = async () => {
-        if (!user?.user_id) return;
+        if (!user?.user_id || isMarkingAll || unreadNotifCount === 0) return;
         setIsMarkingAll(true);
+        setNotificationError('');
         try {
             await api.post(`/notifications/mark-all-read/${user.user_id}`);
             setLocalNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
         } catch (err) {
             console.error("Failed to mark all notifications as read:", err);
+            setNotificationError('Could not mark notifications as read. Please try again.');
         } finally {
             setIsMarkingAll(false);
         }
@@ -139,9 +139,11 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
 
     // Open full detail modal for notification
     const openNotificationDetail = async (notif: any) => {
+        let detail = notif;
         if (!notif.is_read) {
             try {
                 await api.patch(`/notifications/${notif.notification_id}`, { is_read: true });
+                detail = { ...notif, is_read: true };
                 setLocalNotifications(prev =>
                     prev.map(n => n.notification_id === notif.notification_id ? { ...n, is_read: true } : n)
                 );
@@ -150,7 +152,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
             }
         }
         setIsNotifOpen(false);
-        setSelectedNotifForDetail(notif);
+        setSelectedNotifForDetail(detail);
     };
 
     const handleNotificationClick = async (notif: any) => {
@@ -363,6 +365,8 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                         }`}
                         title="System Notifications"
                         aria-label="Notifications"
+                        aria-haspopup="dialog"
+                        aria-expanded={isNotifOpen}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 transition-transform group-hover:scale-105" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -375,10 +379,9 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                     </button>
 
                     {/* Notification Dropdown Panel */}
-                    {isNotifOpen && (
-                        <div className="fixed inset-0 sm:absolute sm:inset-auto sm:right-0 md:right-0 sm:mt-3 w-full h-full sm:w-[25rem] sm:h-auto bg-white rounded-none sm:rounded-2xl shadow-2xl border-0 sm:border border-gray-100/90 overflow-hidden z-[99999] sm:z-50 flex flex-col animate-in fade-in zoom-in-95 duration-200">
+                    <NotificationPanel isOpen={isNotifOpen} onClose={() => setIsNotifOpen(false)} triggerRef={notifRef}>
                             {/* Panel Header */}
-                            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-role-soft/40 via-white to-white shrink-0">
+                            <div className="px-4 py-3 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2 bg-gradient-to-r from-role-soft/40 via-white to-white shrink-0">
                                 <div className="flex items-center gap-2.5">
                                     <div className="w-8 h-8 rounded-lg bg-role-muted/80 text-role flex items-center justify-center">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -393,23 +396,21 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-1.5">
-                                    {unreadNotifCount > 0 && (
-                                        <button
-                                            onClick={handleMarkAllRead}
-                                            disabled={isMarkingAll}
-                                            className="text-[11px] font-bold text-role hover:text-role-hover hover:bg-role-soft px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50 cursor-pointer"
-                                            title="Mark all as read"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                                            </svg>
-                                            <span>Mark all read</span>
-                                        </button>
-                                    )}
+                                <div className="flex items-center justify-end gap-1.5 w-full sm:w-auto">
+                                    <button
+                                        onClick={handleMarkAllRead}
+                                        disabled={isMarkingAll || unreadNotifCount === 0}
+                                        className="text-[11px] font-bold text-role hover:text-role-hover hover:bg-role-soft px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                                        title="Mark all as read"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <span>Mark all read</span>
+                                    </button>
                                     <button
                                         onClick={fetchNotifications}
-                                        className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
                                         title="Refresh notifications"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -418,7 +419,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                                     </button>
                                     <button
                                         onClick={() => setIsNotifOpen(false)}
-                                        className="sm:hidden p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer ml-1"
+                                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer ml-1"
                                         title="Close notifications"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -428,6 +429,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                                 </div>
                             </div>
 
+                            {notificationError && <p role="alert" className="px-4 py-2 text-xs text-red-600 shrink-0">{notificationError}</p>}
                             {/* Filter Tabs */}
                             <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50/50 flex items-center gap-2 shrink-0">
                                 <button
@@ -453,7 +455,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                             </div>
 
                             {/* Notifications Scrollable List */}
-                            <div className="flex-1 sm:flex-initial sm:max-h-[22rem] overflow-y-auto divide-y divide-gray-50">
+                            <div data-notification-list className="flex-1 sm:max-h-[28rem] divide-y divide-gray-50">
                                 {isLoadingNotifs ? (
                                     <div className="py-12 flex flex-col items-center justify-center text-gray-400">
                                         <div className="w-7 h-7 border-2 border-role border-t-transparent rounded-full animate-spin"></div>
@@ -497,8 +499,8 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                                                 {renderNotificationIcon(notif)}
 
                                                 <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center justify-between gap-2">
-                                                        <h4 className={`text-xs tracking-tight truncate ${
+                                                    <div className="flex flex-col items-start gap-1">
+                                                        <h4 className={`text-xs tracking-tight whitespace-normal [overflow-wrap:anywhere] ${
                                                             isOverdue
                                                                 ? 'font-black text-red-950'
                                                                 : !notif.is_read
@@ -512,7 +514,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                                                         </span>
                                                     </div>
 
-                                                    <p className="text-xs text-gray-600 mt-1 leading-relaxed line-clamp-2">
+                                                    <p className="text-xs text-gray-600 mt-1 leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">
                                                         {notif.message}
                                                     </p>
 
@@ -538,8 +540,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                                     })
                                 )}
                             </div>
-                        </div>
-                    )}
+                    </NotificationPanel>
                 </div>
 
 
@@ -642,7 +643,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                         />
 
                         {/* Modal Dialog Card */}
-                        <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden z-10 animate-in zoom-in-95 duration-200">
+                        <div role="dialog" aria-label="Notification details" className="relative w-full min-w-0 max-w-lg max-h-[calc(100dvh-2rem)] bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-x-hidden overflow-y-auto overscroll-contain [overflow-wrap:anywhere] z-10 animate-in zoom-in-95 duration-200">
                             {/* Header Banner */}
                             <div className={`p-6 bg-gradient-to-r ${bannerGrad} text-white relative overflow-hidden`}>
                                 <div className="absolute -right-6 -bottom-6 w-28 h-28 bg-white/10 rounded-full blur-xl pointer-events-none"></div>

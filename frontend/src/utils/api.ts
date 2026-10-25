@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { recordUserActivity, ACTIVITY_STORAGE_KEY, getAppropriateLoginPath } from './inactivity';
 import { getSavedServer, isNativeApp } from './serverAddress';
+import { isDataMutation, notifyDataChanged, refreshScope } from './dataRefresh';
 
 // In the installed app, an address saved in Server settings (login pages) comes first: the PC's IP changes per Wi-Fi
 const CONFIGURED_API_URL: string = getSavedServer() || import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
@@ -197,6 +198,7 @@ export const updateStoredSessionUser = (key: 'resident_user' | 'staff_user' | 'a
 };
 
 // Run just before the session is cleared (e.g. push notifications stop on this device at sign-out)
+const CHAT_CACHE_PREFIXES = ['straysafe_report_chat_', 'straysafe_match_chat_', 'straysafe_adoption_chat_'];
 const beforeClearAuthHooks: Array<(token: string | null) => void> = [];
 export const onBeforeClearAuth = (hook: (token: string | null) => void) => { beforeClearAuthHooks.push(hook); };
 
@@ -213,6 +215,13 @@ export const clearAuthStorage = () => {
     sessionStorage.removeItem('staff_user');
     localStorage.removeItem(ACTIVITY_STORAGE_KEY);
     delete api.defaults.headers.common['Authorization'];
+    // Cached chat messages belong to the account that was signed in: on a shared device the next account must not see
+    // them (every sign-in, sign-out and ended session passes through here)
+    try {
+        Object.keys(localStorage)
+            .filter((k) => CHAT_CACHE_PREFIXES.some((p) => k.startsWith(p)))
+            .forEach((k) => localStorage.removeItem(k));
+    } catch { /* storage unavailable */ }
 };
 
 // Fired when the server ends this browser's session (the sign-in could not be renewed). InactivityManager then takes
@@ -283,6 +292,9 @@ const processQueue = (error: any, token: string | null = null) => {
 api.interceptors.response.use(
     (response) => {
         recordUserActivity();
+        if (isDataMutation(response.config.method, response.config.url)) {
+            notifyDataChanged(refreshScope(getStoredToken()));
+        }
         return response;
     },
     async (error) => {

@@ -16,7 +16,8 @@ const VERIFICATION_METHODS = [
     { key: 'barangay_adoption', label: 'Barangay adoption handover', hint: 'Adopted through the Barangay adoption process.' },
 ];
 import { DEFAULT_PET_AVATAR, getPetPicture, DEFAULT_AVATAR, getProfilePicture, getPetThumb } from '../../utils/avatar';
-import api from '../../utils/api';
+import api, { getStoredToken } from '../../utils/api';
+import { refreshScope, startAutoRefresh } from '../../utils/dataRefresh';
 import WarningDetailsModal from '../Modals/WarningDetailsModal';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
 
@@ -71,6 +72,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 
     // Photo Update State
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+    const [photoFeedback, setPhotoFeedback] = useState<{ error: boolean; message: string } | null>(null);
     const [currentPhoto, setCurrentPhoto] = useState<string | null>(null);
     const [isFullscreenImageOpen, setIsFullscreenImageOpen] = useState(false);
     const photoInputRef = useRef<HTMLInputElement>(null);
@@ -177,8 +179,9 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
         if (!pet) return;
 
         let isMounted = true;
+        let latestRequest = 0;
         const fetchPetIncidents = async () => {
-            setIsLoadingIncidents(true);
+            const request = ++latestRequest;
             try {
                 const petId = Number(pet.id);
                 const ownerId = pet.rawPetObj?.owner_id;
@@ -201,7 +204,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 
                 const reportsRes = await api.get('/reports/');
                 const allReports = Array.isArray(reportsRes.data) ? reportsRes.data : [];
-                const claimReportIds = new Set(petClaims.map((c: any) => c.report_id));
+                const claimReportIds = new Set(petClaims.flatMap((c: any) =>
+                    [c.report_id, ...(c.case_report_ids || [])].map(Number)));
 
                 // Fetch official warning citations for this pet
                 let warningsList: any[] = [];
@@ -246,7 +250,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                         return (b.report_id || 0) - (a.report_id || 0);
                     });
 
-                if (isMounted) {
+                if (isMounted && request === latestRequest) {
                     setIncidentClaims(petClaims);
                     setIncidentReports(matchedReports);
                     setPetWarnings(warningsList);
@@ -254,16 +258,23 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
             } catch (err) {
                 console.error("Error loading pet incident history:", err);
             } finally {
-                if (isMounted) setIsLoadingIncidents(false);
+                if (isMounted && request === latestRequest) setIsLoadingIncidents(false);
             }
         };
 
-        fetchPetIncidents();
+        setIsLoadingIncidents(true);
+        void fetchPetIncidents();
+        const stopRefresh = startAutoRefresh(fetchPetIncidents, {
+            window, document,
+            isVisible: () => document.visibilityState === 'visible',
+            scope: () => refreshScope(getStoredToken()),
+        });
 
         return () => {
             isMounted = false;
+            stopRefresh();
         };
-    }, [pet?.id, activeTab]);
+    }, [pet?.id, pet?.rawPetObj?.owner_id, activeTab]);
 
     // Helper to evaluate incident/report status for pet history
     const getReportHistoryStatus = (report: any, matchingClaim: any) => {
@@ -608,6 +619,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
         }
     }, [pet?.avatar, pet?.id]);
 
+    useEffect(() => { setPhotoFeedback(null); }, [pet?.id]);
+
     if (!pet) return null;
 
     const hasOwner = Boolean(
@@ -626,17 +639,6 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
         }
         : null;
 
-    // Registrant check: Did current user register this pet?
-    const isRegistrant = Boolean(
-        currentUserId && (
-            (pet.registered_by_user_id && Number(pet.registered_by_user_id) === Number(currentUserId)) ||
-            (pet.rawPetObj?.registered_by_user_id && Number(pet.rawPetObj.registered_by_user_id) === Number(currentUserId)) ||
-            (pet.rawPetObj?.registered_by?.user_id && Number(pet.rawPetObj.registered_by.user_id) === Number(currentUserId)) ||
-            (pet.registeredByName && currentUser?.name && pet.registeredByName.toLowerCase().includes(currentUser.name.toLowerCase())) ||
-            (!pet.registered_by_user_id && !pet.rawPetObj?.registered_by_user_id) // Default fallback for existing records
-        )
-    );
-
     const isPetOwner = Boolean(
         currentUserId && (
             (pet.owner_id && Number(pet.owner_id) === Number(currentUserId)) ||
@@ -651,11 +653,11 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
         incidentReports.some(r => r.status_id === 8 || r.current_status_id === 8 || (r.custody_status && r.custody_status.toLowerCase() === 'impounded'))
     );
 
-    // Edit permission rule:
-    // - Admin: always allowed
-    // - Resident / Citizen: only if they are the pet owner
-    // - Subdivision Leader / Staff: only as long as they are the one who registered AND no one has adopted the pet (!hasOwner && isRegistrant)
-    const canEditPet = !isImpounded && (isAdmin || (hideRegisteredPets ? isPetOwner : (!hasOwner && isRegistrant)));
+    // Staff permissions come from the same custody check used by the API.
+    const canEditPet = isAdmin || (hideRegisteredPets
+        ? !isImpounded && isPetOwner
+        : pet.rawPetObj?.can_edit_record === true);
+    const canChangePhoto = !hideRegisteredPets && canEditPet;
 
     // Status pill style helper
     const getStatusStyle = (status: string) => {
@@ -685,6 +687,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
         if (!file || !pet) return;
         try {
             setIsUploadingPhoto(true);
+            setPhotoFeedback(null);
             const formData = new FormData();
             formData.append('file', file);
             const res = await api.post(`/pets/${pet.id}/photo`, formData, {
@@ -694,10 +697,12 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                 setCurrentPhoto(res.data.photo_url);
                 pet.avatar = res.data.photo_url;
                 if (pet.rawPetObj) pet.rawPetObj.photo_url = res.data.photo_url;
+                setPhotoFeedback({ error: false, message: 'Pet photo updated successfully.' });
             }
             if (onOwnerAssigned) onOwnerAssigned();
-        } catch (err) {
+        } catch (err: any) {
             console.error('Failed to update pet photo:', err);
+            setPhotoFeedback({ error: true, message: err.response?.data?.detail || 'Could not update the pet photo. Please try again.' });
         } finally {
             setIsUploadingPhoto(false);
             if (photoInputRef.current) photoInputRef.current.value = '';
@@ -727,6 +732,17 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
             {/* Content Area */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-32 sm:pb-12 space-y-5 sm:space-y-6 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
 
+                {photoFeedback && (
+                    <div role={photoFeedback.error ? 'alert' : 'status'} className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${photoFeedback.error ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
+                        {photoFeedback.message}
+                    </div>
+                )}
+                {!hideRegisteredPets && !canEditPet && pet.rawPetObj?.record_edit_restriction && (
+                    <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-xs text-gray-600">
+                        {pet.rawPetObj.record_edit_restriction}
+                    </div>
+                )}
+
                 {/* Hero Profile Block */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6">
                     {/* Large Photo Overlay */}
@@ -753,7 +769,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                         })()}
 
                         {/* Change Photo Button for Staff / Subdivision Leaders */}
-                        {!hideRegisteredPets && (
+                        {canChangePhoto && (
                             <>
                                 <input
                                     type="file"
@@ -1606,34 +1622,53 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 <div className="space-y-5">
                                     <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest font-bold">Behavior Triggers</h4>
                                     <div className="space-y-4">
-                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs font-bold text-gray-500">Has Bite History?</span>
-                                                {Boolean(pet.hasBiteHistory ?? pet.has_bite_history) && (
-                                                    <span className="text-[9px] font-bold px-2 py-0.5 bg-rose-100 text-rose-800 rounded-md">
-                                                        {(pet.biteIncidentCount ?? pet.bite_incident_count ?? 1)} incident(s)
+                                        {(() => {
+                                            const verified = Boolean(pet.hasBiteHistory ?? pet.has_bite_history);
+                                            const count = verified ? (pet.biteIncidentCount ?? pet.bite_incident_count ?? 1) || 1 : 0;
+                                            const declared = Boolean(pet.declared_bite_history);
+                                            return (
+                                                <div className="flex justify-between items-center gap-3 bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                                        <span className="text-xs font-bold text-gray-500">Bite history</span>
+                                                        {verified && (
+                                                            <span className="text-[9px] font-bold px-2 py-0.5 bg-rose-100 text-rose-800 rounded-md">
+                                                                {count} verified incident{count === 1 ? '' : 's'}
+                                                            </span>
+                                                        )}
+                                                        {declared && (
+                                                            <span className="text-[9px] font-bold px-2 py-0.5 bg-gray-200 text-gray-700 rounded-md">Declared, not verified</span>
+                                                        )}
+                                                    </div>
+                                                    <span className={`text-xs font-black uppercase shrink-0 ${verified ? 'text-red-500' : declared ? 'text-amber-600' : 'text-green-600'}`}>
+                                                        {verified ? 'YES' : declared ? 'DECLARED' : 'NO'}
                                                     </span>
-                                                )}
-                                            </div>
-                                            <span className={`text-xs font-black uppercase ${Boolean(pet.hasBiteHistory ?? pet.has_bite_history) ? 'text-red-500 font-extrabold' : 'text-green-600 font-extrabold'
-                                                }`}>
-                                                {Boolean(pet.hasBiteHistory ?? pet.has_bite_history) ? 'YES' : 'NO'}
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs font-bold text-gray-500">Chase Behavior?</span>
-                                                {Boolean(pet.chaseBehavior ?? pet.chase_behavior) && (
-                                                    <span className="text-[9px] font-bold px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md">
-                                                        {(pet.chaseIncidentCount ?? pet.chase_incident_count ?? 1)} incident(s)
+                                                </div>
+                                            );
+                                        })()}
+                                        {(() => {
+                                            const verified = Boolean(pet.chaseBehavior ?? pet.chase_behavior);
+                                            const count = verified ? (pet.chaseIncidentCount ?? pet.chase_incident_count ?? 1) || 1 : 0;
+                                            const declared = Boolean(pet.declared_chase_behavior);
+                                            return (
+                                                <div className="flex justify-between items-center gap-3 bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                                        <span className="text-xs font-bold text-gray-500">Chasing</span>
+                                                        {verified && (
+                                                            <span className="text-[9px] font-bold px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md">
+                                                                {count} verified incident{count === 1 ? '' : 's'}
+                                                            </span>
+                                                        )}
+                                                        {declared && (
+                                                            <span className="text-[9px] font-bold px-2 py-0.5 bg-gray-200 text-gray-700 rounded-md">Declared, not verified</span>
+                                                        )}
+                                                    </div>
+                                                    <span className={`text-xs font-black uppercase shrink-0 ${verified ? 'text-red-500' : declared ? 'text-amber-600' : 'text-green-600'}`}>
+                                                        {verified ? 'YES' : declared ? 'DECLARED' : 'NO'}
                                                     </span>
-                                                )}
-                                            </div>
-                                            <span className={`text-xs font-black uppercase ${Boolean(pet.chaseBehavior ?? pet.chase_behavior) ? 'text-red-500 font-extrabold' : 'text-green-600 font-extrabold'
-                                                }`}>
-                                                {Boolean(pet.chaseBehavior ?? pet.chase_behavior) ? 'YES' : 'NO'}
-                                            </span>
-                                        </div>
+                                                </div>
+                                            );
+                                        })()}
+                                        <p className="text-[10px] font-semibold text-gray-400">Verified counts come from verified incident reports. "Declared" is what the owner or the registering officer said.</p>
                                     </div>
                                 </div>
                             </div>

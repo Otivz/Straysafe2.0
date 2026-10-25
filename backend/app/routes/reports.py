@@ -99,6 +99,7 @@ from app.utils.case_review import (
     review_permission,
 )
 from app.utils.auth import get_current_staff_or_admin, get_current_user, verify_subdivision_scope
+from app.utils.staff_assignment import require_active_assignee
 from app.limiter import limiter
 from app.utils.photo_checks import STATUS_NOT_CHECKED, classify_ai_confidence
 
@@ -465,9 +466,11 @@ def populate_location_and_facility_info(
         if default_holding_fac is None and landmarks_map:
             default_holding_fac = next((l for l in landmarks_map.values() if l.is_holding_facility), None)
 
-        rep_data.initial_latitude = float(rep.initial_latitude) if rep.initial_latitude is not None else float(rep.latitude)
-        rep_data.initial_longitude = float(rep.initial_longitude) if rep.initial_longitude is not None else float(rep.longitude)
-        rep_data.initial_landmark = rep.initial_landmark or rep.landmark
+        # Current coordinates/landmark may belong to a holding facility. Missing
+        # original fields must stay missing rather than rewriting the incident's origin.
+        rep_data.initial_latitude = float(rep.initial_latitude) if rep.initial_latitude is not None else None
+        rep_data.initial_longitude = float(rep.initial_longitude) if rep.initial_longitude is not None else None
+        rep_data.initial_landmark = rep.initial_landmark or None
         rep_data.facility_id = rep.facility_id
         rep_data.custody_status = rep.custody_status or "Sighting"
 
@@ -500,13 +503,8 @@ def populate_location_and_facility_info(
             
             facility_keywords = ["holding pen", "holding facility", "barangay holding", "subdivision holding"]
             is_lmk_fac = not rep_data.landmark or any(k in (rep_data.landmark or "").lower() for k in facility_keywords)
-            is_init_fac = not rep_data.initial_landmark or any(k in (rep_data.initial_landmark or "").lower() for k in facility_keywords)
-            if is_lmk_fac or is_init_fac:
-                clean_name = (rep.subdivision.subdivision_name if hasattr(rep, 'subdivision') and rep.subdivision else None) or "Incident Sighting Location"
-                if is_init_fac or not rep_data.initial_landmark:
-                    rep_data.initial_landmark = clean_name
-                if is_lmk_fac or is_report_resolved or is_holding_resolved:
-                    rep_data.landmark = rep_data.initial_landmark or clean_name
+            if is_lmk_fac:
+                rep_data.landmark = rep_data.initial_landmark or "Incident Sighting Location"
             elif is_report_resolved or is_holding_resolved:
                 if rep_data.initial_landmark:
                     rep_data.landmark = rep_data.initial_landmark
@@ -3144,8 +3142,11 @@ def confirm_reunited_by_citizen(
     is_reporter = (report.user_id == current_user.user_id)
     is_owner = False
     if report.pet_id:
+        from app.utils.pet_adoption import owned_through_later_adoption
         pet = db.query(Pet).filter(Pet.pet_id == report.pet_id).first()
-        if pet and pet.owner_id == current_user.user_id:
+        # an adopter doesn't own the case from before the adoption
+        if pet and pet.owner_id == current_user.user_id and not owned_through_later_adoption(
+                db, pet.pet_id, current_user.user_id, report.created_at):
             is_owner = True
     is_staff = current_user.role_id in (2, 3, 4)
 
@@ -3832,6 +3833,9 @@ def update_report_status(
         require_animal_record(report, db, "resolved")
 
 
+    if status_update.assigned_staff_id:
+        require_active_assignee(db.get(User, status_update.assigned_staff_id))
+
     prev_status_id = report.current_status_id
 
     # Preserve initial location if not already recorded
@@ -4488,6 +4492,7 @@ def claim_report(
 
     if user.role_id not in [2, 4]:
         raise HTTPException(status_code=403, detail="Only Subdivision Leaders / Officers are authorized to claim reports.")
+    require_active_assignee(user)
 
     # 2. Fetch report with locking
     report = db.query(Report).options(
@@ -4626,6 +4631,7 @@ def takeover_report(
 
     if new_officer.role_id not in [2, 4]:
         raise HTTPException(status_code=403, detail="Only Subdivision Leaders / Officers are authorized to take over reports.")
+    require_active_assignee(new_officer)
 
     # 2. Fetch report with locking
     report = db.query(Report).options(
@@ -4872,6 +4878,7 @@ def request_transfer_report(
         transfer_in.user_id = current_user.user_id
 
     target = db.query(User).filter(User.user_id == transfer_in.target_user_id).first()
+    require_active_assignee(target)
     if not target:
         raise HTTPException(status_code=404, detail="Target officer not found")
 
@@ -5016,6 +5023,7 @@ def accept_transfer_report(
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
+    require_active_assignee(recipient)
     verify_subdivision_scope(recipient, report.subdivision_id, db=db)
 
     if report.pending_transfer_to_id != recipient.user_id and recipient.role_id != 4:
