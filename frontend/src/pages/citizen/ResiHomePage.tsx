@@ -37,6 +37,7 @@ import {
 import StraySafeLoading, { AnimalLoadingOverlay } from '../../components/StraySafeLoading';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import { petName } from '../../utils/petName';
+import { conditionForCategory } from '../../utils/reportCondition';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -138,7 +139,6 @@ interface ReportFormData {
     tertiaryColor: string;
     coatPattern: string;
     distinctiveMarkings: string;
-    observedConditions: string[];
     estimatedSize: string;
     description: string;
     latitude: number;
@@ -308,7 +308,6 @@ const INITIAL_FORM_DATA: ReportFormData = {
     tertiaryColor: 'None',
     coatPattern: 'Unknown',
     distinctiveMarkings: '',
-    observedConditions: [],
     estimatedSize: 'Medium',
     description: '',
     latitude: SELERA_DEFAULT_CENTER[0],
@@ -860,7 +859,6 @@ const ResiHomePage = () => {
             tertiaryColor: tertiaryColor,
             coatPattern: report.coat_pattern || 'Unknown',
             distinctiveMarkings: report.distinctive_markings || '',
-            observedConditions: report.observed_conditions || [],
             estimatedSize: report.estimated_size || 'Medium',
             description: report.description || '',
             latitude: parseFloat(report.latitude) || SELERA_DEFAULT_CENTER[0],
@@ -1481,7 +1479,6 @@ const ResiHomePage = () => {
                 `Custody: ${formData.custodyStatus === 'Secured' ? 'Secured in safe place by resident' : 'Stray sighting (not touched)'}`,
                 formData.coatPattern !== 'Unknown' ? `Pattern: ${formData.coatPattern}` : null,
                 formData.distinctiveMarkings ? `Markings: ${formData.distinctiveMarkings}` : null,
-                formData.observedConditions.length > 0 ? `Observed Conditions: ${formData.observedConditions.join(', ')}` : null,
                 formData.description ? `Notes: ${formData.description}` : null
             ].filter(Boolean).join(' | ');
 
@@ -1501,7 +1498,7 @@ const ResiHomePage = () => {
                 estimated_size: formData.estimatedSize,
                 custody_status: formData.custodyStatus || 'Sighting',
                 description: extraDetails || 'No additional details provided.',
-                condition: formData.observedConditions.length > 0 ? formData.observedConditions.join(', ') : 'Healthy',
+                condition: conditionForCategory(formData.category_id),
                 latitude: formData.latitude,
                 longitude: formData.longitude,
                 animal_count: formData.animalCount,
@@ -1774,19 +1771,17 @@ const ResiHomePage = () => {
                                         {reportStep === 1 && <span className="text-[10px] font-black text-red-500 inline-flex items-center gap-0.5"><Star className="w-2.5 h-2.5" /> Required</span>}
                                         {reportStep === 2 && <span className="text-[10px] font-black text-red-500 inline-flex items-center gap-0.5"><Star className="w-2.5 h-2.5" /> Required</span>}
                                         {reportStep === 5 && <span className="text-[10px] font-black text-red-500 inline-flex items-center gap-0.5"><Star className="w-2.5 h-2.5" /> Required</span>}
-                                        {reportStep === 6 && <span className="text-[10px] font-black text-red-500 inline-flex items-center gap-0.5"><Star className="w-2.5 h-2.5" /> Required</span>}
                                     </div>
                                     <h2 className="text-xl md:text-2xl font-black text-[#1a1208] uppercase tracking-tight mt-1 flex items-center gap-2">
                                         {reportStep === 1 && <><FileText className="w-5 h-5 shrink-0" /> Step 1: Upload Media</>}
                                         {reportStep === 2 && <><Tag className="w-5 h-5 shrink-0" /> Step 2: Report Category</>}
                                         {reportStep === 3 && <><Bot className="w-5 h-5 shrink-0" /> Step 3: AI Animal Analysis</>}
                                         {reportStep === 4 && <><PawPrint className="w-5 h-5 shrink-0" /> Step 4: Animal Details</>}
-                                        {reportStep === 5 && <><AlertTriangle className="w-5 h-5 shrink-0" /> Step 5: Observed Condition</>}
-                                        {reportStep === 6 && <><MapPin className="w-5 h-5 shrink-0" /> Step 6: Location & Pin</>}
-                                        {reportStep === 7 && <><Info className="w-5 h-5 shrink-0" /> Step 7: Additional Information</>}
-                                        {reportStep === 8 && <><Eye className="w-5 h-5 shrink-0" /> Step 8: Who Can See It</>}
-                                        {reportStep === 9 && <><ClipboardList className="w-5 h-5 shrink-0" /> Step 9: Review Report</>}
-                                        {reportStep === 10 && <><Rocket className="w-5 h-5 shrink-0" /> Step 10: Submit Report</>}
+                                        {reportStep === 5 && <><MapPin className="w-5 h-5 shrink-0" /> Step 5: Location & Pin</>}
+                                        {reportStep === 6 && <><Info className="w-5 h-5 shrink-0" /> Step 6: Additional Information</>}
+                                        {reportStep === 7 && <><Eye className="w-5 h-5 shrink-0" /> Step 7: Who Can See It</>}
+                                        {reportStep === 8 && <><ClipboardList className="w-5 h-5 shrink-0" /> Step 8: Review Report</>}
+                                        {reportStep === 9 && <><Rocket className="w-5 h-5 shrink-0" /> Step 9: Submit Report</>}
                                     </h2>
                                 </div>
                                 <button
@@ -1803,7 +1798,7 @@ const ResiHomePage = () => {
                             <div className="w-full bg-gray-100 h-1.5">
                                 <div
                                     className="bg-[#F97316] h-full transition-all duration-300 ease-out"
-                                    style={{ width: `${(reportStep / 10) * 100}%` }}
+                                    style={{ width: `${(reportStep / 9) * 100}%` }}
                                 />
                             </div>
 
@@ -2218,42 +2213,8 @@ const ResiHomePage = () => {
                                     </div>
                                 )}
 
-                                {/* STEP 5: Observed Condition */}
+                                {/* STEP 5: Location & Custody */}
                                 {reportStep === 5 && (
-                                    <div className="space-y-4 animate-in fade-in duration-300">
-                                        <p className="text-xs font-bold text-gray-500 flex items-center gap-1">Select the condition that best describes the animal <Star className="w-3 h-3" /></p>
-                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                            {[
-                                                'Healthy', 'Injured', 'Bleeding', 'Limping', 'Weak',
-                                                'Sick', 'Aggressive', 'Chasing People', 'Unable to Walk',
-                                                'Crying', 'Pregnant', 'With Puppies/Kittens', 'Wearing Collar',
-                                                'Wearing QR Tag', 'Dead', 'Trapped', 'Other'
-                                            ].map((cond) => {
-                                                const isChecked = formData.observedConditions.includes(cond);
-                                                return (
-                                                    <label
-                                                        key={cond}
-                                                        className={`p-3.5 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${isChecked ? 'border-[#F97316] bg-orange-50/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}
-                                                    >
-                                                        <input
-                                                            type="radio"
-                                                            name="homeModalObservedCondition"
-                                                            checked={isChecked}
-                                                            onChange={() => {
-                                                                setFormData(prev => ({ ...prev, observedConditions: [cond] }));
-                                                            }}
-                                                            className="accent-[#F97316] w-4 h-4"
-                                                        />
-                                                        <span className="text-xs font-black text-[#1a1208]">{cond}</span>
-                                                    </label>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* STEP 6: Location & Custody */}
-                                {reportStep === 6 && (
                                     <div className="space-y-6 animate-in fade-in duration-300">
                                         <div>
                                             <h3 className="text-sm font-black text-[#1a1208] uppercase tracking-wider">
@@ -2401,7 +2362,7 @@ const ResiHomePage = () => {
                                             </div>
                                         )}
 
-                                        {/* Interactive Pinpoint Map directly on Step 6 */}
+                                        {/* Interactive Pinpoint Map directly on Step 5 */}
                                         <div className="space-y-2">
                                             <div className="flex items-center justify-between">
                                                 <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest flex items-center gap-1.5">
@@ -2616,8 +2577,8 @@ const ResiHomePage = () => {
                                     </div>
                                 )}
 
-                                {/* STEP 7: Additional Information */}
-                                {reportStep === 7 && (
+                                {/* STEP 6: Additional Information */}
+                                {reportStep === 6 && (
                                     <div className="space-y-4 animate-in fade-in duration-300">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest block">Description (Optional)</label>
                                         <textarea
@@ -2630,8 +2591,8 @@ const ResiHomePage = () => {
                                     </div>
                                 )}
 
-                                {/* STEP 8: Who can see it (decided by the Subdivision Leader, not by the reporter) */}
-                                {reportStep === 8 && (
+                                {/* STEP 7: Who can see it (decided by the Subdivision Leader, not by the reporter) */}
+                                {reportStep === 7 && (
                                     <div className="space-y-4 animate-in fade-in duration-300">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest block">Who Can See Your Report</label>
                                         <div className="p-5 rounded-3xl border-2 border-blue-100 bg-blue-50/60 space-y-2">
@@ -2647,8 +2608,8 @@ const ResiHomePage = () => {
                                     </div>
                                 )}
 
-                                {/* STEP 9: Review Report */}
-                                {reportStep === 9 && (
+                                {/* STEP 8: Review Report */}
+                                {reportStep === 8 && (
                                     <div className="space-y-4 animate-in fade-in duration-300">
                                         <p className="text-xs font-bold text-gray-500">Review all details before submitting:</p>
                                         <div className="p-6 bg-[#FAFAF9] border border-gray-100 rounded-3xl space-y-3 text-xs font-bold text-[#1a1208]">
@@ -2663,14 +2624,13 @@ const ResiHomePage = () => {
                                                 </span>
                                             </div>
                                             <div className="flex justify-between py-1 border-b border-gray-100"><span className="text-gray-400">Location:</span> <span>{formData.landmark || resolvedAddress || 'Selera Homes'}</span></div>
-                                            <div className="flex justify-between py-1 border-b border-gray-100"><span className="text-gray-400">Observed Conditions:</span> <span>{formData.observedConditions.join(', ') || 'None specified'}</span></div>
                                             <div className="flex justify-between py-1"><span className="text-gray-400">AI Confidence:</span> <span className="text-[#F97316] font-black">98%</span></div>
                                         </div>
                                     </div>
                                 )}
 
-                                {/* STEP 10: Submit Report */}
-                                {reportStep === 10 && (
+                                {/* STEP 9: Submit Report */}
+                                {reportStep === 9 && (
                                     <div className="space-y-6 text-center animate-in fade-in duration-300 py-4">
                                         <div className="w-16 h-16 bg-orange-100 text-[#F97316] rounded-3xl flex items-center justify-center mx-auto shadow-md">
                                             <Rocket className="w-8 h-8" />
@@ -2698,7 +2658,7 @@ const ResiHomePage = () => {
                                     </button>
                                 ) : <div />}
 
-                                {reportStep < 10 ? (
+                                {reportStep < 9 ? (
                                     <button
                                         type="button"
                                         onClick={() => {
@@ -2712,10 +2672,6 @@ const ResiHomePage = () => {
                                             }
                                             if (reportStep === 2) {
                                                 triggerMediaAnalysis();
-                                            }
-                                            if (reportStep === 5 && formData.observedConditions.length === 0) {
-                                                toast.warning('Please select at least one observed condition.');
-                                                return;
                                             }
                                             setReportStep(prev => prev + 1);
                                         }}

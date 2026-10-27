@@ -42,6 +42,7 @@ import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import ReturnToSeleraButton from '../MapControls/ReturnToSeleraButton';
 import { fetchCoverageArea, isWithinCoverage, type CoverageAreaInfo, COVERAGE_OUTSIDE_ERROR_MESSAGE, SELERA_DEFAULT_CENTER, SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS } from '../../utils/coverageArea';
+import { conditionForCategory } from '../../utils/reportCondition';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -95,10 +96,9 @@ const steps = [
     { id: 2, title: 'Report Category' },
     { id: 3, title: 'AI Analysis' },
     { id: 4, title: 'Animal Details' },
-    { id: 5, title: 'Observed Condition' },
-    { id: 6, title: 'Location' },
-    { id: 7, title: 'Additional Info' },
-    { id: 8, title: 'Review & Submit' }
+    { id: 5, title: 'Location' },
+    { id: 6, title: 'Additional Info' },
+    { id: 7, title: 'Review & Submit' }
 ];
 
 const VALID_COAT_PATTERNS = ['Solid', 'Bicolor', 'Tricolor', 'Spotted', 'Striped', 'Patched', 'Brindle', 'Merle', 'Tabby', 'Calico', 'Tortoiseshell', 'Mixed', 'Unknown'];
@@ -154,7 +154,6 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
         tertiaryColor: 'None',
         coatPattern: 'Solid',
         distinctiveMarkings: '',
-        observedConditions: [] as string[],
         estimatedSize: 'Small',
         description: '',
         latitude: SELERA_DEFAULT_CENTER[0],
@@ -529,17 +528,13 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
             triggerAiAnalysis();
         }
 
-        if (currentStep === 5 && formData.observedConditions.length === 0) {
-            alert('Please select at least one observed condition.');
-            return;
-        }
 
-        if (currentStep === 6 && !coverageCheck.isInside) {
+        if (currentStep === 5 && !coverageCheck.isInside) {
             alert(COVERAGE_OUTSIDE_ERROR_MESSAGE);
             return;
         }
 
-        if (currentStep < 8) {
+        if (currentStep < 7) {
             setCurrentStep(prev => prev + 1);
             const bodyEl = document.getElementById('subd-modal-scroll-body');
             if (bodyEl) bodyEl.scrollTo({ top: 0, behavior: 'smooth' });
@@ -600,7 +595,6 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                 `Custody: ${formData.custodyStatus === 'Secured' ? 'Secured in safe place' : 'Stray sighting (not touched)'}`,
                 formData.coatPattern !== 'Unknown' ? `Pattern: ${formData.coatPattern}` : null,
                 formData.distinctiveMarkings ? `Markings: ${formData.distinctiveMarkings}` : null,
-                formData.observedConditions.length > 0 ? `Observed Conditions: ${formData.observedConditions.join(', ')}` : null,
                 formData.description ? `Notes: ${formData.description}` : null
             ].filter(Boolean).join(' | ');
 
@@ -620,7 +614,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                 estimated_size: formData.estimatedSize,
                 custody_status: formData.custodyStatus,
                 description: extraDetails || 'Reported by Subdivision Staff.',
-                condition: formData.observedConditions.length > 0 ? formData.observedConditions.join(', ') : 'Healthy',
+                condition: conditionForCategory(formData.category_id),
                 latitude: formData.latitude,
                 longitude: formData.longitude,
                 animal_count: formData.animalCount,
@@ -724,13 +718,13 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                 Report Stray Animal
                             </h2>
                             <p className="text-[11px] font-bold text-gray-400">
-                                Step {currentStep} of 9 &mdash; {steps.find(s => s.id === currentStep)?.title}
+                                Step {currentStep} of 7 &mdash; {steps.find(s => s.id === currentStep)?.title}
                             </p>
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
                         <span className="hidden sm:inline-block px-3 py-1 rounded-full bg-role-muted text-role text-xs font-black uppercase tracking-widest">
-                            Step {currentStep}/9
+                            Step {currentStep}/7
                         </span>
                         <button
                             type="button"
@@ -1241,49 +1235,8 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                         </div>
                     )}
 
-                    {/* STEP 5: Observed Condition */}
+                    {/* STEP 5: Location & Custody */}
                     {currentStep === 5 && (
-                        <div className="space-y-6">
-                            <div>
-                                <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
-                                    <span>What did you observe?</span>
-                                    <span className="text-red-500 text-sm">*</span>
-                                </h2>
-                                <p className="text-xs font-bold text-gray-400 mt-1">Select the condition that best describes the animal to help responders prioritize dispatch.</p>
-                            </div>
-
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                {[
-                                    'Healthy', 'Injured', 'Bleeding', 'Limping', 'Weak',
-                                    'Sick', 'Aggressive', 'Chasing People', 'Unable to Walk',
-                                    'Crying', 'Pregnant', 'With Puppies/Kittens', 'Wearing Collar',
-                                    'Wearing QR Tag', 'Dead', 'Trapped', 'Other'
-                                ].map((cond) => {
-                                    const isChecked = formData.observedConditions.includes(cond);
-                                    return (
-                                        <label
-                                            key={cond}
-                                            className={`p-3.5 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${isChecked ? 'border-role bg-role-soft/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}
-                                        >
-                                            <input
-                                                type="radio"
-                                                name="subdObservedCondition"
-                                                checked={isChecked}
-                                                onChange={() => {
-                                                    setFormData(prev => ({ ...prev, observedConditions: [cond] }));
-                                                }}
-                                                className="accent-role w-4 h-4"
-                                            />
-                                            <span className="text-xs font-black text-[#1a1208]">{cond}</span>
-                                        </label>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* STEP 6: Location & Custody */}
-                    {currentStep === 6 && (
                         <div className="space-y-6">
                             <div>
                                 <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
@@ -1621,8 +1574,8 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                         </div>
                     )}
 
-                    {/* STEP 7: Additional Information */}
-                    {currentStep === 7 && (
+                    {/* STEP 6: Additional Information */}
+                    {currentStep === 6 && (
                         <div className="space-y-6">
                             <div>
                                 <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight">Additional Information</h2>
@@ -1639,8 +1592,8 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                         </div>
                     )}
 
-                    {/* STEP 8: Review & Submit */}
-                    {currentStep === 8 && (
+                    {/* STEP 7: Review & Submit */}
+                    {currentStep === 7 && (
                         <div className="space-y-6">
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
@@ -1669,10 +1622,6 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                         {formData.animalBreed && formData.animalBreed !== 'Unknown' ? ` - ${formData.animalBreed}` : ''}
                                         {` (${formData.estimatedSize}, ${formData.primaryColor}${formData.secondaryColor && formData.secondaryColor !== 'None' ? ` and ${formData.secondaryColor}` : ''})`}
                                     </span>
-                                </div>
-                                <div className="flex justify-between py-2 border-b border-gray-200">
-                                    <span className="text-gray-400">Observed Conditions:</span>
-                                    <span>{formData.observedConditions.join(', ') || 'None specified'}</span>
                                 </div>
                                 <div className="flex justify-between py-2 border-b border-gray-200">
                                     <span className="text-gray-400">Animal Custody:</span>
@@ -1729,7 +1678,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                         <ArrowLeft className="w-4 h-4" /> {currentStep === 1 ? 'Cancel' : 'Back'}
                     </button>
 
-                    {currentStep < 8 ? (
+                    {currentStep < 7 ? (
                         <button
                             type="button"
                             disabled={isAiProcessing || (currentStep === 1 && formData.mediaFiles.length === 0)}

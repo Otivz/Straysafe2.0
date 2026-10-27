@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom';
 import Button from '../../components/Button';
 import LandingPageNavbar from '../../components/Navbars/LandingPageNavbar';
 import InstallAppButton from '../../components/InstallAppButton';
+import GuestQRScannerModal from '../../components/Modals/GuestQRScannerModal';
 import { useSignedInUser, homePathFor } from '../../utils/useSignedInUser';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -18,6 +19,7 @@ const LandingPage = () => {
     const firstName = signedIn ? String(signedIn.name || 'your account').split(' ')[0] : '';
     const { setTheme } = useTheme();
     const [activeWorkflowStep, setActiveWorkflowStep] = useState(0);
+    const [isGuestScannerOpen, setIsGuestScannerOpen] = useState(false);
 
     // Ensure light mode on public landing page
     useEffect(() => {
@@ -282,6 +284,18 @@ const LandingPage = () => {
                                     </span>
                                 </Button>
                             </Link>
+
+                            {/* Temporary: guest QR scanner, opens the public pet scan page */}
+                            <Button
+                                variant="light"
+                                size="lg"
+                                onClick={() => setIsGuestScannerOpen(true)}
+                                className="w-full sm:w-auto px-6 py-3.5 rounded-xl font-semibold text-sm sm:text-base border-orange-200 text-orange-700 hover:bg-orange-50"
+                            >
+                                <span className="inline-flex items-center justify-center gap-2">
+                                    <QrCode className="w-4 h-4" /> Scan Pet QR
+                                </span>
+                            </Button>
 
                             <a href="#how-it-works" className="w-full sm:w-auto">
                                 <Button
@@ -961,6 +975,8 @@ const LandingPage = () => {
                     </div>
                 </div>
             </footer>
+
+            <GuestQRScannerModal isOpen={isGuestScannerOpen} onClose={() => setIsGuestScannerOpen(false)} />
         </div>
     );
 };
