@@ -47,6 +47,7 @@ import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import ReturnToSeleraButton from '../../components/MapControls/ReturnToSeleraButton';
 import { fetchCoverageArea, isWithinCoverage, type CoverageAreaInfo, COVERAGE_OUTSIDE_ERROR_MESSAGE, SELERA_DEFAULT_CENTER, SELERA_BOUNDARY_PATH_OPTIONS, getPolygonLatLngs } from '../../utils/coverageArea';
+import { conditionForCategory } from '../../utils/reportCondition';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -111,10 +112,9 @@ const steps = [
     { id: 2, title: 'Report Category' },
     { id: 3, title: 'AI Analysis' },
     { id: 4, title: 'Animal Details' },
-    { id: 5, title: 'Observed Condition' },
-    { id: 6, title: 'Location' },
-    { id: 7, title: 'Additional Info' },
-    { id: 8, title: 'Review & Submit' }
+    { id: 5, title: 'Location' },
+    { id: 6, title: 'Additional Info' },
+    { id: 7, title: 'Review & Submit' }
 ];
 
 export default function ReportStrayPage() {
@@ -180,7 +180,6 @@ export default function ReportStrayPage() {
         tertiaryColor: 'None',
         coatPattern: 'Solid',
         distinctiveMarkings: '',
-        observedConditions: [] as string[],
         estimatedSize: 'Small',
         description: '',
         latitude: SELERA_DEFAULT_CENTER[0],
@@ -266,7 +265,6 @@ export default function ReportStrayPage() {
                 tertiaryColor: draft.tertiaryColor || prev.tertiaryColor,
                 coatPattern: draft.coatPattern || prev.coatPattern,
                 distinctiveMarkings: draft.distinctiveMarkings || prev.distinctiveMarkings,
-                observedConditions: Array.isArray(draft.observedConditions) ? draft.observedConditions : prev.observedConditions,
                 estimatedSize: draft.estimatedSize || prev.estimatedSize,
                 description: draft.description || prev.description,
                 latitude: draft.latitude || prev.latitude,
@@ -274,7 +272,7 @@ export default function ReportStrayPage() {
                 custodyStatus: draft.custodyStatus || prev.custodyStatus,
                 securedLocationMode: draft.securedLocationMode || prev.securedLocationMode,
             }));
-            if (draft.description || draft.landmark || (Array.isArray(draft.observedConditions) && draft.observedConditions.length > 0)) {
+            if (draft.description || draft.landmark) {
                 setHasRestoredDraft(true);
             }
         } catch (e) {
@@ -285,7 +283,7 @@ export default function ReportStrayPage() {
     useEffect(() => {
         const timer = setTimeout(() => {
             try {
-                if (formData.description || formData.landmark || formData.distinctiveMarkings || (formData.observedConditions && formData.observedConditions.length > 0)) {
+                if (formData.description || formData.landmark || formData.distinctiveMarkings) {
                     const toSave = {
                         category: formData.category,
                         category_id: formData.category_id,
@@ -301,7 +299,6 @@ export default function ReportStrayPage() {
                         tertiaryColor: formData.tertiaryColor,
                         coatPattern: formData.coatPattern,
                         distinctiveMarkings: formData.distinctiveMarkings,
-                        observedConditions: formData.observedConditions,
                         estimatedSize: formData.estimatedSize,
                         description: formData.description,
                         latitude: formData.latitude,
@@ -654,8 +651,8 @@ export default function ReportStrayPage() {
             }
         }
 
-        // Step 6: Location & Custody coverage validation
-        if (currentStep === 6) {
+        // Step 5: Location & Custody coverage validation
+        if (currentStep === 5) {
             const check = isWithinCoverage(formData.latitude, formData.longitude, coverageArea);
             if (!check.isInside) {
                 alert(COVERAGE_OUTSIDE_ERROR_MESSAGE);
@@ -663,12 +660,8 @@ export default function ReportStrayPage() {
             }
         }
 
-        if (currentStep === 5 && formData.observedConditions.length === 0) {
-            alert('Please select at least one observed condition.');
-            return;
-        }
 
-        if (currentStep < 8) {
+        if (currentStep < 7) {
             setCurrentStep(prev => prev + 1);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -761,7 +754,6 @@ export default function ReportStrayPage() {
                 `Custody: ${formData.custodyStatus === 'Secured' ? 'Secured in safe place by resident' : 'Stray sighting (not touched)'}`,
                 formData.coatPattern !== 'Unknown' ? `Pattern: ${formData.coatPattern}` : null,
                 formData.distinctiveMarkings ? `Markings: ${formData.distinctiveMarkings}` : null,
-                formData.observedConditions.length > 0 ? `Observed Conditions: ${formData.observedConditions.join(', ')}` : null,
                 formData.description ? `Notes: ${formData.description}` : null
             ].filter(Boolean).join(' | ');
 
@@ -785,7 +777,7 @@ export default function ReportStrayPage() {
                 estimated_size: formData.estimatedSize,
                 custody_status: formData.custodyStatus,
                 description: extraDetails || 'No additional details provided.',
-                condition: formData.observedConditions.length > 0 ? formData.observedConditions.join(', ') : 'Healthy',
+                condition: conditionForCategory(formData.category_id),
                 latitude: formData.latitude,
                 longitude: formData.longitude,
                 animal_count: formData.animalCount,
@@ -1451,49 +1443,8 @@ export default function ReportStrayPage() {
                         </div>
                     )}
 
-                    {/* STEP 5: Observed Condition */}
+                    {/* STEP 5: Location & Custody */}
                     {currentStep === 5 && (
-                        <div className="space-y-6">
-                            <div>
-                                <h2 className="text-xl font-black text-[#1a1208] flex items-center gap-2">
-                                    <span>What did you observe?</span>
-                                    <span className="text-red-500 text-sm">*</span>
-                                </h2>
-                                <p className="text-xs font-bold text-gray-400 mt-1">Select the condition that best describes the animal to help responders prioritize dispatch.</p>
-                            </div>
-
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                {[
-                                    'Healthy', 'Injured', 'Bleeding', 'Limping', 'Weak',
-                                    'Sick', 'Aggressive', 'Chasing People', 'Unable to Walk',
-                                    'Crying', 'Pregnant', 'With Puppies/Kittens', 'Wearing Collar',
-                                    'Wearing QR Tag', 'Dead', 'Trapped', 'Other'
-                                ].map((cond) => {
-                                    const isChecked = formData.observedConditions.includes(cond);
-                                    return (
-                                        <label
-                                            key={cond}
-                                            className={`p-3.5 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${isChecked ? 'border-[#F97316] bg-orange-50/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}
-                                        >
-                                            <input
-                                                type="radio"
-                                                name="observedCondition"
-                                                checked={isChecked}
-                                                onChange={() => {
-                                                    setFormData(prev => ({ ...prev, observedConditions: [cond] }));
-                                                }}
-                                                className="accent-[#F97316] w-4 h-4"
-                                            />
-                                            <span className="text-xs font-black text-[#1a1208]">{cond}</span>
-                                        </label>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* STEP 6: Location & Custody */}
-                    {currentStep === 6 && (
                         <div className="space-y-6">
                             <div>
                                 <h2 className="text-xl font-black text-[#1a1208] flex items-center gap-2">
@@ -1868,8 +1819,8 @@ export default function ReportStrayPage() {
                         </div>
                     )}
 
-                    {/* STEP 7: Additional Information */}
-                    {currentStep === 7 && (
+                    {/* STEP 6: Additional Information */}
+                    {currentStep === 6 && (
                         <div className="space-y-6">
                             <div>
                                 <h2 className="text-xl font-black text-[#1a1208]">Additional Information</h2>
@@ -1886,8 +1837,8 @@ export default function ReportStrayPage() {
                         </div>
                     )}
 
-                    {/* STEP 8: Review & Submit */}
-                    {currentStep === 8 && (
+                    {/* STEP 7: Review & Submit */}
+                    {currentStep === 7 && (
                         <div className="space-y-6">
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
@@ -1916,10 +1867,6 @@ export default function ReportStrayPage() {
                                         {formData.animalBreed && formData.animalBreed !== 'Unknown' ? ` - ${formData.animalBreed}` : ''}
                                         {` (${formData.estimatedSize}, ${formData.primaryColor}${formData.secondaryColor && formData.secondaryColor !== 'None' ? ` and ${formData.secondaryColor}` : ''})`}
                                     </span>
-                                </div>
-                                <div className="flex justify-between py-2 border-b border-gray-200">
-                                    <span className="text-gray-400">Observed Conditions:</span>
-                                    <span>{formData.observedConditions.join(', ') || 'None specified'}</span>
                                 </div>
                                 <div className="flex justify-between py-2 border-b border-gray-200">
                                     <span className="text-gray-400">Animal Custody:</span>
@@ -1987,7 +1934,7 @@ export default function ReportStrayPage() {
                         <ArrowLeft className="w-3.5 h-3.5" /> Back
                     </button>
 
-                    {currentStep < 8 ? (
+                    {currentStep < 7 ? (
                         <button
                             type="button"
                             disabled={isAiProcessing || (currentStep === 1 && (formData.mediaFiles.length === 0 || isAnimalNotEligible)) || isAnimalNotEligible}

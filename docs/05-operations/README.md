@@ -33,6 +33,8 @@ Three processes ([setup.md](../../setup.md)):
 
 Seed accounts: `backend/scripts/seed_admin.py` (account names and the shared password it prints come from `setup.md` and `.env`; do not use them outside local development).
 
+Mobile testing & IP setup guide: [LOCAL_NETWORK_IP_AND_APK_SETUP_GUIDE.md](LOCAL_NETWORK_IP_AND_APK_SETUP_GUIDE.md) (steps for finding PC Wi-Fi IP and updating the installed APK without rebuilding).
+
 ## Validate (local)
 
 Only commands that exist in the repository:

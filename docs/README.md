@@ -41,14 +41,19 @@ Status values: **Current** (matches the code when last checked), **Reference** (
 | [01-system/overview.md](01-system/overview.md) | Current | System boundary, roles, services, known gaps |
 | [02-project/README.md](02-project/README.md) | Current | Requirements, decisions, milestones, status, stale records |
 | [04-testing/README.md](04-testing/README.md) | Current | Test inventory; results not re-run |
+| [02-project/DEFENSE_PLAN.md](02-project/DEFENSE_PLAN.md) | Current | Capstone defense plan: roles, countdown, outline, demo script, risks, panel questions |
+| [02-project/MANUSCRIPT_CHAPTER1_CHECK_2026-10-26.md](02-project/MANUSCRIPT_CHAPTER1_CHECK_2026-10-26.md) | Current | Manuscript Chapter 1 (STRAYSAFEEE1.pdf) checked against the system, rated 8.4/10 |
 | [03-development/audits/ADOPTION_CHAT_ISOLATION_AUDIT_2026-10-25.md](03-development/audits/ADOPTION_CHAT_ISOLATION_AUDIT_2026-10-25.md) | Current | Chat isolation findings, fixed 2026-10-25; duplicate-thread merge still to run |
+| [03-development/audits/STRAYSAFEEE1_SYSTEM_ALIGNMENT_2026-10-26.md](03-development/audits/STRAYSAFEEE1_SYSTEM_ALIGNMENT_2026-10-26.md) | Current | Chapter 1 compared with current code; manuscript corrections, priority/claim implementation gaps, and unverified research claims |
 | [05-operations/README.md](05-operations/README.md) | Current | Local setup, run, validate, build; deployment, monitoring and recovery are not set up |
+| [05-operations/LOCAL_NETWORK_IP_AND_APK_SETUP_GUIDE.md](05-operations/LOCAL_NETWORK_IP_AND_APK_SETUP_GUIDE.md) | Current | Guide for finding PC IP and changing address in the APK without rebuilds |
 | [AI_TECHNOLOGIES.md](AI_TECHNOLOGIES.md) | Reference | AI technology notes; last verified against code: Unverified |
 | [NOTIFICATION_UI_IMPROVEMENTS.md](NOTIFICATION_UI_IMPROVEMENTS.md) | Reference | Notification panel changes |
 | [Adoption details UI change record](05-operations/agents/feature-updates/2026-10-25_1347_adoption-details-ui.md) | Reference | Initial tabbed redesign, compact assignments, certificate viewer, and browser evidence |
 | [Adoption lifecycle without sideways scrolling](05-operations/agents/feature-updates/2026-10-25_1354_lifecycle-no-sideways-scroll.md) | Current | Wrapping lifecycle stages at every screen width; extends the adoption details redesign |
 | [ERD/](ERD/00_ERD_MODULE_OVERVIEW.md) | Reference | Entity-relationship diagrams and database design; match with the ORM is Unverified |
 | [DFD/](DFD/00_DFD_OVERVIEW.md) | Reference | Data-flow diagrams (context, level 1, level 2) and review notes |
+| [06-future-proposals/TUNNEL_INTEGRATION_RESEARCH_AND_PLANNING.md](06-future-proposals/TUNNEL_INTEGRATION_RESEARCH_AND_PLANNING.md) | Reference | Tunnel integration research, mobile compatibility, and implementation plan |
 
 ### At the repository root (not yet moved under `docs/`)
 
@@ -56,8 +61,9 @@ Status values: **Current** (matches the code when last checked), **Reference** (
 |---|---|---|
 | [setup.md](../setup.md) | Needs update | Names `STRAYSAFE_DB_URL` and `Database.txt`; see [operations](05-operations/README.md) |
 | [DEPLOYMENT_GUIDE.md](../DEPLOYMENT_GUIDE.md) | Current (plan) | Phased plan: Aiven, Cloudinary, Render, Vercel; nothing deployed |
+| [tunnel.md](../tunnel.md) | Current | Active Cloudflare tunnel URL, setup steps, mobile connection instructions |
 | `STRAYSAFE_MAP_AUDIT_AND_IMPROVEMENTS.md` | Deleted | Removed in commit `5e46d00`; last version: `git show 8cb074f:STRAYSAFE_MAP_AUDIT_AND_IMPROVEMENTS.md`. Cited by the project and testing records as history |
-| [CHAPTER_1_2_SYSTEM_CHECK.md](../CHAPTER_1_2_SYSTEM_CHECK.md) | Reference | Manuscript chapters 1 and 2 compared with the system, 2026-10 |
+| [CHAPTER_1_2_SYSTEM_CHECK.md](../CHAPTER_1_2_SYSTEM_CHECK.md) | Reference | Older manuscript version; superseded for Chapter 1 by the 2026-10-26 check |
 | [ANALYTICS_SPECIFICATION.md](../ANALYTICS_SPECIFICATION.md) | Current | Implemented dashboards (updated 2026-10-24) |
 | [AI_TODO.md](../AI_TODO.md) | Current | AI status and remaining work (2026-10-20) |
 | [MULTI_ANIMAL_REPORT_PLAN.md](../MULTI_ANIMAL_REPORT_PLAN.md) | Current | Implemented 2026-10-20 |

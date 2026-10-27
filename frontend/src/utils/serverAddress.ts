@@ -32,7 +32,10 @@ export function getSavedServer(): string | null {
 export function normalizeServer(input: string): string | null {
     let v = (input || '').trim().replace(/\/+$/, '');
     if (!v) return null;
-    if (!/^https?:\/\//i.test(v)) v = 'http://' + v;
+    if (!/^https?:\/\//i.test(v)) {
+        const isIpOrLocal = /^(\d+\.\d+\.\d+\.\d+|localhost)(:\d+)?$/i.test(v);
+        v = (isIpOrLocal ? 'http://' : 'https://') + v;
+    }
     let url: URL;
     try {
         url = new URL(v);
@@ -40,7 +43,8 @@ export function normalizeServer(input: string): string | null {
         return null;
     }
     if (!url.hostname || (url.pathname && url.pathname !== '/')) return null;
-    const port = url.port || (/^https:/i.test(v) ? '' : DEFAULT_PORT);
+    const isDomain = !/^\d+\.\d+\.\d+\.\d+$/.test(url.hostname) && url.hostname !== 'localhost';
+    const port = url.port || (/^https:/i.test(v) || isDomain ? '' : DEFAULT_PORT);
     return `${url.protocol}//${url.hostname}${port ? ':' + port : ''}`;
 }
 

@@ -215,6 +215,26 @@ def _reserved_holding_ids(db: Session, holding_ids: Optional[List[int]] = None) 
     return {row[0] for row in q.distinct().all()}
 
 
+OWNED_PET_DETAIL = (
+    "This animal is linked to a registered pet with an owner, so it cannot be put up for adoption. "
+    "Return it to the owner through a claim, or unlink the pet record if the match is wrong."
+)
+
+
+def _owned_holding_ids(db: Session, holding_ids: List[int]) -> set:
+    """Animals whose report is linked to a registered pet that has an owner: they go back to the owner, not to adoption."""
+    if not holding_ids:
+        return set()
+    rows = (
+        db.query(HoldingAnimal.holding_id)
+        .join(Report, Report.report_id == HoldingAnimal.report_id)
+        .join(Pet, Pet.pet_id == Report.pet_id)
+        .filter(HoldingAnimal.holding_id.in_(holding_ids), Pet.owner_id.isnot(None))
+        .all()
+    )
+    return {row[0] for row in rows}
+
+
 
 AUTO_CLOSED_NOTE = "Another applicant was approved for this pet."
 NOTIFIED_AGAIN_ACTION = "Earlier Applicants Notified (Available Again)"
@@ -977,10 +997,11 @@ def get_adoption_catalog(include_reserved: bool = False, db: Session = Depends(g
         .all()
     )
     reserved = _reserved_holding_ids(db, [a.holding_id for a in animals])
+    owned = _owned_holding_ids(db, [a.holding_id for a in animals])
 
     results: List[CatalogAnimalResponse] = []
     for a in animals:
-        if a.holding_id in reserved and not include_reserved:
+        if (a.holding_id in reserved or a.holding_id in owned) and not include_reserved:
             continue
         rep = a.report
         subd = rep.subdivision if rep else None
@@ -1043,7 +1064,7 @@ def get_adoption_catalog_detail(holding_id: int, db: Session = Depends(get_db)):
     if not animal:
         raise HTTPException(status_code=404, detail="Animal not found")
     # Public detail only for animals that can still be adopted (not reserved, adopted, or out of the catalog).
-    if animal.facility_status != 6 or _reserved_holding_ids(db, [animal.holding_id]):
+    if animal.facility_status != 6 or _reserved_holding_ids(db, [animal.holding_id]) or _owned_holding_ids(db, [animal.holding_id]):
         raise HTTPException(status_code=404, detail="This pet is no longer available for adoption.")
 
     rep = animal.report
@@ -1463,6 +1484,9 @@ def promote_to_adoption(
             detail=f"Cannot promote an animal that is Impounded, resolved, deceased, or claimed (status={animal.facility_status}). Impounded animals cannot be adopted.",
         )
 
+    if _owned_holding_ids(db, [animal.holding_id]):
+        raise HTTPException(status_code=400, detail=OWNED_PET_DETAIL)
+
     now = db_now(db)   # same clock as the stored intake / arrival dates
     stay_limit = float(req.min_stay_days) if req.min_stay_days is not None and req.min_stay_days >= 0 else 0.0
     days_held = 0.0
@@ -1701,6 +1725,9 @@ def apply_for_adoption(
     if animal.facility_status != 6 or (animal.report and animal.report.custody_status == "Impounded") or animal.facility_status == 8:
         logger.warning(f"[ADOPTION APPLY] Animal not available: facility_status={animal.facility_status}")
         raise HTTPException(status_code=400, detail="This animal is currently Impounded or not available for public adoption. Impounded animals cannot be adopted.")
+
+    if _owned_holding_ids(db, [animal.holding_id]):
+        raise HTTPException(status_code=400, detail=OWNED_PET_DETAIL)
 
     # Check if this animal has already been finalized/handed over in an approved adoption
     handed_over_adoption = (

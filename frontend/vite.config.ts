@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => ({
     port: 5173,
     host: '0.0.0.0',
     // Google Sign-In rejects raw IP origins; https://10-1-207-251.sslip.io:5173 resolves to the same LAN IP.
-    allowedHosts: ['.sslip.io'],
+    allowedHosts: ['.sslip.io', '.trycloudflare.com', '.ngrok-free.app'],
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',
