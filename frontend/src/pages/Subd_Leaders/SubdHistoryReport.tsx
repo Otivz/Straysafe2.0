@@ -39,7 +39,7 @@ const statusMap = REPORT_STATUS_MAP;
 
 const categoryMap: Record<number, string> = {
     1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
-    4: 'Roaming Pack', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
+    4: 'Roaming Animal', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
 };
 
 const HISTORY_STATUSES = [11, 12, 3, 9, 10, 14, 8, 7, 17, 18]; // Resolved (11), Deceased (12), Rejected (3), Claimed (9), Released (10), Dismissed (14), Impounded (8), Observation (7), Cannot Be Found (17), Merged (18)

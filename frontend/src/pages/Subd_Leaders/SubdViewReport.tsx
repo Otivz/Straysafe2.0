@@ -50,7 +50,7 @@ import InheritedIdentityNotice from '../../components/InheritedIdentityNotice';
 import IdentityDisputePanel from '../../components/IdentityDisputePanel';
 import DisputeMatchHistory from '../../components/DisputeMatchHistory';
 import SectionJumpNav from '../../components/SectionJumpNav';
-import OwnerFollowUpPreview from '../../components/OwnerFollowUpPreview';
+import OwnerFollowUpCard from '../../components/OwnerFollowUpCard';
 interface Report {
     report_id: number;
     category_id: number;
@@ -189,7 +189,7 @@ const statusMap = REPORT_STATUS_MAP;
 
 const categoryMap: Record<number, string> = {
     1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
-    4: 'Roaming Pack', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
+    4: 'Roaming Animal', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
 };
 
 const RESOLVED_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18];
@@ -2896,14 +2896,19 @@ const SubdViewReport = () => {
                                             <ReportVisibilityPanel report={report} canEdit={report.assigned_leader_id === currentUserId}
                                                 onChanged={() => fetchReportDetails()} />
 
-                                            {/* 3-day owner observation (UI preview, nothing saved): a registered pet with an owner, case still
-                                                open, not with the Barangay and not already held in a facility (nobody holds the animal while observing) */}
-                                            {report.pet_id && (report.owner_id || report.owner_name) && ![3, 7, 8, 9, 10, 11, 12, 14, 17, 18].includes(report.status_id)
-                                                && !isEscalatedToBarangay && !(report as any).facility_id && (
-                                                <OwnerFollowUpPreview reportId={report.report_id} petName={report.pet_name}
-                                                    ownerName={report.owner_name} ownerPhone={report.owner_phone}
+                                            {/* 3-day owner observation of a complaint about a registered pet with an owner. Shown for any such
+                                                report so an ended or escalated follow-up keeps its history; it can only start on an open case,
+                                                not with the Barangay and not held in a facility (nobody holds the pet while observing) */}
+                                            {report.pet_id && (report.owner_id || report.owner_name) && (
+                                                <OwnerFollowUpCard reportId={report.report_id}
+                                                    eligible={![3, 7, 8, 9, 10, 11, 12, 14, 17, 18].includes(report.status_id)
+                                                        && !isEscalatedToBarangay && !(report as any).facility_id && !report.duplicate_of_report_id}
+                                                    canAct={report.assigned_leader_id === currentUserId}
+                                                    petName={report.pet_name} ownerName={report.owner_name} ownerPhone={report.owner_phone}
                                                     ownerHasAccount={Boolean(report.owner_id)}
-                                                    canAct={report.assigned_leader_id === currentUserId} />
+                                                    onChanged={() => fetchReportDetails()}
+                                                    onEscalate={isEscalatedToBarangay ? undefined : openEscalation}
+                                                    onIssueWarning={report.owner_id ? openIssueWarningModal : undefined} />
                                             )}
 
                                             {/* OPERATIONAL CONTROLS - ACTIVE FOR ASSIGNED HANDLER */}

@@ -98,7 +98,7 @@ interface Report {
 const statusMap = REPORT_STATUS_MAP;
 const categoryMap: Record<number, string> = {
     1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
-    4: 'Roaming Pack', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
+    4: 'Roaming Animal', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
 };
 
 const RESOLVED_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18];
@@ -633,7 +633,7 @@ const AdminReport = () => {
                                                     <option value="1">🩹 Injured Animal</option>
                                                     <option value="2">⚠️ Aggressive Stray</option>
                                                     <option value="3">☣️ Rabies Risk</option>
-                                                    <option value="4">🐕‍🦺 Roaming Pack</option>
+                                                    <option value="4">🐕‍🦺 Roaming Animal</option>
                                                     <option value="5">🛟 Rescue Needed</option>
                                                     <option value="6">🔍 Lost Pet</option>
                                                 </select>

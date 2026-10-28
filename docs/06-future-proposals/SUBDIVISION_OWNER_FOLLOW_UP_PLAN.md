@@ -1,6 +1,6 @@
 # Subdivision owner follow-up (3-day observation of a complaint about a registered pet)
 
-- **Status:** step 1 (hide the subdivision holding place) and **Phase 1 (backend) are done** (2026-10-28; `backend/tests/test_owner_followups.py` 69/69, all 86 isolated backend test files pass). Nothing is visible in the app yet: the leader's report page still shows the static preview (`OwnerFollowUpPreview.tsx`) until Phase 2. An earlier backend was written on 2026-10-27 and removed on 2026-10-28 (change record `2026-10-28_0412_remove-owner-follow-up-code`); this one follows the complaint design below.
+- **Status:** step 1, **Phase 1 (backend)**, **Phase 2 steps 2A to 2E (leader card, report-list badge)** and **Phase 3 steps 3A to 3C (owner's panel, notification links, Barangay read-only section)** are done (2026-10-28). Open: 2F (browser check by the developer), 3D (optional analytics) and Phase 4 (documents and defense). Backend tests: `backend/tests/test_owner_followups.py` 69/69, all 86 isolated backend test files pass.
 - **Scenario (decided and confirmed by the subdivision, 2026-10-28):** a complaint about a **registered pet that has a known owner**. The Subdivision Leader contacts the owner and checks, within 3 days, whether the owner does something about the pet. Then the leader resolves the case or escalates it to the Barangay.
 - **Direction:** the follow-up lives on the leader's **report page**. No new page, route or menu entry. The Barangay holding place, and the leader's read-only Barangay Holding page, stay as they are.
 - The interview facts below are as the developer reported them; they are not confirmed with the barangay or the subdivision.
@@ -171,19 +171,19 @@ The leader's report list (`SubdReports.tsx`) shows an **"Observing"** badge (and
 
 ### Phase 2: leader card (replaces the preview)
 
-- [ ] **2A API helper.** New `frontend/src/utils/ownerFollowUp.ts`: types and one function per endpoint.
-- [ ] **2B Card.** New `frontend/src/components/OwnerFollowUpCard.tsx` with the three states in 7.1, using the preview's layout (`OwnerFollowUpPreview.tsx`) and the complaint wording: "Owner complied", "Log phone acknowledgement", no typed-in owner.
-- [ ] **2C Wire in.** In `SubdViewReport.tsx` replace `OwnerFollowUpPreview` with the card (same eligibility condition, now confirmed by the server), then delete `OwnerFollowUpPreview.tsx`.
-- [ ] **2D Ending buttons.** Owner complied and Close call the close endpoint; Escalate calls the page's existing `openEscalation()`; **Issue owner warning** opens the page's existing warning form pre-filled (pet, report, "Free-Roaming Unleashed"), shown before escalating and only for an owner with an account; show the server's refusal message on the card.
-- [ ] **2E List badge.** "Observing" / "Due" badge and filter in `SubdReports.tsx`.
+- [x] **2A API helper.** New `frontend/src/utils/ownerFollowUp.ts`: types and one function per endpoint.
+- [x] **2B Card.** New `frontend/src/components/OwnerFollowUpCard.tsx` with the three states in 7.1, using the preview's layout (`OwnerFollowUpPreview.tsx`) and the complaint wording: "Owner complied", "Log phone acknowledgement", no typed-in owner.
+- [x] **2C Wire in.** In `SubdViewReport.tsx` replace `OwnerFollowUpPreview` with the card (same eligibility condition, now confirmed by the server), then delete `OwnerFollowUpPreview.tsx`.
+- [x] **2D Ending buttons.** Owner complied and Close call the close endpoint; Escalate calls the page's existing `openEscalation()`; **Issue owner warning** opens the page's existing warning form pre-filled (pet, report, "Free-Roaming Unleashed"), shown before escalating and only for an owner with an account; show the server's refusal message on the card.
+- [x] **2E List badge.** "Observing" / "Due" badge and filter in `SubdReports.tsx`.
 - [ ] **2F Check.** `tsc` clean; try it in a browser at 360 px and desktop width on a real eligible report (open, claimed by you, linked to a pet with an owner, no facility).
 
 ### Phase 3: owner and Barangay views
 
-- [ ] **3A Owner card.** In `ResiViewReport.tsx` (the owner's report page): the message, "I received this and I'm acting on it", "Send an update" (photo, note); no leader notes.
-- [ ] **3B Notification link.** Send the notifications with `related_id` = the report number: the navbars already open the report for that. Only check it works, and that the title avoids "scan" and "pet found".
-- [ ] **3C Barangay section.** In `BrgyReportView.tsx`: a read-only follow-up section with the contact history, only for escalated follow-ups.
-- [ ] **3D Optional.** Analytics counts (started, ended by outcome, average days); the owner warning from question 6 if decided.
+- [x] **3A Owner card.** In `ResiViewReport.tsx` (the owner's report page): the message, "I received this and I'm acting on it", "Send an update" (photo, note); no leader notes.
+- [x] **3B Notification link.** Send the notifications with `related_id` = the report number: the navbars already open the report for that. Only check it works, and that the title avoids "scan" and "pet found".
+- [x] **3C Barangay section.** In `BrgyReportView.tsx`: a read-only follow-up section with the contact history, only for escalated follow-ups.
+- [ ] **3D Optional, not built.** The owner warning is covered by step 2D (existing form). Analytics counts are left for later. Analytics counts (started, ended by outcome, average days); the owner warning from question 6 if decided.
 
 ### Phase 4: documents and defense
 

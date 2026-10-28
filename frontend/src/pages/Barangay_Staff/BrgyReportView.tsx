@@ -42,6 +42,7 @@ import GroupAISummary from '../../components/GroupAISummary';
 import InheritedIdentityNotice from '../../components/InheritedIdentityNotice';
 import IdentityDisputePanel from '../../components/IdentityDisputePanel';
 import DisputeMatchHistory from '../../components/DisputeMatchHistory';
+import OwnerFollowUpCard from '../../components/OwnerFollowUpCard';
 interface Report {
     report_id: number;
     category_id: number;
@@ -186,7 +187,7 @@ const categoryMap: Record<number, string> = {
     1: 'Injured Animal',
     2: 'Aggressive Stray',
     3: 'Possible Rabies Risk',
-    4: 'Roaming Pack',
+    4: 'Roaming Animal',
     5: 'Animal Rescue Needed',
     6: 'Lost Pet'
 };
@@ -2235,6 +2236,13 @@ const BrgyReportView = () => {
 
                                             {/* Who can see this report: decided by the Subdivision Leader (read-only for the Barangay) */}
                                             <ReportVisibilityPanel report={report} canEdit={false} />
+
+                                            {/* The subdivision's owner follow-up before this case was escalated: read-only, with its contact
+                                                history (the server shows Barangay staff escalated follow-ups only) */}
+                                            {report.pet_id && (
+                                                <OwnerFollowUpCard reportId={report.report_id} eligible={false} canAct={false}
+                                                    petName={report.pet_name} ownerName={report.owner_name} ownerHasAccount={false} />
+                                            )}
 
                                             {/* Animal record (pet record / community animal) */}
                                             {![3, 14, 18].includes(report.status_id) && !report.duplicate_of_report_id && (

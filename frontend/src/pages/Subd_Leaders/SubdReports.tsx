@@ -31,6 +31,7 @@ import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
 import ReportDescription from '../../components/ReportDescription';
 import { parseReportDescription, reportDescriptionSummary } from '../../utils/reportDescription';
 import NeedsReviewSightings from '../../components/NeedsReviewSightings';
+import { listFollowUps, type OwnerFollowUp } from '../../utils/ownerFollowUp';
 interface Report {
     report_id: number;
     subdivision_id?: number;
@@ -107,7 +108,7 @@ const formatCooldownTimer = (seconds?: number): string => {
 const statusMap = REPORT_STATUS_MAP;
 const categoryMap: Record<number, string> = {
     1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
-    4: 'Roaming Pack', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
+    4: 'Roaming Animal', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
 };
 
 const SubdReports = () => {
@@ -458,6 +459,24 @@ const SubdReports = () => {
         fetchReports();
     }, []);
 
+    // Open owner follow-ups (3-day observation) of this subdivision, by report: badge and filter
+    const [openFollowUps, setOpenFollowUps] = useState<Record<number, OwnerFollowUp>>({});
+    useEffect(() => {
+        listFollowUps({ status: 'open' })
+            .then(rows => setOpenFollowUps(Object.fromEntries(rows.map(f => [f.report_id, f]))))
+            .catch(() => setOpenFollowUps({}));
+    }, [reports]);
+    const followUpBadge = (reportId: number) => {
+        const f = openFollowUps[reportId];
+        if (!f) return null;
+        return (
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border whitespace-nowrap ${f.is_due ? 'bg-red-50 text-red-700 border-red-200' : 'bg-role-soft text-role-strong border-role-border'}`}
+                title={f.is_due ? 'Owner follow-up: the observation period has ended, decide now' : `Owner follow-up: ${f.days_left} day${f.days_left === 1 ? '' : 's'} left`}>
+                {f.is_due ? 'Due' : 'Under Observation'}
+            </span>
+        );
+    };
+
     const handleAddComment = async (reportId: number) => {
         const text = commentInputs[reportId];
         if (!text || !text.trim()) return;
@@ -629,7 +648,10 @@ const SubdReports = () => {
             reporter.includes(searchTerm.toLowerCase()) ||
             handlerName.includes(searchTerm.toLowerCase());
         const statName = statusMap[rep.status_id] || '';
-        const matchesStatus = statusFilter === 'all' || statName.toLowerCase() === statusFilter.toLowerCase();
+        const matchesStatus = statusFilter === 'all'
+            || (statusFilter === 'observing' ? Boolean(openFollowUps[rep.report_id])
+                : statusFilter === 'followup_due' ? Boolean(openFollowUps[rep.report_id]?.is_due)
+                : statName.toLowerCase() === statusFilter.toLowerCase());
 
         // Queue filter
         let matchesQueue = true;
@@ -821,7 +843,9 @@ const SubdReports = () => {
                                                 { value: 'Verified', label: 'Verified' },
                                                 { value: 'Escalated to Barangay', label: 'Escalated' },
                                                 { value: 'Approved', label: 'Approved' },
-                                                { value: 'Rescue In Progress', label: 'In Progress' }
+                                                { value: 'Rescue In Progress', label: 'In Progress' },
+                                                { value: 'observing', label: 'Under Observation' },
+                                                { value: 'followup_due', label: 'Observation Due' }
                                             ]}
                                             className="h-10 md:min-w-[145px]"
                                         />
@@ -959,6 +983,7 @@ const SubdReports = () => {
                                                                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border whitespace-nowrap ${getStatusColor(statusMap[rep.status_id] || 'Pending')}`}>
                                                                     {statusMap[rep.status_id] || 'Pending'}
                                                                 </span>
+                                                                {followUpBadge(rep.report_id)}
                                                             </div>
                                                             <div className="flex items-center gap-0.5 shrink-0 -mr-1 -mt-1">
                                                                 <ReportChatBadge
@@ -1346,6 +1371,7 @@ const SubdReports = () => {
                                                             <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || 'Pending')}`}>
                                                                 {statusMap[rep.status_id] || 'Pending'}
                                                             </span>
+                                                            {followUpBadge(rep.report_id)}
                                                             {(rep.status_id === 18 || rep.duplicate_of_report_id) && (
                                                                 <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-stone-100 text-stone-700 border border-stone-300" title={`Merged duplicate into Case #${rep.duplicate_of_report_id}`}>
                                                                     🔗 Merged

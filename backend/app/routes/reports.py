@@ -1495,7 +1495,7 @@ def classify_category_from_description(description: str) -> int:
     1. Possible Rabies Risk (Category 3)
     2. Aggressive Stray (Category 2)
     3. Injured Animal (Category 1)
-    4. Roaming Pack (Category 4)
+    4. Roaming Animal (Category 4)
     5. Animal Rescue Needed (Category 5) - fallback
     """
     text = (description or "").lower()
@@ -1520,7 +1520,7 @@ def classify_category_from_description(description: str) -> int:
     if any(kw in text for kw in injured_keywords):
         return 1
         
-    # 4. Roaming Pack (grouping & roaming behaviors)
+    # 4. Roaming Animal (grouping & roaming behaviors)
     roaming_keywords = ["roaming", "pack", "group", "multiple", "horde"]
     if any(kw in text for kw in roaming_keywords):
         return 4

@@ -30,6 +30,7 @@ import { getProfilePicture, DEFAULT_AVATAR, DEFAULT_PET_AVATAR } from '../../uti
 import { reportDescriptionSummary } from '../../utils/reportDescription';
 import { petName } from '../../utils/petName';
 import CaseStageStepper from '../../components/CaseStageStepper';
+import OwnerFollowUpOwnerPanel from '../../components/OwnerFollowUpOwnerPanel';
 import { getCaseStages, getWhereNow, type CaseStep } from '../../utils/caseStages';
 
 const reportStatusMap = REPORT_STATUS_MAP;
@@ -38,7 +39,7 @@ const categoryMap: Record<number, string> = {
     1: 'Injured Animal',
     2: 'Aggressive Stray',
     3: 'Possible Rabies Risk',
-    4: 'Roaming',
+    4: 'Roaming Animal',
     5: 'Animal Rescue Needed',
     6: 'Lost Pet'
 };
@@ -923,6 +924,9 @@ const ResiViewReport = () => {
                         </div>
                     </div>
                 </div>
+
+                {/* A complaint about this resident's pet: the subdivision's 3-day observation (shown only to the pet's owner) */}
+                {currentUser && <OwnerFollowUpOwnerPanel reportId={report.report_id} />}
 
                 {reunionSuccessAlert && (
                     <div className="mb-4 sm:mb-6 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 flex items-center gap-3 animate-in fade-in">

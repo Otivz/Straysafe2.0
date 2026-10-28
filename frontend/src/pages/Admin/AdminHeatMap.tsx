@@ -458,7 +458,7 @@ const AdminHeatMap = () => {
                                         <option value="1" className="bg-slate-900 text-white">Injured Animals</option>
                                         <option value="2" className="bg-slate-900 text-white">Aggressive Strays</option>
                                         <option value="3" className="bg-slate-900 text-white">Rabies Risks</option>
-                                        <option value="4" className="bg-slate-900 text-white">Roaming Packs</option>
+                                        <option value="4" className="bg-slate-900 text-white">Roaming Animals</option>
                                         <option value="5" className="bg-slate-900 text-white">Animal Rescues</option>
                                         <option value={String(LOST_PET_CATEGORY_ID)} className="bg-slate-900 text-white">Lost Pets</option>
                                     </select>

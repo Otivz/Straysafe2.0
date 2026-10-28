@@ -269,7 +269,7 @@ INSERT INTO `report_categories` (`category_id`, `category_name`, `description`) 
 (1, 'Injured', 'Stray animals requiring medical assistance or emergency care'),
 (2, 'Aggressive', 'Animals exhibiting dangerous or aggressive behavior'),
 (3, 'Rabies Risk', 'Animals exhibiting signs of rabies infection'),
-(4, 'Roaming', 'Group of stray animals roaming together'),
+(4, 'Roaming Animal', 'A stray animal roaming in the neighborhood'),
 (5, 'Rescue Needed', 'General stray animal capture and rescue requests'),
 (6, 'Lost Pet', 'Report of a missing or lost registered domestic pet');
 

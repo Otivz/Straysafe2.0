@@ -57,7 +57,7 @@ Status values: **Current** (matches the code when last checked), **Reference** (
 | [DFD/](01-system/DFD/00_DFD_OVERVIEW.md) | Reference | Data-flow diagrams (context, level 1, level 2) and review notes |
 | [06-future-proposals/TUNNEL_INTEGRATION_RESEARCH_AND_PLANNING.md](06-future-proposals/TUNNEL_INTEGRATION_RESEARCH_AND_PLANNING.md) | Reference | Tunnel integration research, mobile compatibility, and implementation plan |
 | [06-future-proposals/LATE_REPORTS_FOR_CLOSED_CASES_PLAN.md](06-future-proposals/LATE_REPORTS_FOR_CLOSED_CASES_PLAN.md) | Reference | Plan only: link a late report to a case closed or impounded within 7 days; leader decides |
-| [06-future-proposals/SUBDIVISION_OWNER_FOLLOW_UP_PLAN.md](06-future-proposals/SUBDIVISION_OWNER_FOLLOW_UP_PLAN.md) | Reference | Phase 1 (backend) built; leader card (Phase 2) next, a static UI preview shows meanwhile: for a complaint about a registered pet, the leader contacts the owner and observes for 3 days, then resolves or escalates |
+| [06-future-proposals/SUBDIVISION_OWNER_FOLLOW_UP_PLAN.md](06-future-proposals/SUBDIVISION_OWNER_FOLLOW_UP_PLAN.md) | Reference | Built (backend, leader card, owner panel, Barangay view); documents (Phase 4) next: for a complaint about a registered pet, the leader contacts the owner and observes for 3 days, then resolves or escalates |
 
 ### Moved from the repository root (2026-10-27)
 

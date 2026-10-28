@@ -227,7 +227,7 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                 return "Medium Priority was assigned because the report indicates the animal is weak, sick, or malnourished, requiring rescue attention but without an active physical threat.";
             }
             if (descVal.includes('chasing') || descVal.includes('barking') || descVal.includes('nuisance') || catVal.includes('pack') || descVal.includes('pack')) {
-                return "Medium Priority was assigned because of public nuisance factors (e.g. barking, chasing behavior, or roaming packs) requiring systematic monitoring.";
+                return "Medium Priority was assigned because of public nuisance factors (e.g. barking, chasing behavior, or roaming animals) requiring systematic monitoring.";
             }
             if (descVal.includes('scared') || descVal.includes('fearful') || descVal.includes('distress') || descVal.includes('cry') || descVal.includes('howl')) {
                 return "Medium Priority was assigned as the stray animal displays distress or fearful behavior, requiring retrieval by subdivision personnel.";
