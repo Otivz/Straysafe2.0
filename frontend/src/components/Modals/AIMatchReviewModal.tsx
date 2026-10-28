@@ -302,9 +302,6 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                 {/* ── Modal Header ── */}
                 <div className="shrink-0 px-4 sm:px-6 pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-4 pb-3 border-b border-gray-100 flex flex-col gap-2.5">
                     <div className="flex items-start gap-3">
-                        <div className="hidden sm:flex w-10 h-10 rounded-xl bg-role-muted text-role items-center justify-center font-black text-base shrink-0">
-                            AI
-                        </div>
                         <div className="min-w-0 flex-1">
                             <h2 id="match-review-title" className="text-base sm:text-lg font-black text-gray-900 leading-snug">
                                 {isPetMatch ? "Potential Match Review" : "Suspected Duplicate Sighting Review"}
@@ -836,7 +833,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                             type="button"
                                                             disabled={isReversing || reverseNotes.trim().length < 10}
                                                             onClick={handleReverseDecision}
-                                                            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-bold cursor-pointer disabled:opacity-50"
+                                                            className="px-3 py-1.5 rounded-lg bg-[#F97316] hover:bg-[#EA580C] text-white font-bold cursor-pointer disabled:opacity-50"
                                                         >
                                                             {isReversing ? 'Reversing...' : 'Confirm Reversal'}
                                                         </button>

@@ -501,7 +501,7 @@ def populate_location_and_facility_info(
                 rep_data.latitude = rep_data.initial_latitude
                 rep_data.longitude = rep_data.initial_longitude
             
-            facility_keywords = ["holding pen", "holding facility", "barangay holding", "subdivision holding"]
+            facility_keywords = ["holding pen", "holding facility", "holding place", "barangay holding", "subdivision holding"]
             is_lmk_fac = not rep_data.landmark or any(k in (rep_data.landmark or "").lower() for k in facility_keywords)
             if is_lmk_fac:
                 rep_data.landmark = rep_data.initial_landmark or "Incident Sighting Location"
@@ -3159,7 +3159,7 @@ def confirm_reunited_by_citizen(
     if report.facility_id is not None:
         raise HTTPException(
             status_code=400,
-            detail="This animal is currently admitted to a holding facility. Please coordinate with facility officers to complete physical handover."
+            detail="This animal is currently admitted to a holding place. Please coordinate with facility officers to complete physical handover."
         )
 
     old_status = report.current_status_id
@@ -3847,8 +3847,10 @@ def update_report_status(
     # Handle facility relocation or location update
     relocation_note = None
     target_facility_id = status_update.facility_id
-    if not target_facility_id and status_update.status_id in (7, 8):
+    resident_holds_animal = (status_update.custody_status or "") == "Secured by Resident"
+    if not target_facility_id and status_update.status_id in (7, 8) and not resident_holds_animal:
         # Auto-detect subdivision or barangay holding facility only for status 7/8
+        # (never while a resident still holds the animal: it has not been moved anywhere)
         default_fac = None
         if report.subdivision_id:
             default_fac = db.query(Landmark).filter(
@@ -3870,7 +3872,7 @@ def update_report_status(
             report.custody_status = status_update.custody_status or "Secured in Facility"
             caretaker_str = f" • Caretaker: {fac.contact_person} ({fac.contact_number})" if fac.contact_person else ""
             prev_str = report.initial_landmark or "Original found location"
-            relocation_note = f"Animal secured in holding facility ({fac.name}){caretaker_str} (Relocated from: {prev_str})"
+            relocation_note = f"Animal secured in holding place ({fac.name}){caretaker_str} (Relocated from: {prev_str})"
     elif status_update.status_id == 6:
         # Picked up: animal is with responders in transit, NOT yet admitted into holding facility
         report.custody_status = status_update.custody_status or "Animal Picked Up"
@@ -4155,7 +4157,7 @@ def update_report_status(
             HoldingAnimal.report_id == report.report_id
         ).first()
         if already_in:
-            loc_str = report.landmark or "Subdivision Holding Facility"
+            loc_str = report.landmark or "Subdivision Holding Place"
             db.add(HoldingTimeline(
                 holding_id=already_in.holding_id,
                 event_type='transfer',
@@ -4169,7 +4171,7 @@ def update_report_status(
             HoldingAnimal.report_id == report.report_id
         ).first()
         if already_in:
-            loc_str = report.landmark or "Subdivision Holding Facility"
+            loc_str = report.landmark or "Subdivision Holding Place"
             db.add(HoldingTimeline(
                 holding_id=already_in.holding_id,
                 event_type='observation',
@@ -4235,12 +4237,12 @@ def update_report_status(
             if not loc_name and report.landmark:
                 loc_name = report.landmark
             if not loc_name:
-                loc_name = "Holding Facility"
+                loc_name = "Holding Place"
 
             db.add(HoldingTimeline(
                 holding_id = new_holding.holding_id,
                 event_type = 'intake',
-                title      = f'Animal Admitted to Holding Facility ({loc_name})',
+                title      = f'Animal Admitted to Holding Place ({loc_name})',
                 notes      = f'Admitted into custody at {loc_name}. Report #{report.report_id}.',
                 logged_by  = status_update.user_id,
             ))

@@ -61,7 +61,7 @@ const SubdBottomNav: React.FC<SubdBottomNavProps> = ({
                     type="button"
                     onClick={() => navigate('/subd/holding-facility')}
                     className={`${navItemBase} ${activeTab === 'facility' ? activeColor : inactiveColor}`}
-                    title="Holding Facility"
+                    title="Barangay Holding Place"
                 >
                     <span className={`absolute -top-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-role transition-all duration-300 ${activeTab === 'facility' ? 'opacity-100 scale-100' : 'opacity-0 scale-0'}`} />
                     <div className={`p-1.5 rounded-xl transition-all duration-200 ${activeTab === 'facility' ? 'bg-role-soft' : ''}`}>
@@ -70,7 +70,7 @@ const SubdBottomNav: React.FC<SubdBottomNavProps> = ({
                         </svg>
                     </div>
                     <span className={`text-[9px] leading-tight text-center uppercase tracking-wide whitespace-nowrap max-w-full truncate px-0.5 ${activeTab === 'facility' ? 'font-black' : 'font-bold'}`}>
-                        Holding Facility
+                        Brgy Holding
                     </span>
                 </button>
 

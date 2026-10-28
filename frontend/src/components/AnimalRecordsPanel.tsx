@@ -366,7 +366,7 @@ function SplitAnimalsModal({ reportId, info, reported, onClose, onDone }: {
 
     const label = (i: number) => `Animal ${existing + i + 1}`;
     const carryRows = useMemo(() => ([
-        ['holding', 'Already in the holding facility'], ['pet', 'Confirmed registered pet'], ['claims', 'Open owner claims'],
+        ['holding', 'Already in the holding place'], ['pet', 'Confirmed registered pet'], ['claims', 'Open owner claims'],
     ] as const).filter(([k]) => needs[k]), [needs]);
 
     return createPortal(

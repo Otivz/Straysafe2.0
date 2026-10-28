@@ -28,6 +28,7 @@ from app.models.audit_log import AuditLog
 from app.models.revoked_token import RevokedToken
 from app.models.coverage import CoverageSetting
 from app.models.otp import OtpVerification
+from app.models.owner_followup import OwnerFollowUp, OwnerFollowUpContact  # noqa: F401
 
 __all__ = [
     "Role", "Position", "Barangay", "Subdivision", "User",

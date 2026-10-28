@@ -11,10 +11,11 @@ import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import MapComponent from '../../components/MapComponent';
-import { MapPin, Activity, Flame, Shield, CheckCircle2, Clock, Truck, FileText, X } from 'lucide-react';
+import { Activity, Flame, Shield, CheckCircle2, Clock, Truck, FileText, X } from 'lucide-react';
 import ReportDescription from '../../components/ReportDescription';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
 import { usePersistentState } from '../../utils/useCachedState';
+import { isActiveReport } from '../../utils/heatmap';
 
 const BrgyDashboard = () => {
     const navigate = useNavigate();
@@ -24,12 +25,10 @@ const BrgyDashboard = () => {
     const [reports, setReports] = useState<any[]>(() => getCachedData<any[]>('brgy_dashboard_reports') || []);
     const [facilityAnimals, setFacilityAnimals] = useState<any[]>(() => getCachedData<any[]>('brgy_dashboard_holding') || []);
     const [facilities, setFacilities] = useState<any[]>(() => getCachedData<any[]>('brgy_dashboard_facilities') || []);
-    const [mapMode, setMapMode] = useState<'pins' | 'heatmap' | 'both'>('both');
     const [isMapExpanded, setIsMapExpanded] = useState(false);
     const [isModalLegendOpen, setIsModalLegendOpen] = useState(false);
     const [selectedDetailReport, setSelectedDetailReport] = useState<any>(null);
     const [selectedReport, setSelectedReport] = useState<any>(null);
-    const [selectedCoordinates, setSelectedCoordinates] = useState<{ lat: number; lng: number } | null>(null);
     const [isNavigating, setIsNavigating] = useState(false);
     const [navSource, setNavSource] = useState<'hq' | 'brgy' | 'current'>('hq');
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
@@ -358,19 +357,13 @@ const BrgyDashboard = () => {
         const lng = parseFloat(r.longitude);
         if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return false;
         // Only active reports that are endorsed/escalated to the Barangay
-        return isReportEscalated(r) && [4, 5, 7, 8, 13].includes(r.status_id);
+        return isReportEscalated(r) && isActiveReport(r);
     });
     const assignedReportsCount = requests.filter(req => req.staff_id && [1, 2, 4, 5].includes(req.status_id)).length;
     const inProgressReportsCount = requests.filter(req => req.status_id === 4).length;
     const pickedUpReportsCount = reports.filter(r => isReportEscalated(r) && [7, 8, 9].includes(r.status_id)).length;
     const resolvedReportsCount = reports.filter(r => isReportEscalated(r) && [6, 11].includes(r.status_id)).length;
 
-    const heatmapPoints: [number, number, number][] = activeReports
-        .map((r: any) => [
-            parseFloat(r.latitude),
-            parseFloat(r.longitude),
-            r.priority_level === 'High' ? 1.0 : 0.6
-        ]);
 
     const currentBarangayName = barangayHq?.barangay_name || currentUser?.barangay_name || currentUser?.barangay || 'San Vicente';
 
@@ -704,7 +697,7 @@ const BrgyDashboard = () => {
                             { label: 'Rescue Requests', sub: 'Awaiting barangay dispatch', value: <>{displayReportRequest}</>, to: '/brgy/rescue-requests', tone: 'text-rose-600', note: null as string | null },
                             { label: 'On Duty Personnel', sub: 'Active field officers', value: <>{activePersonnelCount}<span className="text-sm font-bold text-slate-400"> / {totalPersonnel}</span></>, to: '/brgy/personnel', tone: 'text-blue-600', note: `${availablePersonnelCount} available for call` },
                             { label: 'Ongoing Rescues', sub: 'Units deployed in field', value: <>{displayOngoingReport}</>, to: '/brgy/rescue-requests', tone: 'text-emerald-600', note: null },
-                            { label: 'Holding Facility', sub: `${dogsCount} dogs • ${catsCount} cats`, value: <>{animalsInFacilityCount}</>, to: '/brgy/holding-facility', tone: 'text-purple-600', note: `${facilityCapacityPct}% of capacity` },
+                            { label: 'Holding Place', sub: `${dogsCount} dogs • ${catsCount} cats`, value: <>{animalsInFacilityCount}</>, to: '/brgy/holding-facility', tone: 'text-purple-600', note: `${facilityCapacityPct}% of capacity` },
                             { label: 'Up for Adoption', sub: `${adoptionDogsCount} dogs • ${adoptionCatsCount} cats`, value: <>{adoptionCount}</>, to: '/brgy/adoptions', tone: 'text-amber-600', note: null },
                         ].map((c, i) => (
                             <button
@@ -783,7 +776,6 @@ const BrgyDashboard = () => {
                                     showLandmarks={true}
                                     showHQ={true}
                                     showHoldingFacilities={true}
-                                    onMapClick={(lat, lng) => setSelectedCoordinates({ lat, lng })}
                                     markers={mapMarkers}
                                     showHeatmap={false}
                                     onViewDetails={(marker) => setSelectedDetailReport(marker.rawData)}
@@ -816,7 +808,7 @@ const BrgyDashboard = () => {
                         <section className="bg-white rounded-2xl border border-gray-200/80 p-3 sm:p-4 flex flex-col gap-2.5 min-w-0">
                             <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                    <h3 className="text-sm sm:text-base font-black text-slate-900">Holding facility</h3>
+                                    <h3 className="text-sm sm:text-base font-black text-slate-900">Holding place</h3>
                                     <p className="text-xs text-slate-500 mt-0.5">
                                         <span className="font-bold text-amber-700 whitespace-nowrap">{activeHoldingAnimals.length} in custody</span> · holding period before CVO endorsement
                                     </p>
@@ -1065,10 +1057,8 @@ const BrgyDashboard = () => {
                                         showLandmarks={true}
                                         showHQ={true}
                                         showHoldingFacilities={true}
-                                        onMapClick={(lat, lng) => setSelectedCoordinates({ lat, lng })}
-                                        markers={mapMode !== 'heatmap' ? mapMarkers : mapMarkers.filter(m => m.id < 0)}
-                                        showHeatmap={mapMode !== 'pins'}
-                                        heatmapPoints={heatmapPoints}
+                                        markers={mapMarkers}
+                                        showHeatmap={false}
                                         onViewDetails={(marker) => setSelectedDetailReport(marker.rawData)}
                                         routing={getRoutingConfig()}
                                         onMarkerClick={(m) => {
@@ -1086,34 +1076,6 @@ const BrgyDashboard = () => {
                                         onDirectionsFromBrgyClick={handleDirectionsFromBrgyHall}
                                     />
 
-                                    {/* Floating Clicked Coordinates Display Badge */}
-                                    {selectedCoordinates && (
-                                        <div data-map-overlay="bottom" className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur-md px-4 py-3 rounded-2xl shadow-xl border border-amber-200/90 text-xs text-slate-800 flex items-start gap-3 transition-all animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-role text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                                                </svg>
-                                            </div>
-                                            <div className="min-w-0">
-                                                <div className="flex items-center justify-between gap-4">
-                                                    <p className="text-[10px] font-black uppercase tracking-wider text-amber-700 leading-none">Selected Location</p>
-                                                    <button 
-                                                        onClick={() => setSelectedCoordinates(null)} 
-                                                        className="text-slate-400 hover:text-slate-600 text-xs font-bold leading-none cursor-pointer p-0.5"
-                                                        title="Clear Pin"
-                                                    >
-                                                        ✕
-                                                    </button>
-                                                </div>
-                                                <div className="space-y-0.5 mt-1.5 font-mono text-[11px] text-slate-700">
-                                                    <p><span className="font-semibold text-slate-900">Latitude:</span> {selectedCoordinates.lat.toFixed(6)}</p>
-                                                    <p><span className="font-semibold text-slate-900">Longitude:</span> {selectedCoordinates.lng.toFixed(6)}</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
 
                                     {/* Overlay Controls in top right of map */}
                                     <div className="absolute top-3 right-3 z-[1000] flex items-center gap-2">
@@ -1123,26 +1085,6 @@ const BrgyDashboard = () => {
                                             <span>{mapMarkers.length} Active Pins</span>
                                         </div>
 
-                                        <div className="flex bg-white/90 backdrop-blur-md p-1 rounded-2xl text-[10px] font-black uppercase border border-white/80 shadow-md">
-                                            <button
-                                                onClick={() => setMapMode('pins')}
-                                                className={`px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${mapMode === 'pins' ? 'bg-role-strong text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/60'}`}
-                                            >
-                                                Pins
-                                            </button>
-                                            <button
-                                                onClick={() => setMapMode('heatmap')}
-                                                className={`px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${mapMode === 'heatmap' ? 'bg-role-strong text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/60'}`}
-                                            >
-                                                Heatmap
-                                            </button>
-                                            <button
-                                                onClick={() => setMapMode('both')}
-                                                className={`px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${mapMode === 'both' ? 'bg-role-strong text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/60'}`}
-                                            >
-                                                Both
-                                            </button>
-                                        </div>
 
                                         <button
                                             onClick={() => setIsMapExpanded(true)}
@@ -1527,7 +1469,7 @@ const BrgyDashboard = () => {
                                         <div>
                                             <div className="flex items-center gap-2">
                                                 <h3 className="text-[17px] font-black text-slate-900 tracking-tight leading-tight">
-                                                    Holding Facility Period
+                                                    Holding Place Period
                                                 </h3>
                                                 <span className="text-[9.5px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full shadow-3xs">
                                                     {activeHoldingAnimals.length} In Custody
@@ -1751,26 +1693,6 @@ const BrgyDashboard = () => {
                                 </div>
                             </div>
                             <div className="flex items-center justify-between sm:justify-end gap-2.5">
-                                <div className="flex bg-slate-100 p-1 rounded-2xl text-[10px] font-black uppercase border border-slate-200/70 shadow-2xs">
-                                    <button
-                                        onClick={() => setMapMode('pins')}
-                                        className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${mapMode === 'pins' ? 'bg-slate-900 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900'}`}
-                                    >
-                                        Pins
-                                    </button>
-                                    <button
-                                        onClick={() => setMapMode('heatmap')}
-                                        className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${mapMode === 'heatmap' ? 'bg-slate-900 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900'}`}
-                                    >
-                                        Heatmap
-                                    </button>
-                                    <button
-                                        onClick={() => setMapMode('both')}
-                                        className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${mapMode === 'both' ? 'bg-slate-900 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900'}`}
-                                    >
-                                        Both
-                                    </button>
-                                </div>
                                 <button
                                     onClick={() => setIsMapExpanded(false)}
                                     className="p-2.5 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600 hover:text-slate-900 active:scale-95 cursor-pointer shadow-2xs"
@@ -1863,10 +1785,8 @@ const BrgyDashboard = () => {
                                 showLandmarks={true}
                                 showHQ={true}
                                 showHoldingFacilities={true}
-                                onMapClick={(lat, lng) => setSelectedCoordinates({ lat, lng })}
-                                markers={mapMode !== 'heatmap' ? mapMarkers : mapMarkers.filter(m => m.id < 0)}
-                                showHeatmap={mapMode !== 'pins'}
-                                heatmapPoints={heatmapPoints}
+                                markers={mapMarkers}
+                                showHeatmap={false}
                                 onViewDetails={(marker) => {
                                     setIsMapExpanded(false);
                                     setSelectedDetailReport(marker.rawData);
@@ -1886,31 +1806,6 @@ const BrgyDashboard = () => {
                                 onDirectionsClick={handleDirectionsFromMe}
                                 onDirectionsFromBrgyClick={handleDirectionsFromBrgyHall}
                             />
-
-                            {/* Modal Floating Coordinates Display Badge (bottom left; steps aside for the report card on narrow maps) */}
-                            {selectedCoordinates && (
-                                <div data-map-overlay="bottom" className="absolute bottom-3 left-3 z-[990] bg-white/95 backdrop-blur-md px-3.5 py-2.5 rounded-2xl shadow-xl border border-amber-200/90 text-xs text-slate-800 flex items-start gap-2.5 transition-all animate-in fade-in slide-in-from-top-2 duration-300 max-w-[220px]">
-                                    <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-amber-500 to-role text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
-                                        <MapPin className="h-3.5 w-3.5" />
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <p className="text-[9px] font-black uppercase tracking-wider text-amber-700 leading-none truncate">Pinned Location</p>
-                                            <button 
-                                                onClick={() => setSelectedCoordinates(null)} 
-                                                className="text-slate-400 hover:text-slate-600 text-xs font-bold leading-none cursor-pointer p-0.5"
-                                                title="Clear Pin"
-                                            >
-                                                ✕
-                                            </button>
-                                        </div>
-                                        <div className="space-y-0.5 mt-1 font-mono text-[10px] text-slate-700">
-                                            <p><span className="font-semibold text-slate-900">Lat:</span> {selectedCoordinates.lat.toFixed(5)}</p>
-                                            <p><span className="font-semibold text-slate-900">Lng:</span> {selectedCoordinates.lng.toFixed(5)}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
 
                             {/* Status Legend Collapsible Toggle (Top-Right, avoids overlapping with bottom report card) */}
                             <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-[990]">
@@ -2207,7 +2102,7 @@ const BrgyDashboard = () => {
                                 >
                                     <option value={5}>Team Dispatched / In Action</option>
                                     <option value={7}>Picked Up / Animal Secured</option>
-                                    <option value={8}>Under Observation (Holding Facility)</option>
+                                    <option value={8}>Under Observation (Holding Place)</option>
                                     <option value={11}>Incident Resolved / Mission Completed</option>
                                     <option value={17}>Animal Cannot Be Found</option>
                                 </select>

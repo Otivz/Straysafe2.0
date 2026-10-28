@@ -19,7 +19,7 @@ Backend tests build throwaway SQLite databases; they must not be pointed at the 
 | Date | Area | Reported result | Source |
 |---|---|---|---|
 | 2026-10-22/24 | Map pages (picker, pins, small maps, geofence radius, error cases, phone card) | browser checks all passed at 360 to 1366 px; `test_report_edit_auth` 36/36, `test_report_visibility` 76/76, `test_app_stay_signed_in` 19/19 | map audit (deleted from the working tree in commit `5e46d00`; last version: `git show 8cb074f:STRAYSAFE_MAP_AUDIT_AND_IMPROVEMENTS.md`) (section 5) |
-| 2026-10-25 | Pet record custody permission and related claim checks | 16 permission tests and several existing suites reported passing | [CLAUDE_HANDOFF](../../CLAUDE_HANDOFF.md) |
+| 2026-10-25 | Pet record custody permission and related claim checks | 16 permission tests and several existing suites reported passing | [CLAUDE_HANDOFF](../05-operations/agents/CLAUDE_HANDOFF.md) |
 
 These are reports by earlier work sessions. Treat them as leads, not as current evidence.
 

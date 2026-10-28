@@ -271,7 +271,7 @@ export const AdoptionCertificateModal: React.FC<AdoptionCertificateModalProps> =
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="mt-2 px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer"
+                                className="mt-2 px-4 py-2 bg-[#F97316] text-white rounded-xl text-xs font-bold cursor-pointer"
                             >
                                 Back to Dossier
                             </button>

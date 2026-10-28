@@ -117,7 +117,7 @@ def create_landmark(
     if not (is_admin or is_subd_leader or is_brgy_head):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Only Barangay Head Officers, Subdivision Leaders, and Administrators can register landmarks & holding facilities."
+            detail="Access denied: Only Barangay Head Officers, Subdivision Leaders, and Administrators can register landmarks & holding places."
         )
 
     # If Subd Leader, lock to their subdivision; if Barangay Head, lock to barangay level (subdivision_id = None)
@@ -151,7 +151,7 @@ def create_landmark(
         action="CREATE_LANDMARK",
         target_table="landmarks",
         target_id=new_landmark.landmark_id,
-        description=f"Created landmark '{new_landmark.name}' (Holding Facility: {new_landmark.is_holding_facility})",
+        description=f"Created landmark '{new_landmark.name}' (Holding Place: {new_landmark.is_holding_facility})",
         request=req
     )
 

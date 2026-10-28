@@ -66,7 +66,7 @@ const OPEN_LABELS: Record<number, string> = {
     13: 'Rescue approved by the Barangay',
     5: 'A rescue team is on the way',
     6: 'The animal has been picked up',
-    7: 'In safe care at a holding facility',
+    7: 'In safe care at a holding place',
     8: 'In safe care at the Barangay impound facility',
 };
 
@@ -177,7 +177,7 @@ export function getWhereNow(report: any, stages: CaseStages, holding?: any | nul
             tone: 'safe',
             parts: facility
                 ? [{ text: 'The animal is safe at the ' }, { text: facility, strong: true }, { text: stay ? ` (in care for ${stay}).` : '.' }]
-                : [{ text: 'The animal is safe at a holding facility.' }],
+                : [{ text: 'The animal is safe at a holding place.' }],
         };
     }
     if (key === 'rescue') {

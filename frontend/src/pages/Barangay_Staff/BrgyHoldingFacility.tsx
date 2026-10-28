@@ -450,8 +450,8 @@ const BrgyHoldingFacility = () => {
             const stayDays = daysSince(stayStart(animal));
             const isEarly = stayDays < impoundStayDuration;
             const defaultNote = isEarly
-                ? `Animal officially impounded prior to stay limit (${stayDays} of ${impoundStayDuration} days elapsed; authorized by Head Officer) at ${animal.facility_name || 'holding facility'}.`
-                : `Animal officially impounded after reaching ${impoundStayDuration}-day holding stay limit at ${animal.facility_name || 'holding facility'}.`;
+                ? `Animal officially impounded prior to stay limit (${stayDays} of ${impoundStayDuration} days elapsed; authorized by Head Officer) at ${animal.facility_name || 'holding place'}.`
+                : `Animal officially impounded after reaching ${impoundStayDuration}-day holding stay limit at ${animal.facility_name || 'holding place'}.`;
             const finalNote = impoundNotes.trim() ? `${defaultNote} Notes: ${impoundNotes.trim()}` : defaultNote;
 
             await api.patch(`/holding/${animal.holding_id}`, {
@@ -539,7 +539,7 @@ const BrgyHoldingFacility = () => {
                     }
                 }
             } catch (e) {
-                console.error('Error fetching holding facilities and jurisdictions:', e);
+                console.error('Error fetching holding places and jurisdictions:', e);
             }
         };
         fetchFacilityMetadata();
@@ -600,7 +600,7 @@ const BrgyHoldingFacility = () => {
             setSelected(current => current ? (animalsRes.data || []).find((animal: HoldingAnimal) => animal.holding_id === current.holding_id) || current : null);
             setMetrics(metricsRes.data || { total: 0, need_treatment: 0, healthy: 0, nearing_expiry: 0, resolved_today: 0, needs_impoundment: 0 });
         } catch (err) {
-            console.error('Error fetching holding facility data:', err);
+            console.error('Error fetching holding place data:', err);
         } finally {
             setLoading(false);
         }
@@ -872,9 +872,9 @@ const BrgyHoldingFacility = () => {
                     <AdminNavbar
                         leftContent={
                             <div className="flex flex-col">
-                                <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Holding Facility</h1>
+                                <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Holding Place</h1>
                                 <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">
-                                    Cross-jurisdiction animal holding facilities, intake & duration tracking
+                                    Cross-jurisdiction animal holding places, intake & duration tracking
                                 </p>
                             </div>
                         }
@@ -884,7 +884,7 @@ const BrgyHoldingFacility = () => {
                         onMenuToggle={() => setIsMobileSidebarOpen(true)}
                         leftContent={
                             <div className="flex flex-col">
-                                <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Holding Facility</h1>
+                                <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Holding Place</h1>
                                 <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">
                                     Animal intake, monitoring & case resolution
                                 </p>
@@ -899,7 +899,7 @@ const BrgyHoldingFacility = () => {
                         {/* ── Heading (phones; desktop shows it in the top bar) + facility selector ── */}
                         <div className="flex flex-col md:flex-row md:items-end justify-between gap-2.5">
                             <div className="min-w-0 md:hidden">
-                                <h1 className="text-lg font-black text-gray-900 tracking-tight leading-tight">Holding Facility</h1>
+                                <h1 className="text-lg font-black text-gray-900 tracking-tight leading-tight">Holding Place</h1>
                                 <p className="text-xs font-semibold text-gray-500">Animal intake, monitoring and case resolution</p>
                             </div>
                             <div className={`grid gap-2 md:ml-auto md:flex md:items-center ${isAdmin ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
@@ -940,7 +940,7 @@ const BrgyHoldingFacility = () => {
                                 )}
                                 <div className="flex items-center gap-2">
                                     <label className="relative block flex-1 md:w-72">
-                                        <span className="sr-only">Holding facility</span>
+                                        <span className="sr-only">Holding place</span>
                                         <Building2 className="w-4 h-4 text-role-hover absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                                         <select
                                             value={selectedFacilityId}
@@ -961,7 +961,7 @@ const BrgyHoldingFacility = () => {
                                             type="button"
                                             onClick={() => navigate('/brgy/settings')}
                                             className="h-10 w-10 md:w-auto md:px-3 shrink-0 inline-flex items-center justify-center gap-1.5 bg-role-soft hover:bg-role-muted border border-role-border text-role-strong text-xs font-black rounded-xl transition-all cursor-pointer"
-                                            title="Add, edit, or remove Barangay landmarks and holding facilities"
+                                            title="Add, edit, or remove Barangay landmarks and holding places"
                                             aria-label="Manage facilities"
                                         >
                                             <Settings className="w-4 h-4" />
@@ -975,7 +975,7 @@ const BrgyHoldingFacility = () => {
                         {/* Selected facility: type, caretaker, phone, occupancy on one line */}
                         {activeFacility && (
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 bg-role-soft/50 border border-role-muted rounded-xl px-3 py-2">
-                                <span className="inline-flex items-center gap-1"><BarChart3 className="w-3.5 h-3.5 text-role-hover" /> {activeFacility.facility_type || 'Holding Facility'}</span>
+                                <span className="inline-flex items-center gap-1"><BarChart3 className="w-3.5 h-3.5 text-role-hover" /> {activeFacility.facility_type || 'Holding Place'}</span>
                                 {activeFacility.contact_person && (
                                     <span className="inline-flex items-center gap-1 min-w-0"><User className="w-3.5 h-3.5 text-role-hover shrink-0" /> <strong className="text-gray-800 truncate">{activeFacility.contact_person}</strong></span>
                                 )}
@@ -1206,7 +1206,7 @@ const BrgyHoldingFacility = () => {
                         ) : filtered.length === 0 ? (
                             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center py-20 gap-3">
                                 <PawPrint className="w-12 h-12 text-gray-300" />
-                                <p className="text-gray-400 font-semibold text-sm">No animals in holding facility.</p>
+                                <p className="text-gray-400 font-semibold text-sm">No animals in holding place.</p>
                                 <p className="text-gray-300 text-xs">Animals are automatically admitted when a rescue is marked as "Picked Up".</p>
                             </div>
                         ) : (
@@ -1291,7 +1291,7 @@ const BrgyHoldingFacility = () => {
                                                 <p className="text-[11px] text-gray-500 font-semibold flex items-center gap-1.5 min-w-0 flex-wrap">
                                                     <span className="inline-flex items-center gap-1.5 min-w-0">
                                                         <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                                        <span className="truncate">{animal.facility_name || animal.report_landmark || 'Holding facility'}</span>
+                                                        <span className="truncate">{animal.facility_name || animal.report_landmark || 'Holding place'}</span>
                                                     </span>
                                                     {animal.kennel_slot && <span className="text-gray-400">· Slot {animal.kennel_slot}</span>}
                                                     <span className="text-gray-400">· Total {formatStayDuration(animal.intake_date, animal.discharge_date, isResolved, animal.total_duration_display)}</span>

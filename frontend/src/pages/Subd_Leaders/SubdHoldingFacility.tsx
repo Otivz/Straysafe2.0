@@ -335,7 +335,11 @@ const SubdHoldingFacility = () => {
     const [animals, setAnimals] = useState<HoldingAnimal[]>([]);
     const [facilities, setFacilities] = useState<FacilityOption[]>([]);
     const [selectedFacilityId, setSelectedFacilityId] = useState<number | 'all'>('all');
-    const [tabMode, setTabMode] = useState<'active' | 'history'>('active');
+    // The subdivision does not hold animals: the page opens on the Barangay holding place. The 'active' tab (a
+    // subdivision pen) only appears while an animal is still in one from before.
+    const [tabMode, setTabMode] = useState<'active' | 'barangay' | 'history'>('barangay');
+    // Every animal at the Barangay holding place (all subdivisions of the leader's barangay)
+    const [barangayHeld, setBarangayHeld] = useState<HoldingAnimal[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState(0); // 0 = All
@@ -425,7 +429,7 @@ const SubdHoldingFacility = () => {
                     setBarangayFacilities(brgyRes.data);
                 }
             } catch (e) {
-                console.error('Error fetching subdivision holding facilities:', e);
+                console.error('Error fetching subdivision holding places:', e);
             }
         };
         fetchFacilities();
@@ -439,10 +443,15 @@ const SubdHoldingFacility = () => {
             if (subdivisionId) params.subdivision_id = subdivisionId;
             if (selectedFacilityId !== 'all') params.facility_id = selectedFacilityId;
 
-            const res = await api.get('/holding/', { params });
-            setAnimals(res.data || []);
+            const [res, brgyRes] = await Promise.allSettled([
+                api.get('/holding/', { params }),
+                // Everything held at the Barangay holding place of this leader's barangay (read-only for the leader)
+                api.get('/holding/', { params: { barangay_only: true } }),
+            ]);
+            if (res.status === 'fulfilled') setAnimals(res.value.data || []);
+            if (brgyRes.status === 'fulfilled') setBarangayHeld(brgyRes.value.data || []);
         } catch (err) {
-            console.error('Error fetching subdivision holding facility data:', err);
+            console.error('Error fetching subdivision holding place data:', err);
         } finally {
             setLoading(false);
         }
@@ -466,11 +475,26 @@ const SubdHoldingFacility = () => {
         return Boolean(a.facility_id);
     }, [facilities]);
 
+    // Animals from this subdivision now held at a Barangay holding place (not discharged, not closed): the leader
+    // follows them read-only. Held = Need Treatment, Healthy, For Adoption or Impounded, as in the analytics.
+    const isHeldAtBarangay = useCallback((a: HoldingAnimal) => {
+        const atBarangay = a.facility_type === 'barangay_facility' || Boolean(a.facility_name && a.facility_name.toLowerCase().includes('barangay'));
+        if (!atBarangay || a.discharge_date) return false;
+        if (a.report_status_id && [9, 10, 11, 12, 14, 17, 18].includes(a.report_status_id)) return false;
+        return [1, 2, 6, 8].includes(a.facility_status);
+    }, []);
+
     const activeAnimals = useMemo(() => animals.filter(isCurrentlyInSubd), [animals, isCurrentlyInSubd]);
-    const historyAnimals = useMemo(() => animals.filter(a => !isCurrentlyInSubd(a)), [animals, isCurrentlyInSubd]);
+    // Leave the earlier-pen tab once its last animal is gone
+    useEffect(() => {
+        if (tabMode === 'active' && activeAnimals.length === 0) setTabMode('barangay');
+    }, [tabMode, activeAnimals.length]);
+    // The "At Barangay" tab lists everything the Barangay holds, from every subdivision; own animals are tagged
+    const barangayAnimals = useMemo(() => barangayHeld.filter(isHeldAtBarangay), [barangayHeld, isHeldAtBarangay]);
+    const historyAnimals = useMemo(() => animals.filter(a => !isCurrentlyInSubd(a) && !isHeldAtBarangay(a)), [animals, isCurrentlyInSubd, isHeldAtBarangay]);
 
     // ── Filter Animals ─────────────────────────────────────────────────────────
-    const currentList = tabMode === 'active' ? activeAnimals : historyAnimals;
+    const currentList = tabMode === 'active' ? activeAnimals : tabMode === 'barangay' ? barangayAnimals : historyAnimals;
 
     const filtered = currentList.filter(a => {
         if (tabMode === 'active' && !showResolved && RESOLVED_IDS.has(a.facility_status)) return false;
@@ -514,7 +538,8 @@ const SubdHoldingFacility = () => {
         const healthy = activeAnimals.filter(a => a.facility_status === 2).length;
         const nearingExpiry = nearingAnimals.length;
         const needsTransfer = overdueAnimals.length;
-        const transferredCount = historyAnimals.filter(a => a.facility_type === 'barangay_facility' || a.facility_name?.toLowerCase().includes('barangay')).length;
+        // Transferred = every animal of this subdivision that went to a Barangay holding place, still there or not
+        const transferredCount = animals.filter(a => a.facility_type === 'barangay_facility' || a.facility_name?.toLowerCase().includes('barangay')).length;
 
         return {
             activeTotal: activeAnimals.length,
@@ -525,7 +550,7 @@ const SubdHoldingFacility = () => {
             pastTotal: historyAnimals.length,
             transferredToBrgy: transferredCount,
         };
-    }, [activeAnimals, historyAnimals, overdueAnimals, nearingAnimals]);
+    }, [animals, activeAnimals, historyAnimals, overdueAnimals, nearingAnimals]);
 
     // ── Open Detail Modal ──────────────────────────────────────────────────────
     const openDetail = async (animal: HoldingAnimal) => {
@@ -735,6 +760,42 @@ const SubdHoldingFacility = () => {
             color: 'bg-role-soft text-role-hover',
             border: 'border-role-muted',
         },
+    ] : tabMode === 'barangay' ? [
+        {
+            label: 'Held at Barangay',
+            value: barangayAnimals.length,
+            icon: Building2,
+            color: 'bg-role-soft text-role-hover',
+            border: 'border-role-muted',
+        },
+        {
+            label: 'Need Treatment',
+            value: barangayAnimals.filter(a => a.facility_status === 1).length,
+            icon: Pill,
+            color: 'bg-red-50 text-red-600',
+            border: 'border-red-100',
+        },
+        {
+            label: 'Healthy / Monitored',
+            value: barangayAnimals.filter(a => a.facility_status === 2).length,
+            icon: CheckCircle2,
+            color: 'bg-emerald-50 text-emerald-600',
+            border: 'border-emerald-100',
+        },
+        {
+            label: 'For Adoption',
+            value: barangayAnimals.filter(a => a.facility_status === 6).length,
+            icon: Home,
+            color: 'bg-teal-50 text-teal-600',
+            border: 'border-teal-100',
+        },
+        {
+            label: 'Impounded',
+            value: barangayAnimals.filter(a => a.facility_status === 8).length,
+            icon: AlertTriangle,
+            color: 'bg-amber-50 text-amber-600',
+            border: 'border-amber-100',
+        },
     ] : [
         {
             label: 'Total Past Records',
@@ -783,10 +844,10 @@ const SubdHoldingFacility = () => {
                     leftContent={
                         <div className="flex flex-col">
                             <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">
-                                Subdivision Holding Facility
+                                Barangay Holding Place
                             </h1>
                             <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">
-                                Temporary shelter monitoring for unclaimed & found neighborhood pets
+                                Animals held at the Barangay · view only
                             </p>
                         </div>
                     }
@@ -798,28 +859,30 @@ const SubdHoldingFacility = () => {
                         {/* ── Heading + facility selector ── */}
                         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2.5">
                             <div className="min-w-0 md:hidden">
-                                <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight leading-tight">Holding Facility</h1>
-                                <p className="text-xs font-semibold text-gray-500">Animals held in your subdivision until they go home or move to the Barangay</p>
+                                <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight leading-tight">Barangay Holding Place</h1>
+                                <p className="text-xs font-semibold text-gray-500">Every animal held at the Barangay. The subdivision does not hold animals.</p>
                             </div>
+                            {tabMode === 'active' && (
                             <label className="relative block sm:w-72 shrink-0 md:ml-auto">
-                                <span className="sr-only">Holding facility</span>
+                                <span className="sr-only">Holding place</span>
                                 <Building2 className="w-4 h-4 text-role-hover absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                                 <select
                                     value={selectedFacilityId}
                                     onChange={e => setSelectedFacilityId(e.target.value === 'all' ? 'all' : Number(e.target.value))}
                                     className="w-full h-10 pl-9 pr-8 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-800 focus:ring-2 focus:ring-role-border outline-none appearance-none cursor-pointer"
                                 >
-                                    <option value="all">All holding facilities</option>
+                                    <option value="all">All holding places</option>
                                     {facilities.map(f => (
                                         <option key={f.landmark_id} value={f.landmark_id}>{f.name}</option>
                                     ))}
                                 </select>
                                 <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                             </label>
+                            )}
                         </div>
 
                         {/* Selected facility: caretaker, phone, occupancy on one line */}
-                        {activeFacility && (
+                        {activeFacility && tabMode === 'active' && (
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 bg-role-soft/50 border border-role-muted rounded-xl px-3 py-2">
                                 <span className="inline-flex items-center gap-1 min-w-0"><User className="w-3.5 h-3.5 text-role-hover shrink-0" /> <strong className="text-gray-800 truncate">{activeFacility.contact_person || 'Subdivision Leader / Security'}</strong></span>
                                 {activeFacility.contact_number && (
@@ -828,25 +891,6 @@ const SubdHoldingFacility = () => {
                                 <span className="ml-auto inline-flex items-center gap-1 font-bold text-role-strong">
                                     Occupied <strong className="text-sm font-black">{activeOccupancy}</strong> / {activeFacility.capacity || '—'}
                                 </span>
-                            </div>
-                        )}
-
-                        {/* ── No Facilities Warning Banner ───────────────────── */}
-                        {facilities.length === 0 && !loading && (
-                            <div className="bg-role-soft rounded-2xl border border-role-border p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                <div className="flex items-center gap-3">
-                                    <AlertTriangle className="w-6 h-6 text-role-hover" />
-                                    <div>
-                                        <p className="text-xs font-black text-role-strong uppercase tracking-wider">No Designated Holding Facility Found in Subdivision</p>
-                                        <p className="text-xs text-role-strong/80 font-medium">Designate a landmark (e.g. Clubhouse Pet Pen, Guardhouse Temporary Unit) in Subdivision Settings so rescued pets can be placed here.</p>
-                                    </div>
-                                </div>
-                                <Link
-                                    to="/subd/settings"
-                                    className="px-4 py-2 bg-role hover:bg-role-hover text-white text-xs font-black rounded-xl whitespace-nowrap shadow-sm"
-                                >
-                                    Create Facility Pin
-                                </Link>
                             </div>
                         )}
 
@@ -940,10 +984,11 @@ const SubdHoldingFacility = () => {
                         )}
 
                         {/* ── Segmented tabs ── */}
-                        <div className="grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded-2xl" role="tablist">
+                        <div className={`grid ${activeAnimals.length > 0 ? 'grid-cols-3' : 'grid-cols-2'} gap-1 p-1 bg-gray-100 rounded-2xl`} role="tablist">
                             {([
-                                { key: 'active' as const, short: 'In Shelter', long: 'Currently in Shelter', count: activeAnimals.length, icon: PawPrint },
-                                { key: 'history' as const, short: 'History', long: 'Past Facility History', count: historyAnimals.length, icon: ScrollText },
+                                { key: 'barangay' as const, short: 'At Barangay', long: 'At Barangay Holding Place', count: barangayAnimals.length, icon: Building2 },
+                                ...(activeAnimals.length > 0 ? [{ key: 'active' as const, short: 'Earlier Pen', long: 'Earlier Subdivision Pen', count: activeAnimals.length, icon: PawPrint }] : []),
+                                { key: 'history' as const, short: 'History', long: 'Past Records', count: historyAnimals.length, icon: ScrollText },
                             ]).map((t) => (
                                 <button
                                     key={t.key}
@@ -1024,6 +1069,7 @@ const SubdHoldingFacility = () => {
                                         </select>
                                     </label>
 
+                                    {tabMode === 'active' && (
                                     <div>
                                         <span className="block text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1">Stay limit (days)</span>
                                         <div className="flex items-center h-10 bg-white rounded-xl border border-role-border overflow-hidden w-full">
@@ -1058,6 +1104,7 @@ const SubdHoldingFacility = () => {
                                             </button>
                                         </div>
                                     </div>
+                                    )}
 
                                     {tabMode === 'active' && (
                                         <label className="flex items-center gap-2.5 h-10 sm:mt-5 px-3 rounded-xl bg-gray-50 border border-gray-200 text-sm font-semibold text-gray-700 cursor-pointer select-none">
@@ -1077,20 +1124,24 @@ const SubdHoldingFacility = () => {
                         {/* ── Animals Grid (Modern Barangay-Aligned Card Design) ── */}
                         {loading ? (
                             <div className="p-12 text-center text-gray-400 font-bold">
-                                Loading holding facility records...
+                                Loading holding place records...
                             </div>
                         ) : filtered.length === 0 ? (
                             <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center space-y-3">
-                                <div className="flex justify-center text-gray-300">{tabMode === 'active' ? <PawPrint className="w-10 h-10" /> : <ScrollText className="w-10 h-10" />}</div>
+                                <div className="flex justify-center text-gray-300">{tabMode === 'active' ? <PawPrint className="w-10 h-10" /> : tabMode === 'barangay' ? <Building2 className="w-10 h-10" /> : <ScrollText className="w-10 h-10" />}</div>
                                 <p className="text-base font-black text-gray-700">
                                     {tabMode === 'active'
                                         ? 'No animals currently held in the subdivision shelter'
-                                        : 'No past or transferred animals found in history'}
+                                        : tabMode === 'barangay'
+                                            ? 'No animals from your subdivision are at the Barangay holding place'
+                                            : 'No past or transferred animals found in history'}
                                 </p>
                                 <p className="text-xs text-gray-400">
                                     {tabMode === 'active'
                                         ? 'Animals admitted to the subdivision shelter or secured here will appear here.'
-                                        : 'Animals transferred to Barangay facilities or resolved will be archived in this history view.'}
+                                        : tabMode === 'barangay'
+                                            ? 'Animals your subdivision transferred to the Barangay appear here while they are held there. You can follow their status; the Barangay manages their care.'
+                                            : 'Animals transferred to Barangay facilities or resolved will be archived in this history view.'}
                                 </p>
                             </div>
                         ) : (
@@ -1143,9 +1194,14 @@ const SubdHoldingFacility = () => {
                                                         <span className="font-mono font-black">#{animal.report_id.toString().padStart(4, '0')}</span>
                                                         <span className="truncate opacity-90">{animal.report_category || 'Temporary Holding'}</span>
                                                     </span>
-                                                    {isTransferredToBrgy ? (
+                                                    {isTransferredToBrgy && tabMode !== 'barangay' ? (
                                                         <span className="shrink-0 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide bg-white/95 text-role-strong">
                                                             In Brgy Holding
+                                                        </span>
+                                                    ) : tabMode === 'barangay' ? (
+                                                        /* At Barangay tab: the animal's live status there */
+                                                        <span className={`shrink-0 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide border ${statusMeta.color}`}>
+                                                            {statusMeta.name}
                                                         </span>
                                                     ) : animal.is_escalated ? (
                                                         <span className="shrink-0 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide bg-amber-500 text-white inline-flex items-center gap-1">
@@ -1168,6 +1224,11 @@ const SubdHoldingFacility = () => {
                                                     <p className="text-xs text-gray-500 font-semibold truncate">
                                                         {[animal.animal_type, animal.breed || 'Unknown breed', animal.color || 'Unknown color'].filter(Boolean).join(' · ')}
                                                     </p>
+                                                    {tabMode === 'barangay' && (
+                                                        <p className={`mt-0.5 text-[10px] font-black uppercase tracking-wide ${animal.subdivision_id === subdivisionId ? 'text-role-hover' : 'text-gray-400'}`}>
+                                                            {animal.subdivision_id === subdivisionId ? 'From your subdivision' : 'From another subdivision'}
+                                                        </p>
+                                                    )}
                                                 </div>
 
                                                 {/* Intake, stay at the current facility, and where it is */}
@@ -1187,7 +1248,7 @@ const SubdHoldingFacility = () => {
                                                 </div>
                                                 <p className="text-[11px] text-gray-500 font-semibold flex items-center gap-1.5 min-w-0">
                                                     <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                                    <span className="truncate">{animal.facility_name || animal.report_landmark || 'Holding facility'}</span>
+                                                    <span className="truncate">{animal.facility_name || animal.report_landmark || 'Holding place'}</span>
                                                     {animal.kennel_slot && <span className="shrink-0 text-gray-400">· Slot {animal.kennel_slot}</span>}
                                                     <span className="shrink-0 text-gray-400">· Total {formatStayDuration(animal.intake_date, animal.discharge_date, isResolved, animal.total_duration_display)}</span>
                                                 </p>
@@ -1241,7 +1302,7 @@ const SubdHoldingFacility = () => {
                                                                 ? 'bg-red-600 hover:bg-red-700 text-white'
                                                                 : 'bg-role-soft hover:bg-role-muted text-role-strong border border-role-border'
                                                         }`}
-                                                        title="Escalate & transfer animal to Barangay Holding Facility"
+                                                        title="Escalate & transfer animal to Barangay Holding Place"
                                                     >
                                                         <Truck className="w-3.5 h-3.5" />
                                                         Escalate
@@ -1343,9 +1404,9 @@ const SubdHoldingFacility = () => {
                                             <div className="bg-role-soft border border-role-border rounded-xl p-3 flex items-start gap-2.5">
                                                 <Info className="w-4 h-4 text-role-hover shrink-0 mt-0.5" />
                                                 <div className="text-xs text-role-strong">
-                                                    <p className="font-black">Past facility record (read-only)</p>
+                                                    <p className="font-black">{isHeldAtBarangay(selected) ? 'At the Barangay holding place (view only)' : 'Past facility record (read-only)'}</p>
                                                     <p className="text-role-strong/90 font-medium">
-                                                        This animal is now at <strong>{selected.facility_name || 'Barangay Facility'}</strong>. Daily care and disposition are managed by the receiving shelter.
+                                                        {isHeldAtBarangay(selected) ? 'This animal is currently held at ' : 'This animal is now at '}<strong>{selected.facility_name || 'Barangay Facility'}</strong>. Daily care and disposition are managed by the receiving shelter.
                                                     </p>
                                                 </div>
                                             </div>
@@ -1411,7 +1472,9 @@ const SubdHoldingFacility = () => {
                                                 <span className="text-gray-600">
                                                     Intake <strong className="text-gray-900">{formatDate(selected.intake_date)}</strong> · Limit <strong className="text-gray-900">{impoundStayDuration} days</strong>
                                                 </span>
-                                                {isResolved ? (
+                                                {isHeldAtBarangay(selected) ? (
+                                                    <span className="px-2 py-0.5 rounded-lg bg-role-soft border border-role-border text-role-strong font-black">In Barangay shelter</span>
+                                                ) : isResolved ? (
                                                     <span className="font-bold text-gray-500">Completed</span>
                                                 ) : isSelectedTransferred ? (
                                                     <span className="px-2 py-0.5 rounded-lg bg-role-soft border border-role-border text-role-strong font-black">In Barangay shelter</span>
@@ -2055,11 +2118,11 @@ const SubdHoldingFacility = () => {
                             {/* Target Barangay Facility Selector */}
                             <div>
                                 <label className="text-[11px] font-black text-gray-700 uppercase tracking-wider block mb-1.5">
-                                    Destination Barangay Holding Facility
+                                    Destination Barangay Holding Place
                                 </label>
                                 {barangayFacilities.length === 0 ? (
                                     <div className="p-3 bg-role-soft rounded-xl border border-role-border text-xs text-role-strong">
-                                        No specific Barangay holding facility landmark detected. The system will route to the default Barangay Main Holding Shelter.
+                                        No specific Barangay holding place landmark detected. The system will route to the default Barangay Main Holding Shelter.
                                     </div>
                                 ) : (
                                     <select
@@ -2171,7 +2234,7 @@ const SubdHoldingFacility = () => {
                                     Same Procedure as Incident Report Escalation
                                 </p>
                                 <p className="text-[11px] text-role-strong/90 leading-relaxed font-medium">
-                                    Once escalated, an official Rescue & Pickup Mission with Endorsement is forwarded to Barangay Operations. The animal remains safely in your subdivision holding facility until Barangay responders accept the mission and pick up the animal.
+                                    Once escalated, an official Rescue & Pickup Mission with Endorsement is forwarded to Barangay Operations. The animal remains safely in your subdivision holding place until Barangay responders accept the mission and pick up the animal.
                                 </p>
                             </div>
                         </div>

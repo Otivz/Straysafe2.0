@@ -2,11 +2,11 @@
 
 Status: Current for local development; **no production operations exist yet** (baseline written 2026-10-25 from repository evidence)
 
-Only a local development setup is documented and has been used. Hosting, monitoring, incident response and recovery for a public deployment are planned in [DEPLOYMENT_GUIDE](../../DEPLOYMENT_GUIDE.md) and are **not started**.
+Only a local development setup is documented and has been used. Hosting, monitoring, incident response and recovery for a public deployment are planned in [DEPLOYMENT_GUIDE](DEPLOYMENT_GUIDE.md) and are **not started**.
 
 ## Setup (local)
 
-The step-by-step instructions are in [setup.md](../../setup.md). Verified against the code on 2026-10-25, these parts of it are **stale**: it tells you to set `STRAYSAFE_DB_URL` (the API reads `DATABASE_URL`) and to import `Database.txt` (the schema file in the repository is `Database3.3.txt`; the API also creates missing tables itself at startup with `create_all`). Follow `setup.md` for the Python, Node and phone-testing steps, and use the names below for configuration.
+The step-by-step instructions are in [setup.md](setup.md). Verified against the code on 2026-10-25, these parts of it are **stale**: it tells you to set `STRAYSAFE_DB_URL` (the API reads `DATABASE_URL`) and to import `Database.txt` (the schema file in the repository is `Database3.3.txt`; the API also creates missing tables itself at startup with `create_all`). Follow `setup.md` for the Python, Node and phone-testing steps, and use the names below for configuration.
 
 | Item | Requirement | Evidence |
 |---|---|---|
@@ -25,7 +25,7 @@ Values are never recorded here. `.env.example` lists the names it knows; the cod
 
 ## Run (local)
 
-Three processes ([setup.md](../../setup.md)):
+Three processes ([setup.md](setup.md)):
 
 1. API: from `backend/`, `..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000` (add `--reload` while coding).
 2. AI worker: from `backend/`, `..\.venv\Scripts\python.exe -m app.ai_worker`. If it is not running, the API runs AI jobs itself, more slowly (`AI_WORKER_EMBEDDED` controls this).
@@ -52,7 +52,7 @@ Backend tests use throwaway SQLite files, not the application database. Do not p
 ## Build and release
 
 - **Android app:** [`.github/workflows/build-apk.yml`](../../.github/workflows/build-apk.yml) builds a **debug** APK on manual run and on pushes that change `frontend/`. It needs the repository variable `VITE_API_BASE_URL` and the secrets for the browser-side keys. The APK is an artifact kept for 30 days. A signed release build and store publishing: **none**.
-- **Web client and API:** no pipeline, container image or hosting configuration exists in the repository. Release is **manual and undocumented** beyond [DEPLOYMENT_GUIDE](../../DEPLOYMENT_GUIDE.md) (a plan).
+- **Web client and API:** no pipeline, container image or hosting configuration exists in the repository. Release is **manual and undocumented** beyond [DEPLOYMENT_GUIDE](DEPLOYMENT_GUIDE.md) (a plan).
 - **Branching:** work is merged through pull requests (up to #92 on 2026-10-24). Branch protection and required checks: **Unverified** (a GitHub setting, not visible in the repository).
 
 ## Observability
@@ -74,7 +74,7 @@ Backend tests use throwaway SQLite files, not the application database. Do not p
 
 **No automated backup exists.** The database and the local `backend/uploads/` folder live on one development machine.
 
-- Planned procedure before any deployment: [DEPLOYMENT_GUIDE](../../DEPLOYMENT_GUIDE.md), phase 0 (database dump, uploads copy, `.env` copy including `ID_ENCRYPTION_KEY`, a commit).
+- Planned procedure before any deployment: [DEPLOYMENT_GUIDE](DEPLOYMENT_GUIDE.md), phase 0 (database dump, uploads copy, `.env` copy including `ID_ENCRYPTION_KEY`, a commit).
 - Restore procedure: **not written and not tested**.
 - Data-repair scripts in `backend/scripts/` (for example `repair_adopted_animal_whereabouts.py`, `backfill_*`) change live data. Take a dump first and read the script before running it.
 - Media on Cloudinary has no undo outside Cloudinary's own account settings (**Unverified**).

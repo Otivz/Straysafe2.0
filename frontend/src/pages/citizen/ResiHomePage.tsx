@@ -1724,7 +1724,7 @@ const ResiHomePage = () => {
 
                                 <button
                                     onClick={handleAcknowledgeWarning}
-                                    className="w-full py-4 bg-[#1a1208] hover:bg-black text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl active:scale-[0.98]"
+                                    className="w-full py-4 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl active:scale-[0.98]"
                                 >
                                     ACKNOWLEDGE NOTICE
                                 </button>

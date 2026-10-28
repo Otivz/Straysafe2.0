@@ -1501,7 +1501,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                                     type="button"
                                                     onClick={() => handleSearchAddress()}
                                                     disabled={isSearchingAddress || !searchQuery.trim()}
-                                                    className="px-3.5 py-2 bg-gray-900 hover:bg-black disabled:opacity-40 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 shadow-xs"
+                                                    className="px-3.5 py-2 bg-[#F97316] hover:bg-[#EA580C] disabled:opacity-40 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 shadow-xs"
                                                 >
                                                     {isSearchingAddress ? 'Searching...' : 'Search'}
                                                 </button>

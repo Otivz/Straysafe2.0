@@ -378,7 +378,7 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
                                 type="button"
                                 onClick={() => void handleLookup()}
                                 disabled={!lookupInput.trim() || isLookingUp}
-                                className="px-4 py-2.5 bg-gray-900 hover:bg-black text-white text-xs font-black uppercase tracking-wider rounded-2xl disabled:opacity-50 cursor-pointer"
+                                className="px-4 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-2xl disabled:opacity-50 cursor-pointer"
                             >
                                 {isLookingUp ? 'Checking...' : 'Add'}
                             </button>

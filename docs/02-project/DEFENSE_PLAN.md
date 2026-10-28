@@ -22,7 +22,7 @@ Fill in the blanks marked **[ ]** once the panel confirms them. Facts about the 
 | Chapter 1 | Rated 8.4/10; 4 statements don't match the system | Apply the copy-paste fixes in [MANUSCRIPT_CHAPTER1_CHECK_2026-10-26.md](MANUSCRIPT_CHAPTER1_CHECK_2026-10-26.md) |
 | AI accuracy (for Chapter 4) | **Not measured yet**: the test tools exist, **0 of about 170 test photos** collected | Collect, label and run them (section 3), or say clearly that it is the next step |
 | TAM and ISO/IEC 25010 survey results | **[ ]** status unknown here | If not done, present the instrument and procedure, not results |
-| Hosting | Runs on a laptop; cloud deployment (Aiven, Render, Vercel) planned, not done | Demo locally; mention the plan ([DEPLOYMENT_GUIDE](../../DEPLOYMENT_GUIDE.md)) |
+| Hosting | Runs on a laptop; cloud deployment (Aiven, Render, Vercel) planned, not done | Demo locally; mention the plan ([DEPLOYMENT_GUIDE](../05-operations/DEPLOYMENT_GUIDE.md)) |
 | Priority gap | Residents' app can still send a priority; the manuscript says residents don't set it | Either let the developer fix it before the freeze, or use the reworded manuscript text |
 
 ---
@@ -101,7 +101,7 @@ Prepare steps 7–10 **before** the defense (a case already in holding and an ad
 
 ## 6. Demo setup on the day
 
-**Start the system** (from [setup.md](../../setup.md); three terminals):
+**Start the system** (from [setup.md](../05-operations/setup.md); three terminals):
 1. Backend: `cd backend` → `..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000` (no `--reload` for the demo).
 2. AI worker: `cd backend` → `..\.venv\Scripts\python.exe -m app.ai_worker`.
 3. Website: `cd frontend` → `npm run dev:https` (the phone's camera, QR scanner and GPS need https).

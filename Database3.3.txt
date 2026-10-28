@@ -1817,6 +1817,67 @@ CREATE TABLE `email_logs` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================================================
+-- TABLE: OWNER FOLLOW-UPS (3-day observation of a complaint about a registered pet)
+-- [NEW 2026-10-28] docs/06-future-proposals/SUBDIVISION_OWNER_FOLLOW_UP_PLAN.md
+-- The API also creates these at startup (Base.metadata.create_all) if they are missing.
+-- The observation length is the system_settings row 'owner_followup_days' (default 3 when absent).
+-- =============================================================================
+CREATE TABLE `owner_followups` (
+  `followup_id` int NOT NULL AUTO_INCREMENT,
+  `report_id` int NOT NULL,
+  `pet_id` int DEFAULT NULL,
+  `owner_user_id` int DEFAULT NULL,                                     -- owner account at the start, if any
+  `owner_name` varchar(150) DEFAULT NULL,                               -- snapshot at the start
+  `owner_phone` varchar(30) DEFAULT NULL,
+  `opened_by` int DEFAULT NULL,
+  `opened_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `due_at` datetime NOT NULL,
+  `status` enum('Observing','Owner Complied','Closed by Leader','Escalated','Report Closed') NOT NULL DEFAULT 'Observing',
+  `acknowledged_at` datetime DEFAULT NULL,
+  `acknowledged_via` varchar(10) DEFAULT NULL,                          -- App / Phone
+  `acknowledged_by` int DEFAULT NULL,
+  `acknowledgement_note` text,
+  `reminder_sent_at` datetime DEFAULT NULL,
+  `due_notified_at` datetime DEFAULT NULL,
+  `extended_at` datetime DEFAULT NULL,                                  -- one extension at most
+  `extended_by` int DEFAULT NULL,
+  `extension_reason` text,
+  `closed_by` int DEFAULT NULL,
+  `closed_at` datetime DEFAULT NULL,
+  `closing_outcome` varchar(60) DEFAULT NULL,
+  `closing_reason` text,
+  PRIMARY KEY (`followup_id`),
+  KEY `ix_owner_followups_followup_id` (`followup_id`),
+  KEY `ix_owner_followups_report_id` (`report_id`),
+  KEY `ix_owner_followups_owner_user_id` (`owner_user_id`),
+  KEY `ix_owner_followups_status` (`status`),
+  CONSTRAINT `fk_owner_followups_report` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_owner_followups_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_owner_followups_owner` FOREIGN KEY (`owner_user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_owner_followups_opened_by` FOREIGN KEY (`opened_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_owner_followups_ack_by` FOREIGN KEY (`acknowledged_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_owner_followups_extended_by` FOREIGN KEY (`extended_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_owner_followups_closed_by` FOREIGN KEY (`closed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `owner_followup_contacts` (
+  `contact_id` int NOT NULL AUTO_INCREMENT,
+  `followup_id` int NOT NULL,
+  `contacted_by` int DEFAULT NULL,
+  `contacted_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `method` enum('Phone','In person','In-app','Owner update','Repeated incident') NOT NULL,
+  `note` text NOT NULL,
+  `photo_url` varchar(500) DEFAULT NULL,                                -- an owner update's photo
+  `related_report_id` int DEFAULT NULL,                                 -- a repeated incident
+  PRIMARY KEY (`contact_id`),
+  KEY `ix_owner_followup_contacts_contact_id` (`contact_id`),
+  KEY `ix_owner_followup_contacts_followup_id` (`followup_id`),
+  CONSTRAINT `fk_owner_followup_contacts_followup` FOREIGN KEY (`followup_id`) REFERENCES `owner_followups` (`followup_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_owner_followup_contacts_user` FOREIGN KEY (`contacted_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_owner_followup_contacts_report` FOREIGN KEY (`related_report_id`) REFERENCES `reports` (`report_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================================================
 -- END OF INITIALIZATION SCRIPT
 -- =============================================================================
 SET FOREIGN_KEY_CHECKS = 1;

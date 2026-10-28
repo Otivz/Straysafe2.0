@@ -95,7 +95,7 @@ const LandingPage = () => {
             capabilities: [
                 'Receive and approve endorsed rescue requests from subdivision leaders',
                 'Coordinate field dispatch, responder arrival, and humane animal handling',
-                'Oversee holding facility intake, health observation, and feeding logs',
+                'Oversee holding place intake, health observation, and feeding logs',
                 'Verify pet ownership claims using vaccination cards and veterinary proof',
                 'Manage the 5-stage adoption pipeline and generate verified certificates'
             ]
@@ -140,7 +140,7 @@ const LandingPage = () => {
             step: '03',
             role: 'Barangay Personnel',
             title: 'Coordinate Dispatch & Animal Care',
-            desc: 'Verified cases requiring official response are endorsed to the Barangay. Staff approve rescue requests, coordinate field dispatch, safely secure the animal, and log intake into a holding facility.',
+            desc: 'Verified cases requiring official response are endorsed to the Barangay. Staff approve rescue requests, coordinate field dispatch, safely secure the animal, and log intake into a holding place.',
             tags: ['Rescue Dispatch', 'Humane Transport', 'Holding Intake']
         },
         {
@@ -202,8 +202,8 @@ const LandingPage = () => {
         },
         {
             icon: Landmark,
-            title: 'Holding Facility Oversight',
-            description: 'Real-time tracking of holding facility capacity, mandatory observation windows, feeding logs, and health status for captured animals.'
+            title: 'Holding Place Oversight',
+            description: 'Real-time tracking of holding place capacity, mandatory observation windows, feeding logs, and health status for captured animals.'
         },
         {
             icon: Heart,
@@ -422,7 +422,7 @@ const LandingPage = () => {
                                 </div>
 
                                 <div className="flex items-center justify-between text-[10px] text-stone-500 pt-1 border-t border-stone-100">
-                                    <span>Holding facility reserved</span>
+                                    <span>Holding place reserved</span>
                                     <span className="text-emerald-600 font-semibold">Leader Endorsed</span>
                                 </div>
                             </div>
@@ -536,7 +536,7 @@ const LandingPage = () => {
                             Barangay Action & Care
                         </h3>
                         <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
-                            Barangay personnel dispatch responders, manage humane holding facilities, coordinate veterinary observation, process owner claims, and oversee transparent adoption.
+                            Barangay personnel dispatch responders, manage humane holding places, coordinate veterinary observation, process owner claims, and oversee transparent adoption.
                         </p>
                     </div>
                 </div>
@@ -809,7 +809,7 @@ const LandingPage = () => {
                             Looking to Adopt a Rescued Pet?
                         </h3>
                         <p className="text-xs sm:text-sm text-orange-50 leading-relaxed">
-                            Browse verified shelter pets currently in barangay holding facilities that are medically cleared and waiting for a safe home.
+                            Browse verified shelter pets currently in barangay holding places that are medically cleared and waiting for a safe home.
                         </p>
                     </div>
                     <div className="shrink-0 w-full sm:w-auto">

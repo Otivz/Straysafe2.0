@@ -75,3 +75,6 @@ ai_test_set/photos/**
 !ai_test_set/photos/*/
 !ai_test_set/photos/*/.gitkeep
 ai_test_set/disagreements.csv
+
+# Local working files (review screenshots, logs, one-off checks); never committed
+/scratch/

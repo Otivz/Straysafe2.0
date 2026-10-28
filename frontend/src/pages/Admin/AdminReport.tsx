@@ -1475,7 +1475,7 @@ const AdminReport = () => {
                                                         const initLng = rawInitLng != null ? parseFloat(String(rawInitLng)) : (viewReport.longitude != null ? parseFloat(String(viewReport.longitude)) : SELERA_DEFAULT_CENTER[1]);
                                                         const hadHoldingHistory = viewReport.history?.some((h: any) => 
                                                             [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
-                                                            (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
+                                                            (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                                             (h.action && h.action.toLowerCase().includes('holding'))
                                                         ) || Boolean(viewReport.facility_id) || Boolean(viewReport.facility);
                                                         const histFacLat = SAN_VICENTE_HQ[0];

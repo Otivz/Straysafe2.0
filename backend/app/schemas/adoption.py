@@ -221,7 +221,7 @@ class AdoptionCertificateSendRequest(BaseModel):
 class AdoptionHandoverScheduleRequest(BaseModel):
     handover_date: LocalDateTime
     handover_time: Optional[str] = "10:00 AM"
-    handover_location: Optional[str] = "Barangay Holding Facility"
+    handover_location: Optional[str] = "Barangay Holding Place"
     assigned_staff: Optional[str] = None
     assigned_staff_id: Optional[int] = None
     notes: Optional[str] = None
@@ -466,7 +466,7 @@ class AdoptionHandoverCompleteRequest(BaseModel):
     receiving_adopter: Optional[str] = None
     assigned_personnel: Optional[str] = None
     animal_condition: Optional[str] = "Healthy & Active"
-    handover_location: Optional[str] = "Barangay Holding Facility"
+    handover_location: Optional[str] = "Barangay Holding Place"
     handover_photo_url: Optional[str] = None
     notes: Optional[str] = None
     documents_verified: bool = True

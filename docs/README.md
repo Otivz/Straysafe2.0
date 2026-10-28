@@ -44,38 +44,44 @@ Status values: **Current** (matches the code when last checked), **Reference** (
 | [02-project/DEFENSE_PLAN.md](02-project/DEFENSE_PLAN.md) | Current | Capstone defense plan: roles, countdown, outline, demo script, risks, panel questions |
 | [02-project/MANUSCRIPT_CHAPTER1_CHECK_2026-10-26.md](02-project/MANUSCRIPT_CHAPTER1_CHECK_2026-10-26.md) | Current | Manuscript Chapter 1 (STRAYSAFEEE1.pdf) checked against the system, rated 8.4/10 |
 | [03-development/audits/ADOPTION_CHAT_ISOLATION_AUDIT_2026-10-25.md](03-development/audits/ADOPTION_CHAT_ISOLATION_AUDIT_2026-10-25.md) | Current | Chat isolation findings, fixed 2026-10-25; duplicate-thread merge still to run |
-| [03-development/audits/STRAYSAFEEE1_SYSTEM_ALIGNMENT_2026-10-26.md](03-development/audits/STRAYSAFEEE1_SYSTEM_ALIGNMENT_2026-10-26.md) | Current | Chapter 1 compared with current code; manuscript corrections, priority/claim implementation gaps, and unverified research claims |
+| [03-development/audits/HEATMAP_AUDIT_2026-10-27.md](03-development/audits/HEATMAP_AUDIT_2026-10-27.md) | Current | Heat map findings and five-phase checklist; Phases 0 and 1 done |
+| [01-system/HEATMAP_RULES.md](01-system/HEATMAP_RULES.md) | Current | Rules for pins, heat and hotspots (statuses, 50 m / 3 / 5 thresholds, original sighting) |
+| `03-development/audits/STRAYSAFEEE1_SYSTEM_ALIGNMENT_2026-10-26.md` | Missing | Listed here before but the file does not exist in the repository or its history; Chapter 1 compared with current code; manuscript corrections, priority/claim implementation gaps, and unverified research claims |
 | [05-operations/README.md](05-operations/README.md) | Current | Local setup, run, validate, build; deployment, monitoring and recovery are not set up |
 | [05-operations/LOCAL_NETWORK_IP_AND_APK_SETUP_GUIDE.md](05-operations/LOCAL_NETWORK_IP_AND_APK_SETUP_GUIDE.md) | Current | Guide for finding PC IP and changing address in the APK without rebuilds |
-| [AI_TECHNOLOGIES.md](AI_TECHNOLOGIES.md) | Reference | AI technology notes; last verified against code: Unverified |
-| [NOTIFICATION_UI_IMPROVEMENTS.md](NOTIFICATION_UI_IMPROVEMENTS.md) | Reference | Notification panel changes |
+| [AI_TECHNOLOGIES.md](01-system/AI_TECHNOLOGIES.md) | Reference | AI technology notes; last verified against code: Unverified |
+| [NOTIFICATION_UI_IMPROVEMENTS.md](03-development/implementation-reports/NOTIFICATION_UI_IMPROVEMENTS.md) | Reference | Notification panel changes |
 | [Adoption details UI change record](05-operations/agents/feature-updates/2026-10-25_1347_adoption-details-ui.md) | Reference | Initial tabbed redesign, compact assignments, certificate viewer, and browser evidence |
 | [Adoption lifecycle without sideways scrolling](05-operations/agents/feature-updates/2026-10-25_1354_lifecycle-no-sideways-scroll.md) | Current | Wrapping lifecycle stages at every screen width; extends the adoption details redesign |
-| [ERD/](ERD/00_ERD_MODULE_OVERVIEW.md) | Reference | Entity-relationship diagrams and database design; match with the ORM is Unverified |
-| [DFD/](DFD/00_DFD_OVERVIEW.md) | Reference | Data-flow diagrams (context, level 1, level 2) and review notes |
+| [ERD/](01-system/ERD/00_ERD_MODULE_OVERVIEW.md) | Reference | Entity-relationship diagrams and database design; match with the ORM is Unverified |
+| [DFD/](01-system/DFD/00_DFD_OVERVIEW.md) | Reference | Data-flow diagrams (context, level 1, level 2) and review notes |
 | [06-future-proposals/TUNNEL_INTEGRATION_RESEARCH_AND_PLANNING.md](06-future-proposals/TUNNEL_INTEGRATION_RESEARCH_AND_PLANNING.md) | Reference | Tunnel integration research, mobile compatibility, and implementation plan |
+| [06-future-proposals/LATE_REPORTS_FOR_CLOSED_CASES_PLAN.md](06-future-proposals/LATE_REPORTS_FOR_CLOSED_CASES_PLAN.md) | Reference | Plan only: link a late report to a case closed or impounded within 7 days; leader decides |
+| [06-future-proposals/SUBDIVISION_OWNER_FOLLOW_UP_PLAN.md](06-future-proposals/SUBDIVISION_OWNER_FOLLOW_UP_PLAN.md) | Reference | Phase 1 (backend) built; leader card (Phase 2) next, a static UI preview shows meanwhile: for a complaint about a registered pet, the leader contacts the owner and observes for 3 days, then resolves or escalates |
 
-### At the repository root (not yet moved under `docs/`)
+### Moved from the repository root (2026-10-27)
+
+These were loose files in the repository root; they were moved with `git mv` (history kept) and their links updated. Change records written before the move still name the old root paths.
 
 | Document | Status | Notes |
 |---|---|---|
-| [setup.md](../setup.md) | Needs update | Names `STRAYSAFE_DB_URL` and `Database.txt`; see [operations](05-operations/README.md) |
-| [DEPLOYMENT_GUIDE.md](../DEPLOYMENT_GUIDE.md) | Current (plan) | Phased plan: Aiven, Cloudinary, Render, Vercel; nothing deployed |
-| [tunnel.md](../tunnel.md) | Current | Active Cloudflare tunnel URL, setup steps, mobile connection instructions |
+| [05-operations/setup.md](05-operations/setup.md) | Needs update | Names `STRAYSAFE_DB_URL` and `Database.txt`; see [operations](05-operations/README.md) |
+| [05-operations/DEPLOYMENT_GUIDE.md](05-operations/DEPLOYMENT_GUIDE.md) | Current (plan) | Phased plan: Aiven, Cloudinary, Render, Vercel; nothing deployed |
+| [05-operations/tunnel.md](05-operations/tunnel.md) | Current | Active Cloudflare tunnel URL, setup steps, mobile connection instructions |
 | `STRAYSAFE_MAP_AUDIT_AND_IMPROVEMENTS.md` | Deleted | Removed in commit `5e46d00`; last version: `git show 8cb074f:STRAYSAFE_MAP_AUDIT_AND_IMPROVEMENTS.md`. Cited by the project and testing records as history |
-| [CHAPTER_1_2_SYSTEM_CHECK.md](../CHAPTER_1_2_SYSTEM_CHECK.md) | Reference | Older manuscript version; superseded for Chapter 1 by the 2026-10-26 check |
-| [ANALYTICS_SPECIFICATION.md](../ANALYTICS_SPECIFICATION.md) | Current | Implemented dashboards (updated 2026-10-24) |
-| [AI_TODO.md](../AI_TODO.md) | Current | AI status and remaining work (2026-10-20) |
-| [MULTI_ANIMAL_REPORT_PLAN.md](../MULTI_ANIMAL_REPORT_PLAN.md) | Current | Implemented 2026-10-20 |
-| [PET_RECORD_DUPLICATE_PREVENTION_PLAN.md](../PET_RECORD_DUPLICATE_PREVENTION_PLAN.md) | Current | Implemented 2026-10-15 |
-| [PUSH_NOTIFICATION_IMPLEMENTATION.md](../PUSH_NOTIFICATION_IMPLEMENTATION.md) | Current | Web push implemented; Android push not started |
-| [LIVE_GPS_RESPONDER_TRACKING_PLAN.md](../LIVE_GPS_RESPONDER_TRACKING_PLAN.md) | Reference | Plan only, nothing built; belongs in `06-future-proposals/` |
-| [SYSTEM_PRESENTATION_FLOW.md](../SYSTEM_PRESENTATION_FLOW.md) | Reference | Presentation script; match with the code Unverified |
-| [CLAUDE_HANDOFF.md](../CLAUDE_HANDOFF.md) | Reference | Session handoff, 2026-10-25 |
-| `tech_stack_details.txt`, `architectural_design.txt` | Needs update | Disagree with the code (see [project](02-project/README.md)) |
-| [message.md](../message.md) | Unknown | Not reviewed |
+| [02-project/CHAPTER_1_2_SYSTEM_CHECK.md](02-project/CHAPTER_1_2_SYSTEM_CHECK.md) | Reference | Older manuscript version; superseded for Chapter 1 by the 2026-10-26 check |
+| [01-system/ANALYTICS_SPECIFICATION.md](01-system/ANALYTICS_SPECIFICATION.md) | Current | Implemented dashboards (updated 2026-10-24) |
+| [03-development/AI_TODO.md](03-development/AI_TODO.md) | Current | AI status and remaining work (2026-10-20) |
+| [03-development/implementation-reports/MULTI_ANIMAL_REPORT_PLAN.md](03-development/implementation-reports/MULTI_ANIMAL_REPORT_PLAN.md) | Current | Implemented 2026-10-20 |
+| [03-development/implementation-reports/PET_RECORD_DUPLICATE_PREVENTION_PLAN.md](03-development/implementation-reports/PET_RECORD_DUPLICATE_PREVENTION_PLAN.md) | Current | Implemented 2026-10-15 |
+| [03-development/implementation-reports/PUSH_NOTIFICATION_IMPLEMENTATION.md](03-development/implementation-reports/PUSH_NOTIFICATION_IMPLEMENTATION.md) | Current | Web push implemented; Android push not started |
+| [06-future-proposals/LIVE_GPS_RESPONDER_TRACKING_PLAN.md](06-future-proposals/LIVE_GPS_RESPONDER_TRACKING_PLAN.md) | Reference | Plan only, nothing built |
+| [02-project/SYSTEM_PRESENTATION_FLOW.md](02-project/SYSTEM_PRESENTATION_FLOW.md) | Reference | Presentation script; match with the code Unverified |
+| [05-operations/agents/CLAUDE_HANDOFF.md](05-operations/agents/CLAUDE_HANDOFF.md) | Reference | Session handoff, 2026-10-25 |
+| [01-system/tech_stack_details.txt](01-system/tech_stack_details.txt), [01-system/architectural_design.txt](01-system/architectural_design.txt) | Needs update | Disagree with the code (see [project](02-project/README.md)) |
+| [01-system/MESSAGING_GOVERNANCE.md](01-system/MESSAGING_GOVERNANCE.md) | Unknown | Messaging rules and audit checklist (was `message.md`); not reviewed |
+| [archive/outdated/project_structure.txt](archive/outdated/project_structure.txt) | Archived | Folder layout from May 2026, superseded by the repository itself |
 
-Moving these under `docs/` (and archiving the stale ones with `git mv`) is a separate decision for the project owner.
 
 ## Areas
 

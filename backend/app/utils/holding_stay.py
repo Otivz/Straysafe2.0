@@ -61,7 +61,7 @@ def _facility_label(session: Session, facility_id: Optional[int]) -> tuple:
     from app.models.landmark import Landmark
     fac = session.get(Landmark, facility_id) if facility_id else None
     if fac is None:
-        return None, "the holding facility", None
+        return None, "the holding place", None
     kind = "Subdivision" if fac.subdivision_id is not None else "Barangay"
     return fac, fac.name, kind
 

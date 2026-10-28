@@ -2273,7 +2273,7 @@ const BrgyAdoptions = () => {
                                                 <button
                                                     type="button"
                                                     onClick={() => setCertificatePreview({ print: false })}
-                                                    className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                                    className="px-4 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
                                                 >
                                                     <Award className="w-4 h-4 text-amber-400" />
                                                     <span>View Official Certificate</span>
@@ -3447,7 +3447,7 @@ const BrgyAdoptions = () => {
                                         </div>
                                         <h3 className="font-black text-gray-900 text-base mb-1">No Animals in Catalog</h3>
                                         <p className="text-xs text-gray-500 max-w-xs mx-auto">
-                                            Animals can be promoted to the catalog from the Holding Facility page after their 7-day impound period elapses.
+                                            Animals can be promoted to the catalog from the Holding Place page after their 7-day impound period elapses.
                                         </p>
                                     </div>
                                 ) : (
@@ -4300,7 +4300,7 @@ const BrgyAdoptions = () => {
                                     setPreviewIdData(null);
                                     setIdImageError(false);
                                 }}
-                                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-colors cursor-pointer text-xs"
+                                className="px-5 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white font-bold rounded-xl transition-colors cursor-pointer text-xs"
                             >
                                 Close Preview
                             </button>

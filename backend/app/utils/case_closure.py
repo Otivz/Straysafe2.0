@@ -4,6 +4,7 @@ Keep rescue requests in step with their report.
 A report can be closed from many places (report status update, holding facility outcome, adoption handover, pet
 claims, QR recovery, rescue update). Whichever path closes it, its open rescue request(s) must close too, otherwise
 the case keeps showing as an active rescue. This is done once, centrally, with a SQLAlchemy before_flush hook.
+The same hook ends an open owner follow-up when its report closes or is escalated (utils/owner_followups.py).
 """
 from datetime import datetime, timezone
 
@@ -56,3 +57,11 @@ def _sync_rescues_with_closed_reports(session: Session, flush_context, instances
         new_status = obj.current_status_id
         if new_status in CLOSED_REPORT_STATUS_IDS and obj.report_id is not None:
             close_open_rescues(session, obj.report_id, new_status)
+        # An owner follow-up observing this report ends when the report closes or goes to the Barangay
+        if obj.report_id is not None and (new_status in CLOSED_REPORT_STATUS_IDS or new_status == 4):
+            _owner_followups.end_open_followups(session, obj.report_id, new_status)
+
+
+# Imported here at module level, never inside the hook: loading it registers other before_flush listeners
+# (holding_stay), and adding a listener while SQLAlchemy runs the list fails ("deque mutated during iteration").
+from app.utils import owner_followups as _owner_followups  # noqa: E402

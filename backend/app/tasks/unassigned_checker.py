@@ -186,7 +186,7 @@ def check_and_notify_overdue_holding_animals(default_stay_days: int = 3) -> int:
                         user_id=leader.user_id,
                         title=f"⏳ Holding Stay Notice: {animal_desc} ({rep_id_str})",
                         message=(
-                            f"Animal in subdivision holding facility has reached {days_held} days in custody "
+                            f"Animal in subdivision holding place has reached {days_held} days in custody "
                             f"(limit: {default_stay_days} days). Please consider coordinating next steps or endorsement to Barangay."
                         ),
                         type="holding_overdue_alert",
@@ -211,7 +211,7 @@ def check_and_notify_overdue_holding_animals(default_stay_days: int = 3) -> int:
                             user_id=staff.user_id,
                             title=f"🚨 Holding Stay Overdue: {animal_desc} ({rep_id_str})",
                             message=(
-                                f"Animal in holding facility has reached {days_held} days in custody, "
+                                f"Animal in holding place has reached {days_held} days in custody, "
                                 f"exceeding the {default_stay_days}-day stay limit. "
                                 f"Please review for impoundment or promote to adoption catalog."
                             ),
@@ -314,6 +314,9 @@ async def start_unassigned_reports_watcher(interval_seconds: int = 60, threshold
             await asyncio.to_thread(check_and_notify_unassigned_reports, threshold_minutes)
             await asyncio.to_thread(check_and_notify_overdue_holding_animals, 3)
             await asyncio.to_thread(check_and_notify_monitoring_schedules)
+            from app.utils.owner_followups import check_and_notify_due_followups
+            await asyncio.to_thread(check_and_notify_due_followups)
+            # Owner follow-ups: owner reminder a day before, leader notice when the observation period ends
 
             iteration += 1
             # Run notification pruning roughly once per 24 hours (1440 iterations at 60s)

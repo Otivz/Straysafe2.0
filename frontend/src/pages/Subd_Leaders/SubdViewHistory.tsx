@@ -629,7 +629,7 @@ const SubdViewHistory = () => {
                                                 const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : (report.longitude ? parseFloat(report.longitude.toString()) : 121.0028);
                                                 const hadHoldingHistory = report.history?.some((h: any) => 
                                                     [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
-                                                    (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
+                                                    (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                                     (h.action && h.action.toLowerCase().includes('holding'))
                                                 ) || Boolean(report.facility_id) || Boolean(report.facility);
                                                 const histFacLat = 14.8069;
@@ -883,7 +883,7 @@ const SubdViewHistory = () => {
                                 const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : (report.longitude ? parseFloat(report.longitude.toString()) : 121.0028);
                                 const hadHoldingHistory = report.history?.some((h: any) => 
                                     [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
-                                    (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
+                                    (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                     (h.action && h.action.toLowerCase().includes('holding'))
                                 ) || Boolean(report.facility_id) || Boolean(report.facility);
                                 const histFacLat = 14.8069;

@@ -153,7 +153,7 @@ const PetQrCardPage = () => {
                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-2">{error || "Pet not found."}</p>
                     <button 
                         onClick={() => navigate(backPath)}
-                        className="mt-6 px-6 py-3.5 bg-[#1a1208] text-white text-xs font-black uppercase tracking-widest rounded-xl"
+                        className="mt-6 px-6 py-3.5 bg-[#F97316] text-white text-xs font-black uppercase tracking-widest rounded-xl"
                     >
                         Back to Pets
                     </button>

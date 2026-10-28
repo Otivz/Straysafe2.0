@@ -11,7 +11,7 @@ StraySafe 2.0 is a web and Android application for managing stray and lost anima
 | Web client | React 19, TypeScript, Vite 8, Tailwind CSS 4, React Router 7, Leaflet / React-Leaflet, Axios | `frontend/package.json` |
 | Android app | The same web build wrapped with Capacitor 8 (`appId com.straysafe.app`); debug APK built by GitHub Actions | `frontend/capacitor.config.ts`, `.github/workflows/build-apk.yml` |
 | API | FastAPI (Python 3.12+), SQLAlchemy 2, Pydantic 2, PyJWT, Passlib/bcrypt, slowapi rate limiting | `backend/requirements.txt`, `backend/app/main.py` |
-| AI worker | Separate process (`python -m app.ai_worker`) that runs YOLOv8 (Ultralytics), Google Gemini and attribute scoring from a job queue; the API falls back to running jobs itself if the worker is down | `backend/app/ai_worker.py`, `backend/app/utils/ai_jobs.py`, [AI_TECHNOLOGIES](../AI_TECHNOLOGIES.md) |
+| AI worker | Separate process (`python -m app.ai_worker`) that runs YOLOv8 (Ultralytics), Google Gemini and attribute scoring from a job queue; the API falls back to running jobs itself if the worker is down | `backend/app/ai_worker.py`, `backend/app/utils/ai_jobs.py`, [AI_TECHNOLOGIES](AI_TECHNOLOGIES.md) |
 | Database | MySQL through PyMySQL; the schema is created by SQLAlchemy `create_all` at startup, plus hand-run scripts in `backend/scripts/` | `backend/app/database/session.py`, `backend/app/main.py` (`Base.metadata.create_all`) |
 | Media | Cloudinary (photos, video, documents). Some code paths still read a local `backend/uploads/` folder, which the API serves at `/uploads` | `backend/app/utils/cloudinary_config.py`, `backend/app/main.py` |
 | Background jobs | In-process asyncio tasks started in the API lifespan: a watcher, an AI-suggestion backfill, an email queue and a push queue | `backend/app/main.py` (`lifespan`) |
@@ -39,17 +39,17 @@ Authorization is enforced in the backend (subdivision and barangay scope checks)
 - **Claims and reunification** with proof and evidence review.
 - **Adoption** pipeline (catalog, applications, home assessment, agreement, certificates, monitoring).
 - **Communication**: chat, announcements, notifications, email (SMTP or Resend), web push.
-- **Analytics** dashboards for administrators and subdivision leaders ([ANALYTICS_SPECIFICATION](../../ANALYTICS_SPECIFICATION.md)).
+- **Analytics** dashboards for administrators and subdivision leaders ([ANALYTICS_SPECIFICATION](ANALYTICS_SPECIFICATION.md)).
 
 ## External services
 
-Google Gemini (AI), Cloudinary (media), an email service (SMTP, or Resend when `RESEND_API_KEY` is set), Google Sign-In, OpenStreetMap tiles and Nominatim (maps and addresses), the public OSRM server (directions), and browser/Web Push. Several are quota-limited free services; the Gemini free quota is noted in [AI_TODO](../../AI_TODO.md).
+Google Gemini (AI), Cloudinary (media), an email service (SMTP, or Resend when `RESEND_API_KEY` is set), Google Sign-In, OpenStreetMap tiles and Nominatim (maps and addresses), the public OSRM server (directions), and browser/Web Push. Several are quota-limited free services; the Gemini free quota is noted in [AI_TODO](../03-development/AI_TODO.md).
 
 ## Data and sessions
 
 - **Authentication:** JWT access tokens (60 minutes) plus rotating refresh tokens in an httpOnly cookie, with per-role lifetimes; the installed app uses a header instead of the cookie. Revoked tokens are stored in the database. Evidence: `backend/app/utils/auth.py`, `backend/app/routes/auth.py`, `backend/tests/test_session_security.py`, `backend/tests/test_app_stay_signed_in.py`.
 - **Audit:** an `audit_logs` table records actor, action, target, IP and old/new values.
-- **Database design records:** [ERD](../ERD/00_ERD_MODULE_OVERVIEW.md), [DFD](../DFD/00_DFD_OVERVIEW.md), and `Database3.3.txt` at the repository root. Whether `Database3.3.txt` matches the ORM models is **Unverified** (the file has uncommitted changes).
+- **Database design records:** [ERD](ERD/00_ERD_MODULE_OVERVIEW.md), [DFD](DFD/00_DFD_OVERVIEW.md), and `Database3.3.txt` at the repository root. Whether `Database3.3.txt` matches the ORM models is **Unverified** (the file has uncommitted changes).
 
 ## Known gaps in the current record
 
@@ -59,4 +59,4 @@ Google Gemini (AI), Cloudinary (media), an email service (SMTP, or Resend when `
 
 ## Authoritative sources
 
-When documents disagree, trust in this order: code and configuration in the repository, then tests, then this folder, then the root-level notes.
+When documents disagree, trust in this order: code and configuration in the repository, then tests, then this folder, then the other notes under `docs/`.

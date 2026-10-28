@@ -649,7 +649,7 @@ def update_rescue_request(
                             if prev_fac_name and prev_fac_name != fac.name:
                                 relocation_note = f"Transferred to {fac.name}{caretaker_str} (Previously held at: {prev_fac_name})"
                             elif report_status_id in (7, 8):
-                                relocation_note = f"Secured in holding facility ({fac.name}){caretaker_str}"
+                                relocation_note = f"Secured in holding place ({fac.name}){caretaker_str}"
                     elif lat is not None and lng is not None:
                         report_obj.latitude = Decimal(str(lat))
                         report_obj.longitude = Decimal(str(lng))
@@ -809,7 +809,7 @@ def update_rescue_request(
                             HoldingAnimal.report_id == report_obj.report_id
                         ).first()
                         if already_in:
-                            loc_str = prev_fac_name or report_obj.landmark or "Subdivision Holding Facility"
+                            loc_str = prev_fac_name or report_obj.landmark or "Subdivision Holding Place"
                             db.add(HoldingTimeline(
                                 holding_id=already_in.holding_id,
                                 event_type='transfer',
@@ -823,7 +823,7 @@ def update_rescue_request(
                             HoldingAnimal.report_id == report_obj.report_id
                         ).first()
                         if already_in:
-                            loc_str = prev_fac_name or report_obj.landmark or "Subdivision Holding Facility"
+                            loc_str = prev_fac_name or report_obj.landmark or "Subdivision Holding Place"
                             db.add(HoldingTimeline(
                                 holding_id=already_in.holding_id,
                                 event_type='observation',
@@ -902,7 +902,7 @@ def update_rescue_request(
                             db.add(HoldingTimeline(
                                 holding_id = new_holding.holding_id,
                                 event_type = 'intake',
-                                title      = f'Animal Admitted to Holding Facility ({loc_name})',
+                                title      = f'Animal Admitted to Holding Place ({loc_name})',
                                 notes      = f'Admitted into custody at {loc_name}. Report #{report_obj.report_id}.',
                                 logged_by  = staff_id_for_log,
                             ))

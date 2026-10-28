@@ -34,6 +34,7 @@ from app.routes import push as push_routes
 from app.routes import sidebar as sidebar_routes
 from app.services.push_service import start_push_queue_worker  # also registers the push hook
 from app.routes import ai_jobs as ai_jobs_routes
+from app.routes import owner_followups as owner_followups_routes
 from app.models.pet_qr import PetQRCode, PetQRScan
 from app.models.audit_log import AuditLog  # noqa: F401 — ensures table is in Base.metadata
 from app.models.pet_claim import PetClaim  # noqa: F401 — ensures table is in Base.metadata
@@ -1765,6 +1766,7 @@ app.include_router(ai_jobs_routes.router)
 app.include_router(push_routes.router)
 app.include_router(sidebar_routes.router)
 app.include_router(analytics.router)
+app.include_router(owner_followups_routes.router)
 
 @app.get("/")
 def read_root():

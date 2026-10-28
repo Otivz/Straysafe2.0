@@ -476,6 +476,11 @@ def list_animals(
     if report_id is not None:
         query = query.filter(HoldingAnimal.report_id == report_id)
     else:
+        # A Subdivision Leader may follow every animal at the Barangay holding place, but only in their own barangay:
+        # the server uses the leader's barangay, whatever the request says.
+        if barangay_only and getattr(current_user, "role_id", None) == 2:
+            own = db.get(Subdivision, current_user.subdivision_id) if current_user.subdivision_id else None
+            barangay_id = own.barangay_id if own else -1
         query = _apply_scope(query, subdivision_id, barangay_id, facility_id, barangay_only)
 
     animals = query.order_by(HoldingAnimal.intake_date.desc()).all()
@@ -588,7 +593,7 @@ def create_animal(
         # Prevent duplicate intakes for the same report
         existing = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == body.report_id).first()
         if existing:
-            raise HTTPException(status_code=409, detail="Animal already in holding facility for this report")
+            raise HTTPException(status_code=409, detail="Animal already in holding place for this report")
 
         # Automatically associate the logged-in staff member
         intake_staff_id = current_user.user_id if not body.intake_staff_id else body.intake_staff_id
@@ -603,7 +608,7 @@ def create_animal(
         first_log = HoldingTimeline(
             holding_id=animal.holding_id,
             event_type="intake",
-            title="Animal Admitted to Holding Facility",
+            title="Animal Admitted to Holding Place",
             notes=f"Admitted from Report #{body.report_id}.",
             logged_by=current_user.user_id,
         )
@@ -615,7 +620,7 @@ def create_animal(
             action="Intake Holding Animal",
             target_table="holding_animals",
             target_id=animal.holding_id,
-            description=f"Stray animal from Report #{body.report_id} admitted to holding facility (ID: {animal.holding_id}).",
+            description=f"Stray animal from Report #{body.report_id} admitted to holding place (ID: {animal.holding_id}).",
             user_id=current_user.user_id,
             log_type="operation"
         )
@@ -723,7 +728,7 @@ def update_animal(
                     if owner_return_snap:
                         record_owner_return(db, report, owner_return_snap, current_user, holding_id=holding_id)
                         _sum = owner_return_summary(owner_return_snap)
-                        update_notes = f"{update_notes} | {_sum}" if update_notes else f"Animal officially marked as 'Claimed by Owner' after holding facility stay at {animal.facility_name or 'Holding Facility'}. {_sum}. Case resolved."
+                        update_notes = f"{update_notes} | {_sum}" if update_notes else f"Animal officially marked as 'Claimed by Owner' after holding place stay at {animal.facility_name or 'Holding Place'}. {_sum}. Case resolved."
                 elif new_status == 4:
                     report.custody_status = "Deceased"
 
@@ -741,7 +746,7 @@ def update_animal(
                     report_id=report.report_id,
                     report_status_id=history_status_id,
                     updated_by=updated_by or animal.intake_staff_id,
-                    remarks=update_notes or f"Animal officially marked as '{outcome_label}' after holding facility stay at {animal.facility_name or 'Holding Facility'}. Case resolved.",
+                    remarks=update_notes or f"Animal officially marked as '{outcome_label}' after holding place stay at {animal.facility_name or 'Holding Place'}. Case resolved.",
                 )
                 db.add(impound_hist)
 
@@ -867,7 +872,7 @@ def escalate_to_barangay(
                 Landmark.subdivision_id.is_(None)
             ).first()
             if not brgy_fac:
-                raise HTTPException(status_code=400, detail="Selected facility is not a valid Barangay holding facility.")
+                raise HTTPException(status_code=400, detail="Selected facility is not a valid Barangay holding place.")
         else:
             # Auto-detect target barangay
             target_brgy_id = None
@@ -894,14 +899,14 @@ def escalate_to_barangay(
                 ).first()
 
         if not brgy_fac:
-            raise HTTPException(status_code=400, detail="No active Barangay holding facility found. Please designate a Barangay holding facility in landmarks.")
+            raise HTTPException(status_code=400, detail="No active Barangay holding place found. Please designate a Barangay holding place in landmarks.")
 
         # Identify the current subdivision holding facility
         current_fac = animal.report.facility if (animal.report and animal.report.facility) else None
         if not current_fac and animal.report and animal.report.facility_id:
             current_fac = db.query(Landmark).filter(Landmark.landmark_id == animal.report.facility_id).first()
 
-        prev_fac_name = current_fac.name if current_fac else (animal.report.landmark if animal.report else "Subdivision Holding Facility")
+        prev_fac_name = current_fac.name if current_fac else (animal.report.landmark if animal.report else "Subdivision Holding Place")
         target_brgy_name = brgy_fac.name if brgy_fac else "Barangay Holding Shelter"
 
         reason_str = f" Reason: {body.reason}." if body.reason else ""
@@ -951,7 +956,7 @@ def escalate_to_barangay(
 
             if existing_letter:
                 existing_letter.leader_id = current_user.user_id
-                existing_letter.title = f"Holding Facility Transfer Endorsement: Animal #{animal.holding_id}"
+                existing_letter.title = f"Holding Place Transfer Endorsement: Animal #{animal.holding_id}"
                 existing_letter.letter_content = endorse_content
                 if file_url:
                     existing_letter.file_url = file_url
@@ -960,7 +965,7 @@ def escalate_to_barangay(
                 db_letter = EndorsementLetter(
                     report_id=report.report_id,
                     leader_id=current_user.user_id,
-                    title=f"Holding Facility Transfer Endorsement: Animal #{animal.holding_id}",
+                    title=f"Holding Place Transfer Endorsement: Animal #{animal.holding_id}",
                     letter_content=endorse_content,
                     file_url=file_url,
                     status_id=2  # Sent
@@ -1000,7 +1005,7 @@ def escalate_to_barangay(
                 notif = Notification(
                     user_id=staff.user_id,
                     title=f"🚨 New Escalated Animal Pickup #{report.report_id if report else animal.holding_id}",
-                    message=f"Subdivision Leader {current_user.name} has escalated animal #{animal.holding_id} from {prev_fac_name}. Pickup required at the holding facility.",
+                    message=f"Subdivision Leader {current_user.name} has escalated animal #{animal.holding_id} from {prev_fac_name}. Pickup required at the holding place.",
                     type="alert",
                     related_id=report.report_id if report else animal.holding_id
                 )
