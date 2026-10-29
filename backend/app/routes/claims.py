@@ -1,7 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
-from app.utils.auth import get_current_user, get_current_staff_or_admin
+from app.utils.auth import get_current_user, get_current_staff_or_admin, verify_subdivision_scope
+from app.utils.claim_custody import (CLAIM_CLOSABLE, CLAIM_DECIDED, CLAIM_FLOW_STEPS, NOT_HELD_MESSAGE, NOT_NEEDED_REASON, OWNER_SAYS_HOME,
+                                     OWNER_SAYS_MISSING, animal_held, is_closed_not_needed, owner_custody_answer)
 
 from app.database import get_db
 from app.models.pet_claim import PetClaim
@@ -107,6 +110,10 @@ def _attach_case_reports(db: Session, claim: PetClaim) -> None:
     ret = db.query(ReportReturn).filter(ReportReturn.report_id.in_(claim.case_report_ids)).first()
     if ret and ret.handover_photo_url:
         claim.handover_photo_url = ret.handover_photo_url
+    # Phase 6: a claim only for a held animal
+    claim.animal_held = animal_held(db, report) if report else None
+    claim.closed_not_needed = is_closed_not_needed(claim)
+    claim.owner_custody_answer = owner_custody_answer(db, report) if report else None
 
 
 MAX_CLAIM_PHOTOS = 5  # the owner's additional pet photos / videos per claim
@@ -280,6 +287,15 @@ def create_or_update_claim(
             detail="This pet is marked as deceased and cannot be claimed or matched."
         )
 
+    # Phase 6: a claim only for an animal someone holds (a claim already decided goes on as before)
+    if not animal_held(db, report):
+        case_ids_held = [m.report_id for m in case_members(db, case_root(db, report))]
+        decided = db.query(PetClaim.claim_id).filter(
+            PetClaim.report_id.in_(case_ids_held), PetClaim.pet_id == claim_in.pet_id,
+            PetClaim.status.in_(CLAIM_DECIDED)).first()
+        if decided is None:
+            raise HTTPException(status_code=409, detail=NOT_HELD_MESSAGE)
+
     # Ownership checks: Assign ownership if unowned; enforce owner identity for resident claims
     if pet.owner_id is None:
         pet.owner_id = current_user.user_id
@@ -407,6 +423,8 @@ def upload_claim_evidence(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission Denied: You can only upload evidence for your own pet claim."
         )
+    if claim.status not in CLAIM_DECIDED and not animal_held(db, claim.report):
+        raise HTTPException(status_code=409, detail=NOT_HELD_MESSAGE)
 
     # File already lives in Cloudinary (browser uploaded directly via the
     # unsigned preset); just verify the URL is genuinely ours before trusting it.
@@ -486,6 +504,14 @@ def update_claim_status(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Permission Denied: Staff or Administrator privileges required."
             )
+
+    # Phase 6: no claim flow for an animal nobody holds. A claim already approved (or further) may still be handed over;
+    # anything earlier, including a claim closed as not needed, needs the animal to be held first.
+    if (status_update.status in CLAIM_FLOW_STEPS and claim.status not in ("Approved", "Handover Complete", "Pet Received")
+            and not animal_held(db, claim.report)):
+        raise HTTPException(status_code=409, detail=(
+            "Nobody is holding this animal, so there is nothing to approve or hand over. "
+            + ("This claim was closed as not needed." if is_closed_not_needed(claim) else "Close the claim as not needed instead.")))
 
     claim.status = status_update.status
     if status_update.remarks:
@@ -830,6 +856,8 @@ def update_claim_documents(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission Denied: You can only update your own pet claim."
         )
+    if not is_staff_or_admin and claim.status not in CLAIM_DECIDED and not animal_held(db, claim.report):
+        raise HTTPException(status_code=409, detail=NOT_HELD_MESSAGE)
 
     if claim_update.vaccine_card_url is not None:
         validate_cloudinary_url(claim_update.vaccine_card_url, allowed={'Image', 'Video', 'Document'})
@@ -926,3 +954,108 @@ def delete_claim(
     )
 
     return {"message": f"Claim #{claim_id} deleted successfully", "claim_id": claim_id}
+
+# ── Phase 6: a claim only for an animal someone holds ────────────────────────────────────────────
+class CustodyAnswer(BaseModel):
+    report_id: int
+    pet_id: int
+    answer: str            # "home" | "missing"
+    note: Optional[str] = None
+
+
+def _handling_leader_ids(db: Session, report: Report) -> List[int]:
+    if report.assigned_leader_id:
+        return [report.assigned_leader_id]
+    if not report.subdivision_id:
+        return []
+    return [u.user_id for u in db.query(User.user_id).filter(User.role_id == 2, User.subdivision_id == report.subdivision_id).all()]
+
+
+@router.post("/custody-answer")
+def answer_custody(body: CustodyAnswer, req: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """
+    The owner said "Yes, it's my pet" about an animal nobody holds: instead of a claim, they say whether it is home or
+    still missing. Recorded in the report history; the handling leader is told. The pet is not marked Lost.
+    """
+    report = db.query(Report).filter(Report.report_id == body.report_id).first()
+    pet = db.query(Pet).filter(Pet.pet_id == body.pet_id).first()
+    if not report or not pet:
+        raise HTTPException(status_code=404, detail="Report or pet not found")
+    if pet.owner_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Only the pet's owner can answer this.")
+    answer = (body.answer or "").strip().lower()
+    if answer not in ("home", "missing"):
+        raise HTTPException(status_code=422, detail="Answer whether the pet is home or still missing.")
+    case_ids = [m.report_id for m in case_members(db, case_root(db, report))]
+    linked = report.pet_id == pet.pet_id or db.query(ReportMatch.match_id).filter(
+        ReportMatch.source_report_id.in_(case_ids), ReportMatch.matched_pet_id == pet.pet_id,
+        ReportMatch.owner_confirmation_status.in_(("OWNER_CONFIRMED", "LEADER_VERIFIED"))).first() is not None
+    if not linked:
+        raise HTTPException(status_code=409, detail="Confirm first that this sighting is your pet.")
+    if animal_held(db, report):
+        raise HTTPException(status_code=409, detail="Your pet is being held: file a pet claim with your proof of ownership.")
+    marker = OWNER_SAYS_HOME if answer == "home" else OWNER_SAYS_MISSING
+    note = (body.note or "").strip()[:500]
+    db.add(StatusHistory(report_id=report.report_id, report_status_id=None, updated_by=current_user.user_id, remarks=marker))
+    if note:
+        db.add(StatusHistory(report_id=report.report_id, report_status_id=None, updated_by=current_user.user_id,
+                             remarks=f"Owner's note: {note}"))
+    pet_name = pet.display_name
+    message = (f"The owner of {pet_name} says it is home. Close the report, or start an owner follow-up if it is a complaint."
+               if answer == "home" else
+               f"The owner of {pet_name} says it is still missing. The sighting in Report #{report.report_id} stays on its record.")
+    for uid in _handling_leader_ids(db, report):
+        dispatch_notification(db, uid, title=f"Owner answered: Report #{report.report_id}", message=message,
+                              notification_type="status_update", related_id=report.report_id)
+    log_activity(db=db, action="OWNER_CUSTODY_ANSWER", target_table="reports", target_id=report.report_id,
+                 description=f"Owner of {pet_name} answered '{answer}' for Report #{report.report_id} (nobody holds the animal).",
+                 user_id=current_user.user_id, log_type="operation", new_values={"answer": answer}, request=req, commit=False)
+    db.commit()
+    return {"report_id": report.report_id, "answer": answer}
+
+
+@router.post("/{claim_id}/close-not-needed", response_model=PetClaimResponse)
+def close_claim_not_needed(claim_id: int, req: Request, db: Session = Depends(get_db),
+                           current_user: User = Depends(get_current_staff_or_admin)):
+    """Staff close an open claim on an animal nobody holds: Rejected with the fixed reason, shown as "Closed: not needed"."""
+    claim = db.query(PetClaim).options(joinedload(PetClaim.pet), joinedload(PetClaim.report)).filter(
+        PetClaim.claim_id == claim_id).first()
+    if not claim or not claim_visible_to(db, current_user, claim):
+        raise HTTPException(status_code=404, detail="Claim not found")
+    claim = live_claim(db, claim)
+    if claim.report is not None:
+        verify_subdivision_scope(current_user, claim.report.subdivision_id, db=db,
+                                 resource_barangay_id=_barangay_of_subdivision(db, claim.report.subdivision_id))
+    if claim.status not in CLAIM_CLOSABLE:
+        raise HTTPException(status_code=409, detail=f"This claim is already {claim.status}.")
+    if animal_held(db, claim.report):
+        raise HTTPException(status_code=409, detail="The animal is being held: review the claim instead of closing it.")
+    was_approved = claim.status == "Approved"
+    claim.status = "Rejected"
+    claim.remarks = NOT_NEEDED_REASON
+    # An approval set the report to Claimed by Owner (9) though nothing was handed over: give it back its earlier status
+    report = claim.report
+    if was_approved and report is not None and report.current_status_id == 9:
+        earlier = db.query(StatusHistory.report_status_id).filter(
+            StatusHistory.report_id == report.report_id, StatusHistory.report_status_id.isnot(None),
+            StatusHistory.report_status_id != 9).order_by(StatusHistory.history_id.desc()).first()
+        if earlier is not None:
+            report.current_status_id = earlier.report_status_id
+            db.add(StatusHistory(report_id=report.report_id, report_status_id=earlier.report_status_id, updated_by=current_user.user_id,
+                                 remarks="Claim approval undone: nobody held the animal, so there was no handover."))
+    pet_name = claim.pet.display_name if claim.pet else "the pet"
+    db.add(StatusHistory(report_id=claim.report_id, report_status_id=None, updated_by=current_user.user_id,
+                         remarks=f"Pet claim for {pet_name} closed: not needed, nobody is holding the animal (the pet is home)."))
+    if claim.pet and claim.pet.owner_id:
+        dispatch_notification(db, claim.pet.owner_id, title=f"Pet claim closed: not needed (Report #{claim.report_id})",
+                              message=(f"Nobody is holding {pet_name}, so no claim or handover is needed. "
+                                       f"If it is not home, tell the Subdivision Leader."),
+                              notification_type="status_update", related_id=claim.report_id)
+    log_activity(db=db, action="CLOSE_CLAIM_NOT_NEEDED", target_table="pet_claims", target_id=claim.claim_id,
+                 description=f"{current_user.name} closed pet claim #{claim.claim_id} as not needed (nobody holds the animal).",
+                 user_id=current_user.user_id, log_type="operation", new_values={"status": "Rejected", "remarks": NOT_NEEDED_REASON},
+                 request=req, commit=False)
+    db.commit()
+    db.refresh(claim)
+    _attach_case_reports(db, claim)
+    return claim

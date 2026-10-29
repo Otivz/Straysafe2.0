@@ -20,7 +20,8 @@ import {
     AlertTriangle,
     X,
     MapPin,
-    Building2
+    Building2,
+    Eye
 } from 'lucide-react';
 import RelativeTimestamp from './RelativeTimestamp';
 import { sightingLandmark } from '../utils/sighting';
@@ -223,7 +224,28 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             [/^status follows group report/i, 'STATUS FOLLOWS GROUP', 'gray'],
         ];
         const multiAnimalRule = multiAnimal.find(([re]) => re.test(rawRemarks));
-        if (multiAnimalRule) {
+        // Owner follow-up (SUBDIVISION_OWNER_FOLLOW_UP_PLAN.md): checked first, the ending text can say "escalated"
+        const observation = rawRemarks.match(/^Owner follow-up (started|extended|ended)\b/i);
+        if (observation) {
+            const kind = observation[1].toLowerCase();
+            const until = rawRemarks.match(/until ([A-Z][a-z]{2} \d{1,2}, \d{4})/);
+            IconComponent = Eye;
+            if (kind === 'started') {
+                actionTitle = 'UNDER OBSERVATION';
+                type = 'orange';
+                description = `The subdivision contacted the pet's owner and is observing whether the pet is kept confined${until ? ` until ${until[1]}` : ''}.`;
+            } else if (kind === 'extended') {
+                actionTitle = 'OBSERVATION EXTENDED';
+                type = 'orange';
+                description = `The subdivision extended the observation${until ? ` until ${until[1]}` : ''}.`;
+            } else {
+                const outcome = rawRemarks.match(/^Owner follow-up ended \(([^)]+)\)/i)?.[1] || '';
+                actionTitle = 'OBSERVATION ENDED';
+                type = /complied|resolved/i.test(outcome) ? 'green' : 'gray';
+                description = outcome ? `The observation ended: ${outcome}.` : 'The observation ended.';
+            }
+        }
+        else if (multiAnimalRule) {
             actionTitle = multiAnimalRule[1];
             type = multiAnimalRule[2];
             IconComponent = Layers;

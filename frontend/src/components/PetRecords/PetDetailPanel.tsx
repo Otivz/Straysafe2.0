@@ -18,6 +18,7 @@ import { DEFAULT_PET_AVATAR, getPetPicture, DEFAULT_AVATAR, getProfilePicture, g
 import api, { getStoredToken } from '../../utils/api';
 import { refreshScope, startAutoRefresh } from '../../utils/dataRefresh';
 import WarningDetailsModal from '../Modals/WarningDetailsModal';
+import { type OwnerFollowUp, listFollowUps } from '../../utils/ownerFollowUp';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
 
 interface PetDetailPanelProps {
@@ -48,6 +49,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
     const [incidentClaims, setIncidentClaims] = useState<any[]>([]);
     const [incidentReports, setIncidentReports] = useState<any[]>([]);
     const [petWarnings, setPetWarnings] = useState<any[]>([]);
+    const [petFollowUps, setPetFollowUps] = useState<OwnerFollowUp[]>([]);   // complaints observed with the owner (staff only)
     const [isLoadingIncidents, setIsLoadingIncidents] = useState<boolean>(false);
     const [historyFilter, setHistoryFilter] = useState<'all' | 'warnings' | 'reports' | 'resolved' | 'ongoing'>('all');
     const [selectedWarningModal, setSelectedWarningModal] = useState<any | null>(null);
@@ -107,6 +109,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
     };
 
     const userRoleId = getCurrentUserRole();
+    const canSeeFollowUps = userRoleId !== 1;   // the owner follow-up list is for staff (the server scopes it)
     const isAdmin = userRoleId === 4;
 
     // Assign Owner State
@@ -209,6 +212,16 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                     console.error("Error loading pet warnings:", wErr);
                 }
 
+                // Owner follow-ups about this pet (complaints observed with the owner), staff only
+                let followUpList: OwnerFollowUp[] = [];
+                if (canSeeFollowUps) {
+                    try {
+                        followUpList = await listFollowUps({ pet_id: petId });
+                    } catch (fErr) {
+                        console.error("Error loading owner follow-ups:", fErr);
+                    }
+                }
+
                 // Find all reports directly linked to pet, or linked via claim, or linked via duplicate/primary relationship
                 const directPetReportIds = new Set(
                     allReports
@@ -247,6 +260,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                     setIncidentClaims(petClaims);
                     setIncidentReports(matchedReports);
                     setPetWarnings(warningsList);
+                    setPetFollowUps(followUpList);
                 }
             } catch (err) {
                 console.error("Error loading pet incident history:", err);
@@ -267,7 +281,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
             isMounted = false;
             stopRefresh();
         };
-    }, [pet?.id, pet?.rawPetObj?.owner_id, activeTab]);
+    }, [pet?.id, pet?.rawPetObj?.owner_id, activeTab, canSeeFollowUps]);
 
     // Helper to evaluate incident/report status for pet history
     const getReportHistoryStatus = (report: any, matchingClaim: any) => {
@@ -501,6 +515,31 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
             });
         });
 
+        // 3b. Owner follow-ups: a complaint observed with the owner, with its repeats and verbal warnings
+        const day = (s?: string | null) => s ? new Date(s).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+        petFollowUps.forEach((f) => {
+            const contacts = f.contacts || [];
+            const repeats = contacts.filter(c => c.method === 'Repeated incident');
+            const verbal = contacts.filter(c => (c.note || '').startsWith('Verbal warning:')).length;
+            const observing = f.status === 'Observing';
+            events.push({
+                id: `event-followup-${f.followup_id}`,
+                type: 'followup',
+                date: new Date(f.opened_at),
+                title: `Owner follow-up (Report #${f.report_id})`,
+                badgeText: observing ? 'Under Observation' : f.status,
+                badgeStyle: observing ? 'bg-amber-50 text-amber-700 border-amber-200' : f.status === 'Escalated'
+                    ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-gray-50 text-gray-700 border-gray-200',
+                description: [
+                    `Complaint observed with the owner from ${day(f.opened_at)} to ${day(observing ? f.due_at : (f.closed_at || f.due_at))}${observing ? ' (still observing)' : ''}.`,
+                    !observing && f.closing_outcome ? `Outcome: ${f.closing_outcome}.` : '',
+                    repeats.length ? `Repeated incidents: ${repeats.map(c => c.related_report_id ? `Report #${c.related_report_id}` : 'logged').join(', ')}.` : '',
+                    verbal ? `Verbal warnings: ${verbal}.` : '',
+                ].filter(Boolean).join(' '),
+                icon: '👁',
+            });
+        });
+
         // 4. Incident Reports / Stray Sightings
         processedReports.forEach((r: any) => {
             const rDate = r.created_at || r.reported_at ? new Date(r.created_at || r.reported_at) : new Date();
@@ -525,7 +564,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 
         // Sort all events chronologically (newest first)
         return events.sort((a, b) => b.date.getTime() - a.date.getTime());
-    }, [pet, petWarnings, processedReports]);
+    }, [pet, petWarnings, petFollowUps, processedReports]);
 
     const filteredReports = useMemo(() => {
         if (historyFilter === 'resolved') {

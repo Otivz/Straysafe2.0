@@ -22,6 +22,9 @@ ESCALATED_PHASE_STATUS_IDS = (4, 5, 6, 13)
 # A follow-up only starts on an open case whose animal is not held anywhere (7 and 8 are facility statuses)
 NOT_ELIGIBLE_STATUS_IDS = (3, 7, 8, 9, 10, 11, 12, 14, 17, 18)
 REMINDER_BEFORE = timedelta(days=1)
+RABIES_RISK_CATEGORY_ID = 3
+# Report categories that may still be observed, with a caution on the leader's card (plan section 10, question 10)
+CAUTION_CATEGORIES = {1: "Injured", 2: "Aggressive"}
 
 
 def followup_days(db: Session) -> int:
@@ -66,6 +69,19 @@ def owner_snapshot(report, db: Session) -> Optional[Tuple[Optional[int], Optiona
     return None
 
 
+def followup_caution(report) -> Optional[str]:
+    """Why the leader should take care observing this report instead of acting at once, or None."""
+    reasons = []
+    if report.category_id in CAUTION_CATEGORIES:
+        reasons.append(f"it was reported as {CAUTION_CATEGORIES[report.category_id]}")
+    if report.priority_level == "High":
+        reasons.append("it has High priority")
+    if not reasons:
+        return None
+    return ("Take care: " + " and ".join(reasons) + ". You can escalate to the Barangay at any time "
+            "instead of waiting for the observation to end.")
+
+
 def start_refusal(report, user, db: Session) -> Optional[str]:
     """Why this leader cannot start a follow-up on this report, or None when they can (plan section 4.2)."""
     from app.models.owner_followup import OwnerFollowUp
@@ -75,6 +91,8 @@ def start_refusal(report, user, db: Session) -> Optional[str]:
         return "Only the Subdivision Leader of the report's subdivision can start an owner follow-up."
     if report.assigned_leader_id != user.user_id:
         return "Claim this report first: only the leader handling it can start an owner follow-up."
+    if report.category_id == RABIES_RISK_CATEGORY_ID:
+        return "A Rabies Risk report cannot be observed: escalate it to the Barangay."
     if report.current_status_id in NOT_ELIGIBLE_STATUS_IDS or report.duplicate_of_report_id:
         return "This report is closed, merged or its animal is held in a facility, so it cannot be observed."
     if report.facility_id:
@@ -88,6 +106,12 @@ def start_refusal(report, user, db: Session) -> Optional[str]:
     if db.query(OwnerFollowUp.followup_id).filter(
             OwnerFollowUp.report_id == report.report_id, OwnerFollowUp.status == "Observing").first():
         return "This report already has an owner follow-up under observation."
+    other = db.query(OwnerFollowUp.report_id).filter(
+        OwnerFollowUp.pet_id == report.pet_id, OwnerFollowUp.status == "Observing",
+        OwnerFollowUp.report_id != report.report_id).first()
+    if other:
+        return (f"This pet already has an owner follow-up under observation on Report #{other.report_id}: "
+                f"log this report there as a repeated incident.")
     return None
 
 
@@ -115,6 +139,77 @@ def end_open_followups(session: Session, report_id: int, new_status_id: int) -> 
                 f.closing_outcome = f"Report status {new_status_id}"
                 f.closing_reason = f"Report #{report_id} was closed (status {new_status_id}) while it was under observation."
     return len(rows)
+
+
+def observing_followup_for_pet(session: Session, pet_id: Optional[int], exclude_report_id: Optional[int] = None):
+    """The pet's follow-up under observation on a report other than exclude_report_id, or None."""
+    from app.models.owner_followup import OwnerFollowUp
+
+    if not pet_id:
+        return None
+    q = session.query(OwnerFollowUp).filter(OwnerFollowUp.pet_id == pet_id, OwnerFollowUp.status == "Observing")
+    if exclude_report_id is not None:
+        q = q.filter(OwnerFollowUp.report_id != exclude_report_id)
+    return q.order_by(OwnerFollowUp.followup_id).first()
+
+
+def _repeat_logged(session: Session, f, report_id: int) -> bool:
+    from app.models.owner_followup import OwnerFollowUpContact
+
+    return session.query(OwnerFollowUpContact.contact_id).filter(
+        OwnerFollowUpContact.followup_id == f.followup_id,
+        OwnerFollowUpContact.related_report_id == report_id).first() is not None
+
+
+def repeat_title(report_id: int) -> str:
+    return f"Repeated report: Report #{report_id}"
+
+
+def notify_repeated_report(session: Session, report) -> bool:
+    """
+    A report was just linked to a pet that is under observation on another report (Phase 5B): tell the handling
+    leader once. A report merged into another one is the same event, not a repeat.
+    """
+    from app.models.notification import Notification
+    from app.utils.notification_dispatcher import dispatch_notification
+
+    if not report.pet_id or report.report_id is None or report.duplicate_of_report_id:
+        return False
+    f = observing_followup_for_pet(session, report.pet_id, exclude_report_id=report.report_id)
+    if f is None or _repeat_logged(session, f, report.report_id):
+        return False
+    title = repeat_title(report.report_id)
+    pet = f.pet.pet_name if f.pet else "the pet"
+    sent = False
+    for uid in _leader_ids(f):
+        if session.query(Notification.notification_id).filter(
+                Notification.user_id == uid, Notification.title == title,
+                Notification.related_id == f.report_id).first():
+            continue
+        dispatch_notification(
+            session, uid, title=title,
+            message=(f"Report #{report.report_id} is about {pet}, which is under observation on Report "
+                     f"#{f.report_id}. Log it there as a repeated incident, or merge it if it is the same event."),
+            notification_type="owner_followup", related_id=f.report_id)
+        sent = True
+    return sent
+
+
+def unlogged_repeats(session: Session, f) -> list:
+    """Other reports about the follow-up's pet that may be repeats and are not logged on it yet (newest first)."""
+    from app.models.owner_followup import OwnerFollowUpContact
+    from app.models.report import Report
+    from app.utils.case_closure import CLOSED_REPORT_STATUS_IDS
+
+    if not f.pet_id:
+        return []
+    logged = {c.related_report_id for c in session.query(OwnerFollowUpContact.related_report_id).filter(
+        OwnerFollowUpContact.followup_id == f.followup_id, OwnerFollowUpContact.related_report_id.isnot(None))}
+    rows = session.query(Report.report_id, Report.created_at, Report.current_status_id).filter(
+        Report.pet_id == f.pet_id, Report.report_id != f.report_id, Report.duplicate_of_report_id.is_(None)).all()
+    out = [r.report_id for r in rows if r.report_id not in logged
+           and ((r.created_at and r.created_at >= f.opened_at) or r.current_status_id not in CLOSED_REPORT_STATUS_IDS)]
+    return sorted(out, reverse=True)
 
 
 def _leader_ids(f) -> list:

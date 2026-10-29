@@ -852,14 +852,18 @@ const ResiViewReport = () => {
                         </div>
                         <div>
                             <h1 className="text-xs sm:text-2xl md:text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tight leading-tight">
-                                {(report.category_id === 6 || report.pet_id || (report.description && report.description.includes('[LOST PET REPORT]'))) ? 'Lost Pet Recovery Case' : 'Rescue Case Intelligence'}
+                                {isLostPetReport ? 'Lost Pet Recovery Case' : report.pet_id ? 'Registered Pet Case' : 'Rescue Case Intelligence'}
                             </h1>
                             <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1.5 flex-wrap">
                                 <span className="text-[7.5px] sm:text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">#STR-{(report.report_id || 0).toString().padStart(4, '0')}</span>
                                 <div className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-700" />
                                 <span className="text-[7.5px] sm:text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest">
-                                    {(report.category_id === 6 || report.pet_id || (report.description && report.description.includes('[LOST PET REPORT]'))) ? 'Lost Pet' : (categoryMap[report.category_id] || 'Incident Report')}
+                                    {isLostPetReport ? 'Lost Pet' : (categoryMap[report.category_id] || 'Incident Report')}
                                 </span>
+                                {/* A registered pet that was not reported lost (e.g. it got out of the house): the owner is known */}
+                                {!isLostPetReport && report.pet_id && (
+                                    <span className="text-[7.5px] sm:text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">· Owner identified</span>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -894,8 +898,9 @@ const ResiViewReport = () => {
                         )}
 
                         {/* Pet Found / Reunited Button */}
-                        {/* Only the pet's owner, or the reporter of a Lost Pet report (their own pet); not someone who reported a stray */}
-                        {currentUser && (isMyPetOnReport || (isReporter && isLostPetReport)) && ![3, 8, 9, 10, 11, 12, 14, 17, 18].includes(report.status_id) && !report.facility_id && (
+                        {/* Only on a Lost Pet report, for the pet's owner or the reporter (their own pet). A roaming pet that was
+                            reported (not lost) is handled by the owner follow-up panel and the subdivision, so no "recovered" here */}
+                        {currentUser && isLostPetReport && (isMyPetOnReport || isReporter) && ![3, 8, 9, 10, 11, 12, 14, 17, 18].includes(report.status_id) && !report.facility_id && (
                             <button
                                 type="button"
                                 onClick={() => setIsReunitedModalOpen(true)}
@@ -1339,7 +1344,7 @@ const ResiViewReport = () => {
                                                     <div className="flex items-center gap-2">
                                                         <span className="px-2 py-0.5 bg-amber-500 text-white rounded text-[8px] sm:text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
                                                             <PawPrint className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                                                            <span>Registered Lost Pet</span>
+                                                            <span>{isLostPetReport ? 'Registered Lost Pet' : 'Registered Pet'}</span>
                                                         </span>
                                                         {petName(report) && (
                                                             <span className="text-[11px] sm:text-xs font-black text-amber-950 dark:text-amber-200 uppercase">

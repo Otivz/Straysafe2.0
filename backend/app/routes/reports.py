@@ -2891,6 +2891,15 @@ def get_report(report_id: int, db: Session = Depends(get_db), current_user: User
         elif case_claims:
             rep_data.case_pet_id, rep_data.case_pet_report_id = next(iter(case_claims.items()))
         rep_data.pet_link_trusted = pet_link_trusted(report) if report.pet_id else None
+        from app.utils.claim_custody import animal_held as _animal_held, owner_custody_answer as _owner_custody_answer
+        rep_data.animal_held = _animal_held(db, report)
+        rep_data.owner_custody_answer = _owner_custody_answer(db, report)
+        if report.pet_id and not report.duplicate_of_report_id and current_user.role_id in (2, 4):
+            from app.utils.owner_followups import observing_followup_for_pet
+            other_f = observing_followup_for_pet(db, report.pet_id, exclude_report_id=report.report_id)
+            if other_f is not None and (current_user.role_id == 4 or (
+                    other_f.report and other_f.report.subdivision_id == current_user.subdivision_id)):
+                rep_data.observing_followup_report_id = other_f.report_id
         rep_data.identity_dispute = identity_dispute_info(db, report)
         if report.pet_inherited_from_match_id:
             src_match = db.get(ReportMatch, report.pet_inherited_from_match_id)

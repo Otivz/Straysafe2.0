@@ -73,6 +73,8 @@ class ClaimIdentityTests(unittest.TestCase):
     def report(rid, **kwargs):
         return Report(report_id=rid, user_id=1, subdivision_id=1, category_id=1,
                       current_status_id=kwargs.pop('current_status_id', 2), latitude=14.8, longitude=121.0,
+                      # a claim is only for a held animal (Phase 6)
+                      custody_status=kwargs.pop('custody_status', 'In Barangay Facility'),
                       initial_latitude=14.801418, initial_longitude=121.004062,
                       initial_landmark='Original Street', animal_type='Dog', **kwargs)
 

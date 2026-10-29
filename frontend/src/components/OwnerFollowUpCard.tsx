@@ -1,14 +1,15 @@
 // Leader's owner follow-up card: 3-day observation of a complaint about a registered pet
 // (docs/06-future-proposals/SUBDIVISION_OWNER_FOLLOW_UP_PLAN.md, section 7.1). Saved on the server.
 import { useEffect, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import {
     Eye, Phone, CheckCircle2, Clock, Plus, XCircle, Send, AlertTriangle, CalendarPlus, ShieldAlert,
     Users, Smartphone, Image as ImageIcon, MessageSquare, X,
 } from 'lucide-react';
 import Button from './Button';
 import {
-    type CloseOutcome, type ContactMethod, type OwnerFollowUp, acknowledgeFollowUp, addFollowUpContact, closeFollowUp,
-    extendFollowUp, followUpError, getFollowUpForReport, startFollowUp,
+    type CloseOutcome, type ContactMethod, type IncidentWarning, type OwnerFollowUp, type WarningTarget, acknowledgeFollowUp,
+    addFollowUpContact, closeFollowUp, extendFollowUp, followUpError, getFollowUpForReport, getReportWarnings, startFollowUp,
 } from '../utils/ownerFollowUp';
 
 type LeaderMethod = 'Phone' | 'In person' | 'In-app' | 'Repeated incident';
@@ -24,7 +25,22 @@ interface Props {
     ownerHasAccount: boolean;
     onChanged?: () => void;          // the report itself changed (closed): refresh the page
     onEscalate?: () => void;         // the page's existing escalation dialog
-    onIssueWarning?: () => void;     // the page's existing owner warning form (owner with an account only)
+    onIssueWarning?: (target: WarningTarget) => void;   // the page's owner warning form (owner with an account only)
+    warningsRefreshKey?: number;     // changes when the page issued a warning: reload the incidents' warnings
+    categoryId?: number;             // 3 Rabies Risk cannot be observed; 1 Injured and 2 Aggressive get a caution
+    priority?: string | null;
+    reportBasePath?: string;         // where a repeated report opens, e.g. /subd/reports
+}
+
+const RABIES_RISK = 3;
+const CAUTION_CATEGORIES: Record<number, string> = { 1: 'Injured', 2: 'Aggressive' };
+
+/** Same wording as the server's caution (utils/owner_followups.py), shown before the observation starts. */
+function startCaution(categoryId?: number, priority?: string | null): string | null {
+    const reasons: string[] = [];
+    if (categoryId && CAUTION_CATEGORIES[categoryId]) reasons.push(`it was reported as ${CAUTION_CATEGORIES[categoryId]}`);
+    if (priority === 'High') reasons.push('it has High priority');
+    return reasons.length ? `Take care: ${reasons.join(' and ')}. You can escalate to the Barangay at any time instead of waiting for the observation to end.` : null;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -43,7 +59,7 @@ const inputCls = 'h-9 w-full px-3 bg-white border border-gray-200 rounded-lg tex
 const sectionTitle = 'text-[11px] font-black uppercase tracking-wider text-gray-400';
 
 export default function OwnerFollowUpCard({ reportId, eligible, canAct, petName, ownerName, ownerPhone, ownerHasAccount,
-    onChanged, onEscalate, onIssueWarning }: Props) {
+    onChanged, onEscalate, onIssueWarning, categoryId, priority, reportBasePath = '/subd/reports', warningsRefreshKey = 0 }: Props) {
     const [followUp, setFollowUp] = useState<OwnerFollowUp | null>(null);
     const [loaded, setLoaded] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -56,6 +72,10 @@ export default function OwnerFollowUpCard({ reportId, eligible, canAct, petName,
     const [reason, setReason] = useState('');
     const [closeOutcome, setCloseOutcome] = useState<Exclude<CloseOutcome, 'owner_complied'>>('incident_resolved');
     const [now, setNow] = useState(() => Date.now());   // for the progress bar; refreshed on every load and save
+    const [warnings, setWarnings] = useState<Record<number, IncidentWarning[]>>({});
+    const [verbalOpen, setVerbalOpen] = useState(false);
+    const [verbalMethod, setVerbalMethod] = useState<'Phone' | 'In person'>('Phone');
+    const [verbalNote, setVerbalNote] = useState('');
 
     useEffect(() => {
         let current = true;   // ignore a late answer for a report we already left
@@ -65,6 +85,20 @@ export default function OwnerFollowUpCard({ reportId, eligible, canAct, petName,
             .finally(() => { if (current) setLoaded(true); });
         return () => { current = false; };
     }, [reportId]);
+
+    // One warning per incident: the observed report and each logged repeated incident (Phase 5D)
+    const incidentKey = followUp
+        ? [followUp.report_id, ...(followUp.contacts || []).filter(c => c.method === 'Repeated incident' && c.related_report_id)
+            .map(c => c.related_report_id as number)].filter((id, i, all) => all.indexOf(id) === i).join(',')
+        : '';
+    useEffect(() => {
+        if (!incidentKey) return;
+        let current = true;
+        const ids = incidentKey.split(',').map(Number);
+        Promise.all(ids.map(id => getReportWarnings(id).then(list => [id, list] as const).catch(() => [id, []] as const)))
+            .then(rows => { if (current) setWarnings(Object.fromEntries(rows)); });
+        return () => { current = false; };
+    }, [incidentKey, warningsRefreshKey]);
 
     const run = async (action: () => Promise<OwnerFollowUp>, reportChanged = false) => {
         setBusy(true);
@@ -100,6 +134,30 @@ export default function OwnerFollowUpCard({ reportId, eligible, canAct, petName,
         progress = total > 0 ? Math.min(100, Math.max(0, ((now - new Date(f.opened_at).getTime()) / total) * 100)) : 100;
     }
     const totalDays = f ? Math.round((new Date(f.due_at).getTime() - new Date(f.opened_at).getTime()) / DAY_MS) : 3;
+
+    const rabiesRisk = categoryId === RABIES_RISK;
+    const caution = f ? (observing ? f.caution : null) : startCaution(categoryId, priority);
+    const repeats = observing ? (f?.unlogged_repeat_report_ids || []) : [];
+
+    const logRepeat = (id: number) => run(() => addFollowUpContact(f!.followup_id, {
+        method: 'Repeated incident', related_report_id: id,
+        note: `Report #${id}: ${pet || 'the pet'} was reported again during the observation.`,
+    }));
+
+    const incidents = incidentKey ? incidentKey.split(',').map(Number) : [];
+    const day = (s: string) => new Date(s).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    const warningPrefill = (id: number) => f ? (
+        `Owner follow-up on Report #${f.report_id}: ${pet || 'your pet'} was under observation from ${day(f.opened_at)} to ${day(f.due_at)}. `
+        + (id === f.report_id ? `Reported roaming in Report #${id}. ` : `Reported again during the observation in Report #${id}. `)
+        + `Keep ${pet || 'your pet'} safely confined at home and on a leash outside. A repeat may lead to the next warning or to escalation to the Barangay.`
+    ) : '';
+    const issueFor = (id: number) => onIssueWarning?.({ reportId: id, prefill: warningPrefill(id) });
+    const logVerbal = async () => {
+        if (!f || verbalNote.trim().length < 3) return;
+        if (await run(() => addFollowUpContact(f.followup_id, { method: verbalMethod, note: `Verbal warning: ${verbalNote.trim()}` }))) {
+            setVerbalOpen(false); setVerbalNote('');
+        }
+    };
 
     const openDecision = (d: Decision) => { setDecision(prev => prev === d ? null : d); setReason(''); setError(''); };
 
@@ -164,6 +222,36 @@ export default function OwnerFollowUpCard({ reportId, eligible, canAct, petName,
                     </p>
                 )}
 
+                {caution && !rabiesRisk && (
+                    <p role="note" className="text-xs font-semibold text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-start gap-1.5">
+                        <ShieldAlert className="w-3.5 h-3.5 mt-0.5 shrink-0" /> {caution}
+                    </p>
+                )}
+
+                {repeats.length > 0 && (
+                    <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 space-y-2">
+                        <p className="text-xs font-black text-red-800 flex items-center gap-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                            {pet || 'This pet'} was reported again during the observation
+                        </p>
+                        <ul className="space-y-1.5">
+                            {repeats.map(id => (
+                                <li key={id} className="flex flex-wrap items-center justify-between gap-2">
+                                    <Link to={`${reportBasePath}/${id}`} className="text-xs font-bold text-red-700 underline underline-offset-2 hover:text-red-900">
+                                        Report #{id}
+                                    </Link>
+                                    {canAct && (
+                                        <Button size="sm" variant="light" disabled={busy} onClick={() => logRepeat(id)}>
+                                            <Plus className="w-3.5 h-3.5 mr-1" /> Log as repeated incident
+                                        </Button>
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
+                        <p className="text-[11px] text-red-700">If it is the same event, merge that report into this one instead. A repeat can get the next owner warning.</p>
+                    </div>
+                )}
+
                 {/* Owner */}
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5">
                     <div className="min-w-0">
@@ -181,7 +269,21 @@ export default function OwnerFollowUpCard({ reportId, eligible, canAct, petName,
                 </div>
 
                 {/* 1. Not started */}
-                {!f && (
+                {!f && rabiesRisk && (
+                    <div className="space-y-3">
+                        <p role="note" className="text-xs font-semibold text-red-800 bg-red-50 border border-red-200 rounded-xl px-3 py-2 flex items-start gap-1.5">
+                            <ShieldAlert className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                            A Rabies Risk report cannot be observed: escalate it to the Barangay.
+                        </p>
+                        {canAct && onEscalate && (
+                            <Button size="sm" variant="warning" onClick={onEscalate}>
+                                <Send className="w-3.5 h-3.5 mr-1.5" /> Escalate to Barangay
+                            </Button>
+                        )}
+                    </div>
+                )}
+
+                {!f && !rabiesRisk && (
                     <div className="space-y-3">
                         <p className="text-xs text-gray-600 leading-relaxed">
                             This report is about a registered pet with a known owner. Contact the owner, ask them to keep the pet
@@ -297,6 +399,67 @@ export default function OwnerFollowUpCard({ reportId, eligible, canAct, petName,
                             )}
                         </div>
 
+                        {/* Warnings: one per incident (the observed report, then each logged repeat) */}
+                        {(hasAccount || canAct) && (
+                            <div className="space-y-2">
+                                <p className={sectionTitle}>Owner warnings</p>
+                                {hasAccount ? (
+                                    <ul className="space-y-1.5">
+                                        {incidents.map(id => {
+                                            const list = warnings[id] || [];
+                                            return (
+                                                <li key={id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+                                                    <div className="min-w-0">
+                                                        <p className="text-[11px] font-bold text-gray-800">
+                                                            Report #{id}{id === f.report_id ? ' · this report' : ' · repeated incident'}
+                                                        </p>
+                                                        {list.length > 0 ? list.map(w => (
+                                                            <p key={w.warning_id} className="text-[11px] text-amber-800">
+                                                                <ShieldAlert className="w-3 h-3 inline mr-1" />{w.warning_level} · {w.violation_type}
+                                                                {w.created_at ? ` · ${fmt(w.created_at)}` : ''} · {w.status}
+                                                            </p>
+                                                        )) : <p className="text-[11px] text-gray-500">No warning for this incident</p>}
+                                                    </div>
+                                                    {canAct && onIssueWarning && list.length === 0 && (
+                                                        <Button size="sm" variant="soft-warning" onClick={() => issueFor(id)}>
+                                                            <ShieldAlert className="w-3.5 h-3.5 mr-1.5" /> Issue warning
+                                                        </Button>
+                                                    )}
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <p className="text-[11px] text-gray-500">
+                                            The owner has no account, so a written warning can't be sent. Warn them by phone or in person and log it here.
+                                        </p>
+                                        {!verbalOpen ? (
+                                            <Button size="sm" variant="soft-warning" onClick={() => { setVerbalOpen(true); setError(''); }}>
+                                                <ShieldAlert className="w-3.5 h-3.5 mr-1.5" /> Log verbal warning
+                                            </Button>
+                                        ) : (
+                                            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-2.5 space-y-2">
+                                                <div className="flex flex-col sm:flex-row gap-2">
+                                                    <select value={verbalMethod} onChange={e => setVerbalMethod(e.target.value as 'Phone' | 'In person')} aria-label="How the owner was warned"
+                                                        className="h-9 px-2 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 sm:w-36">
+                                                        <option>Phone</option><option>In person</option>
+                                                    </select>
+                                                    <input value={verbalNote} onChange={e => setVerbalNote(e.target.value)} aria-label="What the owner was told"
+                                                        placeholder="What you told the owner, e.g. keep the dog inside; next time it goes to the Barangay"
+                                                        className={`${inputCls} flex-1 min-w-0`} />
+                                                </div>
+                                                <div className="flex justify-end gap-2">
+                                                    <Button size="sm" variant="ghost" onClick={() => { setVerbalOpen(false); setVerbalNote(''); }}>Cancel</Button>
+                                                    <Button size="sm" disabled={busy || verbalNote.trim().length < 3} onClick={logVerbal}>Log verbal warning</Button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {/* Decision: always the leader, never automatic */}
                         {canAct && (
                             <div className="space-y-2.5 pt-3 border-t border-gray-100">
@@ -360,7 +523,7 @@ export default function OwnerFollowUpCard({ reportId, eligible, canAct, petName,
                                         </p>
                                         <div className="flex flex-wrap gap-2">
                                             {hasAccount && onIssueWarning && (
-                                                <Button size="sm" variant="soft-warning" onClick={onIssueWarning}>
+                                                <Button size="sm" variant="soft-warning" onClick={() => issueFor(f.report_id)}>
                                                     <ShieldAlert className="w-3.5 h-3.5 mr-1.5" /> Issue owner warning
                                                 </Button>
                                             )}
@@ -387,6 +550,19 @@ export default function OwnerFollowUpCard({ reportId, eligible, canAct, petName,
                                 Observed {fmt(f.opened_at)} to {fmt(f.closed_at)}{f.closed_by_name ? ` · by ${f.closed_by_name}` : ''}
                             </p>
                         </div>
+                        {incidents.some(id => (warnings[id] || []).length > 0) && (
+                            <div className="space-y-1.5">
+                                <p className={sectionTitle}>Owner warnings</p>
+                                <ul className="space-y-1">
+                                    {incidents.flatMap(id => (warnings[id] || []).map(w => (
+                                        <li key={w.warning_id} className="text-[11px] text-amber-800">
+                                            <ShieldAlert className="w-3 h-3 inline mr-1" />Report #{id}: {w.warning_level} · {w.violation_type}
+                                            {w.created_at ? ` · ${fmt(w.created_at)}` : ''} · {w.status}
+                                        </li>
+                                    )))}
+                                </ul>
+                            </div>
+                        )}
                         {contacts.length > 0 && (
                             <div className="space-y-1.5">
                                 <p className={sectionTitle}>Contact log · {contacts.length}</p>

@@ -1,10 +1,23 @@
 // The pet owner's side of an owner follow-up (docs/06-future-proposals/SUBDIVISION_OWNER_FOLLOW_UP_PLAN.md, 7.3):
 // the complaint, the date the subdivision checks until, "I received this", and updates with a photo.
 // The server answers only the pet's owner, so the panel shows nothing to anyone else.
+// It also shows the owner warnings issued to this owner for the report, acknowledged here (the same as the home notice).
 import { useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Camera, Send, Eye } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Camera, Send, Eye, ShieldAlert } from 'lucide-react';
 import Button from './Button';
+import api from '../utils/api';
 import { type OwnerFollowUp, acknowledgeFollowUp, followUpError, getFollowUpForReport, sendOwnerUpdate } from '../utils/ownerFollowUp';
+
+interface MyWarning {
+    warning_id: number;
+    report_id?: number | null;
+    warning_level: string;
+    violation_type: string;
+    description: string;
+    status: string;
+    created_at?: string | null;
+    acknowledged_at?: string | null;
+}
 
 const fmt = (s?: string | null) => s ? new Date(s).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
 const fmtDate = (s?: string | null) => s ? new Date(s).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' }) : '';
@@ -16,19 +29,79 @@ export default function OwnerFollowUpOwnerPanel({ reportId }: { reportId: number
     const [note, setNote] = useState('');
     const [photo, setPhoto] = useState<File | null>(null);
     const [sent, setSent] = useState(false);
+    const [warnings, setWarnings] = useState<MyWarning[]>([]);
+    const [ticked, setTicked] = useState<Record<number, boolean>>({});
 
     useEffect(() => {
         let current = true;
         getFollowUpForReport(reportId)
             .then(data => { if (current) setF(data && data.my_updates !== undefined ? data : null); })  // owner view only
             .catch(() => { if (current) setF(null); });
+        // Warnings issued to me about this report (the server returns only my own)
+        api.get('/warnings/my-warnings')
+            .then(res => { if (current) setWarnings((Array.isArray(res.data) ? res.data : []).filter((w: MyWarning) => w.report_id === reportId)); })
+            .catch(() => { if (current) setWarnings([]); });
         return () => { current = false; };
     }, [reportId]);
 
-    if (!f) return null;
-    const observing = f.status === 'Observing';
-    const pet = f.pet_name || 'your pet';
-    const updates = f.my_updates || [];
+    const acknowledgeWarning = async (id: number) => {
+        setBusy(true);
+        setError('');
+        try {
+            const res = await api.patch(`/warnings/${id}/acknowledge`);
+            setWarnings(ws => ws.map(w => w.warning_id === id ? { ...w, ...res.data } : w));
+        } catch (err) {
+            setError(followUpError(err, 'The notice could not be acknowledged. Try again.'));
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    if (!f && warnings.length === 0) return null;
+    const observing = f?.status === 'Observing';
+    const pet = f?.pet_name || 'your pet';
+    const updates = f?.my_updates || [];
+
+    const warningList = warnings.length > 0 && (
+        <div className="space-y-2">
+            <p className="text-[11px] font-black uppercase tracking-wider text-gray-500">Subdivision notices</p>
+            {warnings.map(w => {
+                const pending = w.status === 'Pending';
+                return (
+                    <div key={w.warning_id} className="rounded-xl border border-yellow-200 bg-white dark:bg-[#151C2C] dark:border-yellow-800 p-3 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <ShieldAlert className="w-4 h-4 text-yellow-600" />
+                            <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 text-[10px] font-black uppercase tracking-wider">{w.warning_level}</span>
+                            <span className="text-xs font-black text-red-600">{w.violation_type}</span>
+                            {w.created_at && <span className="text-[11px] text-gray-400">{fmt(w.created_at)}</span>}
+                        </div>
+                        {w.description && <p className="text-xs text-gray-700 dark:text-gray-300 break-words">{w.description}</p>}
+                        {pending ? (
+                            <div className="space-y-2">
+                                <label className="flex items-start gap-2 text-[11px] text-gray-700 dark:text-gray-300 cursor-pointer">
+                                    <input type="checkbox" className="mt-0.5 w-4 h-4" checked={Boolean(ticked[w.warning_id])}
+                                        onChange={e => setTicked(t => ({ ...t, [w.warning_id]: e.target.checked }))} />
+                                    I acknowledge receipt of this warning. I understand that repeated violations may result in escalation to the Barangay.
+                                </label>
+                                <Button size="sm" disabled={busy || !ticked[w.warning_id]} onClick={() => acknowledgeWarning(w.warning_id)}>
+                                    <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Acknowledge notice
+                                </Button>
+                            </div>
+                        ) : (
+                            <p className="text-xs font-bold text-emerald-700 inline-flex items-center gap-1.5">
+                                <CheckCircle2 className="w-4 h-4" /> You acknowledged this notice{w.acknowledged_at ? ` on ${fmt(w.acknowledged_at)}` : ''}
+                            </p>
+                        )}
+                    </div>
+                );
+            })}
+        </div>
+    );
+
+    if (!f) {
+        return <div className="mb-4 sm:mb-6 p-4 rounded-2xl border bg-yellow-50/60 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800 space-y-3"
+            aria-label="Subdivision notices">{error && <p role="alert" className="text-xs font-semibold text-red-700">{error}</p>}{warningList}</div>;
+    }
 
     const run = async (action: () => Promise<OwnerFollowUp>) => {
         setBusy(true);
@@ -72,6 +145,8 @@ export default function OwnerFollowUpOwnerPanel({ reportId }: { reportId: number
             </div>
 
             {error && <p role="alert" className="text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+
+            {warningList}
 
             {observing && (
                 f.acknowledged ? (

@@ -44,9 +44,33 @@ export interface OwnerFollowUp {
     extended_at?: string | null;
     extension_reason?: string | null;
     contacts?: FollowUpContact[];
+    caution?: string | null;                 // Injured, Aggressive or High priority (Phase 5A)
+    unlogged_repeat_report_ids?: number[];   // other reports about the pet, not logged yet (Phase 5B)
     // owner view only
     my_updates?: { contacted_at: string; note: string; photo_url?: string | null }[];
 }
+
+/** An owner warning as the follow-up card lists it (GET /warnings/report/{id}). */
+export interface IncidentWarning {
+    warning_id: number;
+    report_id?: number | null;
+    warning_level: string;
+    violation_type: string;
+    status: string;
+    created_at?: string | null;
+    issuer_name?: string | null;
+}
+
+/** What the card asks the page's warning form to open with (Phase 5D): the incident's report and a prefilled text. */
+export interface WarningTarget {
+    reportId: number;
+    prefill: string;
+}
+
+export const getReportWarnings = async (reportId: number): Promise<IncidentWarning[]> => {
+    const data = (await api.get(`/warnings/report/${reportId}`)).data;
+    return Array.isArray(data) ? data : [];
+};
 
 /** The server's refusal message, or a fallback. */
 export function followUpError(err: unknown, fallback = 'Something went wrong. Try again.'): string {
@@ -59,8 +83,10 @@ export function followUpError(err: unknown, fallback = 'Something went wrong. Tr
 export const getFollowUpForReport = async (reportId: number): Promise<OwnerFollowUp | null> =>
     (await api.get(`/owner-followups/by-report/${reportId}`)).data ?? null;
 
-export const listFollowUps = async (params: { status?: 'open' | 'closed'; due?: boolean } = {}): Promise<OwnerFollowUp[]> =>
-    (await api.get('/owner-followups', { params })).data ?? [];
+export const listFollowUps = async (params: { status?: 'open' | 'closed'; due?: boolean; pet_id?: number } = {}): Promise<OwnerFollowUp[]> => {
+    const data = (await api.get('/owner-followups', { params })).data;
+    return Array.isArray(data) ? data : [];
+};
 
 export const startFollowUp = async (reportId: number): Promise<OwnerFollowUp> =>
     (await api.post('/owner-followups', { report_id: reportId })).data;

@@ -32,7 +32,7 @@ from app.models.landmark import Landmark  # noqa: E402
 from app.models.notification import Notification  # noqa: E402
 from app.models.owner_followup import OwnerFollowUp  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
-from app.models.report import Report, ReportStatus  # noqa: E402
+from app.models.report import Report, ReportStatus, StatusHistory  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
 from app.routes import owner_followups, reports  # noqa: E402
 from app.utils.auth import create_access_token  # noqa: E402
@@ -84,6 +84,9 @@ offline_pet = Pet(pet_name="Brownie", pet_type="Dog", owner_id=None, status="Act
 ownerless_pet = Pet(pet_name="Community dog", pet_type="Dog", owner_id=None, status="Active")
 fac = Landmark(name="Impound", latitude=14.8, longitude=121.0, is_holding_facility=True, barangay_id=1)
 db.add_all([pet, offline_pet, ownerless_pet, fac])
+# one Observing follow-up per pet: the later follow-ups observe other pets of the same owner
+more_pets = [Pet(pet_name=f"Dog {i}", pet_type="Dog", owner_id=owner.user_id, status="Active") for i in range(4)]
+db.add_all(more_pets)
 db.flush()
 
 
@@ -98,10 +101,10 @@ def mk_report(status=2, assigned=True, pet_obj=pet, subd=1, facility=None):
 
 R_MAIN = mk_report()
 R_OFFLINE = mk_report(pet_obj=offline_pet)
-R_THIRD = mk_report()
-R_REJECT = mk_report()
-R_WATCH = mk_report()
-R_LATER = mk_report()
+R_THIRD = mk_report(pet_obj=more_pets[0])
+R_REJECT = mk_report(pet_obj=more_pets[1])
+R_WATCH = mk_report(pet_obj=more_pets[2])
+R_LATER = mk_report(pet_obj=more_pets[3])
 R_REPEAT = mk_report()
 R_UNCLAIMED = mk_report(assigned=False)
 R_CLOSED = mk_report(status=11)
@@ -219,6 +222,10 @@ check("the leader extends once", r.status_code == 200 and r.json().get("extended
       and abs((fresh(F_MAIN).due_at - before) - timedelta(days=3)) < timedelta(seconds=2), r.text[:200])
 check("...the owner is told the new date", notes_for(owner, "Observation extended") == 1)
 check("...a second extension is refused", client.post(f"/owner-followups/{F_MAIN}/extend", json={"reason": "again more time"}, headers=H(leader)).status_code == 409)
+db.expire_all()
+ext = db.query(StatusHistory).filter(StatusHistory.report_id == R_MAIN.report_id, StatusHistory.remarks.like("Owner follow-up extended:%")).all()
+check("...the extension is in the report timeline once, with the new date and no owner name", len(ext) == 1 and "until" in ext[0].remarks
+      and "Olga" not in ext[0].remarks, [h.remarks for h in ext])
 
 # ---- who sees what ----
 lst = client.get("/owner-followups", headers=H(leader))
@@ -226,6 +233,11 @@ check("the leader lists the follow-ups of their subdivision", lst.status_code ==
 check("a leader of another subdivision sees none", client.get("/owner-followups", headers=H(leader_s2)).json() == [])
 check("Barangay staff see none while they are still observing", client.get("/owner-followups", headers=H(staff_b1)).json() == [])
 check("the administrator sees all", len(client.get("/owner-followups", headers=H(admin)).json()) == 2)
+# Phase 5F: one pet's follow-ups, for its record's history
+by_pet = client.get(f"/owner-followups?pet_id={pet.pet_id}", headers=H(leader))
+check("the leader lists one pet's follow-ups", by_pet.status_code == 200 and [x["followup_id"] for x in by_pet.json()] == [F_MAIN], by_pet.text[:200])
+check("...another subdivision's leader sees none for it", client.get(f"/owner-followups?pet_id={pet.pet_id}", headers=H(leader_s2)).json() == [])
+check("...a resident (even the owner) gets no list", client.get(f"/owner-followups?pet_id={pet.pet_id}", headers=H(owner)).status_code == 403)
 check("residents get no list", client.get("/owner-followups", headers=H(owner)).status_code == 403)
 br = client.get(f"/owner-followups/by-report/{R_MAIN.report_id}", headers=H(owner)).json()
 check("the owner sees their follow-up without the leader's notes", br and br.get("followup_id") == F_MAIN and "contacts" not in br

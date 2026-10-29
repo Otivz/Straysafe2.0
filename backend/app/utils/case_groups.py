@@ -456,7 +456,8 @@ def _fully_confirmed(m: ReportMatch, pet: Optional[Pet]) -> bool:
     """Staff confirmed it, and the owner did too (or the pet has no owner to ask)."""
     if m.status != "CONFIRMED_MATCH" or not m.matched_pet_id or pet is None:
         return False
-    return (not pet.owner_id) or m.owner_confirmation_status == "OWNER_CONFIRMED"
+    # LEADER_VERIFIED: the handling leader confirmed it when the owner did not (routes/matches.py)
+    return (not pet.owner_id) or m.owner_confirmation_status in ("OWNER_CONFIRMED", "LEADER_VERIFIED")
 
 
 def case_confirmed_match(db: Session, members: List[Report]) -> Optional[ReportMatch]:

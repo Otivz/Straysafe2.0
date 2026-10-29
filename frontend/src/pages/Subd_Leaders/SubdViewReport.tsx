@@ -51,8 +51,13 @@ import IdentityDisputePanel from '../../components/IdentityDisputePanel';
 import DisputeMatchHistory from '../../components/DisputeMatchHistory';
 import SectionJumpNav from '../../components/SectionJumpNav';
 import OwnerFollowUpCard from '../../components/OwnerFollowUpCard';
+import RepeatedReportBanner from '../../components/RepeatedReportBanner';
+import type { WarningTarget } from '../../utils/ownerFollowUp';
 interface Report {
     report_id: number;
+    observing_followup_report_id?: number | null;   // the pet is under an owner follow-up on that report
+    animal_held?: boolean | null;                     // a pet claim is only for a held animal (Phase 6)
+    owner_custody_answer?: 'home' | 'missing' | null; // the owner's answer when nobody holds the animal
     category_id: number;
     status_id: number;
     priority_level: string;
@@ -376,12 +381,17 @@ const SubdViewReport = () => {
     const [warningEvidence, setWarningEvidence] = useState(true);
     const [priorWarnings, setPriorWarnings] = useState<any[]>([]);
     const [isLoadingPriorWarnings, setIsLoadingPriorWarnings] = useState(false);
+    // The incident the warning is for: this report, or a repeated incident logged on its owner follow-up (Phase 5D)
+    const [warningTargetReportId, setWarningTargetReportId] = useState<number | null>(null);
+    const [warningsRefreshKey, setWarningsRefreshKey] = useState(0);
 
     const [noOwnerNotice, setNoOwnerNotice] = useState(false);
     const caseHolding = useCaseHolding(report?.report_id, report?.duplicate_of_report_id, `${report?.status_id}-${report?.history?.length ?? 0}`);
 
-    const openIssueWarningModal = async () => {
+    const openIssueWarningModal = async (target?: WarningTarget) => {
         if (!report) return;
+        setWarningTargetReportId(target && target.reportId !== report.report_id ? target.reportId : null);
+        setWarningDescription(target?.prefill || '');
 
         let targetUserId = report.owner_id;
         let targetOwnerName = report.owner_name;
@@ -762,7 +772,7 @@ const SubdViewReport = () => {
             const res = await api.post('/warnings/', {
                 user_id: targetUserId,
                 pet_id: report.pet_id || null,
-                report_id: report.report_id,
+                report_id: warningTargetReportId ?? report.report_id,
                 warning_level: warningTier,
                 violation_type: warningViolation,
                 description: warningDescription,
@@ -770,7 +780,12 @@ const SubdViewReport = () => {
             });
             setIsWarningModalOpen(false);
             setWarningDescription('');
+            setWarningsRefreshKey(k => k + 1);
             alert('Warning Citation Issued Successfully!');
+            if (warningTargetReportId) {   // a repeated incident's report: this report itself is unchanged
+                setWarningTargetReportId(null);
+                return;
+            }
             setShowSuccess(true);
             setTimeout(() => setShowSuccess(false), 3000);
 
@@ -2899,8 +2914,23 @@ const SubdViewReport = () => {
                                             {/* 3-day owner observation of a complaint about a registered pet with an owner. Shown for any such
                                                 report so an ended or escalated follow-up keeps its history; it can only start on an open case,
                                                 not with the Barangay and not held in a facility (nobody holds the pet while observing) */}
+                                            {/* Nobody holds the animal and the owner answered whether it is home (Phase 6) */}
+                                            {report.owner_custody_answer && report.animal_held === false && (
+                                                <div role="note" className={`rounded-2xl border px-4 py-3 text-xs font-semibold ${report.owner_custody_answer === 'home'
+                                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
+                                                    {report.owner_custody_answer === 'home'
+                                                        ? `The owner says ${report.pet_name || 'the pet'} is home. Close the report (Incident Resolved), or start the owner follow-up if it is a complaint.`
+                                                        : `The owner says ${report.pet_name || 'the pet'} is still missing. This sighting stays on its record.`}
+                                                </div>
+                                            )}
+                                            {/* This report is about a pet under observation on another report: a repeated incident */}
+                                            {report.observing_followup_report_id && (
+                                                <RepeatedReportBanner reportId={report.report_id} observedReportId={report.observing_followup_report_id}
+                                                    petName={report.pet_name} canAct={currentUser?.role_id === 2} />
+                                            )}
                                             {report.pet_id && (report.owner_id || report.owner_name) && (
                                                 <OwnerFollowUpCard reportId={report.report_id}
+                                                    categoryId={report.category_id} priority={report.priority_level}
                                                     eligible={![3, 7, 8, 9, 10, 11, 12, 14, 17, 18].includes(report.status_id)
                                                         && !isEscalatedToBarangay && !(report as any).facility_id && !report.duplicate_of_report_id}
                                                     canAct={report.assigned_leader_id === currentUserId}
@@ -2908,7 +2938,8 @@ const SubdViewReport = () => {
                                                     ownerHasAccount={Boolean(report.owner_id)}
                                                     onChanged={() => fetchReportDetails()}
                                                     onEscalate={isEscalatedToBarangay ? undefined : openEscalation}
-                                                    onIssueWarning={report.owner_id ? openIssueWarningModal : undefined} />
+                                                    onIssueWarning={report.owner_id ? openIssueWarningModal : undefined}
+                                                    warningsRefreshKey={warningsRefreshKey} />
                                             )}
 
                                             {/* OPERATIONAL CONTROLS - ACTIVE FOR ASSIGNED HANDLER */}
@@ -3072,7 +3103,7 @@ const SubdViewReport = () => {
                                                                     ) : (
                                                                         <button
                                                                             type="button"
-                                                                            onClick={openIssueWarningModal}
+                                                                            onClick={() => openIssueWarningModal()}
                                                                             className="w-full py-3 bg-yellow-500 text-white rounded-xl text-xs font-bold shadow-md shadow-yellow-100 hover:bg-yellow-600 transition-all transform hover:-translate-y-0.5 active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
                                                                         >
                                                                             <AlertTriangle className="w-3.5 h-3.5" />
@@ -3293,7 +3324,9 @@ const SubdViewReport = () => {
                                 <AlertTriangle className="w-6 h-6 text-yellow-600" />
                                 <div>
                                     <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Issue Owner Warning</h3>
-                                    <p className="text-[11px] text-gray-500 mt-0.5 font-medium">Issue a formal notice to the registered pet owner.</p>
+                                    <p className="text-[11px] text-gray-500 mt-0.5 font-medium">
+                                        Issue a formal notice to the registered pet owner{warningTargetReportId ? ` for the repeated incident in Report #${warningTargetReportId}` : ''}.
+                                    </p>
                                 </div>
                             </div>
                             <button onClick={() => setIsWarningModalOpen(false)} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-900 rounded-full hover:bg-gray-100 transition-all cursor-pointer">

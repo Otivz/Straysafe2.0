@@ -23,6 +23,7 @@ interface Sighting {
 
 const ANSWER_LABEL: Record<string, string> = {
     OWNER_CONFIRMED: 'Owner: yes, my pet',
+    LEADER_VERIFIED: 'Leader verified (photos and markings)',
     OWNER_REJECTED: 'Owner: not my pet',
     UNSURE: 'Owner: unsure',
     NO_RESPONSE: 'Owner: no answer needed',

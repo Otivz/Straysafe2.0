@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import ClaimNotNeededPanel from '../../components/ClaimNotNeededPanel';
+import { CLOSABLE_CLAIM_STATUSES, claimStatusLabel } from '../../utils/claimCustody';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { Zap } from 'lucide-react';
@@ -600,7 +602,7 @@ const SubdPetClaims = () => {
                                             {/* Top: status, claim number, owner */}
                                             <div className="flex items-center justify-between gap-2">
                                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border truncate min-w-0 ${getStatusStyles(claim.status)}`}>
-                                                    {claim.status || 'Pending Review'}
+                                                    {claimStatusLabel(claim.raw, claim.status || 'Pending Review')}
                                                 </span>
                                                 <span className="text-[11px] font-semibold text-slate-400 shrink-0">Claim #{claim.claim_id}</span>
                                             </div>
@@ -716,7 +718,7 @@ const SubdPetClaims = () => {
                                                     {/* Status */}
                                                     <td className="py-4 px-5">
                                                         <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border leading-none inline-block ${getStatusStyles(claim.status)}`}>
-                                                            {claim.status}
+                                                            {claimStatusLabel(claim.raw, claim.status)}
                                                         </span>
                                                     </td>
 
@@ -821,7 +823,7 @@ const SubdPetClaims = () => {
                                         {/* Status Badge */}
                                         <div className={`text-center rounded-xl px-5 py-3 border ${getStatusStyles(selectedClaim.status)}`}>
                                             <p className="text-[9px] font-black uppercase tracking-widest mb-0.5">Status</p>
-                                            <p className="text-sm font-black uppercase leading-tight">{selectedClaim.status}</p>
+                                            <p className="text-sm font-black uppercase leading-tight">{claimStatusLabel(selectedClaim.raw, selectedClaim.status)}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -1388,7 +1390,22 @@ const SubdPetClaims = () => {
 
                                         {/* Action Panel Content */}
                                         <div>
-                                            {selectedClaim.status === 'Handover Complete' || selectedClaim.status === 'Pet Received' ? (
+                                            {selectedClaim.raw?.animal_held === false && CLOSABLE_CLAIM_STATUSES.includes(selectedClaim.status) && (
+                                                <ClaimNotNeededPanel claimId={selectedClaim.claim_id} petName={selectedClaim.pet?.pet_name}
+                                                    ownerAnswer={selectedClaim.raw?.owner_custody_answer}
+                                                    onClosed={(updated) => {
+                                                        const transformed = transformClaim(updated);
+                                                        setClaims(prev => prev.map(c => c.claim_id === transformed.claim_id ? transformed : c));
+                                                        setSelectedClaim(transformed);
+                                                    }} />
+                                            )}
+                                            {selectedClaim.raw?.closed_not_needed ? (
+                                                <div className="p-3.5 rounded-xl bg-gray-50 border border-gray-200 text-center space-y-1">
+                                                    <p className="text-[11px] font-black text-gray-800">Closed: not needed</p>
+                                                    <p className="text-[10px] text-gray-600">Nobody was holding the animal, so there was nothing to hand over. A new claim can be filed if it is picked up later.</p>
+                                                </div>
+                                            ) : selectedClaim.raw?.animal_held === false && CLOSABLE_CLAIM_STATUSES.includes(selectedClaim.status) ? null
+                                            : selectedClaim.status === 'Handover Complete' || selectedClaim.status === 'Pet Received' ? (
                                                 <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-3">
                                                     <div className="flex items-center gap-2 text-emerald-800 font-black text-xs uppercase tracking-wider">
                                                         <span>🎉</span>

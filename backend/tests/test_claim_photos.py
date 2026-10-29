@@ -39,7 +39,8 @@ for sid in range(1, 19):
 owner = User(name="Owner", email="owner@test-mail.com", password="x", role_id=1, is_verified=True, status="Active", subdivision_id=1, barangay_id=1)
 db.add(owner)
 db.flush()
-rep = Report(user_id=owner.user_id, subdivision_id=1, category_id=1, latitude=14.8, longitude=121.0, current_status_id=2, animal_type="Dog")
+rep = Report(user_id=owner.user_id, subdivision_id=1, category_id=1, latitude=14.8, longitude=121.0, current_status_id=2, animal_type="Dog",
+             custody_status="In Barangay Facility")  # a claim is only for a held animal (Phase 6)
 pet = Pet(pet_name="Boyet", pet_type="Dog", owner_id=owner.user_id, status="Active")
 db.add_all([rep, pet])
 db.commit()
@@ -76,7 +77,7 @@ check("the shown list is the stored one, in order", claims.claim_photo_list(db.g
 # A cached claim ID may no longer exist after the database has changed. The UI
 # saves by the current report/pet, allowing the server to select the live claim.
 rep2 = Report(user_id=owner.user_id, subdivision_id=1, category_id=1, latitude=14.8, longitude=121.0,
-              current_status_id=2, animal_type='Dog')
+              current_status_id=2, animal_type='Dog', custody_status='In Barangay Facility')
 leader = User(name='Leader', email='leader@test-mail.com', password='x', role_id=2, is_verified=True,
               status='Active', subdivision_id=1, barangay_id=1)
 db.add_all([rep2, leader])

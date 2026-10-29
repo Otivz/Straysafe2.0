@@ -6,6 +6,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 const OWNER_LABEL: Record<string, string> = {
     PENDING: 'No answer yet', OWNER_CONFIRMED: 'Said it is their pet', OWNER_REJECTED: 'Said it is not their pet', NO_RESPONSE: 'No response',
+    LEADER_VERIFIED: 'Did not confirm; the leader verified it (photos and markings)',
 };
 
 export default function DisputeMatchHistory({ history }: { history?: any }) {

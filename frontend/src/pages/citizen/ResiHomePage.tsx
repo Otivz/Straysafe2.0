@@ -391,6 +391,7 @@ const ResiHomePage = () => {
     // Warning Acknowledgment State
     const [pendingWarning, setPendingWarning] = useState<any>(null);
     const [showWarningModal, setShowWarningModal] = useState(false);
+    const [warningAckTicked, setWarningAckTicked] = useState(false);   // the notice is acknowledged only after ticking the box
 
     const fetchMyWarnings = async () => {
         try {
@@ -416,6 +417,7 @@ const ResiHomePage = () => {
             await api.patch(`/warnings/${pendingWarning.warning_id}/acknowledge`);
             setPendingWarning(null);
             setShowWarningModal(false);
+            setWarningAckTicked(false);
             fetchMyWarnings();
         } catch (err: any) {
             console.error('Failed to acknowledge warning:', err);
@@ -1705,7 +1707,8 @@ const ResiHomePage = () => {
                                 </div>
 
                                 <div className="flex items-start gap-3 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
-                                    <input type="checkbox" id="ack" className="mt-1 w-5 h-5 rounded border-gray-300 text-blue-500 focus:ring-blue-500" required />
+                                    <input type="checkbox" id="ack" className="mt-1 w-5 h-5 rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+                                        checked={warningAckTicked} onChange={e => setWarningAckTicked(e.target.checked)} />
                                     <label htmlFor="ack" className="text-[11px] font-semibold text-gray-700 leading-relaxed">
                                         I acknowledge receipt of this warning. I understand that repeated violations may result in escalation to the Barangay or HOA management.
                                     </label>
@@ -1713,7 +1716,8 @@ const ResiHomePage = () => {
 
                                 <button
                                     onClick={handleAcknowledgeWarning}
-                                    className="w-full py-4 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl active:scale-[0.98]"
+                                    disabled={!warningAckTicked}
+                                    className="w-full py-4 bg-[#F97316] hover:bg-[#EA580C] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl active:scale-[0.98]"
                                 >
                                     ACKNOWLEDGE NOTICE
                                 </button>

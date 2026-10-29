@@ -12,6 +12,10 @@ import ReportDescription from '../../components/ReportDescription';
 import { petDescription, petName } from '../../utils/petName';
 import MediaLightbox, { type LightboxItem } from '../MediaLightbox';
 import { SeparateIncidentOverride } from '../SeparateIncidentOverride';
+import LeaderIdentityConfirm from '../LeaderIdentityConfirm';
+
+// The owner's half of the two-way confirmation: the owner, or the handling leader (LEADER_VERIFIED)
+const ownerSideConfirmed = (s?: string) => s === 'OWNER_CONFIRMED' || s === 'LEADER_VERIFIED';
 
 interface AIMatchReviewModalProps {
     isOpen: boolean;
@@ -26,7 +30,7 @@ interface AIMatchReviewModalProps {
 
 const getStatusBadge = (status: string, match?: any) => {
     // Pet matches are official only after both staff and the owner confirm
-    if (status === 'CONFIRMED_MATCH' && match?.matched_pet_id && match.matched_pet?.owner_id && match.owner_confirmation_status !== 'OWNER_CONFIRMED') {
+    if (status === 'CONFIRMED_MATCH' && match?.matched_pet_id && match.matched_pet?.owner_id && !ownerSideConfirmed(match.owner_confirmation_status)) {
         return <span className="px-3 py-1 bg-blue-100 border border-blue-300 text-blue-800 rounded-full font-bold text-xs flex items-center gap-1.5 shadow-sm"><span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>Staff Confirmed · Awaiting Owner</span>;
     }
     switch (status) {
@@ -54,6 +58,8 @@ const getOwnerFeedbackBadge = (status: string) => {
             return <span className="px-2.5 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-full text-xs font-semibold">✓ Owner Confirmed</span>;
         case 'OWNER_REJECTED':
             return <span className="px-2.5 py-0.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-full text-xs font-semibold">✕ Owner Reported Not Their Pet</span>;
+        case 'LEADER_VERIFIED':
+            return <span className="px-2.5 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-full text-xs font-semibold">✓ Leader Verified (photos and markings)</span>;
         case 'NO_RESPONSE':
         case 'PENDING':
         default:
@@ -789,11 +795,17 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             {isCommunityAnimal ? (
                                                 <span className="px-2.5 py-0.5 rounded-full border bg-gray-100 border-gray-200 text-gray-600 font-semibold">No owner — staff confirmation only</span>
                                             ) : getOwnerFeedbackBadge(match.owner_confirmation_status)}
-                                            {match.status === 'CONFIRMED_MATCH' && (isCommunityAnimal || match.owner_confirmation_status === 'OWNER_CONFIRMED') && (
+                                            {match.status === 'CONFIRMED_MATCH' && (isCommunityAnimal || ownerSideConfirmed(match.owner_confirmation_status)) && (
                                                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white font-bold">Linked to Pet Record</span>
                                             )}
                                         </div>
                                     </div>
+                                    {/* The owner did not answer within 24 hours, or said no: the handling leader may confirm it (Phase 5C) */}
+                                    {!readOnly && !isCommunityAnimal && match.status === 'CONFIRMED_MATCH' && !ownerSideConfirmed(match.owner_confirmation_status)
+                                        && Number(currentUser?.role_id) === 2 && Number(source?.assigned_leader_id) === Number(currentUser?.user_id)
+                                        && Number(source?.user_id) !== Number(targetPet?.owner_id) && (
+                                        <LeaderIdentityConfirm match={match} onConfirmed={(updated) => onVerified?.(updated)} />
+                                    )}
                                     {/* The owner said yes and filed the claim with proof: shortcut to it */}
                                     {claimPath && (
                                         <button
@@ -1046,7 +1058,12 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                         </div>
                     ) : (
                         /* Resident / Owner Supporting Feedback */
-                        isPetMatch && Number(targetPet?.owner_id) === Number(currentUser?.user_id) ? (
+                        isPetMatch && Number(targetPet?.owner_id) === Number(currentUser?.user_id) && match.owner_confirmation_status === 'LEADER_VERIFIED' ? (
+                        <div className="px-4 py-3 rounded-xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900">
+                            <strong>The Subdivision Leader confirmed this sighting from the photos and markings.</strong>{' '}
+                            If it is not your pet, file a dispute on the report.
+                        </div>
+                        ) : isPetMatch && Number(targetPet?.owner_id) === Number(currentUser?.user_id) ? (
                         <div className="space-y-3">
                             <div className="text-xs text-gray-600 font-medium">
                                 <strong>Owner Confirmation:</strong> Does this animal sighting match your pet? It is added to your pet's record only after both you and a reviewing official confirm it.

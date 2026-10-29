@@ -18,6 +18,8 @@ import { petName } from '../../utils/petName';
 import { compressImageFile } from '../../utils/imageCompress';
 import { getReportSighting } from '../../utils/originalSighting';
 import { saveClaimEvidence, type ClaimEvidenceFile } from '../../utils/claimEvidence';
+import CustodyQuestion from '../../components/CustodyQuestion';
+import { OPEN_CLAIM_STATUSES, claimStatusLabel } from '../../utils/claimCustody';
 const parseReportDescription = (description: string) => {
     if (!description) return { cleanNotes: '', pattern: '', conditions: '', markings: '' };
     
@@ -1920,8 +1922,19 @@ const PetMatchReview = () => {
                                     'bg-blue-50 border-blue-100 text-blue-600'
                                 }`}>
                                     <p className="text-[9px] font-black uppercase tracking-widest mb-1">Status</p>
-                                    <p className="text-lg font-black uppercase">{existingClaim.status}</p>
+                                    <p className="text-lg font-black uppercase">{claimStatusLabel(existingClaim)}</p>
                                 </div>
+
+                                {/* Nobody holds the animal (Phase 6): the claim is not needed; the owner says whether the pet is home */}
+                                {report?.animal_held === false && OPEN_CLAIM_STATUSES.includes(existingClaim.status) && matchedPet && (
+                                    <div className="space-y-3">
+                                        <p className="text-xs font-semibold text-sky-800 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2">
+                                            Nobody is holding {petName(matchedPet) || 'your pet'}, so this claim is not needed and your Subdivision Leader will close it.
+                                        </p>
+                                        <CustodyQuestion embedded reportId={Number(reportId)} petId={matchedPet.pet_id} petName={petName(matchedPet)}
+                                            answer={report?.owner_custody_answer} />
+                                    </div>
+                                )}
 
                                 {existingClaim.status === 'Approved' && (
                                      <div className="p-4 bg-green-50/70 border border-green-200/80 rounded-2xl space-y-3">
@@ -2351,10 +2364,11 @@ const PetMatchReview = () => {
                             // Claim Filing Form Flow
                             <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl p-6 sm:p-8 space-y-6">
                                 <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight">
-                                    {!isMyPetConfirmed && ownerStatus !== 'OWNER_CONFIRMED' ? 'Is This Your Pet?' : 'Submit Pet Claim'}
+                                    {!isMyPetConfirmed && ownerStatus !== 'OWNER_CONFIRMED' && ownerStatus !== 'LEADER_VERIFIED' ? 'Is This Your Pet?'
+                                        : report?.animal_held === false ? 'Is Your Pet Home?' : 'Submit Pet Claim'}
                                 </h3>
 
-                                {!isMyPetConfirmed && ownerStatus !== 'OWNER_CONFIRMED' ? (
+                                {!isMyPetConfirmed && ownerStatus !== 'OWNER_CONFIRMED' && ownerStatus !== 'LEADER_VERIFIED' ? (
                                     // Step 1: Single Yes / No decision (each opens a confirmation dialog)
                                     <div className="space-y-6">
                                         <p className="text-xs font-semibold text-gray-500 leading-relaxed">
@@ -2379,6 +2393,10 @@ const PetMatchReview = () => {
                                             </Button>
                                         </div>
                                     </div>
+                                ) : report?.animal_held === false && matchedPet ? (
+                                    // Nobody holds the animal (Phase 6): no claim, the owner says whether the pet is home
+                                    <CustodyQuestion embedded reportId={Number(reportId)} petId={matchedPet.pet_id} petName={petName(matchedPet)}
+                                        answer={report?.owner_custody_answer} />
                                 ) : (
                                     // Step 2: Proof of Ownership Submission & Review
                                     <div className="space-y-5 animate-in fade-in duration-300">

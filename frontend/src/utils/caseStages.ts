@@ -40,6 +40,21 @@ const STEP_LABELS: Record<StepKey, string> = {
 
 const IN_FACILITY = /facility|impound|holding|shelter|secured in/i;
 
+/**
+ * An owner follow-up observing this report, from its history (the latest "Owner follow-up started/extended/ended"
+ * entry): the date it observes until, or null when none is open.
+ */
+type HistoryNote = { remarks?: string | null; created_at?: string | null };
+export function openObservation(report: { history?: HistoryNote[] | null } | null | undefined): { until: string | null } | null {
+    const entries = (report?.history || [])
+        .filter((h): h is HistoryNote & { remarks: string } => Boolean(h?.remarks) && /^Owner follow-up (started|extended|ended)\b/i.test(String(h.remarks).trim()))
+        .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+    const last = entries[entries.length - 1];
+    if (!last || /^Owner follow-up ended/i.test(last.remarks.trim())) return null;
+    const until = last.remarks.match(/until ([A-Z][a-z]{2} \d{1,2}, \d{4})/);
+    return { until: until ? until[1] : null };
+}
+
 function stepOfStatus(statusId: number | null | undefined): StepKey {
     const id = Number(statusId) || 1;
     return (STEP_ORDER.find((k) => STEP_STATUSES[k].includes(id)) || 'reported');
@@ -88,6 +103,9 @@ export function getCaseStages(report: any, holding?: any | null): CaseStages {
     const firstOf = (key: StepKey) => history.find((h: any) => STEP_STATUSES[key].includes(Number(h.report_status_id))) || null;
 
     const closed = current === 'closed' ? closedOutcome(statusId, report?.duplicate_of_report_id) : null;
+    // The subdivision observes the owner's pet (owner follow-up) while the case stays at "checked"
+    const observation = current === 'checked' ? openObservation(report) : null;
+    const observing = Boolean(observation);
 
     const steps: CaseStep[] = STEP_ORDER.map((key, i) => {
         const first = key === 'reported' ? null : firstOf(key);
@@ -100,7 +118,7 @@ export function getCaseStages(report: any, holding?: any | null): CaseStages {
         if (key === 'closed' && closed && !date) date = history.length ? history[history.length - 1].created_at : null;
         return {
             key,
-            label: key === 'closed' && closed ? closed.short : STEP_LABELS[key],
+            label: key === 'closed' && closed ? closed.short : key === 'checked' && observing ? 'Under observation' : STEP_LABELS[key],
             state,
             date,
             targetId: first ? Number(first.history_id) : null,
@@ -110,6 +128,7 @@ export function getCaseStages(report: any, holding?: any | null): CaseStages {
 
     const currentLabel = closed
         ? closed.label
+        : observing ? `Under observation${observation?.until ? ` until ${observation.until}` : ''}`
         : (current === 'care' && ![7, 8].includes(statusId) ? OPEN_LABELS[7] : (OPEN_LABELS[statusId] || OPEN_LABELS[1]));
     return { steps, currentIndex, currentLabel, outcome: closed ? closed.outcome : null };
 }
@@ -183,6 +202,11 @@ export function getWhereNow(report: any, stages: CaseStages, holding?: any | nul
         if (statusId === 5) return { tone: 'rescue', parts: lastSeen ? seen('A rescue team is on the way to ', 'A rescue team is on the way to the spot ') : [{ text: 'A rescue team is on the way.' }] };
         if (statusId === 13) return { tone: 'rescue', parts: [{ text: 'The Barangay approved the rescue; a team will be sent.' }, ...near(' Last seen near ')] };
         return { tone: 'rescue', parts: [{ text: 'Sent to the Barangay for rescue.' }, ...near(' Last seen near ')] };
+    }
+    if (key === 'checked' && openObservation(report)) {
+        const until = openObservation(report)?.until;
+        return { tone: 'progress', parts: [{ text: `Under observation: the subdivision asked the pet's owner to keep it confined and is checking${until ? ' until ' : '.'}` },
+            ...(until ? [{ text: until, strong: true }, { text: '.' }] : [])] };
     }
     if (key === 'checked') {
         return { tone: 'progress', parts: [{ text: statusId === 15 ? 'Ownership is being reviewed.' : statusId === 16 ? 'The subdivision is looking into it.' : 'Checked by the subdivision.' }, ...near(' Last seen near ')] };

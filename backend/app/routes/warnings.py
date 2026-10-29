@@ -11,7 +11,7 @@ from app.models.pet import Pet
 from app.models.report import Report, StatusHistory, Rescue
 from app.models.notification import Notification
 from app.schemas.warning import WarningCreate, WarningResponse, WarningAcknowledge
-from app.utils.auth import get_current_user
+from app.utils.auth import get_current_user, verify_subdivision_scope
 from app.utils.audit import log_activity
 from app.utils.case_groups import require_case_pet
 from app.utils.notification_dispatcher import dispatch_notification
@@ -77,11 +77,12 @@ def issue_warning(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # Only Leaders (2), Staff (3), and Admin (4) can issue citations
-    if current_user.role_id not in [2, 3, 4]:
+    # Only the Subdivision Leader issues owner warnings (owner follow-up plan, section 15); Barangay staff and
+    # administrators read the warning history
+    if current_user.role_id != 2:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only Subdivision Leaders and Barangay Staff can issue official warnings."
+            detail="Only the Subdivision Leader issues owner warnings."
         )
 
     # Validate target resident
@@ -95,6 +96,8 @@ def issue_warning(
         rep = db.query(Report).filter(Report.report_id == warning_in.report_id).first()
         if not rep:
             raise HTTPException(status_code=404, detail="Associated incident report not found")
+        # The leader warns only on reports of their own subdivision (a repeated incident is another report there)
+        verify_subdivision_scope(current_user, rep.subdivision_id, db=db)
 
         # Subdivision leader cannot issue warning on escalated report
         if current_user.role_id == 2:
@@ -148,6 +151,9 @@ def issue_warning(
             rep.pet_id = warning_in.pet_id
 
     pet = db.query(Pet).filter(Pet.pet_id == warning_in.pet_id).first() if warning_in.pet_id else None
+    # A warning about a registered pet goes to that pet's owner, nobody else
+    if pet is not None and pet.owner_id and pet.owner_id != warning_in.user_id:
+        raise HTTPException(status_code=400, detail="The warning must go to the pet's registered owner.")
 
     new_warning = OwnerWarning(
         user_id=warning_in.user_id,
@@ -258,9 +264,10 @@ def get_pet_warnings(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    warnings = db.query(OwnerWarning).filter(
-        OwnerWarning.pet_id == pet_id
-    ).order_by(OwnerWarning.created_at.desc()).all()
+    query = db.query(OwnerWarning).filter(OwnerWarning.pet_id == pet_id)
+    if current_user.role_id == 1:   # a resident sees only warnings issued to them (names and phones are in the reply)
+        query = query.filter(OwnerWarning.user_id == current_user.user_id)
+    warnings = query.order_by(OwnerWarning.created_at.desc()).all()
     return [enrich_warning_dict(w, db) for w in warnings]
 
 
@@ -270,9 +277,10 @@ def get_report_warnings(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    warnings = db.query(OwnerWarning).filter(
-        OwnerWarning.report_id == report_id
-    ).order_by(OwnerWarning.created_at.desc()).all()
+    query = db.query(OwnerWarning).filter(OwnerWarning.report_id == report_id)
+    if current_user.role_id == 1:   # a resident sees only warnings issued to them (names and phones are in the reply)
+        query = query.filter(OwnerWarning.user_id == current_user.user_id)
+    warnings = query.order_by(OwnerWarning.created_at.desc()).all()
     return [enrich_warning_dict(w, db) for w in warnings]
 
 

@@ -28,7 +28,8 @@ from app.utils.auth import get_current_staff_or_admin, get_current_user, verify_
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.holding_stay import db_now
 from app.utils.notification_dispatcher import dispatch_notification
-from app.utils.owner_followups import SETTING_KEY, followup_days, owner_snapshot, start_refusal
+from app.utils.owner_followups import (SETTING_KEY, followup_caution, followup_days, owner_snapshot, start_refusal,
+                                       unlogged_repeats)
 from app.utils.uploads import read_and_validate_upload
 
 router = APIRouter(prefix="/owner-followups", tags=["Owner Follow-up"])
@@ -139,6 +140,9 @@ def _serialize(f: OwnerFollowUp, db: Session, owner_view: bool = False) -> dict:
         "due_notified_at": f.due_notified_at,
         "subdivision_id": report.subdivision_id if report else None,
         "report_status_id": report.current_status_id if report else None,
+        "caution": followup_caution(report) if report and observing else None,
+        # Reports about this pet not logged here yet (repeated-report banner, Phase 5B)
+        "unlogged_repeat_report_ids": unlogged_repeats(db, f) if observing else [],
         "contacts": [{
             "contact_id": c.contact_id,
             "contacted_at": c.contacted_at,
@@ -195,7 +199,7 @@ def start_followup(body: OwnerFollowUpStart, req: Request, db: Session = Depends
     verify_subdivision_scope(current_user, report.subdivision_id, db=db)
     refusal = start_refusal(report, current_user, db)
     if refusal:
-        status_code = 403 if refusal.startswith(("Only", "Claim")) else 409 if "already has" in refusal else 400
+        status_code = 403 if refusal.startswith(("Only", "Claim")) else 409 if "already" in refusal and "under observation" in refusal else 400
         raise HTTPException(status_code=status_code, detail=refusal)
 
     owner_user_id, owner_name, owner_phone = owner_snapshot(report, db)
@@ -228,9 +232,9 @@ def start_followup(body: OwnerFollowUpStart, req: Request, db: Session = Depends
 # ── list and one report ─────────────────────────────────────────────────────────
 @router.get("")
 @router.get("/", include_in_schema=False)
-def list_followups(status: Optional[str] = None, due: Optional[bool] = None, db: Session = Depends(get_db),
-                   current_user: User = Depends(get_current_staff_or_admin)):
-    """status: 'open' (Observing) or 'closed'; due=true: open and past the due time."""
+def list_followups(status: Optional[str] = None, due: Optional[bool] = None, pet_id: Optional[int] = None,
+                   db: Session = Depends(get_db), current_user: User = Depends(get_current_staff_or_admin)):
+    """status: 'open' (Observing) or 'closed'; due=true: open and past the due time; pet_id: one pet's history (Phase 5F)."""
     q = db.query(OwnerFollowUp).join(Report, Report.report_id == OwnerFollowUp.report_id).options(
         joinedload(OwnerFollowUp.report).joinedload(Report.subdivision),
         joinedload(OwnerFollowUp.contacts).joinedload(OwnerFollowUpContact.contacter))
@@ -243,6 +247,8 @@ def list_followups(status: Optional[str] = None, due: Optional[bool] = None, db:
             return []
         q = q.join(Subdivision, Subdivision.subdivision_id == Report.subdivision_id).filter(
             Subdivision.barangay_id == current_user.barangay_id, OwnerFollowUp.status == "Escalated")
+    if pet_id is not None:
+        q = q.filter(OwnerFollowUp.pet_id == pet_id)
     if status == "open":
         q = q.filter(OwnerFollowUp.status == "Observing")
     elif status == "closed":
@@ -282,6 +288,11 @@ def add_contact(followup_id: int, body: OwnerFollowUpContactCreate, db: Session 
     _require_observing(f)
     if body.related_report_id is not None and not db.get(Report, body.related_report_id):
         raise HTTPException(status_code=404, detail="The repeated incident's report was not found.")
+    if body.method == "Repeated incident":
+        if body.related_report_id is None or body.related_report_id == f.report_id:
+            raise HTTPException(status_code=422, detail="Name the new report of the repeated incident.")
+        if any(c.related_report_id == body.related_report_id for c in f.contacts):
+            raise HTTPException(status_code=409, detail=f"Report #{body.related_report_id} is already logged as a repeated incident.")
     db.add(OwnerFollowUpContact(followup_id=f.followup_id, contacted_by=current_user.user_id, contacted_at=db_now(db),
                                 method=body.method, note=body.note.strip(),
                                 related_report_id=body.related_report_id if body.method == "Repeated incident" else None))
@@ -371,6 +382,9 @@ def extend_followup(followup_id: int, body: OwnerFollowUpExtend, req: Request, d
     f.extension_reason = body.reason.strip()
     f.reminder_sent_at = None
     f.due_notified_at = None
+    from app.models.report import StatusHistory
+    db.add(StatusHistory(report_id=f.report_id, report_status_id=None, updated_by=current_user.user_id,
+                         remarks=f"Owner follow-up extended: the subdivision is observing until {f.due_at:%b %d, %Y}."))
     if f.owner_user_id:
         dispatch_notification(
             db, f.owner_user_id, title=f"Observation extended (Report #{f.report_id})",

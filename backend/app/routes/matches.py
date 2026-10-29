@@ -250,6 +250,14 @@ def is_ownerless_pet_match(match: ReportMatch) -> bool:
     return match.matched_pet_id is not None and pet is not None and not pet.owner_id
 
 
+# The owner's half of the two-way confirmation: the owner, or (Phase 5C of the owner follow-up plan) the handling
+# Subdivision Leader when the owner did not answer within LEADER_VERIFY_WAIT or said no.
+LEADER_VERIFIED = "LEADER_VERIFIED"
+OWNER_SIDE_CONFIRMED = ("OWNER_CONFIRMED", LEADER_VERIFIED)
+LEADER_VERIFY_WAIT = timedelta(hours=24)
+LEADER_VERIFY_METHODS = ("Photos and markings match",)
+
+
 def is_pet_match_fully_confirmed(match: ReportMatch) -> bool:
     """
     A registered-pet match is only official once BOTH staff and the pet owner have confirmed it.
@@ -257,7 +265,7 @@ def is_pet_match_fully_confirmed(match: ReportMatch) -> bool:
     """
     if match.matched_pet_id is None or match.status != "CONFIRMED_MATCH":
         return False
-    return is_ownerless_pet_match(match) or match.owner_confirmation_status == "OWNER_CONFIRMED"
+    return is_ownerless_pet_match(match) or match.owner_confirmation_status in OWNER_SIDE_CONFIRMED
 
 
 def link_confirmed_pet_match(match: ReportMatch, db: Session, actor: User) -> bool:
@@ -293,9 +301,11 @@ def link_confirmed_pet_match(match: ReportMatch, db: Session, actor: User) -> bo
     report.is_possible_owned = not ownerless
     db.flush()
 
+    leader_verified = match.owner_confirmation_status == LEADER_VERIFIED
     confirmed_by = (
         "the reviewing official (community animal with no registered owner)"
-        if ownerless else "both the reviewing official and the pet owner"
+        if ownerless else "the handling Subdivision Leader (photos and markings match; the owner did not confirm)"
+        if leader_verified else "both the reviewing official and the pet owner"
     )
     db.add(StatusHistory(
         report_id=report.report_id,
@@ -331,6 +341,9 @@ def link_confirmed_pet_match(match: ReportMatch, db: Session, actor: User) -> bo
             user_id=pet.owner_id,
             title=f"🐾 Sighting Linked to {pet.display_name}'s Record",
             message=(
+                f"The Subdivision Leader confirmed from the photos and markings that Report #{report.report_id} is "
+                f"{pet.display_name}, and linked it to the pet record. If it is not your pet, file a dispute on the report."
+                if leader_verified else
                 f"Report #{report.report_id} has been confirmed by both you and the reviewing official "
                 f"and is now linked to {pet.display_name}'s pet record."
             ),
@@ -2595,6 +2608,11 @@ def submit_owner_feedback(
             status_code=status.HTTP_409_CONFLICT,
             detail="You already confirmed this sighting and it is linked to your pet's record. Please contact your subdivision office to dispute it."
         )
+    if match.owner_confirmation_status == LEADER_VERIFIED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The Subdivision Leader confirmed this sighting from the photos and markings. If it is not your pet, file a dispute on the report."
+        )
 
     # The owner says "this is my pet" after staff marked it Not a Match: send it back for one more human review.
     if payload.owner_confirmation == "OWNER_CONFIRMED" and match.status == "NOT_A_MATCH":
@@ -2911,6 +2929,74 @@ class OwnerVerificationRequest(BaseModel):
 class OwnerVerificationAnswer(BaseModel):
     answer: str  # YES | NO | UNSURE
     note: Optional[str] = None
+
+
+class LeaderIdentityVerify(BaseModel):
+    method: str
+    reason: str
+
+
+@router.post("/{match_id}/leader-verify-identity", response_model=ReportMatchResponse)
+def leader_verify_identity(match_id: int, payload: LeaderIdentityVerify, req: Request, db: Session = Depends(get_db),
+                           current_user: User = Depends(get_current_staff_or_admin)):
+    """
+    Phase 5C of the owner follow-up plan: the owner did not answer a staff-confirmed match within 24 hours, or said it
+    is not their pet. The Subdivision Leader handling the report confirms the identity themselves, with a method and a
+    reason. A person verifies, never the AI. The owner is told and can still file a dispute on the report.
+    """
+    from app.routes.reports import require_leader_claim
+
+    match = db.query(ReportMatch).options(
+        joinedload(ReportMatch.source_report), joinedload(ReportMatch.matched_pet)
+    ).filter(ReportMatch.match_id == match_id).first()
+    if not match or not match.matched_pet_id or not match.source_report:
+        raise HTTPException(status_code=404, detail="Pet match not found")
+    report, pet = match.source_report, match.matched_pet
+    if current_user.role_id != 2:
+        raise HTTPException(status_code=403, detail="Only the Subdivision Leader handling this report can confirm the identity.")
+    verify_subdivision_scope(current_user, report.subdivision_id, db=db)
+    require_leader_claim(report, current_user)
+    if not pet or not pet.owner_id or report.user_id == pet.owner_id:
+        raise HTTPException(status_code=400, detail="This pet has no other owner to confirm it; no leader confirmation is needed.")
+    if match.status != "CONFIRMED_MATCH":
+        raise HTTPException(status_code=409, detail="Confirm the match as staff first, then wait for the owner's answer.")
+    if match.owner_confirmation_status in OWNER_SIDE_CONFIRMED:
+        raise HTTPException(status_code=409, detail="This match is already confirmed.")
+    method = (payload.method or "").strip()
+    if method not in LEADER_VERIFY_METHODS:
+        raise HTTPException(status_code=422, detail=f"Choose how you checked it: {', '.join(LEADER_VERIFY_METHODS)}.")
+    reason = (payload.reason or "").strip()
+    if len(reason) < 10:
+        raise HTTPException(status_code=422, detail="Explain what matched (at least 10 characters).")
+    if match.owner_confirmation_status != "OWNER_REJECTED":
+        asked_at = max(t for t in (match.verified_at, match.owner_verification_requested_at, match.created_at) if t)
+        wait_until = asked_at + LEADER_VERIFY_WAIT
+        if datetime.now() < wait_until:
+            raise HTTPException(status_code=409, detail=f"Give the owner until {wait_until:%b %d, %Y %I:%M %p} to answer first.")
+    conflict = pet_conflict_for_case(db, report, pet.pet_id)
+    if conflict:
+        raise HTTPException(status_code=409, detail=conflict)
+
+    previous = match.owner_confirmation_status
+    match.owner_confirmation_status = LEADER_VERIFIED
+    match.verification_notes = ((match.verification_notes or "").strip() + (" " if match.verification_notes else "")
+                                + f"Identity confirmed by the Subdivision Leader {current_user.name} ({method}): {reason}"
+                                + (" The owner had said it is not their pet." if previous == "OWNER_REJECTED"
+                                   else " The owner did not answer within 24 hours."))
+    linked = link_confirmed_pet_match(match, db, current_user)
+    if not linked and report.pet_id != pet.pet_id:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="This report cannot be linked to the pet (it is a group report or tied to another pet).")
+    log_activity(db=db, action="LEADER_VERIFY_PET_IDENTITY", target_table="report_matches", target_id=match.match_id,
+                 description=(f"{current_user.name} confirmed Report #{report.report_id} as {pet.display_name} ({method}) "
+                              f"without the owner's confirmation (owner: {previous}). {reason}"),
+                 user_id=current_user.user_id, log_type="operation",
+                 old_values={"owner_confirmation_status": previous},
+                 new_values={"owner_confirmation_status": LEADER_VERIFIED, "method": method, "reason": reason},
+                 request=req, commit=False)
+    db.commit()
+    db.refresh(match)
+    return match
 
 
 def _verification_thread(db: Session, match: ReportMatch, actor: User):

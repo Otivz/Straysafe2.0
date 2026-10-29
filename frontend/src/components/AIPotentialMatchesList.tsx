@@ -143,7 +143,7 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
 
     const getStatusPill = (status: string, match?: any) => {
         // Pet matches are official only after both staff and the owner confirm
-        if (status === 'CONFIRMED_MATCH' && match?.matched_pet_id && match.matched_pet?.owner_id && match.owner_confirmation_status !== 'OWNER_CONFIRMED') {
+        if (status === 'CONFIRMED_MATCH' && match?.matched_pet_id && match.matched_pet?.owner_id && !['OWNER_CONFIRMED', 'LEADER_VERIFIED'].includes(match.owner_confirmation_status)) {
             return <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 rounded-full font-bold text-[11px] border border-blue-200">✓ Staff Confirmed · Awaiting Owner</span>;
         }
         switch (status) {
@@ -454,7 +454,7 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                             ? (m.matched_pet?.photo_url || DEFAULT_AVATAR)
                             : (m.matched_report?.media?.[0]?.file_url || DEFAULT_AVATAR);
                         const ownerRejected = isPet && m.owner_confirmation_status === 'OWNER_REJECTED';
-                        const ownerConfirmed = isPet && m.owner_confirmation_status === 'OWNER_CONFIRMED';
+                        const ownerConfirmed = isPet && ['OWNER_CONFIRMED', 'LEADER_VERIFIED'].includes(m.owner_confirmation_status);
                         const isCommunityAnimal = isPet && !m.matched_pet?.owner_id;
                         // The owner said yes and filed the claim with proof: shortcut to it
                         const claimPath = isStaff && isPet ? petClaimPath(m.claim_id, location.pathname) : null;

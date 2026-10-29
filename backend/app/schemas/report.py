@@ -263,6 +263,11 @@ class ReportResponse(ReportBase):
     identity_rechecked_at: Optional[datetime] = None
     identity_rechecked_by_name: Optional[str] = None
     pet_link_trusted: Optional[bool] = None
+    # Staff: the report where this report's pet is under an owner follow-up (a repeated report), if any
+    observing_followup_report_id: Optional[int] = None
+    # Phase 6: whether anyone holds the animal (a pet claim only for a held animal), and the owner's answer when nobody does
+    animal_held: Optional[bool] = None
+    owner_custody_answer: Optional[str] = None   # 'home' | 'missing'
     # Owner flagged this sighting as not their pet (wrong merge): everything staff need to decide
     identity_dispute: Optional[dict] = None
     case_pet_report_id: Optional[int] = None

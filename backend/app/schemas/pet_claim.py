@@ -67,6 +67,10 @@ class PetClaimResponse(PetClaimBase):
     merged_into_claim_id: Optional[int] = None
     # Every report of the merged case this claim covers (the claim is shared by all of them)
     case_report_ids: List[int] = []
+    # Phase 6: whether anyone holds the animal (a claim is only for a held animal), and a claim closed as not needed
+    animal_held: Optional[bool] = None
+    closed_not_needed: bool = False
+    owner_custody_answer: Optional[str] = None   # 'home' | 'missing' (the owner's answer when nobody holds the animal)
     created_at: datetime
     updated_at: datetime
     pet: Optional[PetResponse] = None

@@ -228,6 +228,9 @@ pet_b = Pet(pet_name="Brownie", pet_type="Dog", owner_id=owner_b.user_id, status
 pet_c = Pet(pet_name="Choco", pet_type="Dog", owner_id=owner_a.user_id, status="Active")
 db.add_all([pet_b, pet_c])
 db.commit()
+for kid in (kids[1], kids[2]):   # a claim is only for a held animal (Phase 6)
+    db.get(Report, kid).custody_status = "In Barangay Facility"
+db.commit()
 ca = client.post("/claims/", headers=H(owner_b), json={"report_id": kids[1], "pet_id": pet_b.pet_id})
 cb = client.post("/claims/", headers=H(owner_a), json={"report_id": kids[2], "pet_id": pet_c.pet_id})
 check("two different owners claim two different animals from one group", ca.status_code == 200 and cb.status_code == 200,

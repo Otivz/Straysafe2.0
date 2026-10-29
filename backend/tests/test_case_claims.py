@@ -66,7 +66,8 @@ def check(label, ok, extra=""):
 def report():
     CLOCK[0] += timedelta(minutes=5)
     r = Report(user_id=res.user_id, subdivision_id=1, category_id=1, latitude=14.8, longitude=121.0, current_status_id=2,
-               animal_type="Dog", animal_breed="Aspin", assigned_leader_id=LEADER, created_at=CLOCK[0], ai_suggested_risk_level="Low")
+               animal_type="Dog", animal_breed="Aspin", assigned_leader_id=LEADER, created_at=CLOCK[0], ai_suggested_risk_level="Low",
+               custody_status="In Barangay Facility")  # a claim is only for a held animal (Phase 6)
     db.add(r)
     db.commit()
     return r.report_id
