@@ -7,7 +7,7 @@ import { currentPushState, disablePush, enablePush, type PushState } from '../ut
 // lock-screen preview and a test. Categories are per account; the on/off switch is per device.
 type PushPrefs = {
     push_enabled: boolean; push_reports: boolean; push_rescues: boolean; push_pet_matches: boolean;
-    push_claims: boolean; push_adoptions: boolean; push_messages: boolean; push_show_preview: boolean;
+    push_claims: boolean; push_messages: boolean; push_show_preview: boolean;
 };
 
 const CATEGORIES: { key: keyof PushPrefs; label: string; staffOnly?: boolean }[] = [
@@ -15,7 +15,6 @@ const CATEGORIES: { key: keyof PushPrefs; label: string; staffOnly?: boolean }[]
     { key: 'push_rescues', label: 'Rescues and holding alerts' },
     { key: 'push_pet_matches', label: 'Possible pet matches' },
     { key: 'push_claims', label: 'Pet claims' },
-    { key: 'push_adoptions', label: 'Adoptions' },
     { key: 'push_messages', label: 'Messages' },
 ];
 

@@ -682,17 +682,15 @@ def update_animal(
                     detail="This animal is currently in a Barangay facility and cannot be modified by Subdivision Leaders. You can only track its progress."
                 )
 
-            if update_data.get("facility_status") in (6, 7, 8):
+            if update_data.get("facility_status") == 8:
                 raise HTTPException(
                     status_code=403,
-                    detail="Only Barangay staff and administrators have the authority to manage adoption or mark an animal as Impounded."
+                    detail="Only Barangay staff and administrators have the authority to mark an animal as Impounded."
                 )
 
-        if update_data.get("facility_status") in (6, 7) and old_status == 8:
-            raise HTTPException(
-                status_code=400,
-                detail="Impounded animals cannot be listed for adoption or adopted."
-            )
+        # Adoption was removed from the system: "For Adoption" (6) and "Adopted" (7) can no longer be set
+        if update_data.get("facility_status") in (6, 7):
+            raise HTTPException(status_code=400, detail="Adoption is not part of StraySafe: this status can no longer be set.")
 
         for key, value in update_data.items():
             if hasattr(animal, key):
@@ -710,7 +708,6 @@ def update_animal(
                 3: "Claimed by Owner",
                 4: "Deceased",
                 5: "Transferred to Shelter",
-                7: "Adopted/Released",
                 8: "Impounded",
             }
             outcome_label = outcome_labels.get(new_status, "Resolved")
@@ -721,8 +718,6 @@ def update_animal(
                 report.current_status_id = 11
                 if new_status == 8:
                     report.custody_status = "Impounded"
-                elif new_status == 7:
-                    report.custody_status = "Adopted"
                 elif new_status == 3:
                     report.custody_status = "Claimed by Owner"
                     if owner_return_snap:
@@ -762,10 +757,6 @@ def update_animal(
 
         elif new_status != old_status:
             # Status changed but not to a resolution status
-            if old_status == 6 and new_status != 6:
-                animal.adoption_catalog_notes = None
-                animal.promoted_at = None
-                animal.promoted_by = None
             status_obj = db.query(FacilityStatus).filter(FacilityStatus.status_id == new_status).first()
             status_name = status_obj.status_name if status_obj else str(new_status)
             db_log = HoldingTimeline(

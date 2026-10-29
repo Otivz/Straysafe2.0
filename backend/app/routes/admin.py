@@ -7,7 +7,7 @@ from datetime import datetime
 from app.schemas.report import effective_priority
 from app.database import get_db
 from app.models.user import User, Subdivision
-from app.models.report import Report, HoldingAnimal, Adoption, Rescue, ReportMedia
+from app.models.report import Report, HoldingAnimal, Rescue, ReportMedia
 from app.models.pet import Pet
 from app.models.warning import OwnerWarning
 from app.models.audit_log import AuditLog
@@ -113,19 +113,13 @@ def get_admin_dashboard_stats(
         User.status.in_(['Inactive', 'Suspended', 'Deactivated'])
     ).scalar() or 0
 
-    # 4. Holding & Adoptions Metrics
+    # 4. Holding Metrics
     holding_count = db.query(func.count(HoldingAnimal.holding_id)).scalar() or 0
     returned_to_owner_count = db.query(func.count(HoldingAnimal.holding_id)).filter(
         HoldingAnimal.facility_status == 3
     ).scalar() or 0
-    active_adoptions_count = db.query(func.count(Adoption.adoption_id)).filter(
-        Adoption.status == 'Pending'
-    ).scalar() or 0
-    for_adoption_count = db.query(func.count(HoldingAnimal.holding_id)).filter(
-        HoldingAnimal.facility_status == 6
-    ).scalar() or 0
-    approved_adoptions_count = db.query(func.count(Adoption.adoption_id)).filter(
-        Adoption.status == 'Approved'
+    impounded_count = db.query(func.count(HoldingAnimal.holding_id)).filter(
+        HoldingAnimal.facility_status == 8
     ).scalar() or 0
 
     # 5. Warnings & Rescue
@@ -290,9 +284,7 @@ def get_admin_dashboard_stats(
         "suspended_users": suspended_users,
         "holding_count": holding_count,
         "returned_to_owner_count": returned_to_owner_count,
-        "active_adoptions_count": active_adoptions_count,
-        "for_adoption_count": for_adoption_count,
-        "approved_adoptions_count": approved_adoptions_count,
+        "impounded_count": impounded_count,
         "pending_warnings_count": pending_warnings_count,
         "rescued_count": rescued_count,
         "total_audit_logs": total_audit_logs,
@@ -319,10 +311,6 @@ def get_admin_badge_counts(
     ).all()
     active_report_ids = [r[0] for r in active_report_records]
 
-    pending_adoptions = db.query(func.count(Adoption.adoption_id)).filter(
-        Adoption.status == 'Pending'
-    ).scalar() or 0
-
     pending_warnings = db.query(func.count(OwnerWarning.warning_id)).filter(
         OwnerWarning.status == 'Pending'
     ).scalar() or 0
@@ -330,7 +318,6 @@ def get_admin_badge_counts(
     return {
         "active_reports": len(active_report_ids),
         "active_report_ids": active_report_ids,
-        "pending_adoptions": pending_adoptions,
         "pending_warnings": pending_warnings
     }
 

@@ -2,7 +2,7 @@
 
 Status: Current (baseline written 2026-10-25 from repository evidence; items marked **Unverified** or **Unknown** were not established)
 
-StraySafe 2.0 is a web and Android application for managing stray and lost animals in a community: residents report sightings, local officers verify and dispatch rescues, animals are held and either returned to an owner or put up for adoption. It is a capstone project; the only documented deployment is a local development setup (see [Operations](../05-operations/README.md)).
+StraySafe 2.0 is a web and Android application for managing stray and lost animals in a community: residents report sightings, local officers verify and dispatch rescues, animals are held and either returned to an owner or, if unclaimed after the stay limit, impounded. Adoption was removed on 2026-10-28 (not approved by the panel). It is a capstone project; the only documented deployment is a local development setup (see [Operations](../05-operations/README.md)).
 
 ## Boundary
 
@@ -22,11 +22,11 @@ Role ids are stored on `users.role_id` and checked in the API (`backend/app/util
 
 | Role id | Role | Scope |
 |---|---|---|
-| 1 | Resident | Own reports, pets, claims and adoption applications; public map data without private reports |
+| 1 | Resident | Own reports, pets and claims; public map data without private reports |
 | 2 | Subdivision Leader | Reports of their own subdivision; verification, assignment, merge, visibility, endorsement and dispute decisions |
-| 3 | Barangay Staff (one may be Head Officer) | Endorsed reports, rescue dispatch, holding facility, claims, adoptions, personnel |
+| 3 | Barangay Staff (one may be Head Officer) | Endorsed reports, rescue dispatch, holding facility, claims, impoundment, personnel |
 | 4 | Administrator | System-wide access, user and staff accounts, settings (including the reporting radius), audit logs, analytics |
-| none | Public visitor | Landing page, adoption catalog, pet QR scan page |
+| none | Public visitor | Landing page, pet QR scan page |
 
 Authorization is enforced in the backend (subdivision and barangay scope checks); the frontend routes use `ProtectedRoute` and the same role ids. Whether every endpoint enforces scope is **Unverified** (no full authorization review has been done; see [Testing](../04-testing/README.md)).
 
@@ -34,10 +34,9 @@ Authorization is enforced in the backend (subdivision and barangay scope checks)
 
 - Stray and lost-animal **reports** with photos or video, location (geofenced to a configurable reporting radius), priority, status timeline, disputes, multi-animal split, and report visibility rules.
 - **AI assistance** that only suggests (animal present, photo authenticity, colour/breed/size, risk, duplicate sightings, look-alike pet matches); staff confirm.
-- **Rescue and holding**: dispatch, holding facility records, care logs, stay limits.
+- **Rescue and holding**: dispatch, holding facility records, care logs, stay limits; after the stay limit the only outcome offered is impoundment.
 - **Pet registry** with QR tags, scan history, ownership requests and records access.
 - **Claims and reunification** with proof and evidence review.
-- **Adoption** pipeline (catalog, applications, home assessment, agreement, certificates, monitoring).
 - **Communication**: chat, announcements, notifications, email (SMTP or Resend), web push.
 - **Analytics** dashboards for administrators and subdivision leaders ([ANALYTICS_SPECIFICATION](ANALYTICS_SPECIFICATION.md)).
 

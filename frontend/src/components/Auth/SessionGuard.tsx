@@ -11,7 +11,7 @@ type SessionKey = 'resident_user' | 'staff_user' | 'admin_user';
 const keyForPath = (path: string): SessionKey | null => {
     if (path.startsWith('/admin') && !path.startsWith('/admin/login')) return 'admin_user';
     if ((path.startsWith('/subd') || path.startsWith('/brgy') || path.startsWith('/staff')) && !path.startsWith('/staff/login')) return 'staff_user';
-    if (path.startsWith('/resident') || path.startsWith('/adopt/apply') || path.startsWith('/adopt/applications')) return 'resident_user';
+    if (path.startsWith('/resident')) return 'resident_user';
     return null;
 };
 const LOGIN: Record<SessionKey, string> = { resident_user: '/login', staff_user: '/staff/login', admin_user: '/admin/login' };

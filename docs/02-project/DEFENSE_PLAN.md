@@ -91,11 +91,11 @@ Tell it as one case following one dog, so the panel sees the whole workflow. Use
 | 6 | Barangay | See the endorsed report, assign a rescuer, show directions from the hall | "Tier two: the barangay dispatches with routing." |
 | 7 | Barangay | Move the rescue to on site, then intake in the holding facility | "Every step is timestamped." |
 | 8 | Resident | Show the report timeline updated and the notification | "The reporter finally knows what happened." |
-| 9 | Barangay | Show the adoption pipeline with an animal already at the final stage; open the certificate | "Unclaimed animals get a second chance." |
-| 10 | Public | Verify the certificate by its QR code | "Anyone can check a certificate is real." |
+| 9 | Barangay | Review an owner's claim with proof (vaccination card or photos) and hand the animal back | "Owners get their pet back only with proof." |
+| 10 | Barangay | Impound an animal that passed the stay limit unclaimed | "Unclaimed animals are impounded on record." |
 | 11 | Admin | Show the audit log entry for one of the actions above, and the heatmap | "Every action is traceable." |
 
-Prepare steps 7–10 **before** the defense (a case already in holding and an adoption already at the certificate stage), so you only open them live.
+Prepare steps 7–10 **before** the defense (a case already in holding, a pending claim, and an animal past the stay limit), so you only open them live.
 
 ---
 
@@ -166,14 +166,14 @@ Answer short, then offer to show it in the system.
 - *Why no SMS?* Cost and scope; in-app, email and push notifications cover it.
 - *Can other barangays use it?* The design supports it, but the pilot and results are limited to Selera Homes and San Vicente.
 - *What is novel here?* The combination for the Philippine barangay hierarchy, not a new algorithm (your Chapter 1 says this well; use the same words).
-- *How long did development take, and how did you test?* Iterative increments; automated tests for permissions, chat privacy, reports and adoption (about 95 backend test scripts), plus browser checks.
+- *How long did development take, and how did you test?* Iterative increments; automated tests for permissions, chat privacy, reports and claims (about 77 backend test scripts), plus browser checks.
 
 ### 8.1 More possible questions, by topic
 
 Practice these in rehearsal 2 (section 3). The person in brackets answers first (section 2). Where the answer depends on your data, it says **[ ]**.
 
 **Opening and general** [Kyla Joy]
-1. Explain your system in one minute. *(Problem → two-tier reporting → rescue → holding → adoption → records; AI suggests, people decide.)*
+1. Explain your system in one minute. *(Problem → two-tier reporting → rescue → holding → claim or impound → records; AI suggests, people decide.)*
 2. Who are your clients, and did they agree to the study? *(Selera Homes leaders and Barangay San Vicente; show the endorsement or permission letter **[ ]**.)*
 3. What made you choose this topic?
 4. What is the single most important feature, and why?
@@ -190,7 +190,7 @@ Practice these in rehearsal 2 (section 3). The person in brackets answers first 
 11. Name three similar systems and how yours differs.
 12. Why didn't you just use an existing app (e.g., a Facebook group or a shelter platform)?
 13. Which related study influenced your design most?
-14. Your novelty is "integrative"; isn't that just combining existing tools? *(Yes, for a real gap: no system fits the subdivision → barangay hierarchy with validation, AI checks and adoption in one place.)*
+14. Your novelty is "integrative"; isn't that just combining existing tools? *(Yes, for a real gap: no system fits the subdivision → barangay hierarchy with validation, AI checks and owner claims in one place.)*
 
 **Objectives and scope** [Kyla Bianca]
 15. Read Specific Objective **[n]**. Where is it in the system? *(Be ready to show each objective live in under 30 seconds.)*
@@ -237,7 +237,7 @@ Practice these in rehearsal 2 (section 3). The person in brackets answers first 
 
 **Database and architecture** [Emmanuel]
 42. Draw or explain your architecture. *(React web app and Android app → FastAPI → MySQL; Cloudinary for photos; AI worker; Gemini; email.)*
-43. How many tables, and which are the main ones? *(Users, reports, rescue assignments, holding animals, adoptions, pets, audit logs.)*
+43. How many tables, and which are the main ones? *(Users, reports, rescue assignments, holding animals, pets, pet claims, audit logs.)*
 44. Show your ERD and explain one relationship.
 45. Why MySQL and FastAPI?
 46. How do you handle two officials editing the same report at once? *(Server-side state checks; status changes are validated.)*
@@ -251,7 +251,7 @@ Practice these in rehearsal 2 (section 3). The person in brackets answers first 
 52. Where are API keys stored? *(Server environment only, never in the app code or the repository.)*
 53. How long do you keep data, and can a user delete their account? **[ ]**
 54. Who can see a reporter's name and phone number?
-55. Can a resident read another person's adoption chat? *(No; access is checked per thread on the server, and it is tested.)*
+55. Can a resident read another person's report chat? *(No; access is checked per thread on the server, and it is tested.)*
 56. Can a barangay staff member make themselves Head Officer? *(No; only the administrator; tested.)*
 57. Can a pet owner erase their dog's bite history? *(No; verified history comes from incident reports and can only be changed by officials.)*
 
@@ -269,11 +269,11 @@ Practice these in rehearsal 2 (section 3). The person in brackets answers first 
 66. What training do barangay staff need? *(User manual and an orientation **[ ]**.)*
 67. How do you back up the data?
 
-**Adoption and records** [Kyla Bianca]
-68. How do you decide who may adopt? *(Blacklist check, scored interview, home visit, then handover.)*
-69. How can someone check that a certificate is real? *(QR or certificate number on the public verify page.)*
-70. What happens after adoption? *(Check-ins on days 7, 14 and 30.)*
-71. What happens to an animal no one claims or adopts?
+**Claims and records** [Kyla Bianca]
+68. How do you check that a claimant really owns the pet? *(Vaccination card, veterinary records or photos, reviewed by Barangay staff before handover.)*
+69. Why is there no adoption? *(The panel did not approve it, so it was removed; unclaimed animals are impounded.)*
+70. Can the barangay keep an animal longer than the stay limit? *(Planned: staff can extend the hold at any time before impounding **[ ]**.)*
+71. What happens to an animal no one claims? *(After the stay limit it is impounded and the case is closed on record.)*
 
 **Limitations, ethics and future work** [all]
 72. What are the biggest limitations of your system?

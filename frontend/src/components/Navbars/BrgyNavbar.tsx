@@ -70,7 +70,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
         barangay_name: parsedUser?.barangay_name
     };
 
-    const { unreadCount: unreadMessageCount, threads: messageThreads, loading: isMessagesLoading, refreshThreads } = useUnreadMessageCount(user?.user_id, true);
+    const { unreadCount: unreadMessageCount, threads: messageThreads, loading: isMessagesLoading, refreshThreads } = useUnreadMessageCount(user?.user_id);
 
     const isMessageNotif = (notif: any) => {
         const t = (notif.type || '').toLowerCase();
@@ -172,31 +172,14 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
         const titleStr = (notif.title || '').toLowerCase();
         const msgStr = (notif.message || '').toLowerCase();
 
-        // Adoption chat: open that application's conversation (checked first; message text may contain any keyword)
-        // Adoption tasks: assignee-facing -> My Adoption Tasks; owner-facing -> the application
-        if (['adoption_task_assigned', 'adoption_task_reassigned', 'adoption_task_cancelled', 'adoption_task_updated'].includes(typeStr)) {
-            navigate('/brgy/adoption-tasks');
-            return;
-        }
         // Resident accepted / rejected an owner the staff assigned
         if (typeStr === 'pet_owner_confirmation_result') {
             navigate('/brgy/pet-records');
             return;
         }
-        if (['adoption_task_accepted', 'adoption_task_declined', 'adoption_task_completed', 'adoption_decision_needed', 'adoption_case_transferred'].includes(typeStr) && notif.related_id) {
-            navigate(`/brgy/adoptions?view=${notif.related_id}`);
-            return;
-        }
-
-        if (typeStr === 'adoption_chat' && notif.related_id) {
-            navigate(`/brgy/messages?adoptionId=${notif.related_id}`);
-            return;
-        }
 
         if (typeStr.includes('holding') || titleStr.includes('holding') || msgStr.includes('holding') || typeStr.includes('impound')) {
             navigate('/brgy/holding-facility');
-        } else if (typeStr.includes('adopt') || titleStr.includes('adopt')) {
-            navigate('/brgy/adoptions');
         } else if (typeStr.includes('claim')) {
             navigate('/brgy/pet-claims');
         } else if (notif.related_id) {
@@ -226,13 +209,6 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
             );
         }
 
-        if (typeStr.includes('adopt') || titleStr.includes('adopt')) {
-            return (
-                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-200 font-black text-base shadow-xs">
-                    🐾
-                </div>
-            );
-        }
 
         return (
             <div className="w-9 h-9 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center shrink-0 border border-gray-200 font-black text-base shadow-xs">
@@ -339,11 +315,6 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                         onRefresh={refreshThreads}
                         onSelectThread={(thread) => {
                             setIsMessagesOpen(false);
-                            // Adoption chats open in the Case Messages inbox (same UI as report chats)
-                            if (thread.thread_mode === 'adoption' && thread.adoption_id) {
-                                navigate(`/brgy/messages?adoptionId=${thread.adoption_id}`);
-                                return;
-                            }
                             setActiveChatThread(thread);
                         }}
                         currentRole="brgy"
@@ -593,7 +564,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                     customCounterpartAvatar={activeChatThread.counterpart?.avatar}
                     matchedPet={activeChatThread.matched_pet ? (activeChatThread.matched_pet as any) : undefined}
                     matchId={activeChatThread.match_id || (activeChatThread.matched_pet as any)?.match_id || undefined}
-                    threadMode={activeChatThread.thread_mode === 'adoption' ? undefined : activeChatThread.thread_mode}
+                    threadMode={activeChatThread.thread_mode}
                 />
             )}
 
@@ -603,7 +574,6 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                 const typeStr = (notif.type || '').toLowerCase();
                 const isOverdue = typeStr.includes('holding') || typeStr.includes('overdue');
                 const isRescue = typeStr.includes('rescue') || typeStr.includes('mission');
-                const isAdopt = typeStr.includes('adopt');
                 const isClaim = typeStr.includes('claim');
 
                 let bannerGrad = 'from-slate-800 via-slate-900 to-black';
@@ -618,10 +588,6 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                     bannerGrad = 'from-role-hover via-amber-600 to-slate-900';
                     iconEmoji = '🚑';
                     typeLabel = 'Rescue Operation';
-                } else if (isAdopt) {
-                    bannerGrad = 'from-emerald-700 via-teal-800 to-slate-900';
-                    iconEmoji = typeStr === 'adoption_chat' ? '💬' : '🐾';
-                    typeLabel = typeStr === 'adoption_chat' ? 'Adoption Chat Message' : 'Adoption Update';
                 } else if (isClaim) {
                     bannerGrad = 'from-amber-600 via-yellow-600 to-slate-900';
                     iconEmoji = '🏷️';
@@ -712,7 +678,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                                     onClick={handleNavigateFromDetail}
                                     className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-role hover:bg-role-hover text-white text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-role/20 flex items-center justify-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>{typeStr === 'adoption_chat' ? 'Open Chat' : 'Open Related Page'}</span>
+                                    <span>Open Related Page</span>
                                     <span>→</span>
                                 </button>
                             </div>

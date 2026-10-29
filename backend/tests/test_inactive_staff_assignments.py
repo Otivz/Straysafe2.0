@@ -1,4 +1,4 @@
-"""Inactive staff cannot receive case, rescue or adoption work, even through direct API calls."""
+"""Inactive staff cannot receive case or rescue work, even through direct API calls. (Adoption checks removed with the adoption feature.)"""
 import os
 import sys
 import unittest
@@ -18,9 +18,8 @@ from sqlalchemy.pool import StaticPool
 import app.models  # noqa: F401
 from app.database import Base, get_db
 from app.models.user import Barangay, Subdivision, User
-from app.models.report import (Adoption, AdoptionAssignment, HoldingAnimal, Report, ReportCategory,
-                               ReportStatus, Rescue, RescueAssignment)
-from app.routes import adoption_tasks, adoptions, reports, rescue
+from app.models.report import HoldingAnimal, Report, ReportCategory, ReportStatus, Rescue, RescueAssignment
+from app.routes import reports, rescue
 from app.utils.auth import create_access_token
 
 
@@ -30,7 +29,7 @@ class InactiveAssignmentTests(unittest.TestCase):
         cls.engine = create_engine('sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool)
         cls.Session = sessionmaker(bind=cls.engine, expire_on_commit=False)
         app = FastAPI()
-        for router in (reports.router, rescue.router, adoption_tasks.router, adoptions.router):
+        for router in (reports.router, rescue.router):
             app.include_router(router)
 
         def database():
@@ -62,12 +61,9 @@ class InactiveAssignmentTests(unittest.TestCase):
                               longitude=121, animal_type='Dog', current_status_id=13))
             db.flush()
             db.add(Rescue(rescue_id=1, report_id=1, staff_id=3, status_id=2))
-            db.add(HoldingAnimal(holding_id=1, report_id=1, animal_name='Test Pet', animal_type='Dog', facility_status=6))
+            db.add(HoldingAnimal(holding_id=1, report_id=1, animal_name='Test Pet', animal_type='Dog', facility_status=2))
             db.flush()
             db.add(RescueAssignment(rescue_id=1, staff_id=3, user_id=3, assigned_by=2, assignment_status='Assigned'))
-            db.add(Adoption(adoption_id=1, holding_id=1, applicant_id=1, case_owner_id=2, status='Approved',
-                            current_stage='Handover', full_name='Applicant', address='Test Address',
-                            contact_no='09000000000', reason='A suitable permanent home for this animal.'))
             db.commit()
         self.dispatch = patch.object(rescue, 'dispatch_notification', return_value=None)
         self.dispatch.start()
@@ -113,60 +109,11 @@ class InactiveAssignmentTests(unittest.TestCase):
         with self.Session() as db:
             self.assertIsNone(db.get(Report, 2).assigned_leader_id)
 
-    def test_every_adoption_task_type_rejects_inactive_staff(self):
-        for task in ('Verification', 'Interview', 'Home_Visit', 'Handover', 'Monitoring', 'Other'):
-            with self.subTest(task=task):
-                self.assert_rejected(self.client.post('/adoptions/1/assignments', json={'task_type': task, 'assigned_to': 4}, headers=self.tokens[2]))
-        with self.Session() as db:
-            self.assertEqual(db.query(AdoptionAssignment).count(), 0)
-
-    def test_adoption_options_exclude_inactive_personnel(self):
-        result = self.client.get('/adoptions/1/assignable-staff', headers=self.tokens[2])
-        self.assertEqual(result.status_code, 200, result.text)
-        self.assertEqual({row['user_id'] for row in result.json()}, {2, 3})
-
-    def test_handover_rejects_inactive_ids_and_legacy_names(self):
-        for staff in ({'assigned_staff_id': 4}, {'assigned_staff': 'Inactive Responder'}):
-            self.assert_rejected(self.client.post('/adoptions/1/handover/schedule', json={'handover_date': '2026-10-27T10:00:00', **staff}, headers=self.tokens[2]))
-        with self.Session() as db:
-            self.assertIsNone(db.get(Adoption, 1).handover_assigned_staff)
-            self.assertIsNone(db.get(Adoption, 1).handover_scheduled_date)
-
-    def test_staff_deactivated_after_opening_the_form_is_rejected(self):
-        with self.Session() as db:
-            db.get(User, 3).status = 'Inactive'
-            db.commit()
-        self.assert_rejected(self.client.post('/adoptions/1/handover/schedule', json={'handover_date': '2026-10-27T10:00:00', 'assigned_staff_id': 3}, headers=self.tokens[2]))
-
-    def test_an_open_adoption_task_with_an_inactive_assignee_requires_reassignment(self):
-        with self.Session() as db:
-            db.add(AdoptionAssignment(adoption_id=1, task_type='Handover', assigned_to=4,
-                                      assigned_to_name='Inactive Responder', assigned_by=2, status='Accepted'))
-            db.commit()
-        self.assert_rejected(self.client.post('/adoptions/1/handover/schedule', json={
-            'handover_date': '2026-10-27T10:00:00', 'assigned_staff_id': 3,
-        }, headers=self.tokens[2]), codes=(409,))
-        # The owner can replace the old assignee with active personnel through the task assignment endpoint.
-        reassigned = self.client.post('/adoptions/1/assignments', json={'task_type': 'Handover', 'assigned_to': 3}, headers=self.tokens[2])
-        self.assertEqual(reassigned.status_code, 200, reassigned.text)
-        with self.Session() as db:
-            old = db.query(AdoptionAssignment).filter(AdoptionAssignment.assigned_to == 4).one()
-            self.assertEqual(old.status, 'Reassigned')
-
-    def test_inactive_adoption_case_owner_cannot_be_selected_for_transfer(self):
-        self.assert_rejected(self.client.post('/adoptions/1/transfer', json={
-            'to_user_id': 7, 'reason': 'Changing the handling officer',
-        }, headers=self.tokens[2]))
-
-    def test_active_handover_staff_still_work_and_names_come_from_database(self):
-        response = self.client.post('/adoptions/1/handover/schedule', json={'handover_date': '2026-10-27T10:00:00', 'assigned_staff_id': 3, 'assigned_staff': 'Inactive Responder'}, headers=self.tokens[2])
-        self.assertEqual(response.status_code, 200, response.text)
-        with self.Session() as db:
-            self.assertEqual(db.get(Adoption, 1).handover_assigned_staff, 'Active Responder')
 
     def test_inactive_staff_cannot_act_using_an_existing_token(self):
-        response = self.client.post('/adoptions/1/claim', json={}, headers=self.tokens[7])
+        response = self.client.patch('/rescue-requests/1', json={'assigned_personnel_ids': [3]}, headers=self.tokens[7])
         self.assertEqual(response.status_code, 403, response.text)
+        self.assert_original_team()
 
     def test_active_rescue_assignment_still_succeeds(self):
         response = self.client.patch('/rescue-requests/1', json={'assigned_personnel_ids': [3]}, headers=self.tokens[2])

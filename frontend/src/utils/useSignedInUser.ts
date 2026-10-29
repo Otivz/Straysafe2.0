@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, getStoredToken, SESSION_ENDED_EVENT } from './api';
 
-// Public pages (landing page, adoption catalog) work signed in or not, but must say honestly which: an account kept in
+// Public pages (landing page, QR scan page) work signed in or not, but must say honestly which: an account kept in
 // this browser counts only once the server confirms its session is still valid (it may have been signed out, revoked
 // or expired), and stops counting as soon as the session ends.
 

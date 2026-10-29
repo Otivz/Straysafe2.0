@@ -213,7 +213,7 @@ def check_and_notify_overdue_holding_animals(default_stay_days: int = 3) -> int:
                             message=(
                                 f"Animal in holding place has reached {days_held} days in custody, "
                                 f"exceeding the {default_stay_days}-day stay limit. "
-                                f"Please review for impoundment or promote to adoption catalog."
+                                f"Please review it for impoundment or extend the hold."
                             ),
                             type="holding_overdue_alert",
                             related_id=animal.holding_id
@@ -270,50 +270,20 @@ def prune_old_notifications(retention_days: int = 30) -> int:
         db.close()
 
 
-def check_and_notify_monitoring_schedules() -> int:
-    """
-    Checks all adoptions currently in Stage 9 (Post-Adoption Monitoring)
-    and reconciles their Day 7, Day 14, Day 30 follow-up milestones,
-    sending due alerts to adopters and overdue alerts to staff without duplicates.
-    """
-    from app.models.report import Adoption
-    from app.routes.adoptions import reconcile_monitoring_schedules_for_adoption
-
-    db: Session = SessionLocal()
-    processed_count = 0
-    try:
-        active_adoptions = db.query(Adoption).filter(
-            (Adoption.current_stage == "Monitoring") | (Adoption.post_monitoring_status == "Active")
-        ).all()
-        for app in active_adoptions:
-            try:
-                reconcile_monitoring_schedules_for_adoption(app, db)
-                processed_count += 1
-            except Exception as e:
-                logger.warning(f"Error checking monitoring schedule for adoption #{app.adoption_id}: {e}")
-        return processed_count
-    except Exception as e:
-        logger.error(f"Error in check_and_notify_monitoring_schedules: {e}")
-        return 0
-    finally:
-        db.close()
-
-
 async def start_unassigned_reports_watcher(interval_seconds: int = 60, threshold_minutes: int = 30):
     """
     Background loop that wakes up every `interval_seconds` to check for stale unassigned reports,
-    overdue holding facility animals, and post-adoption monitoring milestone alerts (due/overdue).
+    overdue holding animals, and owner follow-ups that are due.
     Also triggers nightly pruning of old archived notifications.
     """
     logger.info(
-        f"Starting Operations Watcher: checking every {interval_seconds}s for unassigned reports, overdue holding animals, and monitoring schedules."
+        f"Starting Operations Watcher: checking every {interval_seconds}s for unassigned reports, overdue holding animals, and due owner follow-ups."
     )
     iteration = 0
     while True:
         try:
             await asyncio.to_thread(check_and_notify_unassigned_reports, threshold_minutes)
             await asyncio.to_thread(check_and_notify_overdue_holding_animals, 3)
-            await asyncio.to_thread(check_and_notify_monitoring_schedules)
             from app.utils.owner_followups import check_and_notify_due_followups
             await asyncio.to_thread(check_and_notify_due_followups)
             # Owner follow-ups: owner reminder a day before, leader notice when the observation period ends

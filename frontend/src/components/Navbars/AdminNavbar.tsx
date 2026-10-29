@@ -227,7 +227,7 @@ const AdminNavbar = ({ leftContent }: AdminNavbarProps) => {
                     customCounterpartAvatar={activeChatThread.counterpart?.avatar}
                     matchedPet={activeChatThread.matched_pet ? (activeChatThread.matched_pet as any) : undefined}
                     matchId={activeChatThread.match_id || undefined}
-                    threadMode={activeChatThread.thread_mode === 'adoption' ? undefined : activeChatThread.thread_mode}
+                    threadMode={activeChatThread.thread_mode}
                 />
             )}
 

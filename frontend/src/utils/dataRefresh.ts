@@ -5,7 +5,7 @@ export const DATA_CHANGED_STORAGE_KEY = 'straysafe_data_changed';
 export function isDataMutation(method: string | undefined, url: string | undefined): boolean {
     if (!['post', 'put', 'patch', 'delete'].includes((method || '').toLowerCase())) return false;
     const path = (url || '').replace(/^https?:\/\/[^/]+/i, '').replace(/^\/api(?=\/)/, '');
-    return /^\/(reports|report-returns|rescue-requests|holding|pets|pet-ownership|claims|adoptions|adoption-tasks|users|landmarks|announcements|matches|warnings|owner-warnings|positions|coverage)(\/|\?|$)/.test(path);
+    return /^\/(reports|report-returns|rescue-requests|holding|pets|pet-ownership|claims|users|landmarks|announcements|matches|warnings|owner-warnings|positions|coverage)(\/|\?|$)/.test(path);
 }
 
 export function refreshScope(token: string | null): string | null {

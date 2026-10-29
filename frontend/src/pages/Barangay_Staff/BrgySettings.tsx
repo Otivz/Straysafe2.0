@@ -68,7 +68,7 @@ type BrgySettingsTab = 'profile' | 'landmarks' | 'holding' | 'dispatch' | 'alert
 interface BrgySettingsPreferences {
     quarantineDays: number;
     capacityWarningThreshold: number; // e.g. 80%
-    adoptionGraceDays: number;
+    holdingStayDays: number;
     autoArchiveResolvedDays: number;
     soundOnEscalation: boolean;
     urgentBiteSiren: boolean;
@@ -81,7 +81,7 @@ interface BrgySettingsPreferences {
 const DEFAULT_BRGY_PREFERENCES: BrgySettingsPreferences = {
     quarantineDays: 14,
     capacityWarningThreshold: 80,
-    adoptionGraceDays: 0,
+    holdingStayDays: 0,
     autoArchiveResolvedDays: 30,
     soundOnEscalation: true,
     urgentBiteSiren: true,
@@ -138,7 +138,7 @@ const BrgySettings: React.FC = () => {
             if (savedStay) {
                 const parsedStay = parseInt(savedStay, 10);
                 if (!isNaN(parsedStay) && parsedStay >= 0) {
-                    base.adoptionGraceDays = parsedStay;
+                    base.holdingStayDays = parsedStay;
                 }
             }
             return base;
@@ -408,7 +408,7 @@ const BrgySettings: React.FC = () => {
     const handleSavePreferences = () => {
         try {
             localStorage.setItem('straysafe_brgy_settings', JSON.stringify(prefs));
-            localStorage.setItem('holding_impound_stay_duration', prefs.adoptionGraceDays.toString());
+            localStorage.setItem('holding_impound_stay_duration', prefs.holdingStayDays.toString());
             window.dispatchEvent(new Event('storage'));
             api.put('/notifications/preferences', {
                 email_reports: prefs.emailAlertsEnabled,
@@ -1288,7 +1288,7 @@ const BrgySettings: React.FC = () => {
                                                         </span>
                                                     </div>
                                                     <p className="text-xs text-gray-500 font-medium mt-0.5">
-                                                        Number of days an animal remains in the holding place before scheduled impoundment or transfer to adoption.
+                                                        Number of days an animal remains in the holding place before it is due for impoundment.
                                                     </p>
                                                 </div>
                                                 <div className="flex flex-wrap items-center gap-3">
@@ -1298,9 +1298,9 @@ const BrgySettings: React.FC = () => {
                                                             <button
                                                                 key={days}
                                                                 type="button"
-                                                                onClick={() => setPrefs(prev => ({ ...prev, adoptionGraceDays: days }))}
+                                                                onClick={() => setPrefs(prev => ({ ...prev, holdingStayDays: days }))}
                                                                 className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
-                                                                    prefs.adoptionGraceDays === days
+                                                                    prefs.holdingStayDays === days
                                                                         ? 'bg-role text-white shadow-xs'
                                                                         : 'text-gray-600 hover:bg-gray-100'
                                                                 }`}
@@ -1314,8 +1314,8 @@ const BrgySettings: React.FC = () => {
                                                     <div className="flex items-center space-x-1 bg-white border border-gray-200 rounded-xl px-2 py-1 shadow-xs">
                                                         <button
                                                             type="button"
-                                                            onClick={() => setPrefs(prev => ({ ...prev, adoptionGraceDays: Math.max(0, prev.adoptionGraceDays - 1) }))}
-                                                            disabled={prefs.adoptionGraceDays <= 0}
+                                                            onClick={() => setPrefs(prev => ({ ...prev, holdingStayDays: Math.max(0, prev.holdingStayDays - 1) }))}
+                                                            disabled={prefs.holdingStayDays <= 0}
                                                             className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-gray-100 text-gray-700 font-bold flex items-center justify-center transition-colors text-sm"
                                                             title="Decrease stay duration"
                                                         >
@@ -1326,11 +1326,11 @@ const BrgySettings: React.FC = () => {
                                                                 type="number"
                                                                 min={0}
                                                                 max={90}
-                                                                value={prefs.adoptionGraceDays}
+                                                                value={prefs.holdingStayDays}
                                                                 onChange={(e) => {
                                                                     const val = parseInt(e.target.value, 10);
                                                                     if (!isNaN(val)) {
-                                                                        setPrefs(prev => ({ ...prev, adoptionGraceDays: Math.min(90, Math.max(0, val)) }));
+                                                                        setPrefs(prev => ({ ...prev, holdingStayDays: Math.min(90, Math.max(0, val)) }));
                                                                     }
                                                                 }}
                                                                 className="w-10 text-center text-sm font-black text-gray-900 focus:outline-hidden"
@@ -1339,7 +1339,7 @@ const BrgySettings: React.FC = () => {
                                                         </div>
                                                         <button
                                                             type="button"
-                                                            onClick={() => setPrefs(prev => ({ ...prev, adoptionGraceDays: Math.min(90, prev.adoptionGraceDays + 1) }))}
+                                                            onClick={() => setPrefs(prev => ({ ...prev, holdingStayDays: Math.min(90, prev.holdingStayDays + 1) }))}
                                                             className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold flex items-center justify-center transition-colors text-sm"
                                                             title="Increase stay duration"
                                                         >

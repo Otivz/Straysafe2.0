@@ -109,6 +109,38 @@ r1 = analyze(1)
 check("a cropped photo with one dog passes the same check", r1.status_code == 200
       and r1.json().get("multiple_animals_detected") is False and r1.json().get("detected_animal_count") == 1, r1.text[:300])
 
+# ------------------------------------------------------------------ pet registration mode: YOLO only, never Gemini
+gemini_calls = []
+_saved = (reports.is_gemini_enabled_in_db, reports.call_gemini_with_fallback, os.environ.get("GEMINI_API_KEY", ""))
+reports.is_gemini_enabled_in_db = lambda *a, **k: True          # Gemini switched on, with a key...
+reports.call_gemini_with_fallback = lambda *a, **k: gemini_calls.append(1)
+os.environ["GEMINI_API_KEY"] = "test-key"
+
+
+def analyze_pet(yolo):
+    reports.get_yolo_model = yolo
+    return client.post("/reports/analyze-media", headers=H(resident), data={"purpose": "pet"},
+                       files={"file": ("pet.jpg", photo(), "image/jpeg")})
+
+
+rp = analyze_pet(lambda: _FakeYolo(1))
+body = rp.json() if rp.status_code == 200 else {}
+check("pet mode: a dog is detected with YOLO", body.get("animal_detected") is True and body.get("animal_type") == "Dog", rp.text[:300])
+check("pet mode: Gemini is never called, even when it is switched on", not gemini_calls, len(gemini_calls))
+check("pet mode: no authenticity verdict and no guessed breed or size in the answer",
+      not any(k in body for k in ("verification_status", "is_ai_generated", "ai_generation_confidence", "ai_photo_status"))
+      and body.get("possible_breed") == "Unknown" and body.get("estimated_size") == "Unknown", body)
+rp = analyze_pet(lambda: _FakeYolo(0))
+check("pet mode: a photo with no dog or cat says so (the form then refuses it)", rp.json().get("animal_detected") is False, rp.text[:300])
+rp = analyze_pet(lambda: (_ for _ in ()).throw(RuntimeError("model missing")))
+check("pet mode: if YOLO itself fails the photo is 'not checked' (None), not refused", rp.status_code == 200
+      and rp.json().get("animal_detected") is None, rp.text[:300])
+check("...and Gemini is still not called", not gemini_calls, len(gemini_calls))
+analyze(1)   # control: the same photo checked for a report (no purpose) does go to Gemini
+check("control: report photos still go to Gemini under the same settings", len(gemini_calls) == 1, len(gemini_calls))
+reports.is_gemini_enabled_in_db, reports.call_gemini_with_fallback = _saved[0], _saved[1]
+os.environ["GEMINI_API_KEY"] = _saved[2]
+
 # ------------------------------------------------------------------ registration
 CROP_A = "https://res.cloudinary.com/demo/image/upload/v1/pets/crop-a.jpg"
 CROP_B = "https://res.cloudinary.com/demo/image/upload/v1/pets/crop-b.jpg"

@@ -164,7 +164,7 @@ export default function AnimalRecordsPanel({ reportId, basePath, animalCount, on
             {!info.is_group && (
                 <p className="text-[11px] font-semibold text-gray-500">
                     {reported > 1
-                        ? `This report has ${reported} animals. Add a record for each one so every animal can be matched, held, claimed or adopted on its own.`
+                        ? `This report has ${reported} animals. Add a record for each one so every animal can be matched, held and claimed on its own.`
                         : 'If this report actually shows more than one animal, add a record for each one.'}
                 </p>
             )}

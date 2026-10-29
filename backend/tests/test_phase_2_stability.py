@@ -51,7 +51,7 @@ def run_tests():
         "total_reports", "active_reports", "resolved_reports", "resolution_rate",
         "total_pets", "vaccinated_pets", "compliance_rate",
         "total_users", "active_users",
-        "holding_count", "active_adoptions_count", "pending_warnings_count",
+        "holding_count", "pending_warnings_count",
         "subdivisions_list", "recent_activity_logs", "active_map_reports"
     ]
     for field in expected_fields:
@@ -73,7 +73,7 @@ def run_tests():
     res_badge_200 = client.get("/admin/badge-counts")
     assert res_badge_200.status_code == 200, f"Expected 200 for Admin, got {res_badge_200.status_code}: {res_badge_200.text}"
     badges = res_badge_200.json()
-    assert "active_reports" in badges and "pending_adoptions" in badges
+    assert "active_reports" in badges and "pending_adoptions" not in badges
     print(f"[PASS] 4. Admin (Role 4) GET /admin/badge-counts returned: {badges}")
 
     # ─────────────────────────────────────────────────────────────

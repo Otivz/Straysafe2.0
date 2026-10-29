@@ -59,8 +59,7 @@ const ResidentsLogin = () => {
             normalized.startsWith('/brgy') ||
             normalized.startsWith('/admin') ||
             normalized.startsWith('/staff') ||
-            normalized.includes('/login') ||
-            normalized === '/adopt'
+            normalized.includes('/login')
         ) {
             return false;
         }

@@ -45,10 +45,9 @@ function stepOfStatus(statusId: number | null | undefined): StepKey {
     return (STEP_ORDER.find((k) => STEP_STATUSES[k].includes(id)) || 'reported');
 }
 
-function closedOutcome(statusId: number, custody: string, mergedInto?: number | null): { outcome: Outcome; label: string; short: string } {
+function closedOutcome(statusId: number, mergedInto?: number | null): { outcome: Outcome; label: string; short: string } {
     if (statusId === 9) return { outcome: 'good', label: 'Back home with its owner', short: 'Back home' };
     if (statusId === 10) return { outcome: 'good', label: 'Released', short: 'Released' };
-    if (/adopt/i.test(custody)) return { outcome: 'good', label: 'Adopted into a new home', short: 'Adopted' };
     if (statusId === 11) return { outcome: 'good', label: 'Case resolved', short: 'Resolved' };
     if (statusId === 12) return { outcome: 'sad', label: 'The animal passed away', short: 'Passed away' };
     if (statusId === 17) return { outcome: 'not_found', label: "Search ended: the animal couldn't be found", short: 'Search ended' };
@@ -88,7 +87,7 @@ export function getCaseStages(report: any, holding?: any | null): CaseStages {
         .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     const firstOf = (key: StepKey) => history.find((h: any) => STEP_STATUSES[key].includes(Number(h.report_status_id))) || null;
 
-    const closed = current === 'closed' ? closedOutcome(statusId, custody, report?.duplicate_of_report_id) : null;
+    const closed = current === 'closed' ? closedOutcome(statusId, report?.duplicate_of_report_id) : null;
 
     const steps: CaseStep[] = STEP_ORDER.map((key, i) => {
         const first = key === 'reported' ? null : firstOf(key);
@@ -155,7 +154,6 @@ export function getWhereNow(report: any, stages: CaseStages, holding?: any | nul
             case 'good':
                 if (statusId === 9) return { tone: 'good', parts: [{ text: 'Back home with its owner.' }] };
                 if (statusId === 10) return { tone: 'good', parts: [{ text: 'The animal was released.' }] };
-                if (/adopt/i.test(String(report?.custody_status || ''))) return { tone: 'good', parts: [{ text: 'Adopted into a new home.' }] };
                 return { tone: 'good', parts: [{ text: 'The case was resolved.' }] };
             case 'sad':
                 return { tone: 'closed', parts: [{ text: 'Sadly, the animal passed away.' }] };

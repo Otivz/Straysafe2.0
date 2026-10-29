@@ -22,7 +22,7 @@ from sqlalchemy.pool import StaticPool
 import app.models  # noqa: F401
 from app.database import Base, get_db
 from app.models.user import Barangay, Role, Subdivision, User
-from app.models.report import Adoption, HoldingAnimal, Report, ReportCategory, Rescue
+from app.models.report import HoldingAnimal, Report, ReportCategory, Rescue
 from app.models.pet import Pet
 from app.models.report_match import ReportMatch
 from app.models.warning import OwnerWarning
@@ -85,8 +85,6 @@ class AnalyticsTests(unittest.TestCase):
             Rescue(rescue_id=3, report_id=3, status_id=3, started_at=datetime(2026, 10, 23, 8), completed_at=datetime(2026, 10, 23, 10)),
         ])
         cls.db.flush()
-        for aid, handed in [(1, False), (2, True)]:
-            cls.db.add(Adoption(adoption_id=aid, holding_id=1, applicant_id=1, status='Approved', full_name='Test Adopter', address='Test', contact_no='123', reason='Test', staff_handed_over=handed, is_handed_over=handed, created_at=datetime(2026, 10, 23)))
         cls.db.commit()
 
     @classmethod
@@ -180,13 +178,12 @@ class AnalyticsTests(unittest.TestCase):
         self.assertEqual(data['holding_summary']['currently_held'], 2)
         self.assertEqual(data['holding_summary']['returned_to_owner'], 1)
 
-    def test_only_valid_completed_rescue_durations_and_real_handovers(self):
+    def test_only_valid_completed_rescue_durations(self):
         data = self.get(days=7).json()
         self.assertEqual(data['sla_metrics']['total_completed_rescues'], 1)
         self.assertEqual(data['sla_metrics']['avg_rescue_hours'], 2)
         self.assertEqual(data['sla_metrics']['avg_verification_hours'], 1.5)
-        self.assertEqual(data['holding_and_adoption']['approved_adoptions'], 2)
-        self.assertEqual(data['holding_and_adoption']['completed_handovers'], 1)
+        self.assertNotIn('holding_and_adoption', data)  # adoption was removed from the system
 
     def test_ai_review_rate_is_not_reunion_or_precision(self):
         self.db.add_all([ReportMatch(source_report_id=1, status='CONFIRMED_MATCH', similarity_score=90, created_at=datetime(2026, 10, 23)), ReportMatch(source_report_id=2, status='NOT_A_MATCH', similarity_score=70, created_at=datetime(2026, 10, 23))])

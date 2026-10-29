@@ -43,7 +43,7 @@ try {
         await import('/@vite/client');
         await import('/tests/fixtures/chatCache.tsx');
     </script></body></html>`;
-    const message = (id, text, sender = 31) => ({ message_id: id, thread_id: 9, sender_id: sender, sender_name: 'Applicant B', sender_role: 'Resident',
+    const message = (id, text, sender = 31) => ({ message_id: id, thread_id: 9, sender_id: sender, sender_name: 'Resident B', sender_role: 'Resident',
         message_text: text, media_url: null, is_read: true, is_system: false, sent_at: new Date().toISOString() });
     const intercept = async ({ requestId, request }) => {
         const url = new URL(request.url);
@@ -51,15 +51,17 @@ try {
         let code = 200;
         let type = 'application/json';
         if (url.pathname === '/__chat_cache__') { body = fixture; type = 'text/html'; }
-        else if (/\/chat\/adoptions\/\d+\/messages$/.test(url.pathname)) {
-            if (mode === 'denied') { code = 404; body = { detail: 'Adoption application not found' }; }
+        else if (/\/chat\/reports\/\d+\/messages$/.test(url.pathname)) {
+            if (mode === 'denied') { code = 403; body = { detail: 'Not allowed to view this conversation' }; }
             else if (mode === 'empty') body = [];
             else body = [message(1, 'My own question about the dog')];
-        } else if (/\/chat\/adoptions\/\d+\/thread$/.test(url.pathname)) {
-            if (mode === 'denied') { code = 404; body = { detail: 'Adoption application not found' }; }
-            else body = { adoption_id: 7, thread_id: null, current_stage: 'Application', stage_label: 'Application', application_status: 'Pending',
-                can_send: true, viewer_role: 'applicant', applicant: { user_id: 31, name: 'Applicant B', role: 'Adopter' }, staff_participants: [],
-                total_messages: 0, unread_messages: 0 };
+        } else if (/\/chat\/reports\/\d+\/thread$/.test(url.pathname)) {
+            if (mode === 'denied') { code = 403; body = { detail: 'Not allowed to view this conversation' }; }
+            else body = { thread_id: null, report_id: 7, can_interact: true, is_closed: false };
+        } else if (/\/chat\/reports\/\d+\/stats$/.test(url.pathname)) {
+            body = { thread_id: null, total_messages: 0, unread_messages: 0, is_closed: false };
+        } else if (/\/reports\/\d+$/.test(url.pathname)) {
+            body = { report_id: 7, user_id: 31, status_id: 2, animal_type: 'Dog' };
         }
         await command('Fetch.fulfillRequest', { requestId, responseCode: code, responseHeaders: [{ name: 'Content-Type', value: type }],
             body: Buffer.from(typeof body === 'string' ? body : JSON.stringify(body)).toString('base64') });
@@ -88,9 +90,9 @@ try {
     };
     const signedInWithCache = (cachedText) => `(() => {
         localStorage.clear(); sessionStorage.clear();
-        localStorage.setItem('resident_user', JSON.stringify({ user_id: 31, name: 'Applicant B', role_id: 1,
+        localStorage.setItem('resident_user', JSON.stringify({ user_id: 31, name: 'Resident B', role_id: 1,
             access_token: 'test.' + btoa(JSON.stringify({ user_id: 31, exp: 4102444800 })) + '.test' }));
-        localStorage.setItem('straysafe_adoption_chat_7', JSON.stringify([{ id: 'msg-99', senderId: 30, senderName: 'Applicant A',
+        localStorage.setItem('straysafe_report_chat_7', JSON.stringify([{ id: 'msg-99', senderId: 30, senderName: 'Resident A',
             senderRole: 'Resident', text: ${JSON.stringify(cachedText)}, timestamp: 'Yesterday', isRead: true }]));
         return true; })()`;
     const page = () => evaluate('document.body.innerText');
@@ -102,30 +104,30 @@ try {
         mode = 'denied';
         await command('Page.navigate', { url: base + '/__chat_cache__' });
         await waitFor(`!!document.getElementById('fixture')`, 'fixture');
-        await evaluate(signedInWithCache("Applicant A's private message"));
-        await command('Page.navigate', { url: base + '/__chat_cache__?adoption=7' });
+        await evaluate(signedInWithCache("Resident A's private message"));
+        await command('Page.navigate', { url: base + '/__chat_cache__?report=7' });
         await waitFor(`document.body.innerText.includes("You don't have access to this conversation")`, 'access notice');
         await delay(500);
-        assert.equal((await page()).includes("Applicant A's private message"), false, 'cached message of another account is not shown');
-        assert.equal(await evaluate(`localStorage.getItem('straysafe_adoption_chat_7')`), null, 'refused conversation removed from the cache');
+        assert.equal((await page()).includes("Resident A's private message"), false, 'cached message of another account is not shown');
+        assert.equal(await evaluate(`localStorage.getItem('straysafe_report_chat_7')`), null, 'refused conversation removed from the cache');
         assert.equal(await evaluate(`!!document.querySelector('textarea, input[type=text]') && !document.querySelector('textarea, input[type=text]').disabled && document.body.innerText.includes('Send')`), false, 'no way to send');
 
         // 2. The server has no messages but an old copy is cached: the welcome note replaces it
         mode = 'empty';
         await evaluate(signedInWithCache('Stale message from an older session'));
-        await command('Page.navigate', { url: base + '/__chat_cache__?adoption=7' });
-        await waitFor(`document.body.innerText.includes('Adoption chat for Application #7')`, 'welcome note');
+        await command('Page.navigate', { url: base + '/__chat_cache__?report=7' });
+        await waitFor(`document.body.innerText.includes('Case chat initialized for Report #STR-0007')`, 'welcome note');
         assert.equal((await page()).includes('Stale message from an older session'), false, 'stale cache replaced');
 
         // 3. Normal conversation still loads
         mode = 'ok';
-        await command('Page.navigate', { url: base + '/__chat_cache__?adoption=7' });
+        await command('Page.navigate', { url: base + '/__chat_cache__?report=7' });
         await waitFor(`document.body.innerText.includes('My own question about the dog')`, 'own messages');
 
         // 4. Signing in, out or a session ending clears every cached conversation
-        await evaluate(`localStorage.setItem('straysafe_report_chat_3', '[]'); localStorage.setItem('straysafe_match_chat_2', '[]'); localStorage.setItem('straysafe_adoption_chat_7', '[]'); localStorage.setItem('straysafe_theme', 'light'); true`);
+        await evaluate(`localStorage.setItem('straysafe_report_chat_3', '[]'); localStorage.setItem('straysafe_match_chat_2', '[]'); localStorage.setItem('straysafe_report_chat_7', '[]'); localStorage.setItem('straysafe_theme', 'light'); true`);
         await evaluate('window.__clearAuthStorage(); true');
-        const left = await evaluate(`Object.keys(localStorage).filter(k => /^straysafe_(report|match|adoption)_chat_/.test(k))`);
+        const left = await evaluate(`Object.keys(localStorage).filter(k => /^straysafe_(report|match)_chat_/.test(k))`);
         assert.deepEqual(left, [], 'chat caches cleared');
         assert.equal(await evaluate(`localStorage.getItem('straysafe_theme')`), 'light', 'other settings kept');
         console.log(`PASS ${width}px: refused conversation shows nothing cached; stale cache replaced; own chat loads; sign-in/out clears chat caches`);

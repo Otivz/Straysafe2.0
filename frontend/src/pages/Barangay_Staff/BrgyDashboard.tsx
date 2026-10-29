@@ -235,7 +235,7 @@ const BrgyDashboard = () => {
     const displayOngoingReport = ongoingReportCount;
 
     // Holding Facility stats
-    // Status IDs resolved/discharged in HoldingAnimal: 3: Claimed, 4: Deceased, 5: Transferred, 7: Adopted/Released, 8: Impounded
+    // Status IDs resolved/discharged in HoldingAnimal: 3: Claimed, 4: Deceased, 5: Transferred, 8: Impounded (7 stays listed for old records)
     const RESOLVED_HOLDING = [3, 4, 5, 7, 8];
     const activeHoldingAnimals = (facilityAnimals || []).filter(a => !RESOLVED_HOLDING.includes(a.facility_status));
     const rawDogsCount = activeHoldingAnimals.filter(a => (a.animal_type || a.report?.animal_type || '').toLowerCase().includes('dog')).length;
@@ -249,19 +249,11 @@ const BrgyDashboard = () => {
     const usedSlots = activeHoldingAnimals.length;
     const facilityCapacityPct = totalCapacitySlots > 0 ? Math.min(100, Math.round((usedSlots / totalCapacitySlots) * 100)) : 0;
 
-    // Adoption stats
-    const adoptionAnimalsList = (facilityAnimals || []).filter(a =>
-        a.facility_status === 2 ||
-        a.facility_status === 6 ||
-        a.is_for_adoption ||
-        (a.status_name || '').toLowerCase().includes('adopt') ||
-        (a.facility_status_name || '').toLowerCase().includes('healthy')
-    );
-    const adoptionCount = adoptionAnimalsList.length;
-    const rawAdoptionDogs = adoptionAnimalsList.filter(a => (a.animal_type || a.report?.animal_type || '').toLowerCase().includes('dog')).length;
-    const rawAdoptionCats = adoptionAnimalsList.filter(a => (a.animal_type || a.report?.animal_type || '').toLowerCase().includes('cat')).length;
-    const adoptionDogsCount = rawAdoptionDogs;
-    const adoptionCatsCount = rawAdoptionCats;
+    // Impounded animals (holding status 8)
+    const impoundedAnimals = (facilityAnimals || []).filter(a => a.facility_status === 8);
+    const impoundedCount = impoundedAnimals.length;
+    const impoundedDogsCount = impoundedAnimals.filter(a => (a.animal_type || a.report?.animal_type || '').toLowerCase().includes('dog')).length;
+    const impoundedCatsCount = impoundedAnimals.filter(a => (a.animal_type || a.report?.animal_type || '').toLowerCase().includes('cat')).length;
 
     const getStatusName = (statusId: number | string | undefined | null) => {
         const sId = Number(statusId);
@@ -698,7 +690,7 @@ const BrgyDashboard = () => {
                             { label: 'On Duty Personnel', sub: 'Active field officers', value: <>{activePersonnelCount}<span className="text-sm font-bold text-slate-400"> / {totalPersonnel}</span></>, to: '/brgy/personnel', tone: 'text-blue-600', note: `${availablePersonnelCount} available for call` },
                             { label: 'Ongoing Rescues', sub: 'Units deployed in field', value: <>{displayOngoingReport}</>, to: '/brgy/rescue-requests', tone: 'text-emerald-600', note: null },
                             { label: 'Holding Place', sub: `${dogsCount} dogs • ${catsCount} cats`, value: <>{animalsInFacilityCount}</>, to: '/brgy/holding-facility', tone: 'text-purple-600', note: `${facilityCapacityPct}% of capacity` },
-                            { label: 'Up for Adoption', sub: `${adoptionDogsCount} dogs • ${adoptionCatsCount} cats`, value: <>{adoptionCount}</>, to: '/brgy/adoptions', tone: 'text-amber-600', note: null },
+                            { label: 'Impounded', sub: `${impoundedDogsCount} dogs • ${impoundedCatsCount} cats`, value: <>{impoundedCount}</>, to: '/brgy/holding-facility', tone: 'text-amber-600', note: null },
                         ].map((c, i) => (
                             <button
                                 key={c.label}

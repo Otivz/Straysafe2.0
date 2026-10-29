@@ -2,8 +2,9 @@
 
 **Document Version:** 2.1  
 **Audit & Governance Date:** October 12, 2026  
+**Update 2026-10-28:** adoption was removed from the system (not approved by the panel). Adoption chats no longer exist; the adoption items below are kept as audit history only.  
 **Audited Target Modules:**
-- Backend: [`backend/app/routes/chat.py`](../../backend/app/routes/chat.py), [`backend/app/routes/adoption_chat.py`](../../backend/app/routes/adoption_chat.py), [`backend/app/schemas/chat.py`](../../backend/app/schemas/chat.py), [`backend/app/models/chat.py`](../../backend/app/models/chat.py)
+- Backend: [`backend/app/routes/chat.py`](../../backend/app/routes/chat.py), `backend/app/routes/adoption_chat.py` (removed 2026-10-28), [`backend/app/schemas/chat.py`](../../backend/app/schemas/chat.py), [`backend/app/models/chat.py`](../../backend/app/models/chat.py)
 - Frontend: [`ReportChatDrawer.tsx`](../../frontend/src/components/Chat/ReportChatDrawer.tsx), [`ReportChatBadge.tsx`](../../frontend/src/components/Chat/ReportChatBadge.tsx), [`MessagesDropdown.tsx`](../../frontend/src/components/Chat/MessagesDropdown.tsx), [`MessagesDrawer.tsx`](../../frontend/src/components/Chat/MessagesDrawer.tsx), [`SubdMessages.tsx`](../../frontend/src/pages/Subd_Leaders/SubdMessages.tsx), [`BrgyMessages.tsx`](../../frontend/src/pages/Barangay_Staff/BrgyMessages.tsx), [`useUnreadMessageCount.ts`](../../frontend/src/utils/useUnreadMessageCount.ts)
 
 ---
@@ -24,8 +25,6 @@ Every message sent within the platform is governed by the following strict rulin
 | **Send Message in Report Chat** | ✅ Permitted (case author) | ❌ Denied (403 Forbidden) | ✅ Permitted (assigned / subdivision) | ✅ Permitted (assigned rescuer only) | ✅ Permitted (assigned / head officer) | ✅ Permitted |
 | **View Look-Alike Match Chat** | ✅ Permitted (reporter / pet owner) | ❌ Denied (no relation) | ✅ Permitted (in-jurisdiction) | 👁️ Read-only (if escalated) | ✅ Permitted (if escalated) | ✅ Global oversight |
 | **Send in Match Chat** | ✅ Permitted (pet owner / reporter) | ❌ Denied (403 Forbidden) | ✅ Permitted (handling leader) | ✅ Permitted (assigned rescuer) | ✅ Permitted | ✅ Permitted |
-| **View Adoption Chat** | ✅ Permitted (applicant only) | ❌ Denied (no relation) | ❌ Denied (subdivision does not handle adoptions) | ✅ Permitted (assigned staff) | ✅ Permitted (all barangay cases) | ✅ Global oversight |
-| **Send in Adoption Chat** | ✅ Permitted (active stages) | ❌ Denied (403 Forbidden) | ❌ Denied | ✅ Permitted (assigned staff) | ✅ Permitted (head officer) | ✅ Permitted |
 | **Edit / Modify Sent Message** | 🚫 **PROHIBITED** | 🚫 **PROHIBITED** | 🚫 **PROHIBITED** | 🚫 **PROHIBITED** | 🚫 **PROHIBITED** | 🚫 **PROHIBITED** |
 | **Delete Sent Message** | 🚫 **PROHIBITED** | 🚫 **PROHIBITED** | 🚫 **PROHIBITED** | 🚫 **PROHIBITED** | 🚫 **PROHIBITED** | 🚫 **PROHIBITED** |
 | **Forge System Flag (`is_system`)** | 🚫 Rejected by server | 🚫 Rejected by server | 🚫 Rejected by server | 🚫 Rejected by server | 🚫 Rejected by server | ⚙️ Backend triggers only |
@@ -44,7 +43,7 @@ Every message sent within the platform is governed by the following strict rulin
 2. **Three Exclusive Permitted Contexts:**
    - **Type A: Incident Report Case Chat (`thread_type = 'Report'`):** Permanently bound to an active stray sighting or rescue incident (`report_id`).
    - **Type B: Lost Pet Look-Alike Match Chat (`thread_type = 'Direct'`):** Bound to an AI/rule look-alike pet candidate (`match_id` or `pet_id`).
-   - **Type C: Adoption Screening Thread (`thread_type = 'Adoption'`):** Bound to an ongoing adoption screening application (`adoption_id`).
+   - **Type C: Adoption Screening Thread (`thread_type = 'Adoption'`):** Retired 2026-10-28 with the adoption feature; the server never opens one.
 
 ---
 

@@ -61,7 +61,7 @@ const LandingPage = () => {
                 'Track real-time progress and milestone updates on submitted reports',
                 'Register family pets and print QR recovery tags',
                 'Review potential look-alike matches for lost pets',
-                'Browse verified shelter pets and submit adoption applications'
+                'Claim a lost pet found in the barangay holding place with proof of ownership'
             ]
         },
         {
@@ -91,13 +91,13 @@ const LandingPage = () => {
             bgColor: 'bg-orange-50/70',
             borderColor: 'border-orange-300',
             badgeBg: 'bg-orange-100 text-orange-900',
-            summary: 'Manage endorsed rescue requests, coordinate field dispatch, oversee holding care, and handle adoptions.',
+            summary: 'Manage endorsed rescue requests, coordinate field dispatch, oversee holding care, and return animals to their owners.',
             capabilities: [
                 'Receive and approve endorsed rescue requests from subdivision leaders',
                 'Coordinate field dispatch, responder arrival, and humane animal handling',
                 'Oversee holding place intake, health observation, and feeding logs',
                 'Verify pet ownership claims using vaccination cards and veterinary proof',
-                'Manage the 5-stage adoption pipeline and generate verified certificates'
+                'Impound unclaimed animals after the holding period, or extend the hold'
             ]
         },
         {
@@ -147,8 +147,8 @@ const LandingPage = () => {
             step: '04',
             role: 'Community & Officials',
             title: 'Monitor Progress & Complete Resolution',
-            desc: 'All authorized stakeholders follow transparent milestone updates. Animals are held during an observation period, verified for owner return, or placed in the public adoption catalog for rehoming.',
-            tags: ['Holding Timeline', 'Owner Claims', 'Adoption Pipeline']
+            desc: 'All authorized stakeholders follow transparent milestone updates. Animals are held during an observation period and returned to a verified owner; unclaimed animals are impounded.',
+            tags: ['Holding Timeline', 'Owner Claims', 'Impoundment']
         }
     ];
 
@@ -207,8 +207,8 @@ const LandingPage = () => {
         },
         {
             icon: Heart,
-            title: 'Full 5-Stage Adoption Pipeline',
-            description: 'Structured adoption process from public catalog browsing to digital applications, officer home assessments, adoption agreements, and verified certificates.'
+            title: 'Verified Owner Claims',
+            description: 'Owners claim a found pet with vaccination cards, veterinary records or photos; Barangay staff verify the proof before the animal is handed back.'
         },
         {
             icon: AlertTriangle,
@@ -536,7 +536,7 @@ const LandingPage = () => {
                             Barangay Action & Care
                         </h3>
                         <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
-                            Barangay personnel dispatch responders, manage humane holding places, coordinate veterinary observation, process owner claims, and oversee transparent adoption.
+                            Barangay personnel dispatch responders, manage humane holding places, coordinate veterinary observation, process owner claims, and keep every outcome on record.
                         </p>
                     </div>
                 </div>
@@ -606,7 +606,7 @@ const LandingPage = () => {
                     <div className="mt-8 bg-white rounded-2xl p-4 sm:p-5 border border-stone-200/80 max-w-3xl mx-auto flex items-start gap-3 text-xs sm:text-sm text-stone-600">
                         <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                         <div>
-                            <strong className="text-stone-900">Responsible Outcome Guarantee:</strong> StraySafe coordinates reports through formal verification. Not every report results in immediate impoundment; cases may be resolved through owner reunification, localized assistance, medical care, or verified adoption.
+                            <strong className="text-stone-900">Responsible Outcome Guarantee:</strong> StraySafe coordinates reports through formal verification. Not every report results in immediate impoundment; cases may be resolved through owner reunification, localized assistance, or medical care.
                         </div>
                     </div>
 
@@ -797,39 +797,7 @@ const LandingPage = () => {
             </section>
 
             {/* ========================================================================= */}
-            {/* 8. ADOPTION SHOWCASE BANNER */}
-            {/* ========================================================================= */}
-            <section className="py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-                <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-3xl p-6 sm:p-10 text-white shadow-xl shadow-orange-500/15 flex flex-col md:flex-row items-center justify-between gap-6">
-                    <div className="space-y-2 text-center md:text-left max-w-xl">
-                        <span className="text-xs font-extrabold uppercase tracking-widest text-orange-100 bg-white/20 px-3 py-1 rounded-full inline-block">
-                            Animal Rehoming
-                        </span>
-                        <h3 className="text-2xl sm:text-3xl font-extrabold font-plus-jakarta">
-                            Looking to Adopt a Rescued Pet?
-                        </h3>
-                        <p className="text-xs sm:text-sm text-orange-50 leading-relaxed">
-                            Browse verified shelter pets currently in barangay holding places that are medically cleared and waiting for a safe home.
-                        </p>
-                    </div>
-                    <div className="shrink-0 w-full sm:w-auto">
-                        <Link to="/adopt" className="block w-full sm:w-auto">
-                            <Button
-                                variant="light"
-                                size="lg"
-                                className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-sm sm:text-base text-orange-600 bg-white hover:bg-orange-50 shadow-md border-none"
-                            >
-                                <span className="inline-flex items-center gap-2">
-                                    <Heart className="w-4 h-4 fill-orange-500" /> Browse Adoption Catalog
-                                </span>
-                            </Button>
-                        </Link>
-                    </div>
-                </div>
-            </section>
-
-            {/* ========================================================================= */}
-            {/* 9. CALL TO ACTION SECTION */}
+            {/* 8. CALL TO ACTION SECTION */}
             {/* ========================================================================= */}
             <section className="py-14 sm:py-20 md:py-24 bg-stone-900 text-white text-center relative overflow-hidden" id="contact">
                 <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 space-y-6">
@@ -879,7 +847,7 @@ const LandingPage = () => {
             </section>
 
             {/* ========================================================================= */}
-            {/* 10. FOOTER */}
+            {/* 9. FOOTER */}
             {/* ========================================================================= */}
             <footer className="bg-stone-950 text-stone-400 py-12 sm:py-16 border-t border-stone-800">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -939,9 +907,6 @@ const LandingPage = () => {
                                 </li>
                                 <li>
                                     <Link to="/admin/login" className="hover:text-orange-400 transition-colors">System Administrator</Link>
-                                </li>
-                                <li>
-                                    <Link to="/adopt" className="hover:text-orange-400 transition-colors">Public Adoption Catalog</Link>
                                 </li>
                             </ul>
                         </div>

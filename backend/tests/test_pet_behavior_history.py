@@ -46,7 +46,7 @@ class PetBehaviorHistoryTests(unittest.TestCase):
     def setUp(self):
         Base.metadata.drop_all(self.engine)
         Base.metadata.create_all(self.engine)
-        for target in ('app.routes.pets.recheck_pet_photos', 'app.routes.pets.auto_extract_pet_colors'):
+        for target in ('app.routes.pets.auto_extract_pet_colors',):
             mock = patch(target)
             mock.start()
             self.addCleanup(mock.stop)
@@ -69,7 +69,7 @@ class PetBehaviorHistoryTests(unittest.TestCase):
             db.add(Report(report_id=1, user_id=RESIDENT, subdivision_id=1, category_id=1, current_status_id=7, latitude=14.8,
                           longitude=121.0, facility_id=1, custody_status='In Barangay Facility', animal_type='Dog', pet_id=IN_CARE))
             db.flush()
-            db.add(HoldingAnimal(holding_id=1, report_id=1, animal_type='Dog', facility_status=6, intake_staff_id=STAFF))
+            db.add(HoldingAnimal(holding_id=1, report_id=1, animal_type='Dog', facility_status=2, intake_staff_id=STAFF))
             db.commit()
 
     def pet(self, pid):

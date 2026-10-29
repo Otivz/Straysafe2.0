@@ -418,7 +418,7 @@ const PetMatchReview = () => {
                 const res = await api.post('/claims/', {
                     report_id: parseInt(reportId || '0'),
                     pet_id: selectedPetId,
-                    remarks: remarks || "I confirm this is my pet.",
+                    remarks: remarks.trim() || undefined,
                     distinctive_markings: distinctiveMarkings,
                     vaccine_card_url: uploadedVaccineUrl || undefined,
                     vet_record_url: uploadedVetUrl || undefined,

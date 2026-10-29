@@ -25,8 +25,6 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
     const [isOpen, setIsOpen] = useState(true);
     const [pendingRequestsCount, setPendingRequestsCount] = useCachedState<number>('brgy_sidebar_pendingRequestsCount', 0);
     const [pendingClaimsCount, setPendingClaimsCount] = useCachedState<number>('brgy_sidebar_pendingClaimsCount', 0);
-    const [pendingAdoptionsCount, setPendingAdoptionsCount] = useCachedState<number>('brgy_sidebar_pendingAdoptionsCount', 0);
-    const [newAdoptionTasksCount, setNewAdoptionTasksCount] = useCachedState<number>('brgy_sidebar_newAdoptionTasksCount', 0);
     const [overdueHoldingCount, setOverdueHoldingCount] = useCachedState<number>('brgy_sidebar_overdueHoldingCount', 0);
     const location = useLocation();
     const navigate = useNavigate();
@@ -38,8 +36,8 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
     const rawUser = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = rawUser ? JSON.parse(rawUser) : null;
     const isHeadOfficer = currentUser ? currentUser.is_head_officer : false;
-    // Same count as the navbar badge: report, match and adoption chats (message.md C3)
-    const { unreadCount: unreadMessagesCount } = useUnreadMessageCount(currentUser?.user_id, true);
+    // Same count as the navbar badge: report and match chats (message.md C3)
+    const { unreadCount: unreadMessagesCount } = useUnreadMessageCount(currentUser?.user_id);
 
     const handleLogout = async () => {
         if (handleDrawerClose) handleDrawerClose();
@@ -61,24 +59,14 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
             }
 
             try {
-                // Just the numbers (pending claim ids + pending adoption applications), not the whole lists
+                // Just the pending claim ids, not the whole list
                 const badgesRes = await api.get('/sidebar/badges');
                 const viewedClaimIds = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_brgy_claims') || '[]'));
                 const claimIds: number[] = Array.isArray(badgesRes.data?.pending_claim_ids) ? badgesRes.data.pending_claim_ids : [];
                 sidebarData.claimIds = claimIds;
                 setPendingClaimsCount(claimIds.filter((id) => !viewedClaimIds.has(id)).length);
-                if (typeof badgesRes.data?.pending_adoptions === 'number') setPendingAdoptionsCount(badgesRes.data.pending_adoptions);
             } catch (e) {
                 console.warn("Could not fetch brgy badge counts", e);
-            }
-
-            try {
-                const taskRes = await api.get('/adoption-tasks/count');
-                if (taskRes.data && typeof taskRes.data.new === 'number') {
-                    setNewAdoptionTasksCount(taskRes.data.new);
-                }
-            } catch (e) {
-                // ignore
             }
 
             try {
@@ -220,26 +208,6 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                     icon: (
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    )
-                },
-                {
-                    path: '/brgy/adoptions',
-                    label: 'Adoptions',
-                    badgeCount: pendingAdoptionsCount,
-                    icon: (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-                        </svg>
-                    )
-                },
-                {
-                    path: '/brgy/adoption-tasks',
-                    label: 'Adoption Tasks',
-                    badgeCount: newAdoptionTasksCount,
-                    icon: (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                         </svg>
                     )
                 }

@@ -68,17 +68,10 @@ const BrgyMessages = lazy(() => import('../pages/Barangay_Staff/BrgyMessages'));
 const BrgySettings = lazy(() => import('../pages/Barangay_Staff/BrgySettings'));
 const BrgyPetRecords = lazy(() => import('../pages/Barangay_Staff/BrgyPetRecords'));
 const BrgyPetClaims = lazy(() => import('../pages/Barangay_Staff/BrgyPetClaims'));
-const BrgyAdoptions = lazy(() => import('../pages/Barangay_Staff/BrgyAdoptions'));
-const BrgyAdoptionTasks = lazy(() => import('../pages/Barangay_Staff/BrgyAdoptionTasks'));
 const PetMatchReview = lazy(() => import('../pages/citizen/PetMatchReview'));
 const PetClaimsDashboard = lazy(() => import('../pages/citizen/PetClaimsDashboard'));
 const ReportStrayPage = lazy(() => import('../pages/citizen/ReportStrayPage'));
 const ResidentSettings = lazy(() => import('../pages/citizen/ResidentSettings'));
-const AdoptionCatalog = lazy(() => import('../pages/citizen/AdoptionCatalog'));
-const AnimalJourneyMap = lazy(() => import('../pages/citizen/AnimalJourneyMap'));
-const AdoptionApplyForm = lazy(() => import('../pages/citizen/AdoptionApplyForm'));
-const MyAdoptionApplications = lazy(() => import('../pages/citizen/MyAdoptionApplications'));
-const VerifyAdoptionCertificate = lazy(() => import('../pages/citizen/VerifyAdoptionCertificate'));
 
 const AppRoutes = () => {
     return (
@@ -95,9 +88,6 @@ const AppRoutes = () => {
             <Route path="/staff/login" element={<CommunityStaffLogin />} />
             <Route path="/pet/scan/:token" element={<PetScanPage />} />
             <Route path="/pet/scan/:token/success" element={<PetScanSuccessPage />} />
-            <Route path="/adopt" element={<AdoptionCatalog />} />
-            <Route path="/adopt/journey/:id" element={<AnimalJourneyMap />} />
-            <Route path="/verify/certificate/:number" element={<VerifyAdoptionCertificate />} />
 
             {/* Shared Authenticated QR Tag & Scan History Routes (Roles: Resident, Subd, Brgy, Admin) */}
             <Route element={<ProtectedRoute allowedRoles={[1, 2, 3, 4]} />}>
@@ -124,21 +114,6 @@ const AppRoutes = () => {
                 <Route path="/resident/pet/:petId/claims-dashboard" element={<PetClaimsDashboard />} />
             </Route>
 
-            {/* Authenticated Adoption Application, Journey & Tracking (Residents, Staff, Admin) */}
-            <Route element={<ProtectedRoute allowedRoles={[1, 2, 3, 4]} />}>
-                <Route path="/adopt/apply/:id" element={<AdoptionApplyForm />} />
-                <Route path="/adopt/applications" element={<MyAdoptionApplications />} />
-                <Route path="/adopt/journey" element={<AnimalJourneyMap />} />
-                <Route path="/adopt/journey/:id" element={<AnimalJourneyMap />} />
-                <Route path="/resident/adopt/journey" element={<AnimalJourneyMap />} />
-                <Route path="/resident/adopt/journey/:id" element={<AnimalJourneyMap />} />
-                <Route path="/brgy/adopt/journey" element={<AnimalJourneyMap />} />
-                <Route path="/brgy/adopt/journey/:id" element={<AnimalJourneyMap />} />
-                <Route path="/subd/adopt/journey" element={<AnimalJourneyMap />} />
-                <Route path="/subd/adopt/journey/:id" element={<AnimalJourneyMap />} />
-                <Route path="/admin/adopt/journey" element={<AnimalJourneyMap />} />
-                <Route path="/admin/adopt/journey/:id" element={<AnimalJourneyMap />} />
-            </Route>
 
             {/* Protected Subdivision Leader Routes (Role ID = 2) */}
             <Route element={<ProtectedRoute allowedRoles={[2]} />}>
@@ -176,8 +151,6 @@ const AppRoutes = () => {
                 <Route path="/brgy/holding-facility" element={<BrgyHoldingFacility />} />
                 <Route path="/brgy/pet-records" element={<BrgyPetRecords />} />
                 <Route path="/brgy/pet-claims" element={<BrgyPetClaims />} />
-                <Route path="/brgy/adoptions" element={<BrgyAdoptions />} />
-                <Route path="/brgy/adoption-tasks" element={<BrgyAdoptionTasks />} />
                 <Route path="/brgy/history" element={<BrgyHistoryReports />} />
                 <Route path="/brgy/history/:id" element={<BrgyViewHistory />} />
             </Route>
@@ -201,11 +174,6 @@ const AppRoutes = () => {
                 <Route path="/admin/holding-facility" element={<BrgyHoldingFacility />} />
             </Route>
 
-            {/* Barangay Exclusive Adoptions Portal (Role 3: Barangay Staff, Role 4: System Admin) */}
-            <Route element={<ProtectedRoute allowedRoles={[3, 4]} />}>
-                <Route path="/brgy/adoptions" element={<BrgyAdoptions />} />
-                <Route path="/admin/adoptions" element={<BrgyAdoptions />} />
-            </Route>
 
             {/* Catch-all Redirect to Login */}
             <Route path="*" element={<ResidentsLogin />} />

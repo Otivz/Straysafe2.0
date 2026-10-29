@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import BehaviorHistoryField from '../../components/PetRecords/BehaviorHistoryField';
 import { usePetPhotoGuard, PetPhotoGuardPanel, RegisterAnotherPrompt } from '../../components/PetPhotoGuard';
 import PhoneInput from '../../components/PhoneInput';
 import { useNavigate } from 'react-router-dom';
@@ -16,7 +15,6 @@ import PendingOwnershipRequests from '../../components/PendingOwnershipRequests'
 import HeldPetOffer, { type HeldPet } from '../../components/HeldPetOffer';
 import PetRecordRequestsForResident from '../../components/PetRecordRequestsForResident';
 import PetRecoveryModal, { type RecoveryScanData } from '../../components/Modals/PetRecoveryModal';
-import AiImageVerificationBadge, { type VerificationStatus } from '../../components/AiImageVerificationBadge';
 
 import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
 import { isUnnamedPet, petName } from '../../utils/petName';
@@ -229,27 +227,6 @@ const INITIAL_PET_FORM_DATA: PetFormData = {
     existingVaccineCardUrl: null
 };
 
-interface AiAnalysisSummary {
-    species: string;
-    breed: string;
-    colors: string[];
-    primaryColor: string;
-    secondaryColor: string;
-    tertiaryColor: string;
-    pattern?: string;
-    size?: string;
-    isAiGenerated?: boolean;
-    aiGenerationConfidence?: number;
-    aiPhotoLikelihood?: number | null;
-    aiPhotoStatus?: string;
-    aiPhotoRecommendation?: string;
-    verificationStatus?: VerificationStatus;
-    verificationMessage?: string;
-    authenticityDetails?: string;
-    message?: string;
-    /** false when the AI scan found no dog or cat in the photo */
-    animalDetected?: boolean;
-}
 
 const PRESET_PRIMARY_COLORS = ['Brown', 'Black', 'White', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream', 'Red'];
 const PRESET_SECONDARY_COLORS = ['White', 'Black', 'Brown', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream'];
@@ -385,7 +362,6 @@ const ResidentPet = () => {
     const [breedImageUrl, setBreedImageUrl] = useState<string | null>(null);
     const [isFetchingBreedImage, setIsFetchingBreedImage] = useState(false);
 
-    const [aiAnalysisSummary, setAiAnalysisSummary] = useState<AiAnalysisSummary | null>(null);
     const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
     // One animal per pet record: a photo of several animals is cropped (or confirmed) before saving
     const photoGuard = usePetPhotoGuard();
@@ -402,167 +378,58 @@ const ResidentPet = () => {
 
         if (files.length > 0) {
             setIsAnalyzingPhoto(true);
-            setAiAnalysisSummary(null);
-
             const file = files[0];
-            setAiAnalysisSummary(null);
+
+            // Pet registration: only the local YOLO model checks the photo (purpose=pet, no Gemini). The resident sees
+            // no check result; a photo with no dog or cat is refused when saving, and an unavailable check is accepted.
+            const fillPrimaryFromClient = async () => {
+                const suggestedColor = await analyzeImageColors(file);
+                const p1Match = matchColorOption(suggestedColor, PRESET_PRIMARY_COLORS);
+                const finalPrimary = p1Match.selected || 'Brown';
+                setFormData(prev => ({
+                    ...prev,
+                    primaryColor: finalPrimary,
+                    customPrimaryColor: finalPrimary === 'Other' ? (p1Match.custom || suggestedColor) : ''
+                }));
+            };
 
             try {
                 const mediaData = new FormData();
                 mediaData.append("file", file);
+                mediaData.append("purpose", "pet");
                 const res = await api.post('/reports/analyze-media', mediaData);
+                const ai = res.status === 200 ? res.data : null;
+                photoGuard.noteResult(file, ai, fromCrop);
 
-                if (res.status === 200 && res.data) {
-                    const ai = res.data;
-                    photoGuard.noteResult(file, ai, fromCrop);
-                    const isDetected = ai.animal_detected !== false && !['unknown', 'none', ''].includes((ai.animal_type || '').toLowerCase());
-
-                    const isAiGen = Boolean(ai.is_ai_generated);
-                    const aiConf = typeof ai.ai_generation_confidence === 'number' ? ai.ai_generation_confidence : (isAiGen ? 0.95 : 0.05);
-                    const vStatus: VerificationStatus = (ai.verification_status as VerificationStatus) || (aiConf >= 0.60 ? 'ai_generated' : (aiConf > 0.35 ? 'uncertain' : 'authentic'));
-                    const vMsg = ai.verification_message || (
-                        vStatus === 'ai_generated'
-                            ? "Photo verification failed — this image appears to be AI-generated. Please upload an actual photo of the animal."
-                            : (vStatus === 'uncertain'
-                                ? "Photo verification notice — image authenticity is uncertain. Please ensure the photo is clear and taken with a camera."
-                                : "Photo verified — appears to be a real animal photograph.")
-                    );
-
-                    if (isDetected) {
-                        const normSpecies = ['Dog', 'Cat'].includes(ai.animal_type)
-                            ? ai.animal_type
-                            : (ai.animal_type?.toLowerCase().includes('cat') ? 'Cat' : 'Dog');
-
-                        const p1Match = matchColorOption(ai.primary_color, PRESET_PRIMARY_COLORS);
-                        const finalPrimary = p1Match.selected || 'Brown';
-                        const finalCustomPrimary = finalPrimary === 'Other' ? (p1Match.custom || ai.primary_color) : '';
-
-                        const p2Match = matchColorOption(ai.secondary_color, PRESET_SECONDARY_COLORS);
-                        const p3Match = matchColorOption(ai.tertiary_color, PRESET_TERTIARY_COLORS);
-
-                        const detectedBreed = ai.possible_breed && ai.possible_breed !== 'Unknown'
-                            ? ai.possible_breed
-                            : (normSpecies === 'Cat' ? 'Puspin' : 'Aspin');
-
-                        const detectedSize = ['Small', 'Medium', 'Large'].includes(ai.estimated_size)
-                            ? ai.estimated_size
-                            : (normSpecies === 'Cat' ? 'Small' : 'Medium');
-
-                        const colorSummaryList: string[] = [];
-                        if (ai.primary_color && ai.primary_color !== 'Unknown') colorSummaryList.push(ai.primary_color);
-                        if (ai.secondary_color && !['none', 'unknown', ''].includes(ai.secondary_color.toLowerCase())) colorSummaryList.push(ai.secondary_color);
-                        if (ai.tertiary_color && !['none', 'unknown', ''].includes(ai.tertiary_color.toLowerCase())) colorSummaryList.push(ai.tertiary_color);
-                        // "Solid / Bicolor / Tricolor" only count colors: follow the colors actually found (the AI's label can
-                        // contradict them, e.g. three colors but "Bicolor"). Real patterns (Brindle, Merle, Tabby...) are kept.
-                        const aiPattern = (ai.coat_pattern || '').trim();
-                        const coatPattern = ['', 'solid', 'bicolor', 'tricolor', 'unknown', 'none'].includes(aiPattern.toLowerCase())
-                            ? (colorSummaryList.length >= 3 ? 'Tricolor' : colorSummaryList.length === 2 ? 'Bicolor' : '')
-                            : aiPattern;
-
-                        const parsedPattern = parseCoatPattern(coatPattern);
-
-                        setFormData(prev => ({
-                            ...prev,
-                            species: normSpecies,
-                            breed: detectedBreed,
-                            sizeCategory: detectedSize,
-                            primaryColor: finalPrimary,
-                            customPrimaryColor: finalCustomPrimary,
-                            secondaryColor: p2Match.selected,
-                            customSecondaryColor: p2Match.custom,
-                            tertiaryColor: p3Match.selected,
-                            customTertiaryColor: p3Match.custom,
-                            pattern: parsedPattern.pattern || (coatPattern ? 'Other' : ''),
-                            markingsDetails: parsedPattern.details,
-                            color: coatPattern ? `${coatPattern} coat` : prev.color
-                        }));
-
-                        setAiAnalysisSummary({
-                            species: normSpecies,
-                            breed: detectedBreed,
-                            colors: colorSummaryList.length > 0 ? colorSummaryList : [finalPrimary],
-                            primaryColor: finalPrimary === 'Other' ? finalCustomPrimary : finalPrimary,
-                            secondaryColor: p2Match.selected === 'Other' ? p2Match.custom : p2Match.selected,
-                            tertiaryColor: p3Match.selected === 'Other' ? p3Match.custom : p3Match.selected,
-                            pattern: coatPattern,
-                            size: detectedSize,
-                            isAiGenerated: isAiGen,
-                            aiGenerationConfidence: aiConf,
-                            aiPhotoLikelihood: typeof ai.ai_photo_likelihood === 'number' ? ai.ai_photo_likelihood : null,
-                            aiPhotoStatus: ai.ai_photo_status || (isAiGen ? 'Potentially AI-generated' : 'Likely Authentic'),
-                            aiPhotoRecommendation: ai.ai_photo_recommendation || (isAiGen ? 'Please verify the authenticity of the uploaded photo.' : 'Photo appears authentic.'),
-                            verificationStatus: vStatus,
-                            verificationMessage: vMsg,
-                            authenticityDetails: ai.authenticity_details,
-                            message: ai.message || vMsg,
-                            animalDetected: true
-                        });
-                    } else {
-                        // Fallback to client-side color analyzer
-                        const suggestedColor = await analyzeImageColors(file);
-                        const p1Match = matchColorOption(suggestedColor, PRESET_PRIMARY_COLORS);
-                        const finalPrimary = p1Match.selected || 'Brown';
-                        const finalCustomPrimary = finalPrimary === 'Other' ? (p1Match.custom || suggestedColor) : '';
-
-                        setFormData(prev => ({
-                            ...prev,
-                            primaryColor: finalPrimary,
-                            customPrimaryColor: finalCustomPrimary
-                        }));
-
-                        setAiAnalysisSummary({
-                            species: formData.species || 'Dog',
-                            breed: formData.species === 'Cat' ? 'Puspin' : 'Aspin',
-                            colors: [suggestedColor],
-                            primaryColor: finalPrimary === 'Other' ? finalCustomPrimary : finalPrimary,
-                            secondaryColor: '',
-                            tertiaryColor: '',
-                            pattern: '',
-                            size: formData.sizeCategory || 'Medium',
-                            isAiGenerated: isAiGen,
-                            aiGenerationConfidence: aiConf,
-                            aiPhotoLikelihood: typeof ai.ai_photo_likelihood === 'number' ? ai.ai_photo_likelihood : null,
-                            aiPhotoStatus: ai.ai_photo_status || (isAiGen ? 'Potentially AI-generated' : 'Likely Authentic'),
-                            aiPhotoRecommendation: ai.ai_photo_recommendation || (isAiGen ? 'Please verify the authenticity of the uploaded photo.' : 'Photo appears authentic.'),
-                            verificationStatus: vStatus,
-                            verificationMessage: vMsg,
-                            authenticityDetails: ai.authenticity_details,
-                            message: 'Color detected from photo.',
-                            animalDetected: false
-                        });
-                    }
+                if (ai?.animal_detected === true && ['Dog', 'Cat'].includes(ai.animal_type)) {
+                    const p1Match = matchColorOption(ai.primary_color, PRESET_PRIMARY_COLORS);
+                    const p2Match = matchColorOption(ai.secondary_color, PRESET_SECONDARY_COLORS);
+                    const p3Match = matchColorOption(ai.tertiary_color, PRESET_TERTIARY_COLORS);
+                    const found = [ai.primary_color, ai.secondary_color, ai.tertiary_color]
+                        .filter((c: string | undefined) => c && !['none', 'unknown', ''].includes(c.toLowerCase()));
+                    const coatPattern = found.length >= 3 ? 'Tricolor' : found.length === 2 ? 'Bicolor' : '';
+                    const parsedPattern = parseCoatPattern(coatPattern);
+                    setFormData(prev => ({
+                        ...prev,
+                        species: ai.animal_type,
+                        ...(p1Match.selected ? {
+                            primaryColor: p1Match.selected,
+                            customPrimaryColor: p1Match.selected === 'Other' ? (p1Match.custom || ai.primary_color) : '',
+                        } : {}),
+                        secondaryColor: p2Match.selected,
+                        customSecondaryColor: p2Match.custom,
+                        tertiaryColor: p3Match.selected,
+                        customTertiaryColor: p3Match.custom,
+                        pattern: parsedPattern.pattern || (coatPattern ? 'Other' : prev.pattern)
+                    }));
+                } else if (ai?.animal_detected !== false) {
+                    await fillPrimaryFromClient();   // check not available: a colour guess from the browser only
                 }
             } catch (err) {
                 photoGuard.noteResult(file, null, fromCrop);
-                console.warn("Backend AI media analysis error, falling back to client-side analyzer:", err);
+                console.warn("Pet photo check unavailable, using the browser colour guess:", err);
                 try {
-                    const suggestedColor = await analyzeImageColors(file);
-                    const p1Match = matchColorOption(suggestedColor, PRESET_PRIMARY_COLORS);
-                    const finalPrimary = p1Match.selected || 'Brown';
-                    const finalCustomPrimary = finalPrimary === 'Other' ? (p1Match.custom || suggestedColor) : '';
-
-                    setFormData(prev => ({
-                        ...prev,
-                        primaryColor: finalPrimary,
-                        customPrimaryColor: finalCustomPrimary
-                    }));
-
-                    setAiAnalysisSummary({
-                        species: formData.species || 'Dog',
-                        breed: formData.species === 'Cat' ? 'Puspin' : 'Aspin',
-                        colors: [suggestedColor],
-                        primaryColor: finalPrimary === 'Other' ? finalCustomPrimary : finalPrimary,
-                        secondaryColor: '',
-                        tertiaryColor: '',
-                        pattern: '',
-                        size: formData.sizeCategory || 'Medium',
-                        isAiGenerated: false,
-                        aiGenerationConfidence: 0.50,
-                        verificationStatus: 'uncertain',
-                        verificationMessage: 'Photo verification notice — image authenticity could not be verified by the AI service. Please ensure the photo is clear and taken with a camera.',
-                        authenticityDetails: 'Connection to verification service was interrupted.',
-                        message: 'Color detected from photo.'
-                    });
+                    await fillPrimaryFromClient();
                 } catch (fallbackErr) {
                     console.error("Failed to analyze uploaded photo:", fallbackErr);
                 }
@@ -725,13 +592,11 @@ const ResidentPet = () => {
         ? (editingPetId ? null : 'Add a photo')
         : isAnalyzingPhoto
             ? 'Checking photo…'
-            : aiAnalysisSummary?.verificationStatus === 'ai_generated'
-                ? 'Use a real photo'
-                : aiAnalysisSummary?.animalDetected === false
-                    ? 'No dog or cat seen'
-                    : photoGuard.blocked
-                        ? `Photo shows ${photoGuard.count} animals: crop your pet`
-                        : null;
+            : photoGuard.noAnimal
+                ? 'Use a clear photo of your dog or cat'
+                : photoGuard.blocked
+                    ? `Photo shows ${photoGuard.count} animals: crop your pet`
+                    : null;
     const requiredItems: Array<{ key: string; label: string; done: boolean; hint?: string }> = [
         { key: 'photo', label: 'Pet Photo', done: photoProblem === null, hint: photoProblem || undefined },
         { key: 'name', label: 'Pet Name', done: !!formData.name.trim() },
@@ -764,18 +629,11 @@ const ResidentPet = () => {
             errors.photo = true;
         }
 
-        // The pet photo is what look-alike matching compares against: never save a fake or non-animal photo
-        if (hasPhoto && aiAnalysisSummary) {
-            if (aiAnalysisSummary.verificationStatus === 'ai_generated') {
-                setFormErrors({ ...errors, photo: true });
-                setSubmitErrorMessage('This photo appears to be AI-generated. Please upload a real photo of your pet.');
-                return;
-            }
-            if (aiAnalysisSummary.animalDetected === false) {
-                setFormErrors({ ...errors, photo: true });
-                setSubmitErrorMessage('No dog or cat was detected in the photo. Please upload a clear photo of your pet.');
-                return;
-            }
+        // The pet photo is what look-alike matching compares against: never save a photo with no dog or cat
+        if (hasPhoto && photoGuard.noAnimal) {
+            setFormErrors({ ...errors, photo: true });
+            setSubmitErrorMessage('Please upload a clear photo of your dog or cat.');
+            return;
         }
 
         if (Object.keys(errors).length > 0) {
@@ -829,7 +687,7 @@ const ResidentPet = () => {
 
             const composedMarkings = composeCoatMarkings(
                 formData.pattern,
-                formData.markingsDetails || formData.color
+                formData.markingsDetails
             );
 
             const petData: any = {
@@ -907,7 +765,6 @@ const ResidentPet = () => {
             setIsAddPetModalOpen(false);
             setEditingPetId(null);
             setFormData(INITIAL_PET_FORM_DATA);
-            setAiAnalysisSummary(null);
             setFormErrors({});
             setSubmitErrorMessage(null);
             setFromPhotoOfPetId(null);
@@ -968,7 +825,7 @@ const ResidentPet = () => {
             customTertiaryColor: isTertiaryPreset ? '' : rawTertiary,
             pattern: parsedCoat.pattern,
             markingsDetails: parsedCoat.details,
-            color: petObj.color_markings || petObj.distinctive_markings || '',
+            color: parsedCoat.details,
             age: petObj.estimated_age || '',
             ageMode: parsedAge.hasExactDate ? 'exact' : 'approximate',
             approxYears: parsedAge.years,
@@ -995,7 +852,6 @@ const ResidentPet = () => {
             existingVaccineCardUrl: petObj.vaccine_card_url || null
         });
 
-        setAiAnalysisSummary(null);
         setFormErrors({});
         setSubmitErrorMessage(null);
 
@@ -1253,7 +1109,6 @@ const ResidentPet = () => {
                             setIsAddPetModalOpen(false);
                             setEditingPetId(null);
                             setFormData(INITIAL_PET_FORM_DATA);
-                            setAiAnalysisSummary(null);
                             setPetRequestsKey((k) => k + 1);
                             alert(`Sent! Your subdivision will confirm that ${p.pet_name || 'this pet'} is yours. It will appear in My Pets once they do.`);
                         }}
@@ -1326,7 +1181,6 @@ const ResidentPet = () => {
                             onClick={() => {
                                 setEditingPetId(null);
                                 setFormData(INITIAL_PET_FORM_DATA);
-                                setAiAnalysisSummary(null);
                                 setFormErrors({});
                                 setSubmitErrorMessage(null);
                                 photoGuard.reset();
@@ -1663,15 +1517,11 @@ const ResidentPet = () => {
                                 </div>
                             )}
 
-                            {/* Section 1: Pet Photos & AI Recognition */}
+                            {/* Section 1: Pet Photos */}
                             <div className="space-y-6 scroll-mt-28" id="pet-field-photo">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <span className="h-6 w-1 bg-[#F97316] rounded-full"></span>
-                                        <h3 className="text-xs font-black text-[#1a1208] uppercase tracking-widest">Pet Photos</h3>
-                                        <span className="text-[9px] font-black text-[#F97316] bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full uppercase tracking-wider">AI Powered</span>
-                                    </div>
-                                    <span className="text-[10px] font-bold text-gray-400">Photo auto-fills details</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="h-6 w-1 bg-[#F97316] rounded-full"></span>
+                                    <h3 className="text-xs font-black text-[#1a1208] uppercase tracking-widest">Pet Photos</h3>
                                 </div>
 
                                 <div className="space-y-4">
@@ -1686,7 +1536,7 @@ const ResidentPet = () => {
                                             />
                                             <div className="flex-1 space-y-1 text-center sm:text-left min-w-0">
                                                 <p className="text-xs font-black text-[#1a1208] uppercase tracking-tight truncate">{formData.mediaFiles[0].name}</p>
-                                                <p className="text-[10px] font-bold text-gray-400">{(formData.mediaFiles[0].size / 1024).toFixed(1)} KB • AI Analyzed</p>
+                                                <p className="text-[10px] font-bold text-gray-400">{(formData.mediaFiles[0].size / 1024).toFixed(1)} KB</p>
                                                 <label className="inline-block mt-1 text-[10px] font-black text-[#F97316] uppercase tracking-wider hover:underline cursor-pointer">
                                                     Change Photo
                                                     <input
@@ -1704,7 +1554,6 @@ const ResidentPet = () => {
                                                 type="button"
                                                 onClick={() => {
                                                     setFormData(prev => ({ ...prev, mediaFiles: [] }));
-                                                    setAiAnalysisSummary(null);
                                                     photoGuard.reset();
                                                 }}
                                                 className="text-[10px] font-black text-red-500 uppercase tracking-widest bg-red-50 hover:bg-red-100 px-3.5 py-2 rounded-xl transition-colors cursor-pointer"
@@ -1731,71 +1580,7 @@ const ResidentPet = () => {
                                     <PetPhotoGuardPanel guard={photoGuard}
                                         onCropped={(file) => handlePhotoChange({ target: { files: [file] } } as any, true)} />
 
-                                    {/* AI Photo Authenticity & Verification Badge */}
-                                    <AiImageVerificationBadge
-                                        isAnalyzing={isAnalyzingPhoto}
-                                        verification={aiAnalysisSummary}
-                                        onRetry={() => {
-                                            if (formData.mediaFiles.length > 0) {
-                                                const fakeEvent = { target: { files: formData.mediaFiles } } as any;
-                                                handlePhotoChange(fakeEvent, photoGuard.fromCrop);
-                                            }
-                                        }}
-                                        onRemove={() => {
-                                            setFormData(prev => ({ ...prev, mediaFiles: [] }));
-                                            setAiAnalysisSummary(null);
-                                            photoGuard.reset();
-                                        }}
-                                        className="mt-3"
-                                    />
 
-                                    {!isAnalyzingPhoto && aiAnalysisSummary && (
-                                        <div className="bg-gradient-to-br from-orange-50/90 via-amber-50/60 to-white border border-orange-200/80 rounded-2xl p-4 shadow-sm animate-in slide-in-from-top-2 duration-300">
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div className="space-y-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-[9px] font-black uppercase tracking-widest bg-[#F97316] text-white px-2.5 py-0.5 rounded-full shadow-xs flex items-center gap-1">
-                                                            <span>✨</span> AI Recognition
-                                                        </span>
-                                                        <span className="text-xs font-extrabold text-[#1a1208]">
-                                                            {aiAnalysisSummary.species} • {aiAnalysisSummary.breed}
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                                                        {aiAnalysisSummary.colors && aiAnalysisSummary.colors.map((c, i) => (
-                                                            <span key={i} className="text-[10px] font-bold bg-white text-gray-700 border border-orange-200/60 px-2 py-0.5 rounded-lg shadow-2xs">
-                                                                🎨 {c}
-                                                            </span>
-                                                        ))}
-                                                        {aiAnalysisSummary.size && (
-                                                            <span className="text-[10px] font-bold bg-white text-gray-700 border border-orange-200/60 px-2 py-0.5 rounded-lg shadow-2xs">
-                                                                📏 {aiAnalysisSummary.size} Size
-                                                            </span>
-                                                        )}
-                                                        {aiAnalysisSummary.pattern && aiAnalysisSummary.pattern !== 'Solid' && (
-                                                            <span className="text-[10px] font-bold bg-white text-gray-700 border border-orange-200/60 px-2 py-0.5 rounded-lg shadow-2xs">
-                                                                🏷️ {aiAnalysisSummary.pattern}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <p className="text-[10px] font-bold text-[#F97316] flex items-center gap-1">
-                                                        <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                                        </svg>
-                                                        Species, breed, colors, and size were automatically applied to your form.
-                                                    </p>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setAiAnalysisSummary(null)}
-                                                    className="text-gray-400 hover:text-gray-600 text-xs p-1 rounded-lg hover:bg-orange-100/50 transition-colors"
-                                                    title="Dismiss"
-                                                >
-                                                    ✕
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
 
                                 {/* Multi-Angle Identification Photos */}
@@ -2157,18 +1942,6 @@ const ResidentPet = () => {
                                                     ))}
                                                 </div>
 
-                                                {/* Live preview banner */}
-                                                {(formData.approxYears !== '' || formData.approxMonths !== '') && (
-                                                    <div className="p-3 bg-orange-50/50 border border-orange-100 rounded-2xl flex items-center justify-between text-xs font-bold text-gray-700">
-                                                        <span className="flex items-center gap-1.5">
-                                                            <span className="text-[#F97316]">✨</span>
-                                                            <span>Calculated Age: <strong className="text-[#F97316]">{calculateAge(approximateBirthDateFromAge(formData.approxYears, formData.approxMonths))}</strong></span>
-                                                        </span>
-                                                        <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
-                                                            Auto-advances over time
-                                                        </span>
-                                                    </div>
-                                                )}
                                             </div>
                                         ) : (
                                             <div className="space-y-2.5">
@@ -2198,7 +1971,7 @@ const ResidentPet = () => {
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest flex items-center justify-between">
                                             <span>Pet Size <span className="text-red-500">*</span></span>
                                             <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">
-                                                {formData.sizeCategory === 'Small' ? 'Small (< 10kg)' : formData.sizeCategory === 'Large' ? 'Large (> 25kg)' : 'Medium (10-25kg)'}
+                                                {formData.sizeCategory || 'Medium'}
                                             </span>
                                         </label>
                                         <div className="grid grid-cols-3 gap-2 h-14">
@@ -2312,7 +2085,7 @@ const ResidentPet = () => {
                                     <div className="space-y-4">
                                         <div className="flex items-center justify-between">
                                             <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">
-                                                Coat Pattern & Markings <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span>
+                                                Coat Pattern <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span>
                                             </label>
                                             {formData.pattern && (
                                                 <button
@@ -2349,10 +2122,7 @@ const ResidentPet = () => {
                                             return (
                                                 <div className="p-3.5 bg-orange-50/60 border border-orange-100 rounded-2xl flex items-start gap-2.5 animate-in fade-in duration-200">
                                                     <span className="text-base leading-none">💡</span>
-                                                    <div className="text-xs">
-                                                        <span className="font-black text-[#1a1208]">{selectedPreset.label}: </span>
-                                                        <span className="text-gray-600 font-semibold">{selectedPreset.description}</span>
-                                                    </div>
+                                                    <p className="text-xs text-gray-600 font-semibold">{selectedPreset.description}</p>
                                                 </div>
                                             );
                                         })()}
@@ -2366,7 +2136,7 @@ const ResidentPet = () => {
                                                 type="text"
                                                 className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
                                                 placeholder="e.g. White chest patch, left front white sock, scar on ear"
-                                                value={formData.markingsDetails || formData.color}
+                                                value={formData.markingsDetails}
                                                 onChange={(e) => setFormData(prev => ({ ...prev, markingsDetails: e.target.value, color: e.target.value }))}
                                             />
                                         </div>
@@ -2499,39 +2269,19 @@ const ResidentPet = () => {
                                     <h3 className="text-xs font-black text-[#1a1208] uppercase tracking-widest">Behavior Information</h3>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="space-y-4">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Temperament</label>
-                                        <select
-                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
-                                            value={formData.temperament}
-                                            onChange={(e) => setFormData({ ...formData, temperament: e.target.value })}
-                                        >
-                                            <option value="Friendly">Friendly</option>
-                                            <option value="Aggressive">Aggressive</option>
-                                            <option value="Anxious">Anxious</option>
-                                            <option value="Scared">Scared</option>
-                                            <option value="Protective">Protective</option>
-                                        </select>
-                                    </div>
-
-                                    <BehaviorHistoryField
-                                        label="Bite history"
-                                        question="My pet has bitten a person or another animal before"
-                                        verifiedCount={formData.verifiedBites}
-                                        declared={formData.declaredBite}
-                                        locked={formData.savedDeclaredBite}
-                                        onChange={(v) => setFormData({ ...formData, declaredBite: v })}
-                                    />
-
-                                    <BehaviorHistoryField
-                                        label="Chasing"
-                                        question="My pet chases people, animals or vehicles"
-                                        verifiedCount={formData.verifiedChases}
-                                        declared={formData.declaredChase}
-                                        locked={formData.savedDeclaredChase}
-                                        onChange={(v) => setFormData({ ...formData, declaredChase: v })}
-                                    />
+                                <div className="space-y-4 max-w-md">
+                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Temperament</label>
+                                    <select
+                                        className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
+                                        value={formData.temperament}
+                                        onChange={(e) => setFormData({ ...formData, temperament: e.target.value })}
+                                    >
+                                        <option value="Friendly">Friendly</option>
+                                        <option value="Aggressive">Aggressive</option>
+                                        <option value="Anxious">Anxious</option>
+                                        <option value="Scared">Scared</option>
+                                        <option value="Protective">Protective</option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
@@ -2921,7 +2671,6 @@ const ResidentPet = () => {
                         setRegisterAnother(null);
                         setEditingPetId(null);
                         setFormData(INITIAL_PET_FORM_DATA);
-                        setAiAnalysisSummary(null);
                         setFormErrors({});
                         setSubmitErrorMessage(null);
                         setFromPhotoOfPetId(previous);

@@ -17,7 +17,6 @@ from app.schemas.chat import (
     ChatStatsResponse
 )
 from app.utils.auth import get_current_user
-from app.utils.pet_adoption import owned_through_later_adoption
 from app.utils.uploads import validate_cloudinary_url
 
 router = APIRouter(
@@ -213,7 +212,7 @@ def get_or_create_report_thread(report_id: int, current_user: User, db: Session)
     # Look for existing thread
     thread = find_report_thread(report_id, db)
     if not thread:
-        # Serialize concurrent first messages so a single thread is created per report (the same lock as adoption chats)
+        # Serialize concurrent first messages so a single thread is created per report
         db.query(Report.report_id).filter(Report.report_id == report_id).with_for_update().first()
         thread = find_report_thread(report_id, db)
 
@@ -295,10 +294,7 @@ def check_user_report_chat_access(report_id: int, current_user: User, thread: Op
         return True
     # ...and the owner of the pet the report really is: linked to their pet, or staff confirmed the match and the
     # owner hasn't rejected it. A mere AI suggestion doesn't (the owner has the look-alike match chat for that).
-    # (Not when the pet became theirs by adopting it after this report was filed: the conversation between the
-    # reporter and the officials is not the adopter's.)
-    if report.pet_id and db.query(Pet.pet_id).filter(Pet.pet_id == report.pet_id, Pet.owner_id == current_user.user_id).first() \
-            and not owned_through_later_adoption(db, report.pet_id, current_user.user_id, report.created_at):
+    if report.pet_id and db.query(Pet.pet_id).filter(Pet.pet_id == report.pet_id, Pet.owner_id == current_user.user_id).first():
         return True
     confirmed_pet_ids = [pid for (pid,) in db.query(ReportMatch.matched_pet_id).join(Pet, ReportMatch.matched_pet_id == Pet.pet_id).filter(
         ReportMatch.source_report_id == report_id,
@@ -306,7 +302,7 @@ def check_user_report_chat_access(report_id: int, current_user: User, thread: Op
         ReportMatch.status.in_(("CONFIRMED_MATCH", "COVERED_BY_CASE")),
         ReportMatch.owner_confirmation_status != "OWNER_REJECTED",
     ).all()]
-    return any(not owned_through_later_adoption(db, pid, current_user.user_id, report.created_at) for pid in confirmed_pet_ids)
+    return bool(confirmed_pet_ids)
 
 
 def is_user_assigned_to_report(report_id: int, user_id: int, db: Session) -> bool:
@@ -500,8 +496,7 @@ def check_user_match_chat_access(match_id: int, current_user: User, thread: Opti
         return True
 
     pet = db.query(Pet).filter(Pet.pet_id == match.matched_pet_id).first() if match.matched_pet_id else None
-    if pet and pet.owner_id == current_user.user_id and not owned_through_later_adoption(
-            db, pet.pet_id, current_user.user_id, source_report.created_at if source_report else None):
+    if pet and pet.owner_id == current_user.user_id:
         return True
     if source_report and source_report.user_id == current_user.user_id:
         return True
@@ -585,7 +580,7 @@ def report_chat_finished(db: Session, report: Optional[Report]) -> bool:
 
 def match_chat_finished(db: Session, match: Optional[ReportMatch], source_report: Optional[Report]) -> bool:
     """
-    A look-alike match chat ends like report and adoption chats: when the case is finished, or, while the case is
+    A look-alike match chat ends like report chats: when the case is finished, or, while the case is
     "Claimed by Owner" (kept open so owner and leader can arrange the pickup), once the handover is recorded
     (an owner return, the claim at Handover Complete / Pet Received, or custody "Reunited").
     """
@@ -837,7 +832,7 @@ def mark_thread_messages_as_read(
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
 
-    # Adoption chats are authorized per application; they must use /chat/adoptions/{id}/read.
+    # Adoption was removed from the system: an old adoption thread is never opened here
     if thread.thread_type == "Adoption":
         raise HTTPException(status_code=404, detail="Thread not found")
     if thread.related_id is None:

@@ -13,8 +13,7 @@ localStorage.setItem('staff_user', JSON.stringify({
 const readOnly = new URLSearchParams(location.search).has('readOnly');
 const pet = mapRawPetToPetRecord({ pet_id: 3, pet_name: 'Animal in care', pet_type: 'Dog', status: 'Active',
     registered_by_user_id: 99, can_edit_record: !readOnly,
-    record_edit_restriction: readOnly ? 'This animal has been handed over to the adopter. Only its owner or an administrator can edit the record.' : null,
-    adoption_info: { state: readOnly ? 'adopted' : 'in_progress', adoption_id: 1, adopter_name: 'Adopter', stage: 'Handover', pending_applications: 0 },
+    record_edit_restriction: readOnly ? 'Staff can only edit dogs or cats currently in official care within their jurisdiction.' : null,
 });
 const root = createRoot(document.getElementById('fixture')!);
 root.render(<MemoryRouter><PetDetailPanel pet={pet} /></MemoryRouter>);

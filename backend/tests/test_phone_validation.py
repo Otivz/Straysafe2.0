@@ -15,7 +15,6 @@ from datetime import datetime  # noqa: E402
 
 from pydantic import ValidationError  # noqa: E402
 
-from app.schemas.adoption import AdoptionApplyRequest  # noqa: E402
 from app.schemas.auth import CompleteProfileRequest  # noqa: E402
 from app.schemas.landmark import LandmarkCreate, LandmarkUpdate  # noqa: E402
 from app.schemas.pet import PetCreate, PetUpdate  # noqa: E402
@@ -59,8 +58,6 @@ check("completing a profile requires a valid number", rejects(lambda: CompletePr
       and rejects(lambda: CompleteProfileRequest(name="A", phone="123", subdivision_id=1, address="x")))
 check("pet emergency contacts are checked", rejects(lambda: PetCreate(pet_name="P", pet_type="Dog", emergency_contact_phone="123"))
       and rejects(lambda: PetUpdate(emergency_contact_phone="123")))
-check("adoption applications need a valid contact number",
-      rejects(lambda: AdoptionApplyRequest(holding_id=1, full_name="A", address="x", contact_no="123")))
 check("facility contact numbers accept landlines",
       LandmarkCreate(name="Pen", category="Facility", latitude=14.8, longitude=121.0, contact_number="(044) 815-1234").contact_number == "0448151234"
       and rejects(lambda: LandmarkUpdate(contact_number="abc")))

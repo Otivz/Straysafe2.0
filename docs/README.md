@@ -43,7 +43,7 @@ Status values: **Current** (matches the code when last checked), **Reference** (
 | [04-testing/README.md](04-testing/README.md) | Current | Test inventory; results not re-run |
 | [02-project/DEFENSE_PLAN.md](02-project/DEFENSE_PLAN.md) | Current | Capstone defense plan: roles, countdown, outline, demo script, risks, panel questions |
 | [02-project/MANUSCRIPT_CHAPTER1_CHECK_2026-10-26.md](02-project/MANUSCRIPT_CHAPTER1_CHECK_2026-10-26.md) | Current | Manuscript Chapter 1 (STRAYSAFEEE1.pdf) checked against the system, rated 8.4/10 |
-| [03-development/audits/ADOPTION_CHAT_ISOLATION_AUDIT_2026-10-25.md](03-development/audits/ADOPTION_CHAT_ISOLATION_AUDIT_2026-10-25.md) | Current | Chat isolation findings, fixed 2026-10-25; duplicate-thread merge still to run |
+| [archive/removed-adoption/ADOPTION_CHAT_ISOLATION_AUDIT_2026-10-25.md](archive/removed-adoption/ADOPTION_CHAT_ISOLATION_AUDIT_2026-10-25.md) | Archived | Chat isolation findings, fixed 2026-10-25; archived 2026-10-28 with the adoption removal (the report and match chat checks still run in `backend/tests/test_chat_isolation.py`) |
 | [03-development/audits/HEATMAP_AUDIT_2026-10-27.md](03-development/audits/HEATMAP_AUDIT_2026-10-27.md) | Current | Heat map findings and five-phase checklist; Phases 0 and 1 done |
 | [01-system/HEATMAP_RULES.md](01-system/HEATMAP_RULES.md) | Current | Rules for pins, heat and hotspots (statuses, 50 m / 3 / 5 thresholds, original sighting) |
 | `03-development/audits/STRAYSAFEEE1_SYSTEM_ALIGNMENT_2026-10-26.md` | Missing | Listed here before but the file does not exist in the repository or its history; Chapter 1 compared with current code; manuscript corrections, priority/claim implementation gaps, and unverified research claims |
@@ -51,13 +51,14 @@ Status values: **Current** (matches the code when last checked), **Reference** (
 | [05-operations/LOCAL_NETWORK_IP_AND_APK_SETUP_GUIDE.md](05-operations/LOCAL_NETWORK_IP_AND_APK_SETUP_GUIDE.md) | Current | Guide for finding PC IP and changing address in the APK without rebuilds |
 | [AI_TECHNOLOGIES.md](01-system/AI_TECHNOLOGIES.md) | Reference | AI technology notes; last verified against code: Unverified |
 | [NOTIFICATION_UI_IMPROVEMENTS.md](03-development/implementation-reports/NOTIFICATION_UI_IMPROVEMENTS.md) | Reference | Notification panel changes |
-| [Adoption details UI change record](05-operations/agents/feature-updates/2026-10-25_1347_adoption-details-ui.md) | Reference | Initial tabbed redesign, compact assignments, certificate viewer, and browser evidence |
-| [Adoption lifecycle without sideways scrolling](05-operations/agents/feature-updates/2026-10-25_1354_lifecycle-no-sideways-scroll.md) | Current | Wrapping lifecycle stages at every screen width; extends the adoption details redesign |
+| [Adoption details UI change record](05-operations/agents/feature-updates/2026-10-25_1347_adoption-details-ui.md) | Reference (adoption removed 2026-10-28) | Initial tabbed redesign, compact assignments, certificate viewer, and browser evidence |
+| [Adoption lifecycle without sideways scrolling](05-operations/agents/feature-updates/2026-10-25_1354_lifecycle-no-sideways-scroll.md) | Reference (adoption removed 2026-10-28) | Wrapping lifecycle stages at every screen width; extends the adoption details redesign |
 | [ERD/](01-system/ERD/00_ERD_MODULE_OVERVIEW.md) | Reference | Entity-relationship diagrams and database design; match with the ORM is Unverified |
 | [DFD/](01-system/DFD/00_DFD_OVERVIEW.md) | Reference | Data-flow diagrams (context, level 1, level 2) and review notes |
 | [06-future-proposals/TUNNEL_INTEGRATION_RESEARCH_AND_PLANNING.md](06-future-proposals/TUNNEL_INTEGRATION_RESEARCH_AND_PLANNING.md) | Reference | Tunnel integration research, mobile compatibility, and implementation plan |
 | [06-future-proposals/LATE_REPORTS_FOR_CLOSED_CASES_PLAN.md](06-future-proposals/LATE_REPORTS_FOR_CLOSED_CASES_PLAN.md) | Reference | Plan only: link a late report to a case closed or impounded within 7 days; leader decides |
 | [06-future-proposals/SUBDIVISION_OWNER_FOLLOW_UP_PLAN.md](06-future-proposals/SUBDIVISION_OWNER_FOLLOW_UP_PLAN.md) | Reference | Built (backend, leader card, owner panel, Barangay view); documents (Phase 4) next: for a complaint about a registered pet, the leader contacts the owner and observes for 3 days, then resolves or escalates |
+| [06-future-proposals/REMOVE_ADOPTION_PLAN.md](06-future-proposals/REMOVE_ADOPTION_PLAN.md) | Reference | In progress: removing adoption (not approved by the panel). Backend, frontend, seed and core docs done; the local database tables and the ERD/DFD diagrams remain |
 
 ### Moved from the repository root (2026-10-27)
 

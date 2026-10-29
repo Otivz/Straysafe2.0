@@ -13,7 +13,6 @@ const VERIFICATION_METHODS = [
     { key: 'approved_claim', label: 'Approved pet claim', hint: 'The resident filed a claim for this pet and it was approved.' },
     { key: 'returned_to_owner', label: 'Animal was returned to this owner', hint: 'Handed over in person after a report / holding stay.' },
     { key: 'in_person_proof', label: 'Owner showed proof in person', hint: 'Vaccination card, old photos with the pet, or registration papers.' },
-    { key: 'barangay_adoption', label: 'Barangay adoption handover', hint: 'Adopted through the Barangay adoption process.' },
 ];
 import { DEFAULT_PET_AVATAR, getPetPicture, DEFAULT_AVATAR, getProfilePicture, getPetThumb } from '../../utils/avatar';
 import api, { getStoredToken } from '../../utils/api';
@@ -108,12 +107,6 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
     };
 
     const userRoleId = getCurrentUserRole();
-    // An approved or completed adoption decides who owns this animal: no assigning an owner here
-    const adoptionInfo = pet?.adoptionInfo || null;
-    const adoptionLock = Boolean(adoptionInfo && (adoptionInfo.state === 'adopted' || adoptionInfo.state === 'in_progress'));
-    const adoptionLockText = !adoptionInfo ? '' : adoptionInfo.state === 'adopted'
-        ? `Adopted by ${adoptionInfo.adopter_name || 'an adopter'} (Adoption #${adoptionInfo.adoption_id}). The adopter is this animal's owner now.`
-        : `In the adoption process: ${adoptionInfo.adopter_name || 'an applicant'}'s application (Adoption #${adoptionInfo.adoption_id}) is approved and the handover is pending. Once handed over, the adopter becomes the owner.`;
     const isAdmin = userRoleId === 4;
 
     // Assign Owner State
@@ -800,7 +793,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 </span>
                                 {isImpounded ? (
                                     <span className="px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full text-[9px] sm:text-[11px] font-black uppercase tracking-widest bg-amber-900 text-amber-100 shadow-sm border border-amber-700">
-                                        ⚖️ Under Government Custody • Ineligible for Claim / Adoption
+                                        ⚖️ Under Government Custody • Ineligible for Claim
                                     </span>
                                 ) : !hasOwner && pet.offlineOwnerName ? (
                                     <span className="px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full text-[9px] sm:text-[11px] font-black uppercase tracking-widest bg-emerald-600 text-white shadow-sm">
@@ -962,10 +955,10 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 
                                 {/* Owner Assignment / Reassignment Action */}
                                 {isImpounded ? (
-                                    /* Impounded animals are strictly in government custody and cannot be claimed or adopted */
+                                    /* Impounded animals are strictly in government custody and cannot be claimed */
                                     <div className="w-full py-3.5 px-4 bg-amber-50 text-amber-900 border border-amber-300 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 text-center shadow-xs">
                                         <span>⚖️</span>
-                                        <span>Impounded (Ineligible for Claim / Adoption)</span>
+                                        <span>Impounded (Ineligible for Claim)</span>
                                     </div>
                                 ) : hasOwner ? (
                                     /* Only System Admin can change/reassign an already registered pet */
@@ -990,15 +983,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     </button>
                                 ) : (
                                     /* Subdivision Leaders (Resident Claim), Barangay Staff, and Admin */
-                                    adoptionLock ? (
-                                        <div className="w-full py-3.5 bg-role-soft text-role-strong border border-role-border rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2"
-                                            title={adoptionLockText}>
-                                            <span>🏠</span>
-                                            {adoptionInfo?.state === 'adopted'
-                                                ? `Adopted by ${adoptionInfo?.adopter_name || 'an adopter'}`
-                                                : 'In Adoption Process · Can\'t Assign Owner'}
-                                        </div>
-                                    ) : <button
+                                    <button
                                         onClick={() => setIsAssignOwnerModalOpen(true)}
                                         className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
                                     >
@@ -1051,24 +1036,6 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                     </div>
                 </div>
 
-                {/* Server-side AI check of the pet's photos (main + front/left/right) */}
-                {(() => {
-                    const st = pet.rawPetObj?.photo_check_status as string | undefined;
-                    if (!st || st === 'authentic') return null;
-                    const tone = st === 'ai_generated' || st === 'ineligible_subject'
-                        ? 'bg-rose-50 border-rose-200 text-rose-900'
-                        : st === 'uncertain' ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-slate-50 border-slate-200 text-slate-700';
-                    const title = st === 'ai_generated' ? '⚠️ Photo may be AI-generated'
-                        : st === 'ineligible_subject' ? '⚠️ No dog or cat detected in a photo'
-                        : st === 'uncertain' ? 'Photo authenticity uncertain' : 'Photo authenticity not checked (AI offline)';
-                    return (
-                        <div className={`p-3.5 rounded-2xl border text-xs font-semibold ${tone}`} data-testid="pet-photo-check">
-                            <p className="font-black">{title}</p>
-                            {pet.rawPetObj?.photo_check_details && <p className="mt-0.5 font-medium opacity-90">{pet.rawPetObj.photo_check_details}</p>}
-                            <p className="mt-1 text-[10px] font-medium opacity-80">Look-alike matching compares against these photos. Ask the owner for a real, clear photo if this is wrong.</p>
-                        </div>
-                    );
-                })()}
 
                 {/* Pet Owner Profile & Information (Visible ONLY on Subd, Brgy, and Admin pet records) */}
                 {!hideRegisteredPets && (
@@ -1115,7 +1082,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                             {isImpounded ? (
                                 <span className="px-3 py-1.5 bg-amber-100/90 text-amber-900 text-[10px] font-black uppercase tracking-wider rounded-xl border border-amber-300 flex items-center gap-1.5 shadow-2xs">
                                     <span>⚖️</span>
-                                    <span>Ineligible for Claim / Adoption</span>
+                                    <span>Ineligible for Claim</span>
                                 </span>
                             ) : hasOwner ? (
                                 isAdmin ? (
@@ -1133,12 +1100,6 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                         <span>Owner Record Locked</span>
                                     </span>
                                 )
-                            ) : adoptionLock ? (
-                                <span className="px-3 py-1.5 bg-role-soft text-role-strong text-[10px] font-black uppercase tracking-wider rounded-xl border border-role-border flex items-center gap-1.5 shadow-2xs"
-                                    title={adoptionLockText}>
-                                    <span>🏠</span>
-                                    <span>{adoptionInfo?.state === 'adopted' ? 'Adopted' : 'In Adoption'}</span>
-                                </span>
                             ) : (
                                 <button
                                     type="button"
@@ -1254,7 +1215,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     <div>
                                         <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide">Impounded Animal Record</h4>
                                         <p className="text-xs text-amber-800 font-medium">
-                                            This animal has been officially impounded by municipal authorities and is under government custody. It cannot be claimed or put up for adoption.
+                                            This animal has been officially impounded by municipal authorities and is under government custody. It cannot be claimed.
                                         </p>
                                     </div>
                                 </div>
@@ -1298,27 +1259,6 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     If this owner creates a StraySafe account later, use <strong>Link StraySafe Account</strong> to make them the registered owner.
                                 </p>
                             </div>
-                        ) : adoptionLock ? (
-                            <div className="p-5 bg-role-soft rounded-2xl border border-role-border flex items-center justify-between gap-4 flex-wrap" data-testid="pet-adoption-lock">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-role-muted text-role-strong flex items-center justify-center text-lg font-black shrink-0">🏠</div>
-                                    <div>
-                                        <h4 className="text-xs font-black text-role-strong uppercase tracking-wide">
-                                            {adoptionInfo?.state === 'adopted' ? 'Adopted' : 'In the Adoption Process'}
-                                        </h4>
-                                        <p className="text-xs text-role-strong font-medium">{adoptionLockText} An owner can't be assigned here.</p>
-                                    </div>
-                                </div>
-                                {userRoleId !== 2 && adoptionInfo?.adoption_id && (
-                                    <button
-                                        type="button"
-                                        onClick={() => navigate(userRoleId === 4 ? '/admin/adoptions' : `/brgy/adoptions?view=${adoptionInfo.adoption_id}`)}
-                                        className="px-4 py-2 bg-role hover:bg-role-hover text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer"
-                                    >
-                                        View adoption
-                                    </button>
-                                )}
-                            </div>
                         ) : (
                             <div className="p-5 bg-amber-50/60 rounded-2xl border border-amber-200/80 flex items-center justify-between gap-4 flex-wrap">
                                 <div className="flex items-center gap-3">
@@ -1329,14 +1269,9 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                         <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide">Community Animal / Unassigned Pet</h4>
                                         <p className="text-xs text-amber-800 font-medium">
                                             {userRoleId === 2
-                                                ? 'This pet has no registered owner. Subdivision Leaders can assign a verified resident owner. (Adoptions are managed exclusively by Barangay).'
+                                                ? 'This pet has no registered owner. Subdivision Leaders can assign a verified resident owner.'
                                                 : 'This pet currently has no registered owner profile associated with it.'}
                                         </p>
-                                        {adoptionInfo?.state === 'applications' && (
-                                            <p className="text-[11px] text-role-strong font-bold mt-1">
-                                                🏠 In the adoption catalog: {adoptionInfo.pending_applications} pending application{adoptionInfo.pending_applications === 1 ? '' : 's'}.
-                                            </p>
-                                        )}
                                     </div>
                                 </div>
                                 <button
@@ -2476,7 +2411,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     <div className="space-y-2">
                                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">2 · How was ownership verified?</p>
                                         <div className="grid grid-cols-1 gap-1.5">
-                                            {VERIFICATION_METHODS.filter((m) => !(m.key === 'barangay_adoption' && userRoleId === 2)).map((m) => (
+                                            {VERIFICATION_METHODS.map((m) => (
                                                 <label
                                                     key={m.key}
                                                     className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-colors ${

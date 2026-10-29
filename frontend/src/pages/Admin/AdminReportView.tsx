@@ -1003,7 +1003,7 @@ export const AdminReportView: React.FC = () => {
                                                         </span>
                                                     </div>
                                                     <p className="text-[11px] text-rose-800 font-medium">
-                                                        Mandated observation period for bite or high-risk aggressive animals to verify clinical rabies status before release or adoption.
+                                                        Mandated observation period for bite or high-risk aggressive animals to verify clinical rabies status before release.
                                                     </p>
                                                 </div>
                                             </div>

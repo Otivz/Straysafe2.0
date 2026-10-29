@@ -20,7 +20,7 @@ import app.models  # noqa: F401
 from app.database import Base, get_db
 from app.models.landmark import Landmark
 from app.models.pet import Pet
-from app.models.report import Adoption, HoldingAnimal, Report, ReportCategory, ReportStatus
+from app.models.report import HoldingAnimal, Report, ReportCategory, ReportStatus
 from app.models.user import Barangay, Subdivision, User
 from app.routes import pets
 from app.utils import uploads
@@ -47,7 +47,6 @@ class PetRecordAccessTests(unittest.TestCase):
         Base.metadata.drop_all(self.engine)
         Base.metadata.create_all(self.engine)
         for target, kwargs in [
-            ('app.routes.pets.recheck_pet_photos', {}),
             ('app.routes.pets.auto_extract_pet_colors', {}),
             ('app.routes.pets.upload_to_cloudinary', {'return_value': PHOTO}),
             ('app.routes.pets.read_and_validate_upload', {'new': AsyncMock(return_value=(b'png', 'test.png', 'Image', 'image'))}),
@@ -76,7 +75,7 @@ class PetRecordAccessTests(unittest.TestCase):
             db.flush()
             db.add(self.report(1, pet_id=1))
             db.flush()
-            db.add(HoldingAnimal(holding_id=1, report_id=1, animal_type='Dog', facility_status=6, intake_staff_id=3))
+            db.add(HoldingAnimal(holding_id=1, report_id=1, animal_type='Dog', facility_status=2, intake_staff_id=3))
             db.commit()
 
     @staticmethod
@@ -88,11 +87,6 @@ class PetRecordAccessTests(unittest.TestCase):
     def photo(self, uid=3, pid=1, suffix='photo'):
         return self.client.post(f'/pets/{pid}/{suffix}', data={'url': PHOTO}, headers=self.headers[uid])
 
-    def adoption(self, **kwargs):
-        with self.Session() as db:
-            db.add(Adoption(holding_id=1, applicant_id=1, full_name='Adopter', address='Street',
-                            contact_no='09123456789', reason='Adoption', status=kwargs.pop('status', 'Approved'), **kwargs))
-            db.commit()
 
     def test_barangay_and_subdivision_can_edit_photos_registered_by_other_staff(self):
         for uid in (2, 3):
@@ -121,22 +115,6 @@ class PetRecordAccessTests(unittest.TestCase):
             db.commit()
         self.assertEqual(self.photo(pid=2).status_code, 403)
 
-    def test_pending_or_approved_application_does_not_lock_photo_before_handover(self):
-        for status in ('Pending', 'Approved'):
-            self.adoption(status=status)
-            self.assertEqual(self.photo().status_code, 200)
-
-    def test_physical_handover_locks_staff_even_before_receipt_confirmation(self):
-        self.adoption(staff_handed_over=True, is_handed_over=False)
-        response = self.photo()
-        self.assertEqual(response.status_code, 403)
-        self.assertIn('handed over', response.json()['detail'])
-        self.assertEqual(self.client.put('/pets/1', json={'breed': 'Aspin'}, headers=self.headers[3]).status_code, 403)
-
-    def test_adopter_receipt_and_completed_handover_also_lock_staff(self):
-        self.adoption(is_handed_over=True, staff_handed_over=True)
-        self.assertEqual(self.photo(uid=2).status_code, 403)
-        self.assertEqual(self.photo(uid=3).status_code, 403)
 
     def test_released_animals_are_read_only_to_staff(self):
         for state in (3, 4, 5, 7, 8):
@@ -146,15 +124,13 @@ class PetRecordAccessTests(unittest.TestCase):
             self.assertEqual(self.photo().status_code, 403)
         with self.Session() as db:
             animal = db.get(HoldingAnimal, 1)
-            animal.facility_status, animal.discharge_date = 6, datetime.now()
+            animal.facility_status, animal.discharge_date = 2, datetime.now()
             db.commit()
         self.assertEqual(self.photo().status_code, 403)
 
     def test_owner_and_admin_permissions_are_preserved(self):
         self.assertEqual(self.photo(uid=1, pid=2).status_code, 200)
         self.assertEqual(self.photo(uid=4, pid=2).status_code, 200)
-        self.adoption(staff_handed_over=True, is_handed_over=True)
-        self.assertEqual(self.photo(uid=4).status_code, 200)
 
     def test_profile_edit_preserves_original_registrant_and_blocks_owner_bypass(self):
         response = self.client.put('/pets/1', json={'breed': 'Aspin', 'notes': 'Updated in care'}, headers=self.headers[3])
@@ -171,10 +147,6 @@ class PetRecordAccessTests(unittest.TestCase):
         permissions = {p['pet_id']: p['can_edit_record'] for p in records}
         self.assertEqual(permissions, {1: True, 2: False})
         self.assertTrue(self.client.get('/pets/1', headers=self.headers[3]).json()['can_edit_record'])
-        self.adoption(staff_handed_over=True)
-        data = self.client.get('/pets/1', headers=self.headers[3]).json()
-        self.assertFalse(data['can_edit_record'])
-        self.assertIn('handed over', data['record_edit_restriction'])
 
     def test_unverified_inherited_identity_is_not_proof_of_custody(self):
         with self.Session() as db:
@@ -189,12 +161,6 @@ class PetRecordAccessTests(unittest.TestCase):
             db.commit()
         self.assertEqual(self.photo().status_code, 200)
 
-    def test_legacy_adoption_pet_link_works_without_inventing_a_report_link(self):
-        with self.Session() as db:
-            db.get(Report, 1).pet_id = None
-            db.commit()
-        self.adoption(created_pet_id=1)
-        self.assertEqual(self.photo().status_code, 200)
 
     def test_facility_scope_controls_access_after_transfer(self):
         with self.Session() as db:

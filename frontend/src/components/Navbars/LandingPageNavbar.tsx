@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, ArrowRight, ShieldCheck, Heart, User, LogIn } from 'lucide-react';
+import { Menu, X, ArrowRight, ShieldCheck, User, LogIn } from 'lucide-react';
 import Button from '../Button';
 import { useSignedInUser, homePathFor } from '../../utils/useSignedInUser';
 
@@ -43,7 +43,6 @@ const LandingPageNavbar = () => {
         { name: 'User Roles', href: '#roles', isInternal: false },
         { name: 'Features', href: '#features', isInternal: false },
         { name: 'AI Assistance', href: '#ai', isInternal: false },
-        { name: 'Adopt a Pet', href: '/adopt', isInternal: true, highlight: true },
     ];
 
     const scrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
@@ -107,13 +106,8 @@ const LandingPageNavbar = () => {
                                 <Link
                                     key={link.name}
                                     to={link.href}
-                                    className={`text-sm font-semibold transition-colors duration-200 flex items-center gap-1.5 ${
-                                        link.highlight
-                                            ? 'text-orange-600 hover:text-orange-700 font-bold bg-orange-50/80 px-2.5 py-1 rounded-full border border-orange-200/60'
-                                            : 'text-stone-700 hover:text-orange-600'
-                                    }`}
+                                    className="text-sm font-semibold transition-colors duration-200 flex items-center gap-1.5 text-stone-700 hover:text-orange-600"
                                 >
-                                    {link.highlight && <Heart className="w-3.5 h-3.5 text-orange-500 fill-orange-500/30" />}
                                     {link.name}
                                 </Link>
                             ) : (
@@ -234,14 +228,9 @@ const LandingPageNavbar = () => {
                                         key={link.name}
                                         to={link.href}
                                         onClick={() => setIsMobileMenuOpen(false)}
-                                        className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-                                            link.highlight
-                                                ? 'bg-orange-50 text-orange-700 font-bold border border-orange-200/60'
-                                                : 'text-stone-700 hover:bg-stone-50 hover:text-orange-600'
-                                        }`}
+                                        className="flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors text-stone-700 hover:bg-stone-50 hover:text-orange-600"
                                     >
                                         <span className="flex items-center gap-2">
-                                            {link.highlight && <Heart className="w-4 h-4 text-orange-500" />}
                                             {link.name}
                                         </span>
                                         <ArrowRight className="w-4 h-4 text-stone-400" />

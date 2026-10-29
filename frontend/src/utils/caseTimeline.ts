@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { api } from './api';
 
 // One shared way to build the case activity timeline (resident, Subdivision and Barangay views all use it):
-// the report's status history, plus the holding facility's own log (admission, transfers, photos, adoption
-// outcome), with duplicates removed.
+// the report's status history, plus the holding facility's own log (admission, transfers, photos, outcome),
+// with duplicates removed.
 
 /** Loads the holding-facility record (with its timeline) for a report, if the animal was ever held. */
 export function useCaseHolding(reportId?: number | null, duplicateOfReportId?: number | null, reloadKey?: unknown) {
@@ -65,12 +65,6 @@ export function buildCaseTimeline(report: any, holdingAnimal: any | null): any[]
                     }
                     return;
                 }
-            }
-
-            // The case history already records "promoted to adoption": do not list it twice
-            if (log.event_type === 'status_change' && (log.title || '').toLowerCase().includes('promoted to adoption')
-                && h.some((rh: any) => (rh.remarks || '').toLowerCase().includes('promoted to adoption'))) {
-                return;
             }
 
             let statusId = 16; // default: observation / in-facility care

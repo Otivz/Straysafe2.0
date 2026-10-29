@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session, joinedload, aliased
 from typing import List, cast, Any, Optional
 from sqlalchemy import or_, and_
 from app.database import get_db
-from app.utils.pet_adoption import attach_adoption_info, ownership_blocked_by_adoption
 from app.utils.pet_record_access import attach_record_edit_permissions, require_pet_record_edit
 from app.models.pet import Pet
 from app.models.report import Report
@@ -14,7 +13,6 @@ from app.schemas.pet import PetCreate, PetUpdate, PetResponse
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.audit import log_activity
 from app.utils.pet_ownership import propose_owner
-from app.utils.photo_checks import pet_photo_urls, recheck_pet_photos
 from app.utils.uploads import validate_cloudinary_url, read_and_validate_upload
 from app.utils.model_loader import get_yolo_model
 from app.utils.auth import get_current_user, get_current_staff_or_admin, verify_subdivision_scope
@@ -102,7 +100,7 @@ def check_pet_access(
         if pet.owner_id and pet.owner_id != current_user.user_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied: This pet has already been claimed or adopted and can only be updated by the registered owner or administrator."
+                detail="Access denied: This pet has already been claimed and can only be updated by the registered owner or administrator."
             )
         if pet.registered_by_user_id and pet.registered_by_user_id != current_user.user_id:
             raise HTTPException(
@@ -182,7 +180,6 @@ def get_pets(
         )
     query = query.order_by(Pet.created_at.desc(), Pet.pet_id.desc())
     pets = query.all()
-    attach_adoption_info(db, pets)  # "in the adoption process" indicator for Pet Records
     attach_record_edit_permissions(db, pets, current_user)
     return pets
 
@@ -458,7 +455,6 @@ def get_pet(
     if not pet:
         raise HTTPException(status_code=404, detail="Pet not found")
     check_pet_access(current_user, pet, db, for_write=False)
-    attach_adoption_info(db, pet)
     attach_record_edit_permissions(db, pet, current_user)
     return pet
 
@@ -580,10 +576,6 @@ def assign_pet_owner(
 
     check_pet_access(current_user, pet, db, for_write=True)
     verify_subdivision_scope(current_user, owner.subdivision_id, resource_barangay_id=owner.barangay_id, db=db)
-    # An approved or completed adoption decides who owns this animal
-    blocked = ownership_blocked_by_adoption(db, pet.pet_id)
-    if blocked:
-        raise HTTPException(status_code=409, detail=blocked)
     
     actor = current_user
     actor_role = actor.role_id
@@ -623,7 +615,7 @@ def assign_pet_owner(
         )
         return pet
 
-    # CASE 2: Pet has NO registered owner yet -> INITIAL ASSIGNMENT (Claim / Adoption)
+    # CASE 2: Pet has NO registered owner yet -> INITIAL ASSIGNMENT (Claim)
     if old_owner_id is None:
         if actor and actor_role == 1:
             raise HTTPException(
@@ -631,7 +623,7 @@ def assign_pet_owner(
                 detail="Residents cannot directly assign pet ownership. Authorized officer or administrator approval is required."
             )
         
-        # Check claim or adoption status
+        # Check claim status
         from app.models.pet_claim import PetClaim
         existing_claims = db.query(PetClaim).filter(PetClaim.pet_id == pet_id).all()
         approved_claim = next((c for c in existing_claims if c.status in ["Approved", "Handover Complete", "Pet Received"]), None)
@@ -656,7 +648,7 @@ def assign_pet_owner(
 
         actor_title = "Admin" if actor_role == 4 else ("Subdivision Leader" if actor_role == 2 else ("Barangay Staff" if actor_role == 3 else "Authorized Officer"))
         actor_name = actor.name if actor else actor_title
-        process_label = f" via {process_type}" if process_type else " via official claim/adoption turnover"
+        process_label = f" via {process_type}" if process_type else " via official claim turnover"
 
         log_activity(
             db=db,
@@ -882,8 +874,6 @@ def create_pet(
                      description=f"Pet #{db_pet.pet_id} was registered from the same photo as Pet #{from_photo_of}",
                      user_id=current_user.user_id, log_type="operation",
                      new_values={"previous_pet_id": from_photo_of}, request=req)
-    if pet_photo_urls(db_pet):
-        background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
     
     # Automatically generate QR Code for the pet on registration
     try:
@@ -975,7 +965,6 @@ def update_pet(
     old_snapshot = {"pet_name": db_pet.pet_name, "pet_type": db_pet.pet_type, "status": db_pet.status,
                     "temperament": db_pet.temperament, "declared_bite_history": bool(db_pet.declared_bite_history),
                     "declared_chase_behavior": bool(db_pet.declared_chase_behavior)}
-    old_photo_urls = pet_photo_urls(db_pet)
     update_data = pet_update.model_dump(exclude_unset=True)
     for key in VERIFIED_BEHAVIOR_FIELDS:
         update_data.pop(key, None)  # checked above: unchanged, so nothing to write
@@ -994,9 +983,6 @@ def update_pet(
 
     db.commit()
     db.refresh(db_pet)
-    if pet_photo_urls(db_pet) != old_photo_urls:
-        background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
-    attach_adoption_info(db, db_pet)
     attach_record_edit_permissions(db, db_pet, current_user)
 
     log_activity(
@@ -1487,8 +1473,7 @@ def merge_pet_records(db: Session, dup: Pet, keep: Pet, actor: User, reason: str
     move(PetQRScan, "pet_id", "QR scans")
     from app.models.pet_owner_confirmation import PetOwnerConfirmation
     move(PetOwnerConfirmation, "pet_id", "owner confirmations")
-    from app.models.report import Adoption, ReportReturn
-    move(Adoption, "created_pet_id", "adoptions")
+    from app.models.report import ReportReturn
     move(ReportReturn, "pet_id", "owner returns")
 
     # Fill gaps on the kept record from the duplicate (never overwrite what the kept record has)
@@ -1738,7 +1723,6 @@ async def upload_pet_photo(
             validate_cloudinary_url(target_url, allowed={'Image'})
             db_pet.photo_url = target_url
             db.commit()
-            background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
             return {"photo_url": target_url}
         elif file:
             file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file, allowed={'Image'})
@@ -1748,7 +1732,6 @@ async def upload_pet_photo(
             db_pet.photo_url = image_url
             await run_in_threadpool(auto_extract_pet_colors, file_content, unique_filename, db_pet)
             db.commit()
-            background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
             return {"photo_url": image_url}
         else:
             raise HTTPException(status_code=400, detail="Either file or photo_url must be provided.")
@@ -1814,7 +1797,6 @@ async def upload_pet_photo_front(
             validate_cloudinary_url(target_url, allowed={'Image'})
             db_pet.photo_front_url = target_url
             db.commit()
-            background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
             return {"photo_front_url": target_url}
         elif file:
             file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file, allowed={'Image'})
@@ -1823,7 +1805,6 @@ async def upload_pet_photo_front(
                 raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
             db_pet.photo_front_url = image_url
             db.commit()
-            background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
             return {"photo_front_url": image_url}
         else:
             raise HTTPException(status_code=400, detail="Either file or photo_front_url must be provided.")
@@ -1853,7 +1834,6 @@ async def upload_pet_photo_left(
             validate_cloudinary_url(target_url, allowed={'Image'})
             db_pet.photo_left_url = target_url
             db.commit()
-            background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
             return {"photo_left_url": target_url}
         elif file:
             file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file, allowed={'Image'})
@@ -1862,7 +1842,6 @@ async def upload_pet_photo_left(
                 raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
             db_pet.photo_left_url = image_url
             db.commit()
-            background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
             return {"photo_left_url": image_url}
         else:
             raise HTTPException(status_code=400, detail="Either file or photo_left_url must be provided.")
@@ -1892,7 +1871,6 @@ async def upload_pet_photo_right(
             validate_cloudinary_url(target_url, allowed={'Image'})
             db_pet.photo_right_url = target_url
             db.commit()
-            background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
             return {"photo_right_url": target_url}
         elif file:
             file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file, allowed={'Image'})
@@ -1901,7 +1879,6 @@ async def upload_pet_photo_right(
                 raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
             db_pet.photo_right_url = image_url
             db.commit()
-            background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
             return {"photo_right_url": image_url}
         else:
             raise HTTPException(status_code=400, detail="Either file or photo_right_url must be provided.")

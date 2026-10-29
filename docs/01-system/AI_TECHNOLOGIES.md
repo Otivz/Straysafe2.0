@@ -50,13 +50,14 @@ photo / video ──► OpenCV (video only: sample up to 8 frames)
 | **Output** | Labels (`Dog` / `Cat`), boxes, detection count. For videos, the frame with the best confidence × box size is chosen. |
 | **Confidence** | Stored per photo/video (`report_media.ai_detection_confidence`), per report (best photo) and per pet photo, 0–1. Staff see "Animal detected (87%)", or "Weak detection: check the photo" below 50%. Nothing found = "not measured". For videos it also picks the best frame. |
 | **When it finds nothing** | The whole image is used. Gemini can still describe the animal, and staff see the photo as it is. |
+| **Pet registration** | YOLO is the only check (since 2026-10-28; `analyze-media` with `purpose=pet`). It decides whether there is a dog or cat and how many, and gives the coat colours. The resident sees no check result. A photo with no dog or cat is refused when saving ("Please upload a clear photo of your dog or cat."), several animals ask for a crop, and if YOLO itself fails the photo is accepted. |
 | **Limits to test** | Small or distant animals, partial views (behind a gate), low light, and objects that look like animals (toys, statues). |
 
 ## 2. Gemini: multimodal analysis and decision support
 
 | | |
 |---|---|
-| **Used for** | (a) Describing the animal from the photo and text: type, breed, colour, size, behaviour flags (chasing, bite, injury, aggression) and a suggested risk/priority. (b) Checking a photo: is it a real animal photo, and could it be AI-generated? (c) **Gemini Vision matching:** comparing two photos to estimate whether they show the same individual animal. |
+| **Used for** | (a) Describing the animal from the photo and text: type, breed, colour, size, behaviour flags (chasing, bite, injury, aggression) and a suggested risk/priority. (b) Checking a report photo: is it a real animal photo, and could it be AI-generated? Pet registration photos are **not** sent to Gemini (YOLO only, since 2026-10-28). (c) **Gemini Vision matching** (unchanged; it compares report photos with registered pet photos): comparing two photos to estimate whether they show the same individual animal. |
 | **Models** | `gemini-2.5-flash`, then `gemini-flash-lite-latest`, then `gemini-flash-latest` (tried in order; a model that fails, is rate-limited or is too slow is skipped). "Pro" models are not used. Via the `google-genai` package. |
 | **Settings** | Per-call timeout `GEMINI_TIMEOUT_SECONDS` (15 s), total budget `GEMINI_TOTAL_BUDGET_SECONDS` (35 s). Vision matching re-scores only the 10 best candidates per scan (`VISION_CANDIDATES_PER_SCAN`). Results of a photo pair are cached. Admins can switch Gemini off (Admin settings → AI matching). |
 | **Where** | `utils/ai_suggestions.py` (description, suggestions, model fallback), `utils/ai_matching.py` (Vision comparison), `utils/photo_checks.py` (photo check). |

@@ -1,6 +1,6 @@
 import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { Zap } from 'lucide-react';
 import api from '../../utils/api';
@@ -76,6 +76,8 @@ const SectionStep = ({ n, title }: { n: number; title: string }) => (
 // ─── Component ────────────────────────────────────────────────────────────────
 const BrgyPetClaims = () => {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const openedFromLinkRef = useRef<string | null>(null);
     const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
     const [claims, setClaims] = useState<any[]>(() => getCachedData<any[]>('brgy_pet_claims') || []);
@@ -239,7 +241,7 @@ const BrgyPetClaims = () => {
                 bc.registration_record_url && { name: bc.registration_record_url.split('/').pop(), url: bc.registration_record_url, color: 'green' }
             ].filter(Boolean),
             handover_photo_url: bc.handover_photo_url || bc.report_return?.handover_photo_url || bc.report?.returns?.[0]?.handover_photo_url || null,
-            owner_notes: bc.remarks || '',
+            owner_notes: (bc.remarks && bc.remarks !== 'I confirm this is my pet.') ? bc.remarks : '',
             distinctive_markings: bc.distinctive_markings || '',
             distance: computedMeters === null ? '' : computedMeters < 1000 ? `${Math.round(computedMeters)}m` : `${(computedMeters/1000).toFixed(1)}km`,
             distance_meters: computedMeters === null ? null : Math.round(computedMeters),
@@ -308,6 +310,19 @@ const BrgyPetClaims = () => {
                     if (fresh) {
                         setSelectedClaim(fresh);
                     }
+                }
+
+                // Opened from a shortcut (e.g. a confirmed pet match): ?claim_id=N opens that claim once
+                const linkedId = searchParams.get('claim_id');
+                const linked = linkedId && openedFromLinkRef.current !== linkedId
+                    ? transformed.find((c: { claim_id: number }) => String(c.claim_id) === linkedId)
+                    : undefined;
+                if (linkedId && linked) {
+                    openedFromLinkRef.current = linkedId;
+                    setSelectedClaim(linked);
+                    setRoadDistance(linked.distance_meters || null);
+                    setRemarks('');
+                    setViewMode('review');
                 }
             } else {
                 setClaims([]);
@@ -390,7 +405,7 @@ const BrgyPetClaims = () => {
     const openReview = (claim: any) => { 
         setSelectedClaim(claim); 
         setRoadDistance(claim.distance_meters || null);
-        setRemarks(claim.remarks || ''); 
+        setRemarks(''); 
         setViewMode('review'); 
     };
 

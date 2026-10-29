@@ -51,7 +51,7 @@ try {
         if (url.pathname === '/__pet_photo_access__') { body = fixture; contentType = 'text/html'; }
         else if (url.pathname === '/api/pets/3/photo') {
             uploads++;
-            if (denyUpload) { responseCode = 403; body = { detail: 'Animal handed over while this panel was open. Editing is no longer allowed.' }; }
+            if (denyUpload) { responseCode = 403; body = { detail: 'Animal left official care while this panel was open. Editing is no longer allowed.' }; }
             else body = { photo_url: base + '/assets/photo-test.png' };
         }
         await command('Fetch.fulfillRequest', { requestId, responseCode,
@@ -97,13 +97,13 @@ try {
         await waitFor(`document.querySelector('[role=status]')?.textContent.includes('Pet photo updated successfully.')`, 'photo success banner');
         denyUpload = true;
         await upload();
-        await waitFor(`document.querySelector('[role=alert]')?.textContent.includes('Animal handed over while this panel was open.')`, 'server error is visible');
+        await waitFor(`document.querySelector('[role=alert]')?.textContent.includes('Animal left official care while this panel was open.')`, 'server error is visible');
         assert.equal(await evaluate(`document.body.textContent.includes('Pet photo updated successfully.')`), false);
         await command('Page.navigate', { url: base + '/__pet_photo_access__?readOnly=1' });
-        await waitFor(`document.body.textContent.includes('This animal has been handed over to the adopter.')`, 'handover restriction');
+        await waitFor(`document.body.textContent.includes('Staff can only edit dogs or cats currently in official care')`, 'read-only restriction');
         assert.equal(await evaluate(`document.body.textContent.includes('Change Photo')`), false);
         assert.equal(await evaluate(`document.body.textContent.includes('Edit Pet Details')`), false);
-        console.log(`PASS ${width}px: pre-handover editing available to another officer; upload success/error banners shown; post-handover controls hidden`);
+        console.log(`PASS ${width}px: editing available to another officer while in care; upload success/error banners shown; read-only controls hidden`);
     }
     assert.equal(uploads, 4);
     assert.equal(browserErrors.length, 0, browserErrors.join('\n'));

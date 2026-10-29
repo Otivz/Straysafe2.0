@@ -20,6 +20,7 @@ export function usePetPhotoGuard() {
     const [checking, setChecking] = useState(false);
     const [cropping, setCropping] = useState(false);
     const [override, setOverride] = useState({ confirmed: false, reason: '' });
+    const [noAnimal, setNoAnimal] = useState(false);     // the photo check found no dog or cat (registration refused)
 
     /** Record what the AI check said about the main photo (the form may run the check itself). */
     const noteResult = useCallback((file: File, ai: any | null, isCrop: boolean) => {
@@ -27,6 +28,7 @@ export function usePetPhotoGuard() {
         const multi = !!ai && (Boolean(ai.multiple_animals_detected) || n > 1);
         const c = multi ? Math.max(2, n) : 1;
         setCount(c);
+        setNoAnimal(ai?.animal_detected === false);   // null / unavailable check: never refused
         setOverride({ confirmed: false, reason: '' });
         setFromCrop(isCrop);
         if (!isCrop) {
@@ -43,11 +45,12 @@ export function usePetPhotoGuard() {
         try {
             const form = new FormData();
             form.append('file', file);
+            form.append('purpose', 'pet');   // pet registration: YOLO only (dog or cat, how many), no Gemini
             const res = await api.post('/reports/analyze-media', form);
             noteResult(file, res.data, isCrop);
             return res.data;
         } catch {
-            noteResult(file, null, isCrop);   // check unavailable: the server re-checks pet photos in the background
+            noteResult(file, null, isCrop);   // check unavailable: the photo is accepted
             return null;
         } finally {
             setChecking(false);
@@ -56,6 +59,7 @@ export function usePetPhotoGuard() {
 
     const reset = useCallback((keepSession = false) => {
         setCount(0);
+        setNoAnimal(false);
         setFromCrop(false);
         setCropping(false);
         setOverride({ confirmed: false, reason: '' });
@@ -65,7 +69,7 @@ export function usePetPhotoGuard() {
     const multi = count > 1;
     const overrideValid = override.confirmed && override.reason.trim().length >= 5;
     return {
-        original, count, multi, fromCrop, checking, cropping, override,
+        original, count, multi, fromCrop, checking, cropping, override, noAnimal,
         setOverride, setCropping, setChecking, noteResult, check, reset,
         blocked: multi && !overrideValid,
         hasSession: !!original,

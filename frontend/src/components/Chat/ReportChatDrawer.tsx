@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import MediaLightbox from '../MediaLightbox';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { notifyChatUpdated, markReportChatAsSeen, generateMemorableTitle, CHAT_UPDATED_EVENT } from '../../utils/chatUtils';
+import { notifyChatUpdated, markReportChatAsSeen, generateMemorableTitle } from '../../utils/chatUtils';
 import { api, getAuthenticatedUser, getStoredToken, tokenUserId } from '../../utils/api';
 import { DEFAULT_AVATAR, DEFAULT_PET_AVATAR } from '../../utils/avatar';
 import { getMediaKind, validateFile, UPLOAD_ACCEPT } from '../../utils/uploadValidation';
@@ -85,23 +85,8 @@ interface ReportChatDrawerProps {
     initialMessageSnippet?: string;
     matchedPet?: MatchedPetInfo | null;
     matchId?: number;
-    threadMode?: 'report' | 'match' | 'adoption';
-    adoptionId?: number;
+    threadMode?: 'report' | 'match';
     highlightMatch?: boolean;
-}
-
-// Header info for an adoption application chat (GET /chat/adoptions/{id}/thread)
-interface AdoptionChatInfo {
-    adoption_id: number;
-    stage_label: string;
-    application_status: string;
-    can_send: boolean;
-    read_only_reason?: string | null;
-    pet_name?: string | null;
-    pet_type?: string | null;
-    pet_breed?: string | null;
-    pet_photo?: string | null;
-    barangay_name?: string | null;
 }
 
 const roleNameMap: Record<number, string> = {
@@ -140,7 +125,6 @@ export default function ReportChatDrawer({
     matchedPet,
     matchId,
     threadMode = 'report',
-    adoptionId,
     highlightMatch
 }: ReportChatDrawerProps) {
     const navigate = useNavigate();
@@ -212,11 +196,6 @@ export default function ReportChatDrawer({
     const [isCaseInfoModalOpen, setIsCaseInfoModalOpen] = useState<boolean>(false);
 
     const handleOpenCaseInfo = () => {
-        if (isAdoptionMode && adoptionId) {
-            onClose();
-            navigate(isResidentUser ? `/adopt/applications?adoption=${adoptionId}` : `/brgy/adoptions/${adoptionId}`);
-            return;
-        }
         setIsCaseInfoModalOpen(true);
     };
 
@@ -255,47 +234,37 @@ export default function ReportChatDrawer({
     }, [rawStatusId]);
     const effectiveMatchId = autoMatchId || matchId || 0;
     const isReporter = activeUser && (liveReport || report) && activeUser.user_id === (liveReport?.user_id || report?.user_id);
-    // Adoption chats are keyed by the application only; the server derives everything else from the session.
-    const isAdoptionMode = threadMode === 'adoption' && !!adoptionId;
-    const [adoptionInfo, setAdoptionInfo] = useState<AdoptionChatInfo | null>(null);
     // The server refused this conversation (403 / 404): nothing cached is shown and nothing can be sent
     const [accessDenied, setAccessDenied] = useState(false);
-    const isMatchMode = !isAdoptionMode && ((threadMode === 'match') || (threadMode !== 'report' && effectiveMatchId > 0 && !isReporter));
+    const isMatchMode = (threadMode === 'match') || (threadMode !== 'report' && effectiveMatchId > 0 && !isReporter);
 
     // Terminal statuses (same lists as the server, backend/app/routes/chat.py)
     const isTerminalStatus = seenTerminal || Boolean(rawStatusId && REPORT_CHAT_CLOSED_STATUS_IDS.includes(Number(rawStatusId)));
-    const isResolved = isAdoptionMode ? Boolean(adoptionInfo && !adoptionInfo.can_send) : isThreadClosed || (isMatchMode 
+    const isResolved = isThreadClosed || (isMatchMode 
         ? Boolean(rawStatusId && MATCH_CHAT_CLOSED_STATUS_IDS.includes(Number(rawStatusId)))
         : isTerminalStatus);
     const isClaimApprovedPendingPickup = isMatchMode && Number(rawStatusId) === 9;
 
     const shouldHighlightMatch = highlightMatch || threadMode === 'match' || (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('highlightMatch') === 'true');
 
-    const storageKey = isAdoptionMode
-        ? `straysafe_adoption_chat_${adoptionId}`
-        : isMatchMode
+    const storageKey = isMatchMode
         ? `straysafe_match_chat_${effectiveMatchId}`
         : `straysafe_report_chat_${reportId}`;
 
-    const messagesGetUrl = isAdoptionMode
-        ? `/chat/adoptions/${adoptionId}/messages`
-        : isMatchMode
+    const messagesGetUrl = isMatchMode
         ? `/chat/matches/${effectiveMatchId}/messages`
         : `/chat/reports/${reportId}/messages`;
 
     const messagesPostUrl = messagesGetUrl;
 
-    const markReadUrl = isAdoptionMode
-        ? `/chat/adoptions/${adoptionId}/read`
-        : isMatchMode
+    const markReadUrl = isMatchMode
         ? `/chat/matches/${effectiveMatchId}/read`
         : `/chat/reports/${reportId}/read`;
 
-    // Server-backed read receipts for match and adoption chats; report chats keep their local "seen" marker.
+    // Server-backed read receipts for match chats; report chats keep their local "seen" marker.
     const markThreadSeen = () => {
-        if (isMatchMode || isAdoptionMode) {
+        if (isMatchMode) {
             api.patch(markReadUrl).catch(() => {});
-            if (isAdoptionMode && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(CHAT_UPDATED_EVENT, { detail: { adoptionId } }));
         } else {
             markReportChatAsSeen(reportId, currentUserId || currentUser?.user_id);
         }
@@ -408,17 +377,13 @@ export default function ReportChatDrawer({
     // Identify Counterpart
     const isResidentUser = activeUser?.role_id === 1;
 
-    const counterpartName = customCounterpartName || (isAdoptionMode
-        ? (isResidentUser ? `${adoptionInfo?.barangay_name || 'Barangay'} Adoption Team` : 'Adopter')
-        : isResidentUser
+    const counterpartName = customCounterpartName || (isResidentUser
         ? ((report as any)?.assigned_leader_name ? `${(report as any).assigned_leader_name} (Subdivision Leader)` : 'Subdivision Leader & Responders')
         : (localMatchedPet?.owner_name 
             ? `${localMatchedPet.owner_name} (Owner of ${petName(localMatchedPet) || 'Pet'})` 
             : (report?.reporter_name || `Resident (User #${report?.user_id || '?'})`)));
 
-    const counterpartRole = customCounterpartRole || (isAdoptionMode
-        ? (isResidentUser ? 'Barangay' : 'Adopter')
-        : isResidentUser
+    const counterpartRole = customCounterpartRole || (isResidentUser
         ? (isMatchMode ? 'Pet Owner / Reviewer' : 'Subdivision Operations')
         : (localMatchedPet?.owner_name ? 'Registered Pet Owner' : 'Incident Reporter'));
 
@@ -431,7 +396,7 @@ export default function ReportChatDrawer({
     // Load messages from Backend API with localStorage cache
     useEffect(() => {
         if (!isOpen) return;
-        if (!isMatchMode && !isAdoptionMode && !reportId) return;
+        if (!isMatchMode && !reportId) return;
         if (isMatchMode && !effectiveMatchId) return;
 
         setAccessDenied(false);
@@ -488,9 +453,7 @@ export default function ReportChatDrawer({
                             senderId: 0,
                             senderName: 'System Bot',
                             senderRole: 'System',
-                            text: isAdoptionMode
-                                ? `🔒 Adoption chat for Application #${adoptionId}. Ask the Barangay about your application here; messages never change your application stage.`
-                                : isMatchMode
+                            text: isMatchMode
                                 ? `🔒 Direct verification channel initialized for Pet Look-Alike Match #${effectiveMatchId}. Messages are private between you and the owner/officer.`
                                 : `🔒 Case chat initialized for Report #STR-${reportId.toString().padStart(4, '0')}. All messages are archived for official records.`,
                             timestamp: 'Just now',
@@ -521,11 +484,7 @@ export default function ReportChatDrawer({
 
         // Thread details (who may reply, read-only once the case closes)
         let loadThreadInfo: (() => void) | null = null;
-        if (isAdoptionMode) {
-            loadThreadInfo = () => { api.get(`/chat/adoptions/${adoptionId}/thread`)
-                .then(res => setAdoptionInfo(res.data))
-                .catch(err => console.warn('Could not fetch adoption chat details:', err)); };
-        } else if (!isMatchMode && reportId) {
+        if (!isMatchMode && reportId) {
             loadThreadInfo = () => { api.get(`/chat/reports/${reportId}/thread`)
                 .then(res => {
                     if (res.data && typeof res.data.can_interact === 'boolean') {
@@ -538,17 +497,17 @@ export default function ReportChatDrawer({
         }
         loadThreadInfo?.();
 
-        // Replies arrive while the drawer is open (report, match and adoption chats alike): check every 5 s,
+        // Replies arrive while the drawer is open (report and match chats alike): check every 5 s,
         // paused while the browser tab is hidden; thread details every 30 s
         let ticks = 0;
         const poll = setInterval(() => {
             if (document.hidden) return;
             fetchLiveMessages();
             ticks += 1;
-            if (isAdoptionMode || ticks % 6 === 0) loadThreadInfo?.();
+            if (ticks % 6 === 0) loadThreadInfo?.();
         }, 5000);
         return () => clearInterval(poll);
-    }, [isOpen, reportId, effectiveMatchId, isMatchMode, isAdoptionMode, adoptionId, storageKey, messagesGetUrl, markReadUrl, report, currentUser]);
+    }, [isOpen, reportId, effectiveMatchId, isMatchMode, storageKey, messagesGetUrl, markReadUrl, report, currentUser]);
 
     // Auto-scroll to bottom
     useEffect(() => {
@@ -562,7 +521,6 @@ export default function ReportChatDrawer({
         const trimmed = inputText.trim();
         if (!trimmed && !selectedImageFile) return;
         if (accessDenied || isResolved || !canInteract) return;
-        if (isAdoptionMode && !trimmed) return; // adoption chat is text-only
 
         const currentInput = trimmed;
         const currentFile = selectedImageFile;
@@ -618,9 +576,7 @@ export default function ReportChatDrawer({
 
         // Send to backend
         try {
-            await api.post(messagesPostUrl, isAdoptionMode
-                ? { message_text: messageText }
-                : { message_text: messageText, media_url: mediaUrl });
+            await api.post(messagesPostUrl, { message_text: messageText, media_url: mediaUrl });
         } catch (err: any) {
             console.error('Error sending message to backend:', err);
             // Roll back the optimistic bubble so the sender never thinks a refused message was delivered.
@@ -653,7 +609,7 @@ export default function ReportChatDrawer({
 
     const selectedFileKind = selectedImageFile ? getMediaKind(selectedImageFile.name) : 'image';
 
-    if (!isOpen || (!report && !isAdoptionMode) || !activeUser) return null;
+    if (!isOpen || !report || !activeUser) return null;
 
     const drawerContent = (
         <div className="fixed inset-0 z-[999999] overflow-hidden">
@@ -683,9 +639,7 @@ export default function ReportChatDrawer({
 
                             <div className="relative shrink-0">
                                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center font-bold text-sm text-white overflow-hidden shadow-sm">
-                                    {isAdoptionMode && adoptionInfo?.pet_photo ? (
-                                        <img src={adoptionInfo.pet_photo} alt="" className="w-full h-full object-cover" />
-                                    ) : customCounterpartAvatar ? (
+                                    {customCounterpartAvatar ? (
                                         <img src={customCounterpartAvatar} alt="" className="w-full h-full object-cover" />
                                     ) : customCounterpartName ? (
                                         counterpartName.charAt(0).toUpperCase()
@@ -704,17 +658,17 @@ export default function ReportChatDrawer({
                                         {counterpartName}
                                     </h3>
                                     <span className="px-1.5 py-0.5 bg-white/20 text-white rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-wider shrink-0">
-                                        {isAdoptionMode ? `ADOPTION #${adoptionId}` : isMatchMode ? `MATCH #${effectiveMatchId}` : `#STR-${(report?.report_id || 0).toString().padStart(4, '0')}`}
+                                        {isMatchMode ? `MATCH #${effectiveMatchId}` : `#STR-${(report?.report_id || 0).toString().padStart(4, '0')}`}
                                     </span>
                                     {isResolved && (
                                         <span className="px-2 py-0.5 bg-rose-600 text-white rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-wider shrink-0 shadow-xs flex items-center gap-1">
                                             <span>🔒</span>
-                                            <span>{isAdoptionMode ? 'CLOSED' : 'CASE RESOLVED / CLOSED'}</span>
+                                            <span>CASE RESOLVED / CLOSED</span>
                                         </span>
                                     )}
                                 </div>
                                 <p className="text-[10px] sm:text-[11px] text-role-muted font-medium truncate mt-0.5">
-                                    {counterpartRole} • <span className="text-white font-bold">{isAdoptionMode ? (adoptionInfo?.stage_label || 'Adoption Application') : isMatchMode ? 'Direct Look-Alike Inquiry' : (statusNameMap[Number(rawStatusId) || 1] || 'Active')}</span>
+                                    {counterpartRole} • <span className="text-white font-bold">{isMatchMode ? 'Direct Look-Alike Inquiry' : (statusNameMap[Number(rawStatusId) || 1] || 'Active')}</span>
                                 </p>
                             </div>
                         </div>
@@ -726,12 +680,10 @@ export default function ReportChatDrawer({
                             <span className="text-sm shrink-0 mt-0.5">🔒</span>
                             <div className="flex-1 min-w-0">
                                 <p className="text-xs font-black text-rose-900 dark:text-rose-200">
-                                    {isAdoptionMode ? 'Conversation Closed — Messaging Disabled' : 'Case Closed — Direct Messaging Disabled'}
+                                    Case Closed — Direct Messaging Disabled
                                 </p>
                                 <p className="text-[10.5px] text-rose-700 dark:text-rose-300 font-medium leading-relaxed mt-0.5">
-                                    {isAdoptionMode
-                                        ? (adoptionInfo?.read_only_reason || 'This application is closed. The conversation is kept as read-only history.')
-                                        : <>This incident is marked as <strong>{statusNameMap[Number(rawStatusId) || 1] || 'Resolved'}</strong>. The conversation is archived in read-only mode.</>}
+                                    This incident is marked as <strong>{statusNameMap[Number(rawStatusId) || 1] || 'Resolved'}</strong>. The conversation is archived in read-only mode.
                                 </p>
                             </div>
                         </div>
@@ -739,18 +691,7 @@ export default function ReportChatDrawer({
 
                     {/* Report Summary Quick Strip */}
                     <div className="px-4 py-2 bg-role-soft/80 dark:bg-role-strong/40 border-b border-role-muted dark:border-role-strong/60 flex items-center justify-between text-xs text-role-strong dark:text-role-border shrink-0">
-                        {isAdoptionMode ? (
-                            <div 
-                                onClick={handleOpenCaseInfo}
-                                className="flex items-center gap-1.5 truncate max-w-[70%] sm:max-w-[75%] cursor-pointer group hover:opacity-85 transition-opacity"
-                                title="Click to view adoption application details"
-                            >
-                                <span className="font-bold text-role-strong dark:text-role group-hover:underline">Adoption:</span>
-                                <span className="truncate font-semibold text-gray-800 dark:text-gray-200 group-hover:underline">
-                                    {petName(adoptionInfo) || 'Rescued animal'}{adoptionInfo?.pet_type ? ` (${adoptionInfo.pet_type})` : ''} • {adoptionInfo?.application_status || 'Pending'}
-                                </span>
-                            </div>
-                        ) : (() => {
+                        {(() => {
                             const memorableSummary = generateMemorableTitle({
                                 isMatch: isMatchMode,
                                 reportId: report?.report_id || reportId,
@@ -785,7 +726,7 @@ export default function ReportChatDrawer({
                             className="group text-[10px] font-black uppercase tracking-wider bg-white hover:bg-orange-50 dark:bg-[#1E2738] dark:hover:bg-orange-950/40 px-2.5 py-1 rounded-md border border-role-border hover:border-role dark:border-role-strong text-role-strong dark:text-role-border transition-all cursor-pointer shrink-0 flex items-center gap-1.5 shadow-2xs hover:shadow-xs hover:scale-105 active:scale-95"
                             title="Click to view whole case info"
                         >
-                            <span>{isAdoptionMode ? 'Adoption Chat' : isMatchMode ? 'Direct Match Chat' : 'Case Chat'}</span>
+                            <span>{isMatchMode ? 'Direct Match Chat' : 'Case Chat'}</span>
                             <span className="w-3.5 h-3.5 rounded-full bg-role/15 text-role flex items-center justify-center text-[9px] font-black group-hover:bg-role group-hover:text-white transition-colors">
                                 ℹ
                             </span>
@@ -1188,7 +1129,7 @@ export default function ReportChatDrawer({
                     </div>
 
                     {/* Quick Quick-Prompt Badges (Subdivision Leaders / Staff only) */}
-                    {!isResolved && !isResidentUser && !isAdoptionMode && (
+                    {!isResolved && !isResidentUser && (
                         <div className="px-3.5 py-2.5 bg-white border-t border-gray-100 flex items-center gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] shrink-0">
                             {[
                                 "Is the animal still at the scene?",
@@ -1255,12 +1196,10 @@ export default function ReportChatDrawer({
                             <div className="p-3.5 bg-rose-50/80 dark:bg-[#0E131F] rounded-2xl border border-rose-200 dark:border-rose-900/60 text-center space-y-1">
                                 <div className="flex items-center justify-center gap-1.5 text-rose-900 dark:text-rose-200 font-black text-xs">
                                     <span>🔒</span>
-                                    <span>{isAdoptionMode ? 'Conversation Closed — Messaging Disabled' : 'Case Closed — Messaging Disabled'}</span>
+                                    <span>Case Closed — Messaging Disabled</span>
                                 </div>
                                 <p className="text-[10.5px] text-rose-700 dark:text-rose-300 leading-relaxed font-medium">
-                                    {isAdoptionMode
-                                        ? (adoptionInfo?.read_only_reason || 'This application is closed. The conversation is kept as read-only history.')
-                                        : <>This report is marked as <strong>{statusNameMap[Number(rawStatusId) || 1] || 'Resolved'}</strong>. Direct messaging is disabled and archived in read-only mode.</>}
+                                    This report is marked as <strong>{statusNameMap[Number(rawStatusId) || 1] || 'Resolved'}</strong>. Direct messaging is disabled and archived in read-only mode.
                                 </p>
                             </div>
                         ) : !canInteract ? (
@@ -1275,7 +1214,6 @@ export default function ReportChatDrawer({
                             </div>
                         ) : (
                             <form onSubmit={handleSendMessage} className="flex items-center gap-2">
-                                {!isAdoptionMode && <>
                                 <input
                                     type="file"
                                     ref={fileInputRef}
@@ -1295,14 +1233,12 @@ export default function ReportChatDrawer({
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                     </svg>
                                 </button>
-                                </>}
 
                                 <input
                                     type="text"
                                     value={inputText}
                                     onChange={(e) => setInputText(e.target.value)}
-                                    placeholder={isAdoptionMode ? 'Message the Barangay about your application...' : 'Type message to responder/reporter...'}
-                                    maxLength={isAdoptionMode ? 2000 : undefined}
+                                    placeholder="Type message to responder/reporter..."
                                     className="flex-1 min-w-0 bg-gray-50 dark:bg-[#0E131F] border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-xs text-gray-800 dark:text-white font-medium focus:outline-none focus:border-role focus:bg-white dark:focus:bg-[#151C2C] transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
                                 />
 

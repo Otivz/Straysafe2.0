@@ -2,6 +2,8 @@
 
 > **Status:** Database analysis and proposed module breakdown — **awaiting approval**.
 > No ERD diagram code has been generated yet. Module 1 will be produced only after this breakdown is approved.
+>
+> **2026-10-28:** adoption was removed from the system (not approved by the panel). Module 08 and its sub-modules 08A–08D are archived in [`docs/archive/removed-adoption/`](../../archive/removed-adoption/08_ADOPTION_ERD.md); the adoption tables mentioned below no longer exist.
 
 ## 1. How this analysis was done
 
@@ -67,7 +69,6 @@ docs/
     ├── 05_VERIFICATION_CLAIMS_REUNIFICATION_ERD.md
     ├── 06_AI_MATCHING_ERD.md
     ├── 07_RESCUE_HOLDING_OPERATIONS_ERD.md
-    ├── 08_ADOPTION_ERD.md
     ├── 09_COMMUNICATION_NOTIFICATIONS_ERD.md
     ├── 10_ANNOUNCEMENTS_ERD.md
     ├── 11_ADMINISTRATION_SYSTEM_ERD.md
@@ -883,9 +884,6 @@ drops below about 8 pt. Measured from the models:
 | 04 | 04C Endorsements & Disputes | `endorsement_letters`, `letter_status`, `report_disputes` |
 | 07 | 07A Rescue Dispatch | `rescues`, `rescue_status`, `rescue_assignments` |
 | 07 | 07B Holding Facility | `holding_animals`, `facility_status`, `holding_timeline` |
-| 08 | 08A Application & Verification | `adoptions`, `adoption_verifications`, `adoption_timeline_logs` |
-| 08 | 08B Staff Assignments & Evaluation | `adoption_assignments`, `adoption_interviews`, `adoption_home_visits`, `adoption_monitoring_logs` |
-| 08 | 08C Certificate & Ownership Transfer | `adoption_certificates`, `adoption_ownership_history` |
 | 09 | 09A Chat & Email | `chat_threads`, `chat_messages`, `email_logs` |
 | 09 | 09B Notifications & Push Delivery | `notifications`, `user_notification_preferences`, `push_subscriptions`, `push_deliveries` |
 

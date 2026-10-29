@@ -19,7 +19,6 @@ interface BadgeCounts {
     active_reports?: number;
     active_report_ids?: number[];
     unviewed_reports?: number;
-    pending_adoptions?: number;
     pending_warnings?: number;
 }
 
@@ -39,7 +38,6 @@ const AdminSidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }
         }
         return 0;
     });
-    const [pendingAdoptionsCount, setPendingAdoptionsCount] = useState<number>(() => cachedBadges?.pending_adoptions ?? 0);
     const [pendingWarningsCount, setPendingWarningsCount] = useState<number>(() => cachedBadges?.pending_warnings ?? 0);
 
     // Support both prop naming styles for versatility
@@ -94,7 +92,6 @@ const AdminSidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }
                     }
 
                     setActiveReportsCount(unviewedCount);
-                    setPendingAdoptionsCount(badgeRes.data.pending_adoptions ?? 0);
                     setPendingWarningsCount(badgeRes.data.pending_warnings ?? 0);
                     setCachedData('admin_badge_counts', {
                         ...badgeRes.data,
@@ -181,16 +178,6 @@ const AdminSidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }
                     icon: (
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M12 21.5c-3.038 0-5.5-2.462-5.5-5.5s2.462-5.5 5.5-5.5s5.5 2.462 5.5 5.5s-2.462 5.5-5.5 5.5zm-5.5-12c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zm11 0c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zM12 8c-1.381 0-2.5-1.119-2.5-2.5S10.619 3 12 3s2.5 1.119 2.5 2.5S13.381 8 12 8z" />
-                        </svg>
-                    )
-                },
-                {
-                    path: '/admin/adoptions',
-                    label: 'Adoptions',
-                    badgeCount: pendingAdoptionsCount,
-                    icon: (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
                         </svg>
                     )
                 }
@@ -322,7 +309,6 @@ const AdminSidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }
 
                                 const isActive = item.path 
                                     ? (location.pathname === item.path || 
-                                       (item.path === '/admin/adoptions' && (location.pathname === '/brgy/adoptions' || location.pathname.startsWith('/admin/adoptions'))) ||
                                        (item.path === '/admin/holding-facility' && (location.pathname === '/brgy/holding-facility' || location.pathname.startsWith('/admin/holding-facility'))) ||
                                        (item.path === '/admin/account-settings' && location.pathname === '/admin/settings') ||
                                        location.pathname.startsWith(item.path + '/'))

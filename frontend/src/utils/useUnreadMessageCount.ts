@@ -4,18 +4,10 @@ import { CHAT_UPDATED_EVENT } from './chatUtils';
 
 export interface ChatThreadSummary {
     thread_id: number;
-    thread_type: 'Report' | 'Direct' | 'Adoption';
-    thread_mode: 'report' | 'match' | 'adoption';
+    thread_type: 'Report' | 'Direct';
+    thread_mode: 'report' | 'match';
     report_id?: number | null;
     match_id?: number | null;
-    adoption_id?: number | null;
-    adoption?: {
-        adoption_id: number;
-        pet_name?: string | null;
-        pet_photo?: string | null;
-        applicant_name?: string | null;
-        stage_label?: string | null;
-    } | null;
     title: string;
     is_closed: boolean;
     created_at: string;
@@ -66,7 +58,7 @@ export interface ChatThreadSummary {
     unread_count: number;
 }
 
-// One shared poller per tab (per includeAdoptions setting): the navbar and the sidebar both show the unread count,
+// One shared poller per tab: the navbar and the sidebar both show the unread count,
 // but /chat/threads is fetched once for both. It pauses while the tab is hidden, refreshes when the tab comes back,
 // and reacts only to chat changes (not to every localStorage write: the activity tracker writes there on every
 // request, which used to make open tabs wake each other up endlessly).
@@ -81,19 +73,15 @@ type Store = {
     timer: ReturnType<typeof setInterval> | null;
     detach: (() => void) | null;
 };
-const stores = new Map<boolean, Store>();
+const store: Store = { snapshot: { threads: [], unreadCount: 0, loaded: false }, listeners: new Set(), inFlight: null, timer: null, detach: null };
 
-const fetchInto = (store: Store, includeAdoptions: boolean): Promise<void> => {
+const fetchInto = (): Promise<void> => {
     if (store.inFlight) return store.inFlight;  // a fetch is already running: share it
     store.inFlight = (async () => {
         try {
-            const [res, adoptionRes] = await Promise.all([
-                api.get('/chat/threads'),
-                includeAdoptions ? api.get('/chat/adoptions/threads').catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
-            ]);
+            const res = await api.get('/chat/threads');
             if (Array.isArray(res.data)) {
-                const adoptionThreads = Array.isArray(adoptionRes.data) ? adoptionRes.data : [];
-                const sorted = [...res.data, ...adoptionThreads].sort((a, b) => {
+                const sorted = [...res.data].sort((a, b) => {
                     const timeA = new Date(a.last_message?.sent_at || a.updated_at || a.created_at).getTime();
                     const timeB = new Date(b.last_message?.sent_at || b.updated_at || b.created_at).getTime();
                     return timeB - timeA;
@@ -111,8 +99,8 @@ const fetchInto = (store: Store, includeAdoptions: boolean): Promise<void> => {
     return store.inFlight;
 };
 
-const startPolling = (store: Store, includeAdoptions: boolean) => {
-    const refresh = () => { void fetchInto(store, includeAdoptions); };
+const startPolling = () => {
+    const refresh = () => { void fetchInto(); };
     const tick = () => { if (document.visibilityState === 'visible') refresh(); };
     const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
     const onStorage = (e: StorageEvent) => { if (e.key && e.key.startsWith(CHAT_STORAGE_PREFIX)) refresh(); };
@@ -130,31 +118,22 @@ const startPolling = (store: Store, includeAdoptions: boolean) => {
     };
 };
 
-// includeAdoptions: also list adoption application chats (opened in the Barangay Case Messages inbox).
-export function useUnreadMessageCount(userId?: number, includeAdoptions: boolean = false) {
-    const store = (() => {
-        let s = stores.get(includeAdoptions);
-        if (!s) {
-            s = { snapshot: { threads: [], unreadCount: 0, loaded: false }, listeners: new Set(), inFlight: null, timer: null, detach: null };
-            stores.set(includeAdoptions, s);
-        }
-        return s;
-    })();
+export function useUnreadMessageCount(userId?: number) {
     const [snapshot, setSnapshot] = useState<Snapshot>(store.snapshot);
     const [loading, setLoading] = useState<boolean>(!store.snapshot.loaded);
 
-    const refreshThreads = useCallback(() => fetchInto(store, includeAdoptions), [store, includeAdoptions]);
+    const refreshThreads = useCallback(() => fetchInto(), []);
 
     useEffect(() => {
         store.listeners.add(setSnapshot);
-        if (!store.detach) startPolling(store, includeAdoptions);
+        if (!store.detach) startPolling();
         setLoading(true);
-        fetchInto(store, includeAdoptions).finally(() => setLoading(false));
+        fetchInto().finally(() => setLoading(false));
         return () => {
             store.listeners.delete(setSnapshot);
             if (store.listeners.size === 0 && store.detach) store.detach();
         };
-    }, [store, includeAdoptions, userId]);
+    }, [userId]);
 
     return {
         unreadCount: snapshot.unreadCount,

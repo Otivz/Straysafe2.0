@@ -5,12 +5,12 @@ Which notifications are pushed, what the lock screen shows, and where a tap goes
 import re
 from typing import Optional
 
-REPORTS, RESCUES, PET_MATCHES, CLAIMS, ADOPTIONS, MESSAGES, SYSTEM = (
-    "reports", "rescues", "pet_matches", "claims", "adoptions", "messages", "system")
+REPORTS, RESCUES, PET_MATCHES, CLAIMS, MESSAGES, SYSTEM = (
+    "reports", "rescues", "pet_matches", "claims", "messages", "system")
 # category -> preference column
 PREF_COLUMN = {
     REPORTS: "push_reports", RESCUES: "push_rescues", PET_MATCHES: "push_pet_matches",
-    CLAIMS: "push_claims", ADOPTIONS: "push_adoptions", MESSAGES: "push_messages",
+    CLAIMS: "push_claims", MESSAGES: "push_messages",
 }
 
 _TYPE_CATEGORY = {
@@ -27,7 +27,7 @@ _TYPE_CATEGORY = {
     # Claims
     "claim": CLAIMS,
     # Messages
-    "message": MESSAGES, "match_message": MESSAGES, "adoption_chat": MESSAGES,
+    "message": MESSAGES, "match_message": MESSAGES,
     # "Send test notification" (only the master switch applies)
     "push_test": SYSTEM,
 }
@@ -46,8 +46,6 @@ def category_for(ntype: Optional[str]) -> Optional[str]:
         return None
     if t in _TYPE_CATEGORY:
         return _TYPE_CATEGORY[t]
-    if t.startswith("adoption") or t.startswith("adopter"):
-        return ADOPTIONS
     return None
 
 
@@ -90,10 +88,6 @@ def notification_link(role_id: int, ntype: Optional[str], related_id: Optional[i
     if role_id == 1:  # Resident (ResiNavbar)
         if t == "pet_owner_confirmation":
             return "/resident/pets"
-        if t == "adoption_available_again" and rid:
-            return f"/adopt/apply/{rid}"
-        if t.startswith("adoption") and rid:
-            return f"/adopt/applications?adoption={rid}" + ("&chat=1" if t == "adoption_chat" else "")
         if t == "status_update" and rid:
             return f"/resident/reports/{rid}"
         if t == "match_message" and rid:
@@ -116,19 +110,10 @@ def notification_link(role_id: int, ntype: Optional[str], related_id: Optional[i
             return "/subd/pet-claims"
         return f"/subd/reports/{rid}" if rid else "/subd/reports"
     if role_id == 3:  # Barangay Staff (BrgyNavbar)
-        if t.startswith("adoption_task_") and t in ("adoption_task_assigned", "adoption_task_reassigned",
-                                                    "adoption_task_cancelled", "adoption_task_updated"):
-            return "/brgy/adoption-tasks"
         if t == "pet_owner_confirmation_result":
             return "/brgy/pet-records"
-        if t == "adoption_chat" and rid:
-            return f"/brgy/messages?adoptionId={rid}"
-        if t.startswith("adoption") and rid:
-            return f"/brgy/adoptions?view={rid}"
         if "holding" in t or "holding" in ti or "impound" in t:
             return "/brgy/holding-facility"
-        if "adopt" in t or "adopt" in ti:
-            return "/brgy/adoptions"
         if "claim" in t:
             return "/brgy/pet-claims"
         return f"/brgy/reports/{rid}" if rid else "/brgy/dashboard"

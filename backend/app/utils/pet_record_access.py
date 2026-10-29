@@ -2,11 +2,10 @@
 from collections import defaultdict
 
 from fastapi import HTTPException
-from sqlalchemy import or_
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.models.pet import Pet
-from app.models.report import Adoption, HoldingAnimal, Report
+from app.models.report import HoldingAnimal, Report
 from app.models.user import Subdivision
 from app.utils.case_groups import pet_link_trusted
 
@@ -32,13 +31,11 @@ def record_edit_permissions(db, pets, user):
             if report.duplicate_of_report_id:
                 report_pets[report.duplicate_of_report_id].add(report.pet_id)
     holdings = (db.query(HoldingAnimal)
-                .outerjoin(Adoption, Adoption.holding_id == HoldingAnimal.holding_id)
-                .filter(or_(HoldingAnimal.report_id.in_(report_pets), Adoption.created_pet_id.in_(pet_ids)))
+                .filter(HoldingAnimal.report_id.in_(report_pets))
                 .options(joinedload(HoldingAnimal.report).joinedload(Report.subdivision),
                          joinedload(HoldingAnimal.report).joinedload(Report.facility),
-                         joinedload(HoldingAnimal.report).selectinload(Report.disputes),
-                         selectinload(HoldingAnimal.adoptions))
-                .distinct().all())
+                         joinedload(HoldingAnimal.report).selectinload(Report.disputes))
+                .all())
     user_barangay = user.barangay_id
     if not user_barangay and user.subdivision_id:
         subdivision = db.get(Subdivision, user.subdivision_id)
@@ -48,7 +45,7 @@ def record_edit_permissions(db, pets, user):
         report = holding.report
         if not report:
             continue
-        linked = report_pets[holding.report_id] | {a.created_pet_id for a in holding.adoptions if a.created_pet_id in pet_ids}
+        linked = set(report_pets[holding.report_id])
         if report.pet_id:
             if not pet_link_trusted(report):
                 continue
@@ -64,20 +61,13 @@ def record_edit_permissions(db, pets, user):
             continue
         if user.role_id == 2 and (not user.subdivision_id or subdivision_id != user.subdivision_id):
             continue
-        # Physical release ends staff editing even if the adopter has not yet
-        # clicked receipt confirmation. Approval/scheduling alone does not.
-        released = any(a.staff_handed_over or a.is_handed_over for a in holding.adoptions)
-        if released:
-            for pid in linked:
-                result[pid] = 'This animal has been handed over to the adopter. Only its owner or an administrator can edit the record.'
+        if holding.discharge_date is not None or holding.facility_status not in (1, 2):
             continue
-        if holding.discharge_date is not None or holding.facility_status not in (1, 2, 6):
-            continue
-        if (report.custody_status or '').lower() in ('claimed by owner', 'adopted', 'deceased', 'transferred to shelter'):
+        if (report.custody_status or '').lower() in ('claimed by owner', 'deceased', 'transferred to shelter'):
             continue
         for pid in linked:
             allowed.add(pid)
-    # A fresh admission can legitimately follow an earlier discharge/adoption.
+    # A fresh admission can legitimately follow an earlier discharge.
     for pid in allowed:
         result[pid] = None
     return result

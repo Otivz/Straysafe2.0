@@ -101,8 +101,6 @@ const FACILITY_STATUSES = [
     { id: 3, name: 'Claimed by Owner', color: 'bg-blue-50 text-blue-600 border-blue-200' },
     { id: 4, name: 'Deceased', color: 'bg-gray-100 text-gray-500 border-gray-200' },
     { id: 5, name: 'Transferred to Shelter', color: 'bg-purple-50 text-purple-600 border-purple-200' },
-    { id: 6, name: 'For Adoption', color: 'bg-teal-50 text-teal-600 border-teal-200' },
-    { id: 7, name: 'Adopted/Released', color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
     { id: 8, name: 'Impounded', color: 'bg-amber-50 text-amber-600 border-amber-200' },
 ];
 
@@ -476,12 +474,12 @@ const SubdHoldingFacility = () => {
     }, [facilities]);
 
     // Animals from this subdivision now held at a Barangay holding place (not discharged, not closed): the leader
-    // follows them read-only. Held = Need Treatment, Healthy, For Adoption or Impounded, as in the analytics.
+    // follows them read-only. Held = Need Treatment, Healthy or Impounded, as in the analytics.
     const isHeldAtBarangay = useCallback((a: HoldingAnimal) => {
         const atBarangay = a.facility_type === 'barangay_facility' || Boolean(a.facility_name && a.facility_name.toLowerCase().includes('barangay'));
         if (!atBarangay || a.discharge_date) return false;
         if (a.report_status_id && [9, 10, 11, 12, 14, 17, 18].includes(a.report_status_id)) return false;
-        return [1, 2, 6, 8].includes(a.facility_status);
+        return [1, 2, 8].includes(a.facility_status);
     }, []);
 
     const activeAnimals = useMemo(() => animals.filter(isCurrentlyInSubd), [animals, isCurrentlyInSubd]);
@@ -783,13 +781,6 @@ const SubdHoldingFacility = () => {
             border: 'border-emerald-100',
         },
         {
-            label: 'For Adoption',
-            value: barangayAnimals.filter(a => a.facility_status === 6).length,
-            icon: Home,
-            color: 'bg-teal-50 text-teal-600',
-            border: 'border-teal-100',
-        },
-        {
             label: 'Impounded',
             value: barangayAnimals.filter(a => a.facility_status === 8).length,
             icon: AlertTriangle,
@@ -944,7 +935,7 @@ const SubdHoldingFacility = () => {
                                 {overdueExpanded && (
                                     <div className="px-3 pb-3 space-y-2">
                                         <p className="text-xs text-red-900/90 leading-relaxed">
-                                            {overdueAnimals.length === 1 ? '1 animal has' : `${overdueAnimals.length} animals have`} reached or exceeded the {impoundStayDuration}-day temporary holding limit. Animals past temporary subdivision holding should be transferred to the Barangay shelter for impoundment or official adoption listing.
+                                            {overdueAnimals.length === 1 ? '1 animal has' : `${overdueAnimals.length} animals have`} reached or exceeded the {impoundStayDuration}-day temporary holding limit. Animals past temporary subdivision holding should be transferred to the Barangay shelter for impoundment.
                                         </p>
                                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
                                             {overdueAnimals.map((animal) => {
@@ -1569,7 +1560,7 @@ const SubdHoldingFacility = () => {
                                                 <div className="min-w-0">
                                                     <p className="text-sm font-black text-red-950">Stay limit reached · {heldDays} days held</p>
                                                     <p className="text-xs text-red-800 mt-0.5 leading-relaxed">
-                                                        This animal has reached the {impoundStayDuration}-day temporary holding limit. Coordinate with Barangay responders to transfer it to the Barangay Holding Pen for impoundment or adoption.
+                                                        This animal has reached the {impoundStayDuration}-day temporary holding limit. Coordinate with Barangay responders to transfer it to the Barangay Holding Pen for impoundment.
                                                     </p>
                                                 </div>
                                             </div>

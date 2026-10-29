@@ -26,7 +26,7 @@ from app.models.report import (FacilityStatus, HoldingAnimal, Report, ReportCate
                                ReportStatus, StatusHistory)
 from app.models.report_match import ReportMatch  # noqa: E402
 from app.models.user import Barangay, Role, Subdivision, User  # noqa: E402
-from app.routes import admin, adoptions, audit_logs, claims, holding, report_split, reports  # noqa: E402
+from app.routes import admin, audit_logs, claims, holding, report_split, reports  # noqa: E402
 from app.utils import report_split as rs  # noqa: E402
 from app.utils.ai_matching import image_url_for_entity  # noqa: E402
 from app.utils.auth import create_access_token  # noqa: E402
@@ -34,7 +34,7 @@ from app.utils.uploads import CLOUDINARY_CLOUD_NAME  # noqa: E402
 
 Base.metadata.create_all(bind=engine)
 api = FastAPI()
-for r in (reports, report_split, claims, holding, adoptions, admin, audit_logs):
+for r in (reports, report_split, claims, holding, admin, audit_logs):
     api.include_router(r.router)
 client = TestClient(api, raise_server_exceptions=False)
 db = SessionLocal()
@@ -252,15 +252,12 @@ check("the group timeline says how each animal's case ended",
 check("...with a timeline note", db.query(StatusHistory).filter(StatusHistory.report_id == G,
                                                                  StatusHistory.remarks.like("All 3 animal records%")).count() == 1)
 
-# ------------------------------------------------------------------ adoption from an animal record
+# ------------------------------------------------------------------ an animal record in holding
 G4 = group_report(count=2, status=6)
 _r4 = split(G4, 2, token="tok-g4-split")
 k4 = _r4.json()["created"]
 h4 = client.post("/holding/", headers=H(staff), json={"report_id": k4[0], "animal_type": "Dog", "facility_status": 2})
-hid = h4.json().get("holding_id")
-pr = client.post(f"/adoptions/promote/{hid}", headers=H(staff), json={"catalog_notes": "Friendly", "adoption_catalog_notes": "Friendly"})
-check("an animal record's holding animal can be promoted for adoption", h4.status_code == 200 and pr.status_code == 200,
-      h4.text[:200] + " | " + pr.text[:300])
+check("an animal record can be admitted to holding", h4.status_code == 200, h4.text[:200])
 
 # ------------------------------------------------------------------ undo
 G5 = group_report(count=2)

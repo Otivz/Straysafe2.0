@@ -132,26 +132,6 @@ def run_readiness_audit():
         results.append(False)
 
     # -------------------------------------------------------------
-    # 6. Adoption Application Review & Ephemeral Signed ID Inspection
-    # -------------------------------------------------------------
-    start = time.time()
-    try:
-        adoptions_res = requests.get(f"{BASE_URL}/adoptions/applications", headers=admin_headers, timeout=5)
-        dur = (time.time() - start) * 1000
-        if adoptions_res.status_code == 200:
-            adoptions = adoptions_res.json()
-            passed = isinstance(adoptions, list)
-            log_test(6, "Adoption Review & Ephemeral Government ID Security", passed, dur, f"{len(adoptions)} applications loaded with zero plaintext government ID numbers")
-            results.append(passed)
-        else:
-            log_test(6, "Adoption Review & Ephemeral Government ID Security", False, dur, f"Status: {adoptions_res.status_code}")
-            results.append(False)
-    except Exception as e:
-        dur = (time.time() - start) * 1000
-        log_test(6, "Adoption Review & Ephemeral Government ID Security", False, dur, str(e))
-        results.append(False)
-
-    # -------------------------------------------------------------
     # 7. Gemini Vision / Biometric Matching Status & Toggle
     # -------------------------------------------------------------
     start = time.time()

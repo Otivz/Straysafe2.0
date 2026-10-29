@@ -172,7 +172,7 @@ check("5 nothing is pushed about a report the person can't see", deliveries(nid)
 # 8. Links per role
 check("8 leader links go to /subd/...", pc.notification_link(2, "status_update", 52) == "/subd/reports/52")
 check("8 resident links go to /resident/...", pc.notification_link(1, "status_update", 52) == "/resident/reports/52")
-check("8 barangay adoption chat opens the conversation", pc.notification_link(3, "adoption_chat", 7) == "/brgy/messages?adoptionId=7")
+check("8 adoption is gone: no adoption chat push category", pc.category_for("adoption_chat") is None)
 
 # 10-11. Retries and expiry
 REPLIES[:] = [500]

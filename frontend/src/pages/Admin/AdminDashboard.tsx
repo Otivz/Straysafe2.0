@@ -123,16 +123,9 @@ const AdminDashboard = () => {
     const highRiskPercent = dashboardStats?.high_risk_percentage ?? (totalReports > 0 ? Math.round(((dashboardStats?.high_risk_reports_count ?? 0) / totalReports) * 100) : 0);
     const petIdPercent = dashboardStats?.pet_id_percentage ?? (totalReports > 0 ? Math.round(((dashboardStats?.pet_id_reports_count ?? 0) / totalReports) * 100) : 0);
 
-    // Adoptions Metrics
-    const forAdoptionCount = dashboardStats?.for_adoption_count ?? 0;
-    const totalAdoptionApps = dashboardStats?.active_adoptions_count ?? 0;
-    const approvedAdoptionsCount = dashboardStats?.approved_adoptions_count ?? 0;
-    const pendingAdoptionsCount = dashboardStats?.active_adoptions_count ?? 0;
-    const totalAdoptionCases = forAdoptionCount + totalAdoptionApps + approvedAdoptionsCount;
-
     // Community Impact
     const rescuedCount = dashboardStats?.rescued_count ?? 0;
-    const adoptedCount = approvedAdoptionsCount;
+    const impoundedCount = dashboardStats?.impounded_count ?? 0;
     const returnedToOwnerCount = dashboardStats?.returned_to_owner_count ?? 0;
     
     // Dynamic Subdivisions Performance from Server Aggregation
@@ -294,10 +287,6 @@ const AdminDashboard = () => {
                             <Link to="/admin/warnings" className="h-10 px-3 bg-white hover:bg-amber-50 text-amber-700 font-bold text-xs rounded-xl border border-amber-200 transition-colors flex items-center justify-center gap-1.5 min-w-0">
                                 <span className="truncate">Citations</span>
                                 <span className="px-1.5 rounded-full bg-amber-100 text-[11px] shrink-0">{dashboardStats?.pending_warnings_count ?? 0}</span>
-                            </Link>
-                            <Link to="/admin/adoptions" className="h-10 px-3 bg-white hover:bg-orange-50 text-orange-600 font-bold text-xs rounded-xl border border-orange-200 transition-colors flex items-center justify-center gap-1.5 min-w-0">
-                                <span className="truncate">Adoptions</span>
-                                <span className="px-1.5 rounded-full bg-orange-100 text-[11px] shrink-0">{pendingAdoptionsCount}</span>
                             </Link>
                             <Link to="/admin/incidents" className="col-span-2 h-10 px-4 bg-[#1A4543] hover:bg-[#153836] text-white font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5">
                                 Manage reports
@@ -705,7 +694,7 @@ const AdminDashboard = () => {
                         </div>
                     </div>
 
-                    {/* 3. MIDDLE SECTION - ROW 2: SUBDIVISION PERFORMANCE, ADOPTION, COMMUNITY IMPACT & RECENT ACTIVITY */}
+                    {/* 3. MIDDLE SECTION - ROW 2: SUBDIVISION PERFORMANCE & COMMUNITY IMPACT */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
 
                         {/* SUBDIVISION PERFORMANCE TABLE */}
@@ -767,84 +756,8 @@ const AdminDashboard = () => {
                             </div>
                         </div>
 
-                        {/* ADOPTION OVERVIEW (DONUT CHART) */}
-                        <div className="bg-white rounded-2xl p-3 sm:p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 min-w-0 flex flex-col justify-between hover:border-orange-200 transition-all">
-                            <div>
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-sm font-black text-gray-900">Adoption Overview</h3>
-                                    <span className="text-[11px] font-bold px-2 py-0.5 bg-orange-50 text-orange-600 rounded-full border border-orange-100">Live</span>
-                                </div>
-                                <div className="flex justify-center my-4 relative">
-                                    {(() => {
-                                        // Slices sized from the real counts below (a grey ring when they are all zero)
-                                        const C = 2 * Math.PI * 38;
-                                        const parts = [
-                                            [forAdoptionCount, '#1A4543'],
-                                            [totalAdoptionApps, '#3B82F6'],
-                                            [approvedAdoptionsCount, '#F97316'],
-                                            [pendingAdoptionsCount, '#8B5CF6'],
-                                        ] as Array<[number, string]>;
-                                        const sum = parts.reduce((a, [v]) => a + (Number(v) || 0), 0);
-                                        let offset = 0;
-                                        return (
-                                            <svg viewBox="0 0 100 100" className="w-32 h-32 sm:w-36 sm:h-36 transform -rotate-90" aria-hidden="true">
-                                                <circle cx="50" cy="50" r="38" fill="transparent" stroke="#F1F5F9" strokeWidth="12" />
-                                                {sum > 0 && parts.map(([v, color]) => {
-                                                    const len = ((Number(v) || 0) / sum) * C;
-                                                    const el = len > 0 ? <circle key={color} cx="50" cy="50" r="38" fill="transparent" stroke={color} strokeWidth="12" strokeDasharray={`${len} ${C - len}`} strokeDashoffset={-offset} /> : null;
-                                                    offset += len;
-                                                    return el;
-                                                })}
-                                            </svg>
-                                        );
-                                    })()}
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                        <span className="text-2xl font-black text-gray-900 leading-none">{totalAdoptionCases}</span>
-                                        <span className="text-[10px] font-bold text-gray-400 mt-1">Total cases</span>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2 text-xs font-medium text-gray-600">
-                                    <div className="flex justify-between items-center">
-                                        <span className="flex items-center space-x-2">
-                                            <span className="w-2.5 h-2.5 rounded-full bg-[#1A4543]"></span>
-                                            <span>For Adoption</span>
-                                        </span>
-                                        <span className="font-black text-gray-900">{forAdoptionCount}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="flex items-center space-x-2">
-                                            <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
-                                            <span>Applications</span>
-                                        </span>
-                                        <span className="font-black text-gray-900">{totalAdoptionApps}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="flex items-center space-x-2">
-                                            <span className="w-2.5 h-2.5 rounded-full bg-[#F97316]"></span>
-                                            <span>Approved / Adopted</span>
-                                        </span>
-                                        <span className="font-black text-gray-900">{approvedAdoptionsCount}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="flex items-center space-x-2">
-                                            <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
-                                            <span>Pending Review</span>
-                                        </span>
-                                        <span className="font-black text-purple-600">{pendingAdoptionsCount}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="mt-4 pt-3 border-t border-gray-50 text-left">
-                                <Link to="/admin/adoptions" className="text-[11px] font-bold text-[#F97316] hover:underline flex items-center space-x-1">
-                                    <span>Manage adoptions & applications</span>
-                                    <span>&rarr;</span>
-                                </Link>
-                            </div>
-                        </div>
-
                         {/* COMMUNITY IMPACT */}
-                        <div className="bg-white rounded-2xl p-3 sm:p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 min-w-0 flex flex-col justify-between">
+                        <div className="lg:col-span-2 bg-white rounded-2xl p-3 sm:p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 min-w-0 flex flex-col justify-between">
                             <div>
                                 <h3 className="text-sm font-black text-gray-900 mb-3">Community Impact</h3>
                                 <div className="space-y-3">
@@ -857,10 +770,10 @@ const AdminDashboard = () => {
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <span className="text-xs font-medium text-gray-600 flex items-center space-x-2">
-                                            <span>🏡</span>
-                                            <span>Animals Adopted</span>
+                                            <span>⚖️</span>
+                                            <span>Animals Impounded</span>
                                         </span>
-                                        <span className="text-sm font-black text-blue-600">{isDataLoading ? '...' : adoptedCount}</span>
+                                        <span className="text-sm font-black text-blue-600">{isDataLoading ? '...' : impoundedCount}</span>
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <span className="text-xs font-medium text-gray-600 flex items-center space-x-2">

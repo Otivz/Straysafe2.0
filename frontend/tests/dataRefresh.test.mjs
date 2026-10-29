@@ -14,7 +14,7 @@ function setup(refresh, options = {}) {
 }
 
 test('only changes to business records trigger refresh, including absolute and proxy URLs', () => {
-    for (const url of ['/pets/1', '/reports/128/status', '/api/holding/1', 'http://localhost:8000/adoptions/1', '/claims/1', '/adoption-tasks/2/accept', '/pet-ownership/1/accept', '/report-returns/1']) assert.equal(isDataMutation('patch', url), true);
+    for (const url of ['/pets/1', '/reports/128/status', '/api/holding/1', 'http://localhost:8000/claims/1', '/claims/1', '/pet-ownership/1/accept', '/report-returns/1']) assert.equal(isDataMutation('patch', url), true);
     for (const url of ['/auth/refresh', '/notifications/mark-all-read/1', '/chat/report/1/read', '/push/test']) assert.equal(isDataMutation('post', url), false);
     assert.equal(isDataMutation('get', '/reports/'), false);
     assert.equal(isDataMutation('options', '/pets/'), false);

@@ -7,12 +7,12 @@ import '../../src/index.css';
 
 // The browser test sets localStorage (signed-in user, cached messages) before this page loads.
 (window as any).__clearAuthStorage = clearAuthStorage;
-const adoptionId = Number(new URLSearchParams(location.search).get('adoption') || 7);
+const reportId = Number(new URLSearchParams(location.search).get('report') || 7);
 const root = createRoot(document.getElementById('fixture')!);
 root.render(
     <MemoryRouter>
-        <ReportChatDrawer isOpen onClose={() => {}} report={null} threadMode="adoption" adoptionId={adoptionId}
-            currentUser={{ user_id: 31, name: 'Applicant B', role_id: 1 }} />
+        <ReportChatDrawer isOpen onClose={() => {}} report={{ report_id: reportId, user_id: 31, status_id: 2 }} threadMode="report"
+            currentUser={{ user_id: 31, name: 'Resident B', role_id: 1 }} />
     </MemoryRouter>
 );
 if (import.meta.hot) import.meta.hot.dispose(() => root.unmount());

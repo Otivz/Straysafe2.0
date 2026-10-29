@@ -6,9 +6,9 @@ Status: Current inventory (written 2026-10-25 from repository evidence). **Pass/
 
 | Suite | Location | How it runs | Covers (from file names and headers) |
 |---|---|---|---|
-| Backend scripts | `backend/tests/` (95 `.py` files) | `.venv\Scripts\python.exe backend/tests/<file>.py`, one at a time; each prints its own pass count | sessions and sign-in (`test_session_security`, `test_app_stay_signed_in`), report visibility and edit authorization (`test_report_visibility`, `test_report_edit_auth`), AI pipeline and matching, claims, adoption stages and authority, pet records and ownership, admin controls, notifications, analytics |
+| Backend scripts | `backend/tests/` (90 `.py` files) | `.venv\Scripts\python.exe backend/tests/<file>.py`, one at a time; each prints its own pass count | sessions and sign-in (`test_session_security`, `test_app_stay_signed_in`), report visibility and edit authorization (`test_report_visibility`, `test_report_edit_auth`), AI pipeline and matching, claims, pet records and ownership, admin controls, notifications, analytics |
 | Frontend unit | `frontend/tests/*.test.mjs` | `node frontend/tests/<file>.test.mjs` | claim evidence, data refresh, original sighting, personnel availability |
-| Frontend browser | `frontend/tests/*.browser.mjs` with `fixtures/*.tsx` | `node frontend/tests/<file>.browser.mjs`; needs Vite on port 5173 and local Chrome | claim evidence, match-review location, notifications, pet claim records, pet photo access, adoption details |
+| Frontend browser | `frontend/tests/*.browser.mjs` with `fixtures/*.tsx` | `node frontend/tests/<file>.browser.mjs`; needs Vite on port 5173 and local Chrome | claim evidence, match-review location, notifications, pet claim records, pet photo access, pet behavior history, chat cache |
 | Type check and build | `frontend/` | `npm --prefix frontend run build` | TypeScript and Vite build |
 | Lint | `frontend/` | `npm --prefix frontend run lint` | ESLint; last result **Unverified** |
 
@@ -23,11 +23,9 @@ Backend tests build throwaway SQLite databases; they must not be pointed at the 
 
 These are reports by earlier work sessions. Treat them as leads, not as current evidence.
 
-## Adoption details UI validation — 2026-10-25
+## Adoption details UI validation — 2026-10-25 (removed)
 
-`node frontend/tests/adoptionDetails.browser.mjs` passed at 320, 375, 390, 430, 768, and 1280 px. It mounts the real adoption page with mocked APIs and verifies overflow, tabs, procedures, applicant information, assignment history/submission, certificate availability/preview/zoom, print-only PDF rendering, certificate delivery/handover callbacks, and staff restrictions. The frontend TypeScript/production build also passed.
-
-The generated mock certificate PDF contained one page. Screenshots and PDF are local artifacts under `scratch/adoption-ui-review/`. Physical Android/Capacitor behavior, live delivery, and physical printing remain unverified. Details: [adoption UI change record](../05-operations/agents/feature-updates/2026-10-25_1347_adoption-details-ui.md).
+Adoption was removed on 2026-10-28 (not approved by the panel), and `adoptionDetails.browser.mjs` was deleted with it. The earlier results no longer apply.
 
 ## Gaps
 

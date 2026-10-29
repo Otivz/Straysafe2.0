@@ -21,7 +21,6 @@ export interface AnalyticsData {
     holding_summary: { total_intake: number; returned_to_owner: number; currently_held: number; transferred_to_shelter: number };
     subdivisions_comparison?: Benchmark[];
     sla_metrics?: { avg_verification_hours: number | null; avg_rescue_hours: number | null; total_verified_cases: number; total_completed_rescues: number };
-    holding_and_adoption?: { total_intake: number; currently_held: number; returned_to_owner: number; approved_adoptions: number; pending_adoptions: number; completed_handovers: number; total_adoptions: number; adoption_rate: number | null };
     ai_performance?: { total_matches_suggested: number; confirmed_matches: number; reviewed_matches: number; review_acceptance_rate: number | null; average_confidence_score: number | null };
     security_overview?: { total_users: number; active_users: number; suspended_users: number; audit_events_count: number };
 }
@@ -120,7 +119,7 @@ export function exportAnalytics(data: AnalyticsData, scope: string) {
     for (const item of data.subdivisions_comparison ?? []) rows.push(['Subdivisions', item.subdivision_name, item.total_reports, item.resolved_reports, item.active_reports, null, item.resolution_rate]);
     for (const [key, value] of Object.entries(data.pet_compliance)) rows.push(['Current pet registry', key.replaceAll('_', ' '), value]);
     for (const item of data.warnings_breakdown) rows.push(['Owner warnings', item.violation, item.count]);
-    for (const [key, value] of Object.entries(data.holding_and_adoption ?? data.holding_summary)) rows.push(['Holding / adoption cohort', key.replaceAll('_', ' '), value]);
+    for (const [key, value] of Object.entries(data.holding_summary)) rows.push(['Holding cohort', key.replaceAll('_', ' '), value]);
     for (const [section, values] of [['Animal types', data.animal_distribution], ['Priority levels', data.priority_distribution], ['Response durations', data.sla_metrics], ['AI review outcomes', data.ai_performance], ['Current accounts and audit events', data.security_overview]] as const) {
         for (const [key, value] of Object.entries(values ?? {})) rows.push([section, key.replaceAll('_', ' '), value]);
     }

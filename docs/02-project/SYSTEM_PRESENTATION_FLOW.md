@@ -23,9 +23,6 @@ graph TD
     subgraph PUBLIC["Public Guest Access (No Login)"]
         P1["Landing Page & Awareness"]
         P2["Scan-to-Reunite Pet QR (/pet/scan/:token)"]
-        P3["Public Adoption Catalog (/adopt)"]
-        P4["Animal Journey Map (/adopt/journey/:id)"]
-        P5["Digital Certificate Verifier (/verify/certificate/:number)"]
     end
 
     subgraph RESIDENT["Citizen / Resident Portal (Role 1)"]
@@ -35,7 +32,6 @@ graph TD
         R4["Digital QR Tag Management & Scan Logs"]
         R5["AI Lost/Found Match Review"]
         R6["Pet Custody Claims & Dispute Filing"]
-        R7["Online Adoption Application & Tracking"]
     end
 
     subgraph SUBD["Subdivision Leader Portal (Role 2)"]
@@ -45,7 +41,7 @@ graph TD
         S4["Private-to-Public Sighting Publisher"]
         S5["Temporary Holding Facility Intake & Care"]
         S6["Responsible Pet Ownership Warnings"]
-        S7["Adoption Application HOA Endorsements"]
+        S7["Rescue Endorsement Letter Archive"]
         S8["Community Hazard & Aggression Alerts"]
     end
 
@@ -53,9 +49,7 @@ graph TD
         B1["Municipal Command Center & Live Heatmap"]
         B2["Rescue Mission Dispatch & OSRM Routing"]
         B3["Municipal Holding Impound & Vet Logs"]
-        B4["End-to-End 9-Stage Adoption Lifecycle"]
-        B5["Digital Certificate Generation"]
-        B6["Adoption Task & Field Visit Calendar"]
+        B4["Owner Claims Review & Impoundment"]
         B7["Anti-Rabies Drive Community Alerts"]
         B8["Staff Personnel Invitation & Onboarding"]
     end
@@ -83,7 +77,7 @@ graph TD
 00:00 – 03:00 │ ACT 1: Executive Briefing, Problem Statement & Governance Framework
 03:00 – 08:30 │ ACT 2: Citizen Experience — Pet Registry, Smart Age, QR Recovery & AI Reporting
 08:30 – 12:30 │ ACT 3: Subdivision Leader Triage — Live Map, Duplicate Merge, Holding & Warnings
-12:30 – 17:30 │ ACT 4: Barangay Operations — Rescue Routing, Holding Shelter & 9-Stage Adoption
+12:30 – 17:30 │ ACT 4: Barangay Operations — Rescue Routing, Holding Shelter, Claims & Impoundment
 17:30 – 20:30 │ ACT 5: System Administration — Business Analytics, AI Audit Rates & Security Logs
 20:30 – 25:00 │ ACT 6: Architectural Rigor, Data Privacy Act (RA 10173) & Master Defense Q&A
 ```
@@ -100,32 +94,19 @@ graph TD
 
 ### 1.1 Public Landing Page (`/`)
 - **Community Hero & Mission Statement:** Introduces the municipal animal welfare initiative.
-- **Dynamic Quick Statistics:** Live counter of registered pets, reunited animals, and successful adoptions.
-- **Portals Navigator:** Fast access links for Citizen Sign-In, Subdivision Leader Login, Barangay Personnel Portal, and Public Adoption Catalog.
+- **Dynamic Quick Statistics:** Live counter of registered pets and reunited animals.
+- **Portals Navigator:** Fast access links for Citizen Sign-In, Subdivision Leader Login, and Barangay Personnel Portal.
 
 ### 1.2 "Scan-to-Reunite" Pet QR Code Page (`/pet/scan/:token`)
 - **Zero-Barrier Identification:** Anyone who scans a StraySafe physical pet tag (collar QR) is taken directly to this mobile-optimized page without downloading an app or registering.
 - **Protected Emergency Profile:** Shows the pet's photo, name, breed, sex, rabies vaccination badge, and the owner's emergency contact number (while redacting the owner's residential address for safety).
 - **One-Tap Location Sighting (`/pet/scan/:token/success`):** With a single tap, the finder can send their current GPS coordinates and an optional message (*"Found resting near Central Park Gate 2"*) directly to the owner via in-app and Web Push alerts.
 
-### 1.3 Public Stray Animal Adoption Catalog (`/adopt`)
-- **Filterable Pet Gallery:** Citizens can browse animals currently sheltered at the Barangay or Subdivision facilities ready for adoption.
-- **Rich Attribute Filtering:** Filter by Species (*Dog/Cat*), Gender (*Male/Female*), Size (*Small, Medium, Large*), and Age Category (*Puppy/Kitten, Young, Adult, Senior*).
-- **Animal Background Story:** Highlights rescue dates, personality traits, health conditions, and vaccination status.
-
-### 1.4 Animal Journey & Rehabilitation Map (`/adopt/journey/:id`)
-- **Visual Welfare Timeline:** Displays the complete journey of a rescued animal from initial rescue sighting, medical treatment, quarantine, and shelter life, building emotional connection with prospective adopters.
-- **Interactive Rescue Coordinate Pin:** Visualizes where the animal was rescued within the community.
-
-### 1.5 Digital Adoption Certificate Public Authenticator (`/verify/certificate/:number`)
-- **Anti-Fraud Ownership Check:** Anyone (police, animal welfare inspectors, veterinarians, or barangay tanods) can enter or scan an adoption certificate serial number.
-- **Cryptographic Verification:** Validates the official adoption date, adopter name, pet microchip/id, approving official name, and official Barangay seal.
-
 ---
 
 ## 👤 PORTAL 2: Citizen / Resident Experience (Role ID = 1)
 
-*Empowers pet owners and vigilant residents with AI tools, automated pet aging, lost pet matching, and structured adoption.*
+*Empowers pet owners and vigilant residents with AI tools, automated pet aging, lost pet matching, and ownership claims.*
 
 ### 2.1 Resident Authentication & Session Security
 - **Dual Authentication Modes:** Email OTP passwordless login and Google OAuth integration.
@@ -141,8 +122,8 @@ graph TD
 - **Multi-Angle Photographic Identification:**
   - Primary identification avatar.
   - Optional multi-angle views: **Front View**, **Left Side View**, and **Right Side View** to document unique coat patches.
-- **AI Photo Authenticity Guard (`usePetPhotoGuard`):**
-  - Verifies that uploaded files are real animal photographs, rejecting synthetic or non-animal imagery.
+- **Pet Photo Guard (`usePetPhotoGuard`, YOLO only):**
+  - Checks quietly that the photo shows a dog or cat and refuses it otherwise; the resident sees no check result. Gemini is not used at registration (it is still used for look-alike matching).
   - **Multi-Animal Crop Guard:** If the camera captures multiple animals, the system requires the resident to crop and isolate the specific pet being registered to maintain 1:1 biometric integrity.
 - **Standardized Coat Pattern Dropdown with Plain-English Descriptions:**
   - Dropdown presets tailored for dogs and cats:
@@ -202,16 +183,11 @@ graph TD
 - **Side-by-Side Verification Screen:** Resident can compare photos, confirm a match, or reject false positives.
 
 ### 2.8 Pet Ownership Claims & Recovery Dashboard (`/resident/pet/:petId/claims-dashboard`)
-- **Proof-of-Ownership Submissions:** Submit adoption papers, old photos, or veterinary receipts to claim a pet sheltered at a holding facility.
+- **Proof-of-Ownership Submissions:** Submit vaccination cards, old photos, or veterinary receipts to claim a pet sheltered at a holding facility.
 - **Claim Status Tracking:** Follows claim review by HOA leaders and Barangay animal welfare officers.
 
-### 2.9 Online Adoption Application & Lifecycle Tracking
-- **Adoption Application Wizard (`/adopt/apply/:id`):** Multi-step questionnaire capturing housing suitability, landlord permission, yard enclosure, other household pets, and family consensus.
-- **Resident Adoption Dashboard (`/adopt/applications`):** Tracks the application as it moves through the 9-stage adoption lifecycle.
-- **Post-Adoption Milestone Check-in Interface:** Submit Day 7, Day 14, and Day 30 health photos and updates directly to the Barangay monitoring team.
-
-### 2.10 Resident Settings & Web Push Notifications (`/resident/settings`)
-- **Granular Web Push Toggles:** Toggle push notifications for *Lost Pet Alerts*, *Community Sighting Updates*, *Warning Notifications*, and *Adoption Status Changes*.
+### 2.9 Resident Settings & Web Push Notifications (`/resident/settings`)
+- **Granular Web Push Toggles:** Toggle push notifications for *Lost Pet Alerts*, *Community Sighting Updates*, *Warning Notifications*, and *Pet Claim Updates*.
 - **Password Updates:** Secure password modification with current password verification.
 
 ---
@@ -252,8 +228,8 @@ graph TD
 - **Direct Citation Dispatch:** Issue formal warnings to residents whose pets repeatedly roam unleashed, cause neighborhood disturbances, or lack mandatory rabies vaccinations.
 - **Warning Status Tracking:** Track whether the citizen has viewed and acknowledged the warning in their portal.
 
-### 3.6 Subdivision Adoption Endorsement Arch (`/subd/endorsements`)
-- **Local Background Screening:** Subdivision leaders verify if an applicant from their neighborhood is a responsible resident before endorsing the adoption application to the Barangay.
+### 3.6 Endorsement Archive (`/subd/endorsements`)
+- **Endorsement Letters on Record:** Every rescue request the leader endorsed to the Barangay, with its letter and the rescue's progress.
 
 ### 3.7 Neighborhood Hazard Broadcast (`/subd/hazard-alert`)
 - **Emergency Alert Dispatch:** Instantly broadcast a high-visibility hazard warning (via in-app banner and Web Push) to all subdivision residents regarding an aggressive stray or suspected rabies case.
@@ -269,10 +245,10 @@ graph TD
 
 ## 🏛️ PORTAL 4: Barangay Animal Welfare Operations (Role ID = 3 - LGU Level)
 
-*Central operations hub for municipal animal control, professional rescue dispatch, impound healthcare, and the 9-stage adoption lifecycle.*
+*Central operations hub for municipal animal control, professional rescue dispatch, impound healthcare, owner claims and impoundment.*
 
 ### 4.1 Municipal Command Center Dashboard (`/brgy/dashboard`)
-- **Comprehensive LGU Metrics:** Real-time counters for *Total Active Rescues*, *Occupied Impound Capacity*, *Pending Adoption Applications*, and *Vaccination Drive Numbers*.
+- **Comprehensive LGU Metrics:** Real-time counters for *Total Active Rescues*, *Occupied Impound Capacity*, *Impounded Animals*, and *Vaccination Drive Numbers*.
 - **Live Operations Activity Feed:** Live ticker of incoming reports, citizen QR scans, and field responder updates.
 
 ### 4.2 Geospatial Hotspot Heatmap
@@ -289,51 +265,17 @@ graph TD
   - Record veterinary evaluations, weight changes, body condition score (1–9).
   - Administer and log anti-rabies vaccines, deworming, and medical treatments.
   - Record rabies quarantine monitoring periods (14-day observation for bite incidents).
-- **Disposition Tracking:** Record disposition status (*In Holding, Under Medical Care, Up for Adoption, Reunited with Owner, Humanely Euthanized*).
+- **Disposition Tracking:** Record disposition status (*In Holding, Under Medical Care, Reunited with Owner, Impounded, Deceased, Transferred*).
+- **Stay Limit and Impoundment:** When an animal passes the stay limit unclaimed, the only action offered is impoundment.
 
-### 4.5 The 9-Stage Adoption Lifecycle Engine (`/brgy/adoptions`)
-*A legally compliant adoption pipeline ensuring thorough vetting, accountability, and post-placement welfare.*
-
-```mermaid
-stateDiagram-v2
-    [*] --> Stage1_ApplicationSubmitted: Resident Applies Online
-    Stage1_ApplicationSubmitted --> Stage2_InitialScreening: Document & Capacity Review
-    Stage2_InitialScreening --> Stage3_InterviewScheduled: Background Check Cleared
-    Stage3_InterviewScheduled --> Stage4_HomeVisitEvaluation: Virtual/In-Person Interview Passed
-    Stage4_HomeVisitEvaluation --> Stage5_HOAEndorsement: Physical Environment Verified
-    Stage5_HOAEndorsement --> Stage6_OfficialApproval: Subdivision HOA Endorses
-    Stage6_OfficialApproval --> Stage7_HandoverAndCertificate: Barangay Official Signs Off
-    Stage7_HandoverAndCertificate --> Stage8_PostAdoptionMonitoring: Digital Certificate Issued
-    Stage8_PostAdoptionMonitoring --> Stage9_CaseFinalized: Day 7, 14, 30 Milestones Complete
-    Stage9_CaseFinalized --> [*]
-```
-
-- **Stage 1 — Application Submitted:** Initial intake of citizen adoption application.
-- **Stage 2 — Initial Screening:** Verification of valid government ID, household capability, and landlord permissions.
-- **Stage 3 — Interview Scheduling:** Conduct structured applicant interview (teleconference or in-person).
-- **Stage 4 — Home Visit Evaluation:** On-site inspection of yard fencing, shelter conditions, and hazard prevention.
-- **Stage 5 — HOA Endorsement:** Verification with the applicant's Subdivision Leader.
-- **Stage 6 — Official Approval:** Final endorsement by the Barangay Animal Welfare Officer.
-- **Stage 7 — Formal Handover & Digital Certificate Generation:**
-  - Physical animal handover.
-  - Automatically generates an official **Digital Adoption Certificate** with a unique cryptographic serial number.
-  - Ownership in the database is officially transferred to the adopter's account.
-- **Stage 8 — Post-Adoption Milestone Monitoring (Day 7, 14, 30):**
-  - Adopter submits photos and health updates at mandatory 7-day, 14-day, and 30-day intervals.
-  - Barangay officers inspect submissions and log welfare approval.
-- **Stage 9 — Case Finalized:** Successful completion of probation; animal is permanently registered to the adopter.
-
-### 4.6 Adoption Task Calendar (`/brgy/adoption-tasks`)
-- **Field Work Scheduler:** Calendar view of scheduled home visits, adoption interviews, and overdue post-adoption check-ins assigned to staff.
-
-### 4.7 Barangay Community Alerts & Anti-Rabies Campaigns (`/brgy/community-alerts`)
+### 4.5 Barangay Community Alerts & Anti-Rabies Campaigns (`/brgy/community-alerts`)
 - **Official Broadcast Tool:** Publish announcements for free anti-rabies vaccination drives, spay/neuter outreach, and lost animal bulletins sent to all verified residents.
 
-### 4.8 Personnel Management & Invitation Onboarding (`/brgy/personnel`)
+### 4.6 Personnel Management & Invitation Onboarding (`/brgy/personnel`)
 - **Email Invitation System:** Admins/officers invite new staff members via email containing a secure setup code (no manual password distribution).
 - **Roster & Active Status Control:** Manage active/inactive field personnel and emergency dispatch contacts.
 
-### 4.9 Custody Dispute Adjudication (`/brgy/pet-claims`)
+### 4.7 Custody Dispute Adjudication (`/brgy/pet-claims`)
 - **Formal Custody Resolution:** Adjudicate conflicting ownership claims for reclaimed pets, evaluating submitted evidence and issuing final custody resolutions.
 
 ---
@@ -371,8 +313,8 @@ stateDiagram-v2
 - **Municipal Heatmap Visualization:** High-performance Leaflet canvas rendering stray animal sighting densities, repeat aggressive animal encounters, and rabies quarantine zones.
 
 ### 5.5 Enterprise Audit Trail & Security Filtering (`/admin/logs`)
-- **Immutable State Logging:** Every role change, pet profile modification, photo override, adoption handover, and system login attempt is permanently logged.
-- **Database-Level Performance Filtering:** Filter logs by category (*Security, Authentication, Adoption, Custody, Report*) with database-indexed query execution.
+- **Immutable State Logging:** Every role change, pet profile modification, photo override, claim decision, and system login attempt is permanently logged.
+- **Database-Level Performance Filtering:** Filter logs by category (*Security, Authentication, Custody, Report*) with database-indexed query execution.
 - **Export Capabilities:** Export audit records for official LGU governance compliance.
 
 ### 5.6 Global Settings & Geofence Coordinates (`/admin/account-settings`)
@@ -427,7 +369,7 @@ stateDiagram-v2
 | **4** | *"If an owner registered a 2-month-old puppy last year, will the database still show it as a 2-month-old puppy today?"* | **"No, because of our Smart Age auto-advancing engine.** StraySafe 2.0 avoids storing static age strings. When a pet is registered, the system derives and stores an approximate or exact `birth_date`. Whenever a profile, table, or QR code is opened, the system dynamically calculates the age relative to the current timestamp (`calculateAge()`). A puppy registered a year ago will automatically display as `1 yr 2 mos` today without running background database batch jobs." |
 | **5** | *"Why did you use Web Push notifications instead of SMS alerts?"* | **"To ensure zero operational recurring costs for local government units.** SMS gateways in the Philippines require recurring per-message credits that drain municipal budgets. By leveraging the W3C Web Push API (`pywebpush`), StraySafe delivers instant, rich push notifications to mobile devices and desktops free of charge, with optional email notifications as an automated fallback." |
 | **6** | *"What prevents an animal from outside your municipality from being reported in your system?"* | **"Our Geofenced Leaflet Engine enforces coordinate boundaries.** The system maintains coordinate boundary polygons in its configuration. If a citizen attempts to drop a pin outside the authorized jurisdiction, the system blocks report submission and provides immediate on-screen guidance directing the resident to the neighboring LGU's contact channels." |
-| **7** | *"What is the significance of the 9-stage adoption lifecycle compared to standard adoption forms?"* | **"It ensures post-placement accountability and animal welfare compliance.** Most municipal adoptions end at handover, leading to pet abandonment or neglect. StraySafe's 9-stage pipeline includes structured screening, HOA background endorsements, digital certificate issuance (`/verify/certificate/:number`), and mandatory Day 7, Day 14, and Day 30 post-adoption health check-ins before a case is officially finalized." |
+| **7** | *"What happens to an animal that nobody claims?"* | **"It is impounded on record.** Every animal in holding has a stay limit. Owners can claim it with proof before then; once the limit passes unclaimed, the Barangay's only action is to impound it, which closes the case with a timestamped entry in the audit trail. Adoption is not part of StraySafe: the panel did not approve it." |
 | **8** | *"How does the system handle pet ownership disputes when two residents claim the same animal?"* | **"Through our Pet Claims and Dispute Adjudication module.** Residents can file formal ownership claims with photographic proof and veterinary documents. Claims are routed through the Subdivision Leader for community validation and finalized by the Barangay Animal Welfare Officer, maintaining a complete audit trail in `report_disputes`." |
 | **9** | *"What happens when multiple neighbors report the exact same stray dog on the same street?"* | **"Our Duplicate Detection & Case Merging engine resolves it.** When reports share spatial proximity and visual similarity, the Subdivision Leader is alerted with a duplicate notice. The leader can merge duplicate sightings into a single master incident with one tap, aggregating all photos and citizen comments into a single case file." |
 | **10** | *"Can staff use StraySafe on low-end computers or unstable internet connections?"* | **"Yes, through code-splitting and optimized resource loading.** Our frontend implements dynamic route lazy-loading (`React.lazy`), reducing the initial JavaScript bundle from 5.4 MB down to fast, lightweight page chunks. Static assets are served via high-speed CDN, and images are resized and cached via Cloudinary." |
@@ -436,9 +378,9 @@ stateDiagram-v2
 
 ## 🎯 Final Presentation Checklist for the Defending Team
 
-- [ ] **Tab 1:** Public Guest Window (`/adopt` & `/pet/scan/:token`)
+- [ ] **Tab 1:** Public Guest Window (`/` & `/pet/scan/:token`)
 - [ ] **Tab 2:** Resident Window (`/resident-home` & `/resident/pets`)
 - [ ] **Tab 3:** Subdivision Leader Window (`/subd/dashboard` & `/subd/holding-facility`)
-- [ ] **Tab 4:** Barangay Staff Window (`/brgy/dashboard` & `/brgy/adoptions`)
+- [ ] **Tab 4:** Barangay Staff Window (`/brgy/dashboard` & `/brgy/holding-facility`)
 - [ ] **Tab 5:** System Administrator Window (`/admin/dashboard` & `/admin/analytics`)
 - [ ] **Mobile Device:** Ready to scan a pet QR code live on camera to trigger the public "Scan-to-Reunite" flow.

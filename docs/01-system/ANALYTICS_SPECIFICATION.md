@@ -19,7 +19,7 @@ Updated: 24 October 2026. This document describes the implemented administrator 
 | Counting | Exclude merged duplicates and animal child records from incident counts. Retain animal child records in relevant operational metrics. |
 | Case outcomes | Picked-up cases remain active until an authoritative closure status. Successful resolution is distinguished from all closed outcomes. |
 | Registry | Include eligible ownerless registrations, exclude archived/merged pets, and exclude expired vaccination flags from the current vaccination numerator. |
-| Operations | Use valid completed rescue durations, distinguish adoption approval from completed handover, and display sample sizes. |
+| Operations | Use valid completed rescue durations and display sample sizes. |
 | AI results | Replace invented accuracy defaults with actual reviewed-match counts, acceptance rate, and confirmed-match similarity. Missing rates display N/A. |
 | Access and queries | Enforce leader subdivision boundaries on the server. Build area comparisons without one query per subdivision. |
 
@@ -64,9 +64,8 @@ Report filters affect incident metrics and related operations through their link
 | Registered pets | Current unarchived, unmerged registry records. Subdivision follows owner, with registrar subdivision fallback when the owner has no subdivision. This is not registrations created during the selected period. |
 | Vaccination records | Current registry vaccination flag with no expiry or an expiry that has not passed, divided by eligible registry pets. This does not assert independent clinical verification. |
 | Warnings | Owner-warning records created in the selected period; grouped by violation. |
-| Holding | Animals with intake dates in the selected period, including eligible child animal reports. Currently held means no discharge and custody status 1, 2, 6, or 8. This is the intake cohort still held, not total shelter occupancy. |
+| Holding | Animals with intake dates in the selected period, including eligible child animal reports. Currently held means no discharge and custody status 1, 2, or 8 (6, For Adoption, can no longer be set). This is the intake cohort still held, not total shelter occupancy. |
 | Rescue duration | Administrator view: mean started-to-completed interval for completed rescue status 6, completed in the selected period, with valid timestamps; sample size shown. |
-| Adoption | Applications created in the selected period. Pending, approved, and completed handovers are separate. Completed handover requires both handover confirmations. Approval rate uses approved applications / applications. |
 | AI review | Suggestions created in the selected period. Reviewed means CONFIRMED_MATCH or NOT_A_MATCH; acceptance = confirmed / reviewed. Mean similarity uses confirmed suggestions. These are not measured model precision or completed reunions. |
 | Accounts / audits | Administrator view: current accounts by status and area; audit events created in the selected period, scoped by actor area when an area is selected. |
 

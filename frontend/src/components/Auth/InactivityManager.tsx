@@ -84,7 +84,7 @@ export const InactivityManager: React.FC = () => {
     useEffect(() => {
         const onSessionEnded = () => {
             const path = window.location.pathname;
-            const signedInPage = /^\/(admin|subd|brgy|staff|resident|adopt\/apply|adopt\/applications)/.test(path) && !path.includes('/login');
+            const signedInPage = /^\/(admin|subd|brgy|staff|resident)/.test(path) && !path.includes('/login');
             if (!signedInPage || isLoggingOutRef.current) return;
             setShowWarning(false);
             toast.warning('Signed out', 'Your session has ended. Please sign in again.', 8000);

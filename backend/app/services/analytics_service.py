@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, aliased
 
 from app.models.audit_log import AuditLog
 from app.models.pet import Pet
-from app.models.report import Adoption, HoldingAnimal, Report, ReportCategory, Rescue
+from app.models.report import HoldingAnimal, Report, ReportCategory, Rescue
 from app.models.report_match import ReportMatch
 from app.models.user import Subdivision, User
 from app.models.warning import OwnerWarning
@@ -163,7 +163,6 @@ def analytics_payload(db: Session, filters: AnalyticsFilters, subdivision_id: Op
     warnings_q = warnings_query(db, filters, subdivision_id, eligible_reports, pets_q)
     holding_q = db.query(HoldingAnimal).filter(HoldingAnimal.report_id.in_(eligible_reports))
     rescue_q = db.query(Rescue).filter(Rescue.report_id.in_(eligible_reports), Rescue.status_id == 6, Rescue.started_at.isnot(None), Rescue.completed_at >= Rescue.started_at)
-    adoption_q = db.query(Adoption).join(HoldingAnimal, Adoption.holding_id == HoldingAnimal.holding_id).filter(HoldingAnimal.report_id.in_(eligible_reports))
     matches_q = db.query(ReportMatch).filter(ReportMatch.source_report_id.in_(eligible_reports))
     users = db.query(User.user_id, User.status)
     if subdivision_id:
@@ -175,7 +174,7 @@ def analytics_payload(db: Session, filters: AnalyticsFilters, subdivision_id: Op
     if not filters.days and not filters.start_date:
         candidates = [earliest, warnings_q.with_entities(func.min(OwnerWarning.created_at)).scalar(), holding_q.with_entities(func.min(HoldingAnimal.intake_date)).scalar()]
         if admin:
-            candidates.extend([rescue_q.with_entities(func.min(Rescue.completed_at)).scalar(), adoption_q.with_entities(func.min(Adoption.created_at)).scalar(), matches_q.with_entities(func.min(ReportMatch.created_at)).scalar(), audit_q.with_entities(func.min(AuditLog.created_at)).scalar()])
+            candidates.extend([rescue_q.with_entities(func.min(Rescue.completed_at)).scalar(), matches_q.with_entities(func.min(ReportMatch.created_at)).scalar(), audit_q.with_entities(func.min(AuditLog.created_at)).scalar()])
         earliest = min((value for value in candidates if value), default=None)
     start, end, grouping = date_window(filters, earliest)
     columns = (Report.report_id, Report.subdivision_id, Report.created_at, Report.verified_at,
@@ -268,9 +267,6 @@ def analytics_payload(db: Session, filters: AnalyticsFilters, subdivision_id: Op
 
     rescues = in_window(rescue_q, Rescue.completed_at, start, end).all()
     durations = [(r.completed_at - r.started_at).total_seconds() / 3600 for r in rescues]
-    adoptions = in_window(adoption_q, Adoption.created_at, start, end).all()
-    approved = sum(a.status == 'Approved' for a in adoptions)
-    handed_over = sum(a.status == 'Approved' and a.staff_handed_over and a.is_handed_over for a in adoptions)
     matches = in_window(matches_q, ReportMatch.created_at, start, end).with_entities(ReportMatch.status, ReportMatch.similarity_score).all()
     confirmed = [m for m in matches if m.status == 'CONFIRMED_MATCH']
     reviewed = [m for m in matches if m.status in ('CONFIRMED_MATCH', 'NOT_A_MATCH')]
@@ -282,9 +278,8 @@ def analytics_payload(db: Session, filters: AnalyticsFilters, subdivision_id: Op
             for s in subdivisions if not subdivision_id or s.subdivision_id == subdivision_id
         ], key=lambda row: (-row['total_reports'], row['subdivision_name'])),
         'sla_metrics': {'avg_verification_hours': kpis['avg_verification_hours'], 'avg_rescue_hours': round(sum(durations) / len(durations), 1) if durations else None, 'total_verified_cases': kpis['verified_reports'], 'total_completed_rescues': len(rescues)},
-        'holding_and_adoption': {**holding_summary, 'total_adoptions': len(adoptions), 'approved_adoptions': approved, 'completed_handovers': handed_over, 'pending_adoptions': sum(a.status == 'Pending' for a in adoptions), 'adoption_rate': percentage(approved, len(adoptions))},
         'ai_performance': {'total_matches_suggested': len(matches), 'confirmed_matches': len(confirmed), 'reviewed_matches': len(reviewed), 'review_acceptance_rate': percentage(len(confirmed), len(reviewed)), 'average_confidence_score': round(sum(m.similarity_score for m in confirmed) / len(confirmed), 1) if confirmed else None},
         'security_overview': {'total_users': len(user_rows), 'active_users': sum(u.status == 'Active' for u in user_rows), 'suspended_users': sum(u.status in ('Inactive', 'Suspended') for u in user_rows), 'audit_events_count': in_window(audit_q, AuditLog.created_at, start, end).count()},
     })
-    result['kpis'].update(total_rescues=len(rescues), total_adoptions=approved, total_intake=len(holding), total_users=len(user_rows))
+    result['kpis'].update(total_rescues=len(rescues), total_intake=len(holding), total_users=len(user_rows))
     return result

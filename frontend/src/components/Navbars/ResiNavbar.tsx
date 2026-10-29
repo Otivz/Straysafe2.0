@@ -96,7 +96,7 @@ const ResiNavbar = ({
         return () => window.removeEventListener(SESSION_ENDED_EVENT, onEnded);
     }, []);
 
-    const { unreadCount: unreadMessageCount, threads: messageThreads, loading: isMessagesLoading, refreshThreads } = useUnreadMessageCount(user?.user_id, true);
+    const { unreadCount: unreadMessageCount, threads: messageThreads, loading: isMessagesLoading, refreshThreads } = useUnreadMessageCount(user?.user_id);
     const [searchReports, setSearchReports] = useState<any[]>([]);
     const [isSearchingReports, setIsSearchingReports] = useState(false);
     const [isDesktopSearchFocused, setIsDesktopSearchFocused] = useState(false);
@@ -234,18 +234,6 @@ const ResiNavbar = ({
         // Staff recorded this resident as a pet's owner -> accept / reject on My Pets
         if (typeStr === 'pet_owner_confirmation') {
             navigate('/resident/pets');
-            return;
-        }
-
-        // An animal someone applied for is available again: open that animal's adoption page (related_id = holding id)
-        if (typeStr === 'adoption_available_again' && notif.related_id) {
-            navigate(`/adopt/apply/${notif.related_id}`);
-            return;
-        }
-
-        // Adoption notifications (incl. chat) open the adopter's application, not a report
-        if (typeStr.startsWith('adoption') && notif.related_id) {
-            navigate(`/adopt/applications?adoption=${notif.related_id}${typeStr === 'adoption_chat' ? '&chat=1' : ''}`);
             return;
         }
 
@@ -575,12 +563,6 @@ const ResiNavbar = ({
                                             <Link to="/resident/pets" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
                                                 My Pets
                                             </Link>
-                                            <Link to="/adopt" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
-                                                Adopt a Pet
-                                            </Link>
-                                            <Link to="/adopt/applications" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
-                                                My Adoption Requests
-                                            </Link>
                                             <Link to="/resident/settings" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
                                                 Settings
                                             </Link>
@@ -693,27 +675,6 @@ const ResiNavbar = ({
 
                     {/* Menu Items */}
                     <div className="flex-1 px-4 py-6 space-y-2.5 overflow-y-auto">
-                        <Link
-                            to="/adopt"
-                            onClick={() => setIsMobileHamburgerOpen(false)}
-                            className="flex items-center gap-4 px-4 py-3.5 rounded-2xl hover:bg-orange-50/50 hover:pl-6 text-[#4a3b28] hover:text-[#F97316] transition-all duration-300 ease-out group active:scale-[0.98]"
-                        >
-                            <div className="w-10 h-10 bg-orange-50 group-hover:bg-orange-100 rounded-xl flex items-center justify-center text-[#F97316] shadow-sm shadow-orange-100/50 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shrink-0 text-base">
-                                🐾
-                            </div>
-                            <span className="font-black text-xs uppercase tracking-[0.15em] transition-colors">Adopt a Pet</span>
-                        </Link>
-
-                        <Link
-                            to="/adopt/applications"
-                            onClick={() => setIsMobileHamburgerOpen(false)}
-                            className="flex items-center gap-4 px-4 py-3.5 rounded-2xl hover:bg-orange-50/50 hover:pl-6 text-[#4a3b28] hover:text-[#F97316] transition-all duration-300 ease-out group active:scale-[0.98]"
-                        >
-                            <div className="w-10 h-10 bg-orange-50 group-hover:bg-orange-100 rounded-xl flex items-center justify-center text-[#F97316] shadow-sm shadow-orange-100/50 group-hover:scale-110 group-hover:-rotate-6 transition-all duration-300 shrink-0 text-base">
-                                📋
-                            </div>
-                            <span className="font-black text-xs uppercase tracking-[0.15em] transition-colors">My Adoption Requests</span>
-                        </Link>
 
                         <Link
                             to="/resident/settings"
@@ -1043,23 +1004,8 @@ const ResiNavbar = ({
                     </div>
             </NotificationPanel>
 
-            {/* DIRECT CHAT DRAWER (report, match and adoption chats share the same drawer) */}
-            {activeChatThread && activeChatThread.thread_mode === 'adoption' && activeChatThread.adoption_id && (
-                <ReportChatDrawer
-                    isOpen
-                    onClose={() => { setActiveChatThread(null); refreshThreads(); }}
-                    report={null}
-                    currentUser={user ? {
-                        user_id: user.user_id,
-                        name: user.name || 'User',
-                        role_id: user.role_id || 1,
-                        profile_picture: user.profile_picture
-                    } : null}
-                    threadMode="adoption"
-                    adoptionId={activeChatThread.adoption_id}
-                />
-            )}
-            {activeChatThread && activeChatThread.thread_mode !== 'adoption' && activeChatThread.report_id && (
+            {/* DIRECT CHAT DRAWER (report and match chats share the same drawer) */}
+            {activeChatThread && activeChatThread.report_id && (
                 <ReportChatDrawer
                     isOpen={!!activeChatThread}
                     onClose={() => setActiveChatThread(null)}

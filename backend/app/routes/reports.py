@@ -31,7 +31,6 @@ from app.models.pet import Pet
 from app.models.pet_claim import PetClaim
 from app.models.pet_qr import PetQRCode
 from app.models.report import (
-    Adoption,
     Comment,
     EndorsementLetter,
     HoldingAnimal,
@@ -1027,20 +1026,15 @@ def get_admin_badge_counts(
 ):
     """
     Lightweight badge count aggregation for Admin and Staff sidebars.
-    Avoids downloading full reports and adoptions tables every few seconds.
+    Avoids downloading the full reports table every few seconds.
     """
     active_reports = db.query(func.count(Report.report_id)).filter(
         ~Report.current_status_id.in_([3, 9, 10, 11, 12, 14, 17, 18]),
         Report.duplicate_of_report_id.is_(None)
     ).scalar() or 0
 
-    pending_adoptions = db.query(func.count(Adoption.adoption_id)).filter(
-        Adoption.status == "Pending"
-    ).scalar() or 0
-
     return {
         "active_reports": active_reports,
-        "pending_adoptions": pending_adoptions
     }
 
 
@@ -1536,9 +1530,15 @@ def classify_category_from_description(description: str) -> int:
 def analyze_report_media(
     request: Request,
     file: UploadFile = File(...),
+    purpose: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user),
 ):
-    """Analyze uploaded stray animal image or video and return AI predictions or indicate if no animal was detected."""
+    """Analyze uploaded stray animal image or video and return AI predictions or indicate if no animal was detected.
+
+    purpose="pet" (pet registration): only the local YOLO model runs (is there a dog or cat, how many, coat colours).
+    Gemini is not called, and the answer carries no authenticity verdict."""
+    pet_mode = (purpose or "").strip().lower() == "pet"
+    yolo_failed = False
     # Plain `def`: FastAPI runs it in a worker thread, so YOLO and Gemini don't freeze every other request.
     is_video = False
     media_label = "image"
@@ -1619,6 +1619,7 @@ def analyze_report_media(
                         if os.path.exists(tmp_path):
                             os.unlink(tmp_path)
                 except Exception as yerr:
+                    yolo_failed = True
                     print("YOLO check in analyze-media error:", yerr)
 
         # Crop image to primary animal subject bounding box to eliminate background distraction (cobblestones, street, buildings)
@@ -1638,7 +1639,7 @@ def analyze_report_media(
 
         # Run AI vision analysis and forensics using full uncropped image
         api_key = os.getenv("GEMINI_API_KEY")
-        if api_key and is_gemini_enabled_in_db():
+        if api_key and is_gemini_enabled_in_db() and not pet_mode:
             try:
                 prompt = f"""
                 You are a senior digital image forensics expert and animal safety inspector for StraySafe, a community animal welfare and stray rescue platform.
@@ -1905,6 +1906,34 @@ def analyze_report_media(
         # Safe fallback if Gemini API is unavailable or rate-limited
         detected_type = detected_yolo_labels[0] if detected_yolo_labels else "Unknown"
         is_detected = yolo_count > 0
+
+        if pet_mode:
+            # Pet registration: YOLO's answer only. If YOLO itself failed, say "not checked" (None) so the
+            # registration is not refused for a problem on our side.
+            p_color, s_color, t_color = "Unknown", "None", "None"
+            if is_detected:
+                try:
+                    cropped_bytes_io = io.BytesIO()
+                    cropped_img.save(cropped_bytes_io, format='JPEG')
+                    found = [c.strip() for c in extract_dominant_colors(cropped_bytes_io.getvalue()).split(',')
+                             if c.strip() and c.strip() != "Unknown"]
+                    p_color = found[0] if found else "Unknown"
+                    s_color = found[1] if len(found) > 1 else "None"
+                    t_color = found[2] if len(found) > 2 else "None"
+                except Exception as col_err:
+                    print("Color extraction (pet) error:", col_err)
+            return {
+                "animal_detected": None if yolo_failed else is_detected,
+                "animal_type": detected_type if detected_type in ["Dog", "Cat"] else "Unknown",
+                "detected_animal_count": yolo_count,
+                "multiple_animals_detected": yolo_count > 1,
+                "primary_color": p_color,
+                "secondary_color": s_color,
+                "tertiary_color": t_color,
+                "coat_pattern": "Unknown",
+                "estimated_size": "Unknown",
+                "possible_breed": "Unknown",
+            }
 
         p_color = "White"
         s_color = "None"
@@ -3142,11 +3171,8 @@ def confirm_reunited_by_citizen(
     is_reporter = (report.user_id == current_user.user_id)
     is_owner = False
     if report.pet_id:
-        from app.utils.pet_adoption import owned_through_later_adoption
         pet = db.query(Pet).filter(Pet.pet_id == report.pet_id).first()
-        # an adopter doesn't own the case from before the adoption
-        if pet and pet.owner_id == current_user.user_id and not owned_through_later_adoption(
-                db, pet.pet_id, current_user.user_id, report.created_at):
+        if pet and pet.owner_id == current_user.user_id:
             is_owner = True
     is_staff = current_user.role_id in (2, 3, 4)
 
