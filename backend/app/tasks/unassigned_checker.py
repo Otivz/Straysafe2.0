@@ -186,7 +186,7 @@ def check_and_notify_overdue_holding_animals(default_stay_days: int = 3) -> int:
                         user_id=leader.user_id,
                         title=f"⏳ Holding Stay Notice: {animal_desc} ({rep_id_str})",
                         message=(
-                            f"Animal in subdivision holding facility has reached {days_held} days in custody "
+                            f"Animal in subdivision holding place has reached {days_held} days in custody "
                             f"(limit: {default_stay_days} days). Please consider coordinating next steps or endorsement to Barangay."
                         ),
                         type="holding_overdue_alert",
@@ -211,7 +211,7 @@ def check_and_notify_overdue_holding_animals(default_stay_days: int = 3) -> int:
                             user_id=staff.user_id,
                             title=f"🚨 Holding Stay Overdue: {animal_desc} ({rep_id_str})",
                             message=(
-                                f"Animal in holding facility has reached {days_held} days in custody, "
+                                f"Animal in holding place has reached {days_held} days in custody, "
                                 f"exceeding the {default_stay_days}-day stay limit. "
                                 f"Please review for impoundment or promote to adoption catalog."
                             ),

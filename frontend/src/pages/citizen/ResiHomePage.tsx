@@ -155,7 +155,7 @@ const categoryMap: Record<number, string> = {
     1: 'Injured Animal',
     2: 'Aggressive Stray',
     3: 'Possible Rabies Risk',
-    4: 'Roaming',
+    4: 'Roaming Animal',
     5: 'Animal Rescue Needed',
     6: 'Lost Pet'
 };
@@ -831,7 +831,7 @@ const ResiHomePage = () => {
     const handleEditClick = (report: any) => {
         const categoryMap: Record<number, string> = {
             1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
-            4: 'Roaming', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
+            4: 'Roaming Animal', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
         };
 
         let primaryColor = report.primary_color;
@@ -1633,7 +1633,7 @@ const ResiHomePage = () => {
         const q = searchQuery.toLowerCase();
         const categoryMap: Record<number, string> = {
             1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
-            4: 'Roaming', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
+            4: 'Roaming Animal', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
         };
         const categoryName = categoryMap[r.category_id] || '';
         return (r.description && r.description.toLowerCase().includes(q)) ||
@@ -1724,7 +1724,7 @@ const ResiHomePage = () => {
 
                                 <button
                                     onClick={handleAcknowledgeWarning}
-                                    className="w-full py-4 bg-[#1a1208] hover:bg-black text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl active:scale-[0.98]"
+                                    className="w-full py-4 action-primary rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl active:scale-[0.98]"
                                 >
                                     ACKNOWLEDGE NOTICE
                                 </button>
@@ -1904,7 +1904,7 @@ const ResiHomePage = () => {
                                                 { id: 1, name: 'Injured Animal', icon: Bandage, desc: 'Wounded, bleeding, or physically hurt' },
                                                 { id: 2, name: 'Aggressive Stray', icon: AlertTriangle, desc: 'Biting, barking aggressively, or chasing people' },
                                                 { id: 3, name: 'Possible Rabies Risk', icon: Siren, desc: 'Foaming at mouth, disorientation, erratic behavior' },
-                                                { id: 4, name: 'Roaming', icon: Dog, desc: 'Stray Roaming in the Neighborhood' },
+                                                { id: 4, name: 'Roaming Animal', icon: Dog, desc: 'Stray Roaming in the Neighborhood' },
                                                 { id: 5, name: 'Animal Rescue Needed', icon: LifeBuoy, desc: 'Trapped, sick/weak, or in general distress' },
                                             ].map((cat) => (
                                                 <label

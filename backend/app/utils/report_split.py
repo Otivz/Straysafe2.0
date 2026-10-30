@@ -297,7 +297,7 @@ def intake_group_animals(db: Session, group: Report, intake_staff_id: Optional[i
     if group.facility_id:
         fac = db.get(Landmark, group.facility_id)
         loc_name = fac.name if fac else None
-    loc_name = loc_name or group.landmark or "Holding Facility"
+    loc_name = loc_name or group.landmark or "Holding Place"
     created = []
     for pos, c in enumerate(children, 1):
         if c.report_id in held or c.current_status_id in CASE_CLOSED_STATUS_IDS:
@@ -318,7 +318,7 @@ def intake_group_animals(db: Session, group: Report, intake_staff_id: Optional[i
         db.flush()
         db.add(HoldingTimeline(
             holding_id=h.holding_id, event_type="intake",
-            title=f"Animal Admitted to Holding Facility ({loc_name})",
+            title=f"Animal Admitted to Holding Place ({loc_name})",
             notes=f"Admitted into custody at {loc_name}. Animal {pos} of {len(children)} from group Report #{group.report_id} (record #{c.report_id}).",
             logged_by=intake_staff_id,
         ))

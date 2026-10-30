@@ -59,7 +59,7 @@ const isSubdivisionPosition = (name: string) => {
 const DEFAULT_POSITIONS = [
     'Field Rescuer',
     'Animal Control Officer',
-    'Holding Facility Caretaker',
+    'Holding Place Caretaker',
     'Dispatch Officer',
     'Barangay Officer-in-Charge (OIC)',
     'Animal Control Operations Head',

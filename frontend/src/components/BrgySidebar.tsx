@@ -182,7 +182,7 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                 },
                 {
                     path: '/brgy/holding-facility',
-                    label: 'Holding Facility',
+                    label: 'Holding Place',
                     badgeCount: overdueHoldingCount,
                     icon: (
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">

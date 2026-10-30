@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { FileCheck2, X } from 'lucide-react';
+import { petClaimPath } from '../../utils/petClaimLink';
 import { api, getAuthenticatedUser } from '../../utils/api';
 import { DEFAULT_AVATAR } from '../../utils/avatar';
 import AddPetModal from '../PetRecords/AddPetModal';
@@ -9,7 +11,6 @@ import ReportChatDrawer from '../Chat/ReportChatDrawer';
 import ReportDescription from '../../components/ReportDescription';
 import { petDescription, petName } from '../../utils/petName';
 import MediaLightbox, { type LightboxItem } from '../MediaLightbox';
-import { StaffOwnerVerification } from '../OwnerVerificationBlocks';
 import { SeparateIncidentOverride } from '../SeparateIncidentOverride';
 
 interface AIMatchReviewModalProps {
@@ -69,6 +70,8 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     readOnly = false,
     readOnlyReason
 }) => {
+    const navigate = useNavigate();
+    const location = useLocation();
     const [selectedDecision, setSelectedDecision] = useState<'CONFIRMED_MATCH' | 'NOT_A_MATCH' | 'UNABLE_TO_VERIFY' | null>(null);
     const [verificationNotes, setVerificationNotes] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -238,6 +241,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     };
 
     const isCommunityAnimal = isPetMatch && !targetPet?.owner_id;
+    const claimPath = isStaff && isPetMatch ? petClaimPath(match.claim_id, location.pathname) : null;
     const isDisputed = isPetMatch && (match.owner_confirmation_status === 'OWNER_REJECTED' || match.status === 'NOT_A_MATCH');
 
     const handleUnlinkAndAddNew = async () => {
@@ -302,9 +306,6 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                 {/* ── Modal Header ── */}
                 <div className="shrink-0 px-4 sm:px-6 pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-4 pb-3 border-b border-gray-100 flex flex-col gap-2.5">
                     <div className="flex items-start gap-3">
-                        <div className="hidden sm:flex w-10 h-10 rounded-xl bg-role-muted text-role items-center justify-center font-black text-base shrink-0">
-                            AI
-                        </div>
                         <div className="min-w-0 flex-1">
                             <h2 id="match-review-title" className="text-base sm:text-lg font-black text-gray-900 leading-snug">
                                 {isPetMatch ? "Potential Match Review" : "Suspected Duplicate Sighting Review"}
@@ -381,12 +382,12 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                             { label: isPetMatch ? 'Seen at / Registered address' : 'Location', left: source?.landmark || 'Not recorded', right: (isPetMatch ? targetPet?.registered_address : targetReport?.landmark) || 'Not recorded' },
                             { label: isPetMatch ? 'Reporter / Owner' : 'Reporter', left: source?.reporter_name || source?.reporter?.name || source?.user?.name || 'Unknown reporter', right: isPetMatch ? (targetPet?.owner?.name || targetPet?.emergency_contact_name || 'No owner on file') : (targetReport?.reporter_name || targetReport?.reporter?.name || targetReport?.user?.name || 'Unknown reporter') },
                             {
-                                label: isPetMatch ? 'Description / Markings' : 'Description',
+                                label: 'Physical Markings & Traits',
                                 long: true,
-                                left: <ReportDescription description={source?.description} emptyText="No description provided." />,
+                                left: <ReportDescription description={source?.description} emptyText="No markings noted." appearanceOnly />,
                                 right: isPetMatch
                                     ? <span className="italic">{targetPet?.distinctive_markings || targetPet?.color_markings || 'None noted'}</span>
-                                    : <ReportDescription description={targetReport?.description} emptyText="No description provided." />,
+                                    : <ReportDescription description={targetReport?.description} emptyText="No markings noted." appearanceOnly />,
                             },
                         ];
 
@@ -793,6 +794,17 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             )}
                                         </div>
                                     </div>
+                                    {/* The owner said yes and filed the claim with proof: shortcut to it */}
+                                    {claimPath && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { onClose(); navigate(claimPath); }}
+                                            className="w-full py-2.5 font-bold text-xs rounded-xl border border-role-border bg-role-soft text-role-strong hover:bg-role-muted transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                        >
+                                            <FileCheck2 className="w-3.5 h-3.5" />
+                                            Open Pet Claim #{match.claim_id} · {match.claim_status}
+                                        </button>
+                                    )}
                                     {!readOnly && (match.status === 'CONFIRMED_MATCH' || (match.status === 'NOT_A_MATCH' && match.owner_confirmation_status !== 'OWNER_REJECTED')) && (
                                         <div className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-2">
                                             {!showReverse ? (
@@ -836,7 +848,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                             type="button"
                                                             disabled={isReversing || reverseNotes.trim().length < 10}
                                                             onClick={handleReverseDecision}
-                                                            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-bold cursor-pointer disabled:opacity-50"
+                                                            className="px-3 py-1.5 rounded-lg action-primary font-bold cursor-pointer disabled:opacity-50"
                                                         >
                                                             {isReversing ? 'Reversing...' : 'Confirm Reversal'}
                                                         </button>
@@ -853,7 +865,6 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             <p>Ask for proof (photos, vet or vaccination records, the pet's QR) before deciding. Your decision is final; after it the owner can only file a formal dispute.</p>
                                         </div>
                                     )}
-                                    {!readOnly && <StaffOwnerVerification match={match} onChanged={(m) => onVerified && onVerified(m)} />}
                                     {isDisputed && (
                                         <div className="px-4 py-3 rounded-xl bg-rose-50 border border-rose-200 flex flex-wrap items-center justify-between gap-3">
                                             <div className="text-xs text-rose-800 font-medium">

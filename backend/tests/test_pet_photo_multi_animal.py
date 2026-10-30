@@ -10,10 +10,8 @@ Run from the backend folder:  python tests/test_pet_photo_multi_animal.py
 import io
 import os
 import sys
-import tempfile
 
-_DB = os.path.join(tempfile.mkdtemp(), "pet_photo_multi_animal_test.db")
-os.environ["DATABASE_URL"] = f"sqlite:///{_DB}"
+os.environ["DATABASE_URL"] = "sqlite://"
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-for-pet-photo-multi-animal-0123456789")
 os.environ["GEMINI_API_KEY"] = ""          # photo check runs YOLO only here (a fake model below)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -23,7 +21,10 @@ from fastapi.testclient import TestClient  # noqa: E402
 from PIL import Image  # noqa: E402
 
 import app.models  # noqa: E402,F401
-from app.database import Base, SessionLocal, engine  # noqa: E402
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+from app.database import Base, get_db  # noqa: E402
 from app.models.audit_log import AuditLog  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
 from app.models.user import Barangay, Role, Subdivision, User  # noqa: E402
@@ -31,8 +32,16 @@ from app.routes import pets, reports  # noqa: E402
 from app.utils.ai_matching import image_url_for_entity  # noqa: E402
 from app.utils.auth import create_access_token  # noqa: E402
 
+engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+SessionLocal = sessionmaker(bind=engine)
 Base.metadata.create_all(bind=engine)
 api = FastAPI()
+
+def isolated_db():
+    with SessionLocal() as session:
+        yield session
+
+api.dependency_overrides[get_db] = isolated_db
 api.include_router(pets.router)
 api.include_router(reports.router)
 client = TestClient(api, raise_server_exceptions=False)
@@ -108,6 +117,44 @@ check("a photo with two dogs is flagged as several animals", r2.status_code == 2
 r1 = analyze(1)
 check("a cropped photo with one dog passes the same check", r1.status_code == 200
       and r1.json().get("multiple_animals_detected") is False and r1.json().get("detected_animal_count") == 1, r1.text[:300])
+
+# ------------------------------------------------------------------ pet registration mode: YOLO only, never Gemini
+gemini_calls = []
+_saved = (reports.is_gemini_enabled_in_db, reports.call_gemini_with_fallback, os.environ.get("GEMINI_API_KEY", ""))
+reports.is_gemini_enabled_in_db = lambda *a, **k: True          # Gemini switched on, with a key...
+reports.call_gemini_with_fallback = lambda *a, **k: gemini_calls.append(1)
+os.environ["GEMINI_API_KEY"] = "test-key"
+
+
+def analyze_pet(yolo):
+    reports.get_yolo_model = yolo
+    return client.post("/reports/analyze-media", headers=H(resident), data={"purpose": "pet"},
+                       files={"file": ("pet.jpg", photo(), "image/jpeg")})
+
+
+rp = analyze_pet(lambda: _FakeYolo(1))
+body = rp.json() if rp.status_code == 200 else {}
+check("pet mode: a dog is detected with YOLO", body.get("animal_detected") is True and body.get("animal_type") == "Dog", rp.text[:300])
+check("pet mode: Gemini is never called, even when it is switched on", not gemini_calls, len(gemini_calls))
+check("pet mode: no authenticity verdict and no guessed breed or size in the answer",
+      not any(k in body for k in ("verification_status", "is_ai_generated", "ai_generation_confidence", "ai_photo_status"))
+      and body.get("possible_breed") == "Unknown" and body.get("estimated_size") == "Unknown", body)
+rp = analyze_pet(lambda: _FakeYolo(0))
+check("pet mode: a photo with no dog or cat says so (the form then refuses it)", rp.json().get("animal_detected") is False, rp.text[:300])
+rp = analyze_pet(lambda: (_ for _ in ()).throw(RuntimeError("model missing")))
+check("pet mode: if YOLO itself fails the photo is 'not checked' (None), not refused", rp.status_code == 200
+      and rp.json().get("animal_detected") is None, rp.text[:300])
+rp = analyze_pet(lambda: None)
+check("pet mode: a missing model is unavailable rather than a negative detection", rp.status_code == 200
+      and rp.json().get("animal_detected") is None, rp.text[:300])
+rp = analyze_pet(lambda: _FakeYolo(2))
+check("pet mode: multiple animals still require cropping or a validated override", rp.status_code == 200
+      and rp.json().get("multiple_animals_detected") is True and rp.json().get("detected_animal_count") == 2, rp.text[:300])
+check("...and Gemini is still not called", not gemini_calls, len(gemini_calls))
+analyze(1)   # control: the same photo checked for a report (no purpose) does go to Gemini
+check("control: report photos still go to Gemini under the same settings", len(gemini_calls) == 1, len(gemini_calls))
+reports.is_gemini_enabled_in_db, reports.call_gemini_with_fallback = _saved[0], _saved[1]
+os.environ["GEMINI_API_KEY"] = _saved[2]
 
 # ------------------------------------------------------------------ registration
 CROP_A = "https://res.cloudinary.com/demo/image/upload/v1/pets/crop-a.jpg"

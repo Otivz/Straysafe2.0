@@ -99,7 +99,7 @@ export default function IdentityDisputePanel({ report, canDecide = true, onChang
                         <button
                             type="button"
                             onClick={() => setDecision('uphold')}
-                            className={`px-3 py-2 rounded-xl text-xs font-black border cursor-pointer ${decision === 'uphold' ? 'bg-slate-800 text-white border-slate-900' : 'bg-white border-slate-300 text-slate-800'}`}
+                            className={`px-3 py-2 rounded-xl text-xs font-black border cursor-pointer ${decision === 'uphold' ? 'action-primary border-orange-600' : 'bg-white border-slate-300 text-slate-800'}`}
                         >
                             Uphold merge: it is {info.pet_name || 'the pet'}
                         </button>
@@ -132,7 +132,7 @@ export default function IdentityDisputePanel({ report, canDecide = true, onChang
                                     type="button"
                                     disabled={busy || reason.trim().length < 10}
                                     onClick={submit}
-                                    className="px-3 py-2 rounded-xl bg-gray-900 hover:bg-black text-white text-xs font-black cursor-pointer disabled:opacity-50"
+                                    className="px-3 py-2 rounded-xl action-primary text-xs font-black cursor-pointer disabled:opacity-50"
                                 >
                                     {busy ? 'Saving…' : decision === 'uphold' ? 'Confirm: uphold the merge' : 'Confirm: remove from the case'}
                                 </button>

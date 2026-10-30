@@ -255,7 +255,7 @@ const AdoptionCatalog = () => {
                         <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-3 sm:mb-4">{error}</p>
                         <button
                             onClick={() => window.location.reload()}
-                            className="px-3.5 py-1.5 sm:px-4 sm:py-2 bg-gray-900 dark:bg-gray-700 text-white text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl hover:bg-gray-800 dark:hover:bg-gray-600 transition-all cursor-pointer"
+                            className="px-3.5 py-1.5 sm:px-4 sm:py-2 action-primary text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl transition-all cursor-pointer"
                         >
                             Retry
                         </button>

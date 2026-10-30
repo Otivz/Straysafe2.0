@@ -47,7 +47,6 @@ class PetRecordAccessTests(unittest.TestCase):
         Base.metadata.drop_all(self.engine)
         Base.metadata.create_all(self.engine)
         for target, kwargs in [
-            ('app.routes.pets.recheck_pet_photos', {}),
             ('app.routes.pets.auto_extract_pet_colors', {}),
             ('app.routes.pets.upload_to_cloudinary', {'return_value': PHOTO}),
             ('app.routes.pets.read_and_validate_upload', {'new': AsyncMock(return_value=(b'png', 'test.png', 'Image', 'image'))}),

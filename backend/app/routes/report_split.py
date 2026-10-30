@@ -247,7 +247,7 @@ def split_report(report_id: int, body: SplitRequest, req: Request, db: Session =
     for key in needs:
         idx = getattr(choice, key)
         if idx is None or not (0 <= idx < n):
-            what = {"holding": "the animal already in the holding facility",
+            what = {"holding": "the animal already in the holding place",
                     "pet": "the registered pet this report is confirmed as",
                     "claims": "the open owner claims"}[key]
             raise HTTPException(status_code=400, detail=f"Choose which animal is {what}.")
@@ -379,7 +379,7 @@ def unsplit_report(report_id: int, req: Request, db: Session = Depends(get_db),
     for c in children:
         reasons = []
         if db.query(HoldingAnimal.holding_id).filter(HoldingAnimal.report_id == c.report_id).first():
-            reasons.append("is in the holding facility")
+            reasons.append("is in the holding place")
         if db.query(PetClaim.claim_id).filter(PetClaim.report_id == c.report_id, PetClaim.status != "Rejected").first():
             reasons.append("has an owner claim")
         if c.pet_id or db.query(ReportMatch.match_id).filter(ReportMatch.source_report_id == c.report_id,

@@ -723,7 +723,7 @@ export const AdoptionInterviewModal: React.FC<InterviewModalProps> = ({
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-black rounded-xl cursor-pointer"
+                                className="px-5 py-2 action-primary font-black rounded-xl cursor-pointer"
                             >
                                 Close
                             </button>
@@ -1772,7 +1772,7 @@ export const AdoptionHomeVisitModal: React.FC<HomeVisitModalProps> = ({
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-black text-xs rounded-xl cursor-pointer"
+                                className="px-5 py-2.5 action-primary font-black text-xs rounded-xl cursor-pointer"
                             >
                                 Close Record
                             </button>
@@ -2107,7 +2107,7 @@ export const AdoptionHandoverScheduleModal: React.FC<HandoverScheduleModalProps>
 
     const [handoverDate, setHandoverDate] = useState('');
     const [handoverTime, setHandoverTime] = useState('10:00');
-    const [handoverLocation, setHandoverLocation] = useState('Barangay Animal Welfare Center / Holding Facility');
+    const [handoverLocation, setHandoverLocation] = useState('Barangay Animal Welfare Center / Holding Place');
     const [assignedStaff, setAssignedStaff] = useState('');
     const [notes, setNotes] = useState('');
     const [personnelList, setPersonnelList] = useState<StaffOption[]>([]);
@@ -2260,7 +2260,7 @@ export const AdoptionHandoverScheduleModal: React.FC<HandoverScheduleModalProps>
                             type="text"
                             value={handoverLocation}
                             onChange={(e) => setHandoverLocation(e.target.value)}
-                            placeholder="Barangay Animal Welfare Center / Holding Facility"
+                            placeholder="Barangay Animal Welfare Center / Holding Place"
                             className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] font-semibold"
                             required
                         />
@@ -2963,7 +2963,7 @@ export const AdoptionDossierModal: React.FC<DossierModalProps> = ({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-xl transition-all cursor-pointer text-xs shadow-xs"
+                        className="px-6 py-2.5 action-primary font-black rounded-xl transition-all cursor-pointer text-xs shadow-xs"
                     >
                         Close Dossier
                     </button>

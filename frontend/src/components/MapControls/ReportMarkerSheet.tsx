@@ -32,7 +32,7 @@ const CUSTODY_LABELS: Record<string, string> = {
 const isFacilityWord = (val?: string | null) => {
     if (!val) return false;
     const l = val.toLowerCase();
-    return l.includes('holding pen') || l.includes('holding facility') || l.includes('barangay holding');
+    return l.includes('holding pen') || l.includes('holding facility') || l.includes('holding place') || l.includes('barangay holding');
 };
 const known = (v: any) => (typeof v === 'string' && v.trim() && v.trim().toLowerCase() !== 'unknown' ? v.trim() : null);
 
@@ -297,7 +297,7 @@ export default function ReportMarkerSheet({ info, address, onClose, onViewFull, 
                                     <div className={`grid ${actions.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
                                         {actions.map((a) => (
                                             <button key={a.label} type="button" onClick={() => { setExpanded(false); a.onClick(); }} title={a.title}
-                                                className={`h-11 px-2 rounded-xl text-xs font-bold cursor-pointer truncate ${a.tone === 'dark' ? 'bg-slate-900 hover:bg-slate-800 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200'}`}>
+                                                className={`h-11 px-2 rounded-xl text-xs font-bold cursor-pointer truncate ${a.tone === 'dark' ? 'action-primary ' : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200'}`}>
                                                 {a.label}
                                             </button>
                                         ))}

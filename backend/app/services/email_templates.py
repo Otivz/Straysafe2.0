@@ -553,7 +553,7 @@ def render_brgy_escalated_report_email(
         ("Escalated At", datetime.now().strftime("%b %d, %Y %I:%M %p")),
     ]
     
-    intro = f"A stray report has been formally escalated to Barangay staff for municipal intervention, rescue dispatch, or holding facility intake."
+    intro = f"A stray report has been formally escalated to Barangay staff for municipal intervention, rescue dispatch, or holding place intake."
     cta_url = f"/barangay/reports/{report_id}"
     
     html_content = _build_html_wrapper(

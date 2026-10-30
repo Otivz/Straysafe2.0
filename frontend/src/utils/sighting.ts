@@ -10,7 +10,7 @@ const NOT_A_LANDMARK = new Set([
     'selera homes', 'selera', 'incident location', 'initial sighting spot', 'sighting location', 'rescue site',
     'reported incident location', 'unknown', 'n/a', 'none',
 ]);
-const FACILITY_WORDS = ['holding pen', 'holding facility', 'barangay holding'];
+const FACILITY_WORDS = ['holding pen', 'holding facility', 'holding place', 'barangay holding'];
 
 /** The landmark the reporter actually gave for the sighting, or null. */
 export function sightingLandmark(raw: any): string | null {

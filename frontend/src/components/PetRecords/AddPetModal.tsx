@@ -81,7 +81,6 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
     const [customTertiaryColor, setCustomTertiaryColor] = useState<string>('');
     const [pattern, setPattern] = useState<string>('');
     const [markingsDetails, setMarkingsDetails] = useState<string>('');
-    const [colorMarkings, setColorMarkings] = useState('');
 
     // Smart Age Mode
     const [ageMode, setAgeMode] = useState<'approximate' | 'exact'>('approximate');
@@ -150,7 +149,6 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                 const parsedCoat = parseCoatPattern(rawCoat);
                 setPattern(parsedCoat.pattern);
                 setMarkingsDetails(parsedCoat.details);
-                setColorMarkings(rawCoat);
                 setIsVaccinated(!!pet.isVaccinated || !!pet.is_vaccinated);
                 setVaccinationDate(pet.vaccinationDate || pet.vaccination_date || '');
                 setIsNeutered(!!pet.isNeutered || !!pet.is_neutered);
@@ -281,7 +279,6 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                 const parsedRepCoat = parseCoatPattern(markingsText || effectivePattern);
                 setPattern(parsedRepCoat.pattern || (effectivePattern && effectivePattern !== 'None' ? effectivePattern : ''));
                 setMarkingsDetails(parsedRepCoat.details);
-                setColorMarkings(markingsText);
 
                 // 9. Temperament & Behavior
                 const reasoning = (rep.ai_decision_reasoning || rep.description || '').toLowerCase();
@@ -401,7 +398,6 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
         setCustomTertiaryColor('');
         setPattern('');
         setMarkingsDetails('');
-        setColorMarkings('');
         setAgeMode('approximate');
         setApproxYears('');
         setApproxMonths('');
@@ -447,6 +443,10 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
             setErrorMessage('Still checking the photo. Wait a moment.');
             return;
         }
+        if (photoGuard.noAnimal) {
+            setErrorMessage('Please upload a clear photo of your dog or cat.');
+            return;
+        }
         if (photoGuard.blocked) {
             setErrorMessage(`The photo shows ${photoGuard.count} animals. Crop the pet you are registering, or confirm the photo with a reason.`);
             return;
@@ -462,6 +462,14 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
     const handleCompleteRegistration = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
         if (isSubmitting) return;
+        if (photoGuard.checking) {
+            setErrorMessage('Still checking the photo. Wait a moment.');
+            return;
+        }
+        if (photoGuard.noAnimal) {
+            setErrorMessage('Please upload a clear photo of your dog or cat.');
+            return;
+        }
         if (photoGuard.blocked) {
             setErrorMessage(`The photo shows ${photoGuard.count} animals. Crop the pet you are registering, or confirm the photo with a reason.`);
             return;
@@ -549,7 +557,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
 
             const composedMarkings = composeCoatMarkings(
                 pattern,
-                markingsDetails || colorMarkings
+                markingsDetails
             );
 
             const petPayload = {
@@ -1048,19 +1056,6 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                         </button>
                                                     ))}
                                                 </div>
-
-                                                {/* Live preview banner */}
-                                                {(approxYears !== '' || approxMonths !== '') && (
-                                                    <div className="p-3 bg-role-soft/30 border border-role-border/50 rounded-2xl flex items-center justify-between text-xs font-bold text-gray-700">
-                                                        <span className="flex items-center gap-1.5">
-                                                            <span className="text-role">✨</span>
-                                                            <span>Calculated Age: <strong className="text-role-hover">{calculateAge(approximateBirthDateFromAge(approxYears, approxMonths))}</strong></span>
-                                                        </span>
-                                                        <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
-                                                            Auto-advances over time
-                                                        </span>
-                                                    </div>
-                                                )}
                                             </div>
                                         ) : (
                                             <div className="space-y-2.5">
@@ -1091,7 +1086,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest flex items-center justify-between">
                                             <span>Pet Size <span className="text-red-500">*</span></span>
                                             <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">
-                                                {sizeCategory === 'Small' ? 'Small (< 10kg)' : sizeCategory === 'Large' ? 'Large (> 25kg)' : 'Medium (10-25kg)'}
+                                                {sizeCategory || 'Medium'}
                                             </span>
                                         </label>
                                         <div className="grid grid-cols-3 gap-2 h-14">
@@ -1232,7 +1227,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                     <div className="space-y-3 md:col-span-2">
                                         <div className="flex items-center justify-between">
                                             <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">
-                                                Coat Pattern & Markings <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span>
+                                                Coat Pattern <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span>
                                             </label>
                                             {pattern && (
                                                 <button
@@ -1289,11 +1284,8 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                 type="text"
                                                 className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role-border"
                                                 placeholder="e.g. White chest patch, left front white sock, scar on ear"
-                                                value={markingsDetails || colorMarkings}
-                                                onChange={(e) => {
-                                                    setMarkingsDetails(e.target.value);
-                                                    setColorMarkings(e.target.value);
-                                                }}
+                                                value={markingsDetails}
+                                                onChange={(e) => setMarkingsDetails(e.target.value)}
                                             />
                                         </div>
                                     </div>

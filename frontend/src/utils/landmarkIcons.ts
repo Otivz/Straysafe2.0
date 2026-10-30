@@ -35,7 +35,7 @@ export const LANDMARK_CATEGORIES: LandmarkCategory[] = [
     },
     {
         id: 'facility',
-        label: 'Holding Facility / Pen',
+        label: 'Holding Place / Pen',
         emoji: '🐾',
         color: '#059669',
         borderColor: '#6ee7b7',
@@ -252,7 +252,7 @@ export const createHoldingFacilityPinIcon = (_name?: string, zoom: number = 16) 
                         box-shadow: 0 2px 6px rgba(0,0,0,0.12);
                         white-space: nowrap;
                         border: 1px solid #059669;
-                    ">HOLDING FACILITY</div>
+                    ">HOLDING PLACE</div>
                 </div>
             `,
             iconSize: [64, m.size + 20],

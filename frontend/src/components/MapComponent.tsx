@@ -75,7 +75,7 @@ const IncidentIcon = L.divIcon({
 
 export const createFacilityHoldingIcon = (
     animalType: string = 'Dog',
-    facilityName: string = 'HOLDING FACILITY',
+    facilityName: string = 'HOLDING PLACE',
     imageUrl?: string,
     landmarkIcon: string = '🐾',
     zoom: number = 16
@@ -132,8 +132,8 @@ export const createFacilityHoldingIcon = (
         <img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" onerror="this.outerHTML='<span style=\\'font-size:20px;\\'>${defaultEmoji}</span>'" />
     ` : `<span style="font-size: 20px; line-height: 1;">${defaultEmoji}</span>`;
 
-    const cleanFacName = (facilityName && facilityName.trim()) ? facilityName.trim() : 'HOLDING FACILITY';
-    const isGenericHolding = cleanFacName.toLowerCase() === 'holding facility' || cleanFacName.toLowerCase() === 'facility';
+    const cleanFacName = (facilityName && facilityName.trim()) ? facilityName.trim() : 'HOLDING PLACE';
+    const isGenericHolding = cleanFacName.toLowerCase() === 'holding facility' || cleanFacName.toLowerCase() === 'holding place' || cleanFacName.toLowerCase() === 'facility';
 
     return L.divIcon({
         html: `
@@ -215,7 +215,7 @@ export const createFacilityHoldingIcon = (
                             letter-spacing: 0.04em;
                             line-height: 1.2;
                         ">
-                            ${isGenericHolding ? 'HOLDING FACILITY' : cleanFacName.toUpperCase()}
+                            ${isGenericHolding ? 'HOLDING PLACE' : cleanFacName.toUpperCase()}
                         </div>
                         <div style="
                             font-size: 10px;
@@ -229,7 +229,7 @@ export const createFacilityHoldingIcon = (
                             line-height: 1.2;
                             margin-top: 2px;
                         ">
-                            <span style="font-size: 9px; font-weight: 900;">✓</span> ${isGenericHolding ? 'SECURED INSIDE' : 'HOLDING FACILITY • SECURED INSIDE'}
+                            <span style="font-size: 9px; font-weight: 900;">✓</span> ${isGenericHolding ? 'SECURED INSIDE' : 'HOLDING PLACE • SECURED INSIDE'}
                         </div>
                     </div>
                 </div>
@@ -1367,11 +1367,7 @@ const MapComponent = ({
                                 if (onLocChange) onLocChange(e.latlng.lat, e.latlng.lng);
                             }
                         }))}
-                    >
-                        {CAN_HOVER && <Tooltip sticky direction="top" className="custom-hover-tooltip">
-                            <span>{coverage?.center_label || 'Selera Homes'} · reports accepted within {Number(coverage?.radius_meters ?? 1000).toLocaleString()} m of the centre</span>
-                        </Tooltip>}
-                    </Polygon>
+                    />
                 )}
 
                 {/* ── Official Barangay Headquarters Marker (Admin Configured) ── */}
@@ -1506,7 +1502,7 @@ const MapComponent = ({
                     }
 
                     const animalTypeStr = marker.rawData?.animal_type || marker.rawData?.animalType || marker.rawData?.pet_type || marker.rawData?.report?.animal_type || marker.category || '';
-                    const facilityNameStr = marker.rawData?.facility?.name || marker.rawData?.facility_name || (marker.title ? marker.title.replace(/^Secured:\s*/i, '') : 'HOLDING FACILITY');
+                    const facilityNameStr = marker.rawData?.facility?.name || marker.rawData?.facility_name || (marker.title ? marker.title.replace(/^Secured:\s*/i, '') : 'HOLDING PLACE');
                     const petImage = marker.rawData?.media?.[0]?.file_url || marker.rawData?.image_url || marker.rawData?.media?.[0]?.url;
 
                     let lmIcon = '🐾';
@@ -1672,7 +1668,7 @@ const MapComponent = ({
                                                     letterSpacing: '0.04em',
                                                     lineHeight: 1.2
                                                 }}>
-                                                    {facilityNameStr ? facilityNameStr.toUpperCase() : 'HOLDING FACILITY'}
+                                                    {facilityNameStr ? facilityNameStr.toUpperCase() : 'HOLDING PLACE'}
                                                 </div>
                                                 <div style={{
                                                     fontSize: '10px',
@@ -1687,9 +1683,9 @@ const MapComponent = ({
                                                     marginTop: '2px'
                                                 }}>
                                                     <span style={{ fontSize: '9px', fontWeight: 900 }}>✓</span>
-                                                    {facilityNameStr && (facilityNameStr.toLowerCase() === 'holding facility' || facilityNameStr.toLowerCase() === 'facility')
+                                                    {facilityNameStr && (facilityNameStr.toLowerCase() === 'holding facility' || facilityNameStr.toLowerCase() === 'holding place' || facilityNameStr.toLowerCase() === 'facility')
                                                         ? 'SECURED INSIDE'
-                                                        : 'HOLDING FACILITY • SECURED INSIDE'}
+                                                        : 'HOLDING PLACE • SECURED INSIDE'}
                                                 </div>
                                             </div>
                                         </div>
@@ -1706,7 +1702,8 @@ const MapComponent = ({
                                         }} />
                                     </div>
                                 </Tooltip>
-                            ) : marker.title ? (
+                            ) : marker.title && marker.rawData?.report_id == null ? (
+                                // Report pins have no hover label: tapping opens their card. Other pins (HQ, your location) keep it.
                                 <Tooltip
                                     direction="top"
                                     offset={[0, isUserLoc ? -12 : -32]}
@@ -1765,16 +1762,6 @@ const MapComponent = ({
 
                 {showHeatmap && heatmapPoints && heatmapPoints.length > 0 && (
                     <HeatmapLayer points={heatmapPoints} />
-                )}
-
-                {/* Selected pin: a ring so it is clear which report the card below belongs to */}
-                {selectedReportMarker && isValidLatLng(selectedReportMarker.lat, selectedReportMarker.lng) && (
-                    <CircleMarker
-                        center={[Number(selectedReportMarker.lat), Number(selectedReportMarker.lng)]}
-                        radius={22}
-                        interactive={false}
-                        pathOptions={{ color: '#F97316', weight: 3, fillColor: '#F97316', fillOpacity: 0.15 }}
-                    />
                 )}
 
                 {cardShown && selectedReportMarker && (
@@ -1940,7 +1927,7 @@ const MapComponent = ({
                                 <button
                                     type="button"
                                     onClick={() => startDirections(onDirectionsFromBrgyClick)}
-                                    className="w-full h-10 px-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer text-center min-w-0"
+                                    className="w-full h-10 px-2 action-primary text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer text-center min-w-0"
                                     title="Directions starting from registered Barangay Hall location"
                                 >
                                     <svg className="w-3.5 h-3.5 shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

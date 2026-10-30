@@ -131,8 +131,9 @@ export default function AnimalRecordsPanel({ reportId, basePath, animalCount, on
         );
     }
 
-    if (!info.is_group && !info.can_split) {
-        // an ordinary one-animal report: staff or the leader may still swap in a close-up
+    // An ordinary one-animal report (or one this user can't split): no "Animals in this report" box. Splitting is offered
+    // only when the report says 2 or more animals (developer's decision, 2026-10-28); a close-up can still be swapped in.
+    if (!info.is_group && (!info.can_split || reported <= 1)) {
         return info.can_replace_photo
             ? <ReplaceAnimalPhotoButton reportId={reportId} onDone={() => { load(); onChanged?.(); }} />
             : null;
@@ -366,7 +367,7 @@ function SplitAnimalsModal({ reportId, info, reported, onClose, onDone }: {
 
     const label = (i: number) => `Animal ${existing + i + 1}`;
     const carryRows = useMemo(() => ([
-        ['holding', 'Already in the holding facility'], ['pet', 'Confirmed registered pet'], ['claims', 'Open owner claims'],
+        ['holding', 'Already in the holding place'], ['pet', 'Confirmed registered pet'], ['claims', 'Open owner claims'],
     ] as const).filter(([k]) => needs[k]), [needs]);
 
     return createPortal(

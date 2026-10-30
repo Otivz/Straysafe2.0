@@ -501,7 +501,7 @@ const SubdSettings: React.FC = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
             ),
-            description: 'Designate landmarks and official animal holding facilities'
+            description: 'Manage landmarks and earlier holding-place records'
         },
         {
             id: 'dispatch' as SettingsTab,
@@ -829,15 +829,15 @@ const SubdSettings: React.FC = () => {
                                     <div className="space-y-6">
                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                             <div>
-                                                <h3 className="text-base font-black text-gray-900">Subdivision Landmarks & Holding Facilities</h3>
-                                                <p className="text-xs text-gray-500 font-medium mt-0.5">Register key reference landmarks and designate official points where rescued animals can be held.</p>
+                                                <h3 className="text-base font-black text-gray-900">Subdivision Landmarks & Holding Places</h3>
+                                                <p className="text-xs text-gray-500 font-medium mt-0.5">Register reference landmarks and maintain earlier holding-place records. New animal admissions are managed by the Barangay.</p>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <span className="px-3 py-1 bg-role-soft border border-role-border text-role-strong rounded-xl text-xs font-bold">
                                                     📍 {landmarks.length} Landmarks
                                                 </span>
                                                 <span className="px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold">
-                                                    🐾 {landmarks.filter(l => l.is_holding_facility).length} Holding Facilities
+                                                    🐾 {landmarks.filter(l => l.is_holding_facility).length} Holding Places
                                                 </span>
                                             </div>
                                         </div>
@@ -1000,7 +1000,9 @@ const SubdSettings: React.FC = () => {
                                                 </div>
                                             </div>
 
-                                            {/* Holding Facility Designation Toggle */}
+                                            {/* Holding place switch: the subdivision does not hold animals, so it is only shown to switch an existing
+                                                holding place off; it can no longer be turned on here */}
+                                            {landmarkForm.is_holding_facility && (
                                             <div className={`p-4 rounded-xl border transition-all ${
                                                 landmarkForm.is_holding_facility
                                                     ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
@@ -1010,8 +1012,8 @@ const SubdSettings: React.FC = () => {
                                                     <div className="flex items-center gap-2.5">
                                                         <span className="text-xl">🐾</span>
                                                         <div>
-                                                            <p className="text-xs font-black uppercase tracking-wider">Designate as Animal Holding Facility</p>
-                                                            <p className="text-[11px] text-gray-500 font-medium">Animals rescued or impounded in the subdivision can be temporarily sheltered here.</p>
+                                                            <p className="text-xs font-black uppercase tracking-wider">Designate as Animal Holding Place</p>
+                                                            <p className="text-[11px] text-gray-500 font-medium">Earlier designation: keep it or switch it off. Coordinate new animal admissions with the Barangay.</p>
                                                         </div>
                                                     </div>
                                                     <input
@@ -1111,6 +1113,7 @@ const SubdSettings: React.FC = () => {
                                                     </div>
                                                 )}
                                             </div>
+                                            )}
 
                                             <div className="flex justify-end gap-3 pt-2">
                                                 <Button
@@ -1162,7 +1165,7 @@ const SubdSettings: React.FC = () => {
                                                                             : `${cat.badgeBg} ${cat.badgeText}`
                                                                     }`}>
                                                                         <span>{cat.emoji}</span>
-                                                                        <span className="truncate">{item.is_holding_facility ? 'Holding Facility' : cat.label}</span>
+                                                                        <span className="truncate">{item.is_holding_facility ? 'Holding Place' : cat.label}</span>
                                                                     </span>
                                                                 </div>
 

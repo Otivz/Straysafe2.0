@@ -501,7 +501,7 @@ def populate_location_and_facility_info(
                 rep_data.latitude = rep_data.initial_latitude
                 rep_data.longitude = rep_data.initial_longitude
             
-            facility_keywords = ["holding pen", "holding facility", "barangay holding", "subdivision holding"]
+            facility_keywords = ["holding pen", "holding facility", "holding place", "barangay holding", "subdivision holding"]
             is_lmk_fac = not rep_data.landmark or any(k in (rep_data.landmark or "").lower() for k in facility_keywords)
             if is_lmk_fac:
                 rep_data.landmark = rep_data.initial_landmark or "Incident Sighting Location"
@@ -1495,7 +1495,7 @@ def classify_category_from_description(description: str) -> int:
     1. Possible Rabies Risk (Category 3)
     2. Aggressive Stray (Category 2)
     3. Injured Animal (Category 1)
-    4. Roaming Pack (Category 4)
+    4. Roaming Animal (Category 4)
     5. Animal Rescue Needed (Category 5) - fallback
     """
     text = (description or "").lower()
@@ -1520,7 +1520,7 @@ def classify_category_from_description(description: str) -> int:
     if any(kw in text for kw in injured_keywords):
         return 1
         
-    # 4. Roaming Pack (grouping & roaming behaviors)
+    # 4. Roaming Animal (grouping & roaming behaviors)
     roaming_keywords = ["roaming", "pack", "group", "multiple", "horde"]
     if any(kw in text for kw in roaming_keywords):
         return 4
@@ -1536,9 +1536,15 @@ def classify_category_from_description(description: str) -> int:
 def analyze_report_media(
     request: Request,
     file: UploadFile = File(...),
+    purpose: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user),
 ):
-    """Analyze uploaded stray animal image or video and return AI predictions or indicate if no animal was detected."""
+    """Analyze uploaded stray animal image or video and return AI predictions or indicate if no animal was detected.
+
+    purpose="pet" (pet registration): only the local YOLO model runs (is there a dog or cat, how many, coat colours).
+    Gemini is not called, and the answer carries no authenticity verdict."""
+    pet_mode = (purpose or "").strip().lower() == "pet"
+    yolo_failed = False
     # Plain `def`: FastAPI runs it in a worker thread, so YOLO and Gemini don't freeze every other request.
     is_video = False
     media_label = "image"
@@ -1619,6 +1625,7 @@ def analyze_report_media(
                         if os.path.exists(tmp_path):
                             os.unlink(tmp_path)
                 except Exception as yerr:
+                    yolo_failed = True
                     print("YOLO check in analyze-media error:", yerr)
 
         # Crop image to primary animal subject bounding box to eliminate background distraction (cobblestones, street, buildings)
@@ -1638,7 +1645,7 @@ def analyze_report_media(
 
         # Run AI vision analysis and forensics using full uncropped image
         api_key = os.getenv("GEMINI_API_KEY")
-        if api_key and is_gemini_enabled_in_db():
+        if not pet_mode and api_key and is_gemini_enabled_in_db():
             try:
                 prompt = f"""
                 You are a senior digital image forensics expert and animal safety inspector for StraySafe, a community animal welfare and stray rescue platform.
@@ -1905,6 +1912,34 @@ def analyze_report_media(
         # Safe fallback if Gemini API is unavailable or rate-limited
         detected_type = detected_yolo_labels[0] if detected_yolo_labels else "Unknown"
         is_detected = yolo_count > 0
+
+        if pet_mode:
+            # Pet registration: YOLO's answer only. If YOLO itself failed, say "not checked" (None) so the
+            # registration is not refused for a problem on our side.
+            p_color, s_color, t_color = "Unknown", "None", "None"
+            if is_detected:
+                try:
+                    cropped_bytes_io = io.BytesIO()
+                    cropped_img.save(cropped_bytes_io, format='JPEG')
+                    found = [c.strip() for c in extract_dominant_colors(cropped_bytes_io.getvalue()).split(',')
+                             if c.strip() and c.strip() != "Unknown"]
+                    p_color = found[0] if found else "Unknown"
+                    s_color = found[1] if len(found) > 1 else "None"
+                    t_color = found[2] if len(found) > 2 else "None"
+                except Exception as col_err:
+                    print("Color extraction (pet) error:", col_err)
+            return {
+                "animal_detected": None if yolo_failed else is_detected,
+                "animal_type": detected_type if detected_type in ["Dog", "Cat"] else "Unknown",
+                "detected_animal_count": yolo_count,
+                "multiple_animals_detected": yolo_count > 1,
+                "primary_color": p_color,
+                "secondary_color": s_color,
+                "tertiary_color": t_color,
+                "coat_pattern": "Unknown",
+                "estimated_size": "Unknown",
+                "possible_breed": "Unknown",
+            }
 
         p_color = "White"
         s_color = "None"
@@ -3159,7 +3194,7 @@ def confirm_reunited_by_citizen(
     if report.facility_id is not None:
         raise HTTPException(
             status_code=400,
-            detail="This animal is currently admitted to a holding facility. Please coordinate with facility officers to complete physical handover."
+            detail="This animal is currently admitted to a holding place. Please coordinate with facility officers to complete physical handover."
         )
 
     old_status = report.current_status_id
@@ -3803,6 +3838,23 @@ def update_report_status(
                     detail="This animal case has been escalated to the Barangay and can no longer be updated by Subdivision Leaders. You can only track its progress."
                 )
 
+    if current_user.role_id == 2 and report.facility and report.facility.subdivision_id is None:
+        raise HTTPException(status_code=403, detail="Animals at the Barangay holding place are view-only for Subdivision Leaders.")
+    resident_holds_animal = status_update.custody_status == "Secured by Resident"
+    if resident_holds_animal:
+        active_holding = db.query(HoldingAnimal).filter(
+            HoldingAnimal.report_id == report_id, HoldingAnimal.discharge_date.is_(None)).first()
+        if (report.facility_id or report.current_status_id in (7, 8) or active_holding
+                or status_update.facility_id or status_update.status_id in (7, 8)):
+            raise HTTPException(status_code=400, detail="Secured by Resident cannot be combined with holding-place custody. Keep an open case status while the animal remains with the resident.")
+    if current_user.role_id == 2 and (status_update.facility_id or status_update.status_id in (7, 8)):
+        if status_update.facility_id and status_update.facility_id != report.facility_id:
+            raise HTTPException(status_code=403, detail="Subdivision Leaders cannot relocate animals to a new holding place. Coordinate with the Barangay.")
+        already_held = report.facility_id or report.current_status_id in (7, 8) or db.query(HoldingAnimal).filter(
+            HoldingAnimal.report_id == report_id, HoldingAnimal.discharge_date.is_(None)).first()
+        if not already_held:
+            raise HTTPException(status_code=403, detail="Subdivision Leaders cannot place a new animal in a holding place. Coordinate with the Barangay.")
+
     # Returned to Owner / Reunited: the owner is either a StraySafe account or entered manually (never auto-created)
     owner_return_snap = None
     if status_update.status_id == 9:
@@ -3847,7 +3899,7 @@ def update_report_status(
     # Handle facility relocation or location update
     relocation_note = None
     target_facility_id = status_update.facility_id
-    if not target_facility_id and status_update.status_id in (7, 8):
+    if not target_facility_id and status_update.status_id in (7, 8) and not resident_holds_animal:
         # Auto-detect subdivision or barangay holding facility only for status 7/8
         default_fac = None
         if report.subdivision_id:
@@ -3870,7 +3922,7 @@ def update_report_status(
             report.custody_status = status_update.custody_status or "Secured in Facility"
             caretaker_str = f" • Caretaker: {fac.contact_person} ({fac.contact_number})" if fac.contact_person else ""
             prev_str = report.initial_landmark or "Original found location"
-            relocation_note = f"Animal secured in holding facility ({fac.name}){caretaker_str} (Relocated from: {prev_str})"
+            relocation_note = f"Animal secured in holding place ({fac.name}){caretaker_str} (Relocated from: {prev_str})"
     elif status_update.status_id == 6:
         # Picked up: animal is with responders in transit, NOT yet admitted into holding facility
         report.custody_status = status_update.custody_status or "Animal Picked Up"
@@ -4155,7 +4207,7 @@ def update_report_status(
             HoldingAnimal.report_id == report.report_id
         ).first()
         if already_in:
-            loc_str = report.landmark or "Subdivision Holding Facility"
+            loc_str = report.landmark or "Subdivision Holding Place"
             db.add(HoldingTimeline(
                 holding_id=already_in.holding_id,
                 event_type='transfer',
@@ -4169,7 +4221,7 @@ def update_report_status(
             HoldingAnimal.report_id == report.report_id
         ).first()
         if already_in:
-            loc_str = report.landmark or "Subdivision Holding Facility"
+            loc_str = report.landmark or "Subdivision Holding Place"
             db.add(HoldingTimeline(
                 holding_id=already_in.holding_id,
                 event_type='observation',
@@ -4235,12 +4287,12 @@ def update_report_status(
             if not loc_name and report.landmark:
                 loc_name = report.landmark
             if not loc_name:
-                loc_name = "Holding Facility"
+                loc_name = "Holding Place"
 
             db.add(HoldingTimeline(
                 holding_id = new_holding.holding_id,
                 event_type = 'intake',
-                title      = f'Animal Admitted to Holding Facility ({loc_name})',
+                title      = f'Animal Admitted to Holding Place ({loc_name})',
                 notes      = f'Admitted into custody at {loc_name}. Report #{report.report_id}.',
                 logged_by  = status_update.user_id,
             ))

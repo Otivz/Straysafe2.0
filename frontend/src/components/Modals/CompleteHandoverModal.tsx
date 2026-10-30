@@ -605,7 +605,7 @@ const CompleteHandoverModal: React.FC<Props> = ({
                         </div>
                         <ul className="text-[11px] text-emerald-800 space-y-1 pl-4 list-disc font-medium">
                             <li>Report #{claim.report_id} status moves to <strong>Claimed by Owner (Status 9)</strong>.</li>
-                            <li>Holding Facility animal record is discharged automatically.</li>
+                            <li>Holding Place animal record is discharged automatically.</li>
                             <li>Registered pet record is set to <strong>Active</strong> with audit history.</li>
                             <li>Report Management is locked with <strong>"Animal Already Reunited"</strong>.</li>
                         </ul>

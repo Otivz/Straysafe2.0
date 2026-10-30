@@ -13,6 +13,7 @@ import ReportDescription from '../../components/ReportDescription';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
 import { petName } from '../../utils/petName';
 import { DEFAULT_PET_AVATAR } from '../../utils/avatar';
+import { DEFAULT_DATE_PRESET, heatPoints, isActiveReport, isInDateRange, isLostPetReport } from '../../utils/heatmap';
 interface Report {
     report_id: number;
     status_id: number;
@@ -81,7 +82,6 @@ const SubdDashboard = () => {
     };
     const [selectedDetailReport, setSelectedDetailReport] = useState<any>(null);
     const [selectedReport, setSelectedReport] = useState<any>(null);
-    const [selectedMapCoords, setSelectedMapCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [isNavigating, setIsNavigating] = useState(false);
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
     const [geoToast, setGeoToast] = useState<{ message: string; type: 'error' | 'info' } | null>(null);
@@ -204,7 +204,8 @@ const SubdDashboard = () => {
         fetchAll();
     }, []);
 
-    const isResolvedOrClosed = (r: Report) => [6, 11, 12, 3, 9, 10, 14, 17, 18].includes(r.status_id);
+    // Closed = the backend's closed statuses (utils/heatmap.ts); Picked Up (6) is still an open case
+    const isResolvedOrClosed = (r: Report) => !isActiveReport(r);
     const activeReports = reports.filter(r => !isResolvedOrClosed(r));
     const currentUserId = currentUser?.user_id || currentUser?.id || 3;
 
@@ -229,7 +230,10 @@ const SubdDashboard = () => {
     });
     const pendingClaimsCount = pendingClaimsList.length;
 
-    const activeHoldingAnimals = holdingAnimals.filter(a => ![3, 4, 5, 7, 8].includes(a.facility_status));
+    const activeHoldingAnimals = holdingAnimals.filter(a => !a.discharge_date
+        && [1, 2, 6, 8].includes(a.facility_status)
+        && (a.facility_type === 'barangay_facility' || /barangay/i.test(a.facility_name || ''))
+        && ![3, 9, 10, 11, 12, 14, 17, 18].includes(a.report_status_id));
     const holdingCount = activeHoldingAnimals.length;
 
     // Helper functions for consistent priority categorization
@@ -258,6 +262,7 @@ const SubdDashboard = () => {
 
     // Filtered reports for Map based on priority
     const filteredMapReports = activeReports.filter(r => {
+        if (isLostPetReport(r)) return false;
         if (priorityFilter === 'all') return true;
         if (priorityFilter === 'high') return isReportHighPriority(r);
         if (priorityFilter === 'medium') return isReportMediumPriority(r);
@@ -337,14 +342,19 @@ const SubdDashboard = () => {
             case 3: return 'Rejected';
             case 4: return 'Forwarded to Barangay';
             case 5: return 'Team Dispatched';
-            case 6: return 'Resolved';
-            case 7: return 'Picked Up';
-            case 8: return 'Under Observation';
-            case 9: return 'Impounded';
+            case 6: return 'Picked Up';
+            case 7: return 'Under Observation';
+            case 8: return 'Impounded';
+            case 9: return 'Claimed by Owner';
             case 10: return 'Released';
             case 11: return 'Incident Resolved';
             case 12: return 'Deceased';
             case 13: return 'Approved by Barangay';
+            case 14: return 'Dismissed';
+            case 15: return 'Disputed';
+            case 16: return 'Under Investigation';
+            case 17: return 'Animal Cannot Be Found';
+            case 18: return 'Merged Duplicate';
             default: return 'Active';
         }
     };
@@ -610,15 +620,6 @@ const SubdDashboard = () => {
             category: "Leader",
             time: "Live"
         }] : []),
-        ...(selectedMapCoords ? [{
-            id: -999,
-            lat: selectedMapCoords.lat,
-            lng: selectedMapCoords.lng,
-            title: `Selected Spot (${selectedMapCoords.lat.toFixed(5)}, ${selectedMapCoords.lng.toFixed(5)})`,
-            category: "Pinpoint",
-            color: "orange",
-            time: "Selected"
-        }] : []),
         ...filteredMapReports
             .filter(r => r.latitude && r.longitude)
             .map((r: any) => ({
@@ -638,13 +639,15 @@ const SubdDashboard = () => {
             }))
     ];
 
-    const heatmapPoints: [number, number, number][] = filteredMapReports
-        .filter(r => r.latitude && r.longitude)
-        .map(r => [
-            parseFloat(r.latitude),
-            parseFloat(r.longitude),
-            r.priority_level === 'High' ? 1.0 : 0.6
-        ]);
+    // Heat: incidents of the last 30 days, resolved included, at the original sighting (utils/heatmap.ts).
+    // The priority filter applies to heat as it does to pins.
+    const priorityMatches = (r: Report) => priorityFilter === 'all'
+        || (priorityFilter === 'high' && isReportHighPriority(r))
+        || (priorityFilter === 'medium' && isReportMediumPriority(r))
+        || (priorityFilter === 'low' && isReportLowPriority(r));
+    const heatmapPoints: [number, number, number][] = heatPoints(
+        reports.filter(r => priorityMatches(r) && isInDateRange(r, DEFAULT_DATE_PRESET))
+    );
 
     const handleLocateOnMap = (r: Report) => {
         setSelectedReport(r);
@@ -839,7 +842,7 @@ const SubdDashboard = () => {
                             { label: 'Barangay Action', sub: 'Endorsed to Brgy', value: underBrgyCount, to: '/subd/reports?status=Escalated%20to%20Barangay', tone: 'text-blue-600', note: null },
                             { label: 'Registered Pets', sub: 'Subdivision pets', value: displayPetCount, to: '/subd/pet-records', tone: 'text-emerald-600', note: `↑ ${petsRegisteredThisMonth} this month` },
                             { label: 'Pending Claims', sub: 'Owner confirmation', value: pendingClaimsCount, to: '/subd/pet-claims', tone: 'text-purple-600', note: null },
-                            { label: 'Holding Facility', sub: 'Sheltered pets', value: holdingCount, to: '/subd/holding-facility', tone: 'text-teal-600', note: null },
+                            { label: 'At Barangay', sub: 'Your animals held', value: holdingCount, to: '/subd/holding-facility', tone: 'text-teal-600', note: null },
                         ].map((c, i) => (
                             <button
                                 key={c.label}
@@ -874,7 +877,7 @@ const SubdDashboard = () => {
                                             </span>
                                             Incident map
                                         </h3>
-                                        <p className="text-xs text-slate-500 mt-0.5">Reports inside your subdivision</p>
+                                        <p className="text-xs text-slate-500 mt-0.5">Active pins; heat shows the last 30 days of incidents, including resolved cases.</p>
                                     </div>
                                     <button
                                         type="button"
@@ -936,7 +939,6 @@ const SubdDashboard = () => {
                                         heatmapPoints={heatmapPoints}
                                         showGeofence={true}
                                         showLandmarks={true}
-                                        onMapClick={(lat, lng) => setSelectedMapCoords({ lat, lng })}
                                         onViewDetails={(marker) => {
                                             const reportId = marker.rawData?.report_id || (marker.id > 0 ? marker.id : null);
                                             if (reportId) {
@@ -957,34 +959,6 @@ const SubdDashboard = () => {
                                         }}
                                         onDirectionsClick={handleDirectionsFromMe}
                                     />
-
-                                    {/* Floating Coordinate Pill Overlay when clicking on map */}
-                                    {selectedMapCoords && (
-                                        <div className="absolute top-3 right-3 max-w-[calc(100%-68px)] z-20 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-xl border border-role-border/90 flex items-center gap-2 text-xs animate-in fade-in zoom-in-95 duration-150">
-                                            <span className="w-2 h-2 rounded-full bg-role animate-ping" />
-                                            <span className="font-black text-slate-800 tracking-tight text-[11px] truncate min-w-0">
-                                                {selectedMapCoords.lat.toFixed(6)}, {selectedMapCoords.lng.toFixed(6)}
-                                            </span>
-                                            <button
-                                                onClick={() => {
-                                                    if (navigator.clipboard) {
-                                                        navigator.clipboard.writeText(`${selectedMapCoords.lat.toFixed(6)}, ${selectedMapCoords.lng.toFixed(6)}`);
-                                                    }
-                                                }}
-                                                className="px-2 py-0.5 bg-role hover:bg-role-hover text-white rounded-lg font-bold text-[10px] transition-colors shadow-2xs cursor-pointer"
-                                                title="Copy coordinates"
-                                            >
-                                                Copy
-                                            </button>
-                                            <button
-                                                onClick={() => setSelectedMapCoords(null)}
-                                                className="text-slate-400 hover:text-slate-600 font-bold ml-1 cursor-pointer"
-                                                title="Clear pinpoint"
-                                            >
-                                                ✕
-                                            </button>
-                                        </div>
-                                    )}
 
                                     {/* Desktop Floating Bottom-Left Overlay Legend */}
                                     <div data-map-overlay="bottom" className="hidden sm:block absolute bottom-4 left-4 z-[1000]">
@@ -1216,7 +1190,7 @@ const SubdDashboard = () => {
                                         <div className="flex-1 min-w-0">
                                             <p className="text-xs font-bold text-blue-700 leading-none">Facility & claims</p>
                                             <p className="text-xs font-medium text-slate-700 leading-snug mt-1">
-                                                <strong className="text-slate-900 font-bold">{holdingCount} animal{holdingCount !== 1 ? 's' : ''}</strong> in holding custody • <strong className="text-[#2563EB] font-bold">{pendingClaimsCount} claim{pendingClaimsCount !== 1 ? 's' : ''}</strong> pending.
+                                                <strong className="text-slate-900 font-bold">{holdingCount} animal{holdingCount !== 1 ? 's' : ''}</strong> held at the Barangay • <strong className="text-[#2563EB] font-bold">{pendingClaimsCount} claim{pendingClaimsCount !== 1 ? 's' : ''}</strong> pending.
                                             </p>
                                         </div>
                                     </div>
@@ -1676,7 +1650,6 @@ const SubdDashboard = () => {
                                 heatmapPoints={heatmapPoints}
                                 showGeofence={true}
                                 showLandmarks={true}
-                                onMapClick={(lat, lng) => setSelectedMapCoords({ lat, lng })}
                                 onViewDetails={(marker) => {
                                     const reportId = marker.rawData?.report_id || (marker.id > 0 ? marker.id : null);
                                     if (reportId) {
@@ -1698,34 +1671,6 @@ const SubdDashboard = () => {
                                 }}
                                 onDirectionsClick={handleDirectionsFromMe}
                             />
-
-                            {/* Floating Coordinate Pill Overlay in expanded modal */}
-                            {selectedMapCoords && (
-                                <div className="absolute top-3 right-3 max-w-[calc(100%-68px)] z-[1000] bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-xl border border-role-border/90 flex items-center gap-2 text-xs animate-in fade-in zoom-in-95 duration-150">
-                                    <span className="w-2 h-2 rounded-full bg-role animate-ping" />
-                                    <span className="font-black text-slate-800 tracking-tight text-[11px] truncate min-w-0">
-                                        {selectedMapCoords.lat.toFixed(6)}, {selectedMapCoords.lng.toFixed(6)}
-                                    </span>
-                                    <button
-                                        onClick={() => {
-                                            if (navigator.clipboard) {
-                                                navigator.clipboard.writeText(`${selectedMapCoords.lat.toFixed(6)}, ${selectedMapCoords.lng.toFixed(6)}`);
-                                            }
-                                        }}
-                                        className="px-2 py-0.5 bg-role hover:bg-role-hover text-white rounded-lg font-bold text-[10px] transition-colors shadow-2xs cursor-pointer"
-                                        title="Copy coordinates"
-                                    >
-                                        Copy
-                                    </button>
-                                    <button
-                                        onClick={() => setSelectedMapCoords(null)}
-                                        className="text-slate-400 hover:text-slate-600 font-bold ml-1 cursor-pointer"
-                                        title="Clear pinpoint"
-                                    >
-                                        ✕
-                                    </button>
-                                </div>
-                            )}
 
                             {/* Legend in Expanded Map (steps aside for the report card on narrow maps) */}
                             <div data-map-overlay="bottom" className="absolute bottom-3 left-3 z-[1000]">

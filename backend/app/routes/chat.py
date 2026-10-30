@@ -96,7 +96,7 @@ def generate_memorable_report_title(report: Optional[Report], reporter: Optional
     elif "rabies" in cat_lower or cat_id == 3:
         prefix = "Rabies Alert"
     elif "roaming" in cat_lower or cat_id == 4:
-        prefix = "Roaming"
+        prefix = "Roaming Animal"
     elif "rescue" in cat_lower or cat_id == 5:
         prefix = "Rescue"
     else:

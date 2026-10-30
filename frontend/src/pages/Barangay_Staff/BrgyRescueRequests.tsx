@@ -126,7 +126,7 @@ const categoryMap: Record<number, string> = {
     1: 'Injured Animal',
     2: 'Aggressive Stray',
     3: 'Possible Rabies Risk',
-    4: 'Roaming Pack',
+    4: 'Roaming Animal',
     5: 'Animal Rescue Needed',
     6: 'Lost Pet'
 };
@@ -331,7 +331,7 @@ const BrgyRescueRequests = () => {
                 setSelectedFacilityId(current => list.some((f: { landmark_id: number }) => f.landmark_id === current) ? current : list[0].landmark_id);
             }
         } catch (err) {
-            console.warn('Could not fetch holding facilities:', err);
+            console.warn('Could not fetch holding places:', err);
         } finally {
             setIsLoadingFacilities(false);
         }
@@ -360,7 +360,7 @@ const BrgyRescueRequests = () => {
         }
 
         if (statusToUpdate.statusId === 7 && facilities.length === 0) {
-            alert('Notice: No holding facility registered for this Barangay. Please register a facility under Landmarks & Facilities first.');
+            alert('Notice: No holding place registered for this Barangay. Please register a facility under Landmarks & Facilities first.');
             return;
         }
 
@@ -374,7 +374,7 @@ const BrgyRescueRequests = () => {
                 13: "Approved by Barangay. Rescue operation is being planned.",
                 5: "Rescue team has been dispatched to the location.",
                 6: "Picked up by the barangay and in a safe place.",
-                7: "Under observation in holding facility.",
+                7: "Under observation in holding place.",
                 8: "Securely impounded.",
                 9: "Claimed by owner.",
                 10: "Safely released.",
@@ -391,7 +391,7 @@ const BrgyRescueRequests = () => {
             let defaultRemark = friendlyDefaults[statusToUpdate.statusId] || `Status updated to ${statusMap[statusToUpdate.statusId] || reportStatusMap[statusToUpdate.statusId]}`;
             if (selectedFac && !statusUpdateMessage.trim()) {
                 const caretakerInfo = selectedFac.contact_person ? ` • Caretaker: ${selectedFac.contact_person}` : '';
-                defaultRemark = `Animal securely placed in holding facility under observation. Secured in holding facility (${selectedFac.name})${caretakerInfo}.`;
+                defaultRemark = `Animal securely placed in holding place under observation. Secured in holding place (${selectedFac.name})${caretakerInfo}.`;
             }
 
             const primaryId = selectedPersonnelIds[0] || selectedPersonnelId || null;
@@ -1566,7 +1566,7 @@ const BrgyRescueRequests = () => {
                                                         routing={isNavigating && (navSource === 'brgy' || userLocation) ? {
                                                             start: navSource === 'brgy' ? BRGY_OFFICE : userLocation!,
                                                             end: [currentLat, currentLng],
-                                                            waypointNames: [navSource === 'brgy' ? "Barangay Hall HQ" : "My Current Location", isFac ? (rep?.facility?.name || 'Holding Facility') : (rep?.landmark || "Rescue Site")],
+                                                            waypointNames: [navSource === 'brgy' ? "Barangay Hall HQ" : "My Current Location", isFac ? (rep?.facility?.name || 'Holding Place') : (rep?.landmark || "Rescue Site")],
                                                             onClose: () => setIsNavigating(false),
                                                             live: navSource !== 'brgy'
                                                         } : undefined}
@@ -1666,7 +1666,7 @@ const BrgyRescueRequests = () => {
                                         { id: 13, label: 'Approved', sub: 'Barangay Accepted' },
                                         { id: 5, label: 'Dispatched', sub: 'On the way' },
                                         { id: 6, label: 'Picked Up', sub: 'Animal secured' },
-                                        { id: 7, label: 'Holding Facility', sub: 'In Observation' },
+                                        { id: 7, label: 'Holding Place', sub: 'In Observation' },
                                         { id: 11, label: 'Resolved', sub: 'Operation complete' },
                                         { id: 17, label: 'Cannot Be Found', sub: 'Search complete' }
                                     ].map((opt) => {
@@ -1807,7 +1807,7 @@ const BrgyRescueRequests = () => {
                                         {isLoadingFacilities ? (
                                             <p className="text-xs text-gray-500">Loading registered facilities...</p>
                                         ) : facilities.length === 0 ? (
-                                            <p className="text-xs font-bold text-red-600">No holding facility registered. Please register one under Landmarks & Facilities.</p>
+                                            <p className="text-xs font-bold text-red-600">No holding place registered. Please register one under Landmarks & Facilities.</p>
                                         ) : (
                                             <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto custom-scrollbar p-1">
                                                 {facilities.map(fac => {
