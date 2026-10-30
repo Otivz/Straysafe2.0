@@ -3,6 +3,8 @@ import api from '../../utils/api';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import { getLandmarkCategory } from '../../utils/landmarkIcons';
 import AddPetModal from '../PetRecords/AddPetModal';
+import Button from '../Button';
+import { Plus } from 'lucide-react';
 import OwnerReturnPicker, { EMPTY_OWNER_RETURN, ownerReturnError, prepareOwnerReturn, type OwnerReturnValue } from '../OwnerReturnPicker';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -251,7 +253,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                     setSelectedFacilityId(subdFac ? subdFac.landmark_id : facList[0].landmark_id);
                 }
             } catch (err) {
-                console.warn("Could not fetch holding facilities:", err);
+                console.warn("Could not fetch holding places:", err);
             } finally {
                 setIsLoadingFacilities(false);
             }
@@ -321,6 +323,11 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
         (targetReport?.status?.status_name && targetReport.status.status_name.toLowerCase().includes('escalat'))
     );
 
+    const isInFacility = Boolean(targetReport
+        && ![3, 9, 10, 11, 12, 14, 17, 18].includes(Number(targetReport.status_id))
+        && ([7, 8].includes(Number(targetReport.status_id)) || targetReport.facility_id != null
+            || /facility|impound|holding/i.test(String(targetReport.custody_status || ''))));
+
     const selectedFacility = facilities.find(f => f.landmark_id === selectedFacilityId) || (facilities.length > 0 ? facilities[0] : null);
 
     const isBrgyFacility = selectedFacility 
@@ -328,7 +335,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
         : isEscalatedEffective;
 
     const facilityTitle = isBrgyFacility
-        ? 'Barangay Holding Facility / Shelter'
+        ? 'Barangay Holding Place / Shelter'
         : 'Subdivision Facility / Shelter';
     const facilityBadge = isBrgyFacility ? 'In Brgy Facility' : 'In Subd Facility';
 
@@ -342,7 +349,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
             if (currentRep?.facility_id) {
                 setSelectedFacilityId(currentRep.facility_id);
             }
-            const facName = currentRep?.facility?.name || (isBrgyFacility ? 'Barangay Holding Facility' : 'Subdivision Holding Facility');
+            const facName = currentRep?.facility?.name || (isBrgyFacility ? 'Barangay Holding Place' : 'Subdivision Holding Place');
             setRemarks(`The animal was secured alive and is currently held at ${facName} while coordinating next steps.`);
         } else {
             setPrimaryChoice('pet_found');
@@ -372,7 +379,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                     ? 'The lost pet was located alive and safely returned to the owner. Identity and ownership confirmed.'
                     : 'The animal was located alive and safely reunited with or returned to the owner / caregiver.');
             } else if (sub === 'temporary_care') {
-                const facName = facObj?.name || (isBrgyFacility ? 'Barangay Holding Facility' : 'Subdivision Holding Facility');
+                const facName = facObj?.name || (isBrgyFacility ? 'Barangay Holding Place' : 'Subdivision Holding Place');
                 const caretakerInfo = facObj?.contact_person ? ` (Caretaker: ${facObj.contact_person}${facObj.contact_number ? `, ${facObj.contact_number}` : ''})` : '';
                 setRemarks(`The animal was secured alive and is currently held at ${facName}${caretakerInfo} while coordinating next steps.`);
             } else if (sub === 'owner_not_located') {
@@ -459,7 +466,11 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                     choiceKey: 'owner_not_located',
                     title: 'Secured by Resident (Awaiting Pickup)',
                     petStatus: 'Found',
-                    reportStatusId: isEscalatedEffective ? (reportDetails?.status_id === 5 ? 5 : 4) : 7, // Keep Escalated status if already escalated
+                    // The animal is still with the resident: keep the case's current status. Never 7 (Under
+                    // Observation), which the server treats as "in a holding facility" and relocates the report there.
+                    reportStatusId: isEscalatedEffective
+                        ? (targetReport?.status_id === 5 ? 5 : 4)
+                        : ([1, 2, 15, 16].includes(Number(targetReport?.status_id)) ? Number(targetReport?.status_id) : 2),
                     badgeText: 'Awaiting Pickup',
                     badgeColor: 'bg-blue-50 text-blue-700 border-blue-200'
                 };
@@ -609,6 +620,12 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
             setIsSubmitting(false);
         }
     };
+
+    useEffect(() => {
+        if (!isOpen || isInFacility || subChoice !== 'temporary_care') return;
+        handleSubSelect(String(targetReport?.custody_status || '') === 'Secured by Resident' ? 'owner_not_located' : 'returned_to_owner');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, isInFacility, subChoice]);
 
     if (!isOpen) return null;
 
@@ -854,7 +871,8 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                     </div>
                                 )}
 
-                                {/* Sub 2: 🟡 Secured in Facility / Shelter */}
+                                {/* Sub 2: 🟡 Secured in Facility / Shelter: only for an animal already in one (the subdivision does not hold animals) */}
+                                {isInFacility && (
                                 <div
                                     onClick={() => handleSubSelect('temporary_care')}
                                     className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
@@ -871,7 +889,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                             </h5>
                                             <p className="text-[10px] font-bold text-amber-800/80 dark:text-stone-400">
                                                 {isBrgyFacility
-                                                    ? 'Animal was secured and is currently held at the Barangay Holding Facility.'
+                                                    ? 'Animal was secured and is currently held at the Barangay Holding Place.'
                                                     : 'Animal was secured and is currently held at the Subdivision holding area / facility.'}
                                             </p>
                                         </div>
@@ -881,12 +899,14 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                     </span>
                                 </div>
 
+                                )}
+
                                 {/* Facility Picker Card (Shown when Secured in Facility is selected) */}
-                                {subChoice === 'temporary_care' && (
+                                {subChoice === 'temporary_care' && isInFacility && (
                                     <div className="p-4 rounded-2xl bg-amber-100/60 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 space-y-3 animate-in fade-in duration-200">
                                         <div className="flex items-center justify-between">
                                             <span className="text-[10px] font-black text-amber-950 dark:text-amber-200 uppercase tracking-widest flex items-center gap-1.5">
-                                                <span>🏢</span> Select Holding Facility / Shelter
+                                                <span>🏢</span> Select Holding Place / Shelter
                                             </span>
                                             <span className="text-[9px] font-bold text-amber-800 dark:text-amber-300 uppercase">
                                                 {isLoadingFacilities ? 'Loading...' : `${facilities.length} available`}
@@ -936,7 +956,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                                         {selectedFacility.latitude && selectedFacility.longitude && !isNaN(parseFloat(String(selectedFacility.latitude))) && !isNaN(parseFloat(String(selectedFacility.longitude))) && (
                                                             <div className="space-y-1.5 pt-1">
                                                                 <div className="h-44 w-full rounded-xl overflow-hidden border border-amber-300 dark:border-amber-700 relative z-0 shadow-inner group">
-                                                                    <button
+                                                                    <Button
                                                                         type="button"
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
@@ -949,7 +969,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                                                                         </svg>
                                                                         <span>Expand</span>
-                                                                    </button>
+                                                                    </Button>
                                                                     <MapContainer
                                                                         center={[parseFloat(String(selectedFacility.latitude)), parseFloat(String(selectedFacility.longitude))]}
                                                                         zoom={16}
@@ -1025,14 +1045,15 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                             <div className="p-3 bg-white/80 dark:bg-stone-900/80 rounded-xl border border-amber-200 text-xs text-stone-600 dark:text-stone-300">
                                                 <p className="font-semibold text-amber-900">Standard Subdivision Holding Area</p>
                                                 <p className="text-[10px] text-stone-500 mt-0.5">
-                                                    No custom landmarks registered as holding facilities yet. The report will update custody to Subdivision Holding.
+                                                    No custom landmarks registered as holding places yet. The report will update custody to Subdivision Holding.
                                                 </p>
                                             </div>
                                         )}
                                     </div>
                                 )}
 
-                                {/* Sub 3: 🔵 Secured by Resident (Awaiting Pickup) */}
+                                {/* Sub 3: 🔵 Secured by Resident (Awaiting Pickup): not for an animal already in a facility */}
+                                {!isInFacility && (
                                 <div
                                     onClick={() => handleSubSelect('owner_not_located')}
                                     className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
@@ -1056,6 +1077,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                         Awaiting Pickup
                                     </span>
                                 </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -1154,13 +1176,14 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                 </div>
                             </div>
                             <div className="flex justify-end pt-1">
-                                <button
+                                <Button
                                     type="button"
                                     onClick={() => setIsAddPetModalOpen(true)}
-                                    className="px-4 py-2 bg-gradient-to-r from-amber-500 to-role-hover hover:from-amber-600 hover:to-role-strong text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md hover:scale-[1.02] active:scale-95 transition-all cursor-pointer flex items-center gap-2"
+                                    className="flex items-center gap-1.5 font-black cursor-pointer"
                                 >
-                                    <span>➕ Add to Pet Records</span>
-                                </button>
+                                    <Plus className="w-3.5 h-3.5" />
+                                    <span>Add to Pet Records</span>
+                                </Button>
                             </div>
                         </div>
                     )}
@@ -1192,18 +1215,19 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                             Cancel
                         </button>
                         {isDogOrCat && !effectiveHasRegisteredPet && [9, 10, 11].includes(currentMeta.reportStatusId) ? (
-                            <button
+                            <Button
                                 type="button"
                                 onClick={() => setIsAddPetModalOpen(true)}
-                                className="px-6 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest bg-gradient-to-r from-amber-500 to-role-hover hover:from-amber-600 hover:to-role-strong text-white shadow-lg shadow-role/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center gap-2"
+                                className="flex items-center gap-2 text-xs font-black uppercase tracking-widest cursor-pointer"
                             >
-                                <span>➕ Register Pet in Records First</span>
-                            </button>
+                                <Plus className="w-4 h-4" />
+                                <span>Register Pet in Records First</span>
+                            </Button>
                         ) : (
-                            <button
+                            <Button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className="px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest bg-gradient-to-r from-role to-amber-600 hover:from-role-hover hover:to-amber-700 text-white shadow-lg shadow-role/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center gap-2"
+                                className="flex items-center gap-2 text-xs font-black uppercase tracking-widest cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                                 {isSubmitting ? (
                                     <>
@@ -1213,7 +1237,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                 ) : (
                                     <span>Confirm Status Update</span>
                                 )}
-                            </button>
+                            </Button>
                         )}
                     </div>
                 </form>
@@ -1239,12 +1263,12 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                         )}
                                     </h4>
                                     <p className="text-[11px] text-stone-500 dark:text-stone-400">
-                                        {selectedFacility.contact_person ? `Caretaker: ${selectedFacility.contact_person}` : 'Subdivision Holding Facility'}
+                                        {selectedFacility.contact_person ? `Caretaker: ${selectedFacility.contact_person}` : 'Subdivision Holding Place'}
                                         {selectedFacility.contact_number && ` • 📞 ${selectedFacility.contact_number}`}
                                     </p>
                                 </div>
                             </div>
-                            <button
+                            <Button
                                 type="button"
                                 onClick={() => setIsMapExpanded(false)}
                                 className="p-2 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-full transition-colors text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 cursor-pointer"
@@ -1253,7 +1277,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
-                            </button>
+                            </Button>
                         </div>
 
                         {/* Expanded Map View */}
@@ -1314,7 +1338,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                                             ✓ Current Selection
                                                         </span>
                                                     ) : (
-                                                        <button
+                                                        <Button
                                                             type="button"
                                                             onClick={() => {
                                                                 setSelectedFacilityId(fac.landmark_id);
@@ -1323,7 +1347,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                                             className="mt-2 w-full py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[10px] font-bold cursor-pointer transition-colors"
                                                         >
                                                             Select Facility
-                                                        </button>
+                                                        </Button>
                                                     )}
                                                 </div>
                                             </Popup>
@@ -1342,7 +1366,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                         const isSelected = fac.landmark_id === selectedFacility.landmark_id;
                                         const facCat = getLandmarkCategory(fac.category, fac.is_holding_facility);
                                         return (
-                                            <button
+                                            <Button
                                                 key={`btn-${fac.landmark_id}`}
                                                 type="button"
                                                 onClick={() => {
@@ -1357,7 +1381,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                             >
                                                 <span>{facCat.emoji}</span>
                                                 <span>{fac.name}</span>
-                                            </button>
+                                            </Button>
                                         );
                                     })}
                                 </div>
@@ -1366,13 +1390,13 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                 <span className="text-[10px] font-mono text-stone-500">
                                     Lat: {parseFloat(String(selectedFacility.latitude)).toFixed(6)}, Lng: {parseFloat(String(selectedFacility.longitude)).toFixed(6)}
                                 </span>
-                                <button
+                                <Button
                                     type="button"
                                     onClick={() => setIsMapExpanded(false)}
-                                    className="px-4 py-1.5 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-xl font-bold text-xs hover:opacity-90 transition-opacity cursor-pointer"
+                                    className="px-4 py-1.5 action-primary rounded-xl font-bold text-xs hover:opacity-90 transition-opacity cursor-pointer"
                                 >
                                     Done
-                                </button>
+                                </Button>
                             </div>
                         </div>
                     </div>

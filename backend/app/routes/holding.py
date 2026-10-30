@@ -41,7 +41,7 @@ CATEGORY_MAP = {
     1: "Injured Animal",
     2: "Aggressive Stray",
     3: "Possible Rabies Risk",
-    4: "Roaming Pack",
+    4: "Roaming Animal",
     5: "Animal Rescue Needed",
 }
 
@@ -159,7 +159,8 @@ def _populate(animal: HoldingAnimal) -> HoldingAnimal:
         if animal.report.facility:
             current_facility = animal.report.facility
             animal.facility_name = animal.report.facility.name  # type: ignore[attr-defined]
-            animal.facility_type = animal.report.facility.facility_type  # type: ignore[attr-defined]
+            animal.facility_type = animal.report.facility.facility_type or (
+                "barangay_facility" if animal.report.facility.subdivision_id is None else "subdivision_facility")
         else:
             animal.facility_name = animal.report.landmark if animal.report.facility_id else None  # type: ignore[attr-defined]
             animal.facility_type = None  # type: ignore[attr-defined]
@@ -376,6 +377,32 @@ def _apply_scope(query, subdivision_id, barangay_id, facility_id, barangay_only)
 
 
 # ── GET /holding/metrics ───────────────────────────────────────────────────────
+def _scope_for_actor(query, db, current_user, subdivision_id, barangay_id, facility_id, barangay_only):
+    """A leader's scope comes from their account, never from request filter precedence."""
+    if current_user.role_id == 2:
+        own = db.get(Subdivision, current_user.subdivision_id) if current_user.subdivision_id else None
+        if own is None:
+            return query.filter(HoldingAnimal.holding_id == -1)
+        query = (_apply_scope(query, None, own.barangay_id, None, True) if barangay_only
+                 else _apply_scope(query, own.subdivision_id, None, None, False))
+        if facility_id is not None:
+            query = _apply_scope(query, None, None, facility_id, None)
+        return query
+    return _apply_scope(query, subdivision_id, barangay_id, facility_id, barangay_only)
+
+
+def _require_leader_holding_write(animal, current_user):
+    """Leaders manage only their own earlier pen records; Barangay holding is view-only."""
+    if current_user.role_id != 2:
+        return
+    report = animal.report
+    facility = report.facility if report else None
+    if (not current_user.subdivision_id or not report
+            or report.subdivision_id != current_user.subdivision_id
+            or not facility or facility.subdivision_id != current_user.subdivision_id):
+        raise HTTPException(status_code=403, detail="Subdivision Leaders can only update their own earlier subdivision pen records. Barangay holding is view-only.")
+
+
 @router.get("/metrics", response_model=HoldingMetricsResponse)
 def get_metrics(
     subdivision_id: Optional[int] = None,
@@ -392,7 +419,7 @@ def get_metrics(
         .options(joinedload(HoldingAnimal.status_obj))
     )
 
-    query = _apply_scope(query, subdivision_id, barangay_id, facility_id, barangay_only)
+    query = _scope_for_actor(query, db, current_user, subdivision_id, barangay_id, facility_id, barangay_only)
 
     effective_impound_days = impound_days if (impound_days is not None and impound_days >= 0) else IMPOUND_DAYS
 
@@ -475,8 +502,7 @@ def list_animals(
 
     if report_id is not None:
         query = query.filter(HoldingAnimal.report_id == report_id)
-    else:
-        query = _apply_scope(query, subdivision_id, barangay_id, facility_id, barangay_only)
+    query = _scope_for_actor(query, db, current_user, subdivision_id, barangay_id, facility_id, barangay_only)
 
     animals = query.order_by(HoldingAnimal.intake_date.desc()).all()
     for a in animals:
@@ -569,6 +595,12 @@ def get_animal(holding_id: int, db: Session = Depends(get_db),
     animal = _load(holding_id, db)
     if not animal:
         raise HTTPException(status_code=404, detail="Holding record not found")
+    if current_user.role_id == 2:
+        base = db.query(HoldingAnimal.holding_id).join(HoldingAnimal.report).filter(HoldingAnimal.holding_id == holding_id)
+        own = _scope_for_actor(base, db, current_user, None, None, None, False).first()
+        barangay = _scope_for_actor(base, db, current_user, None, None, None, True).first()
+        if not own and not barangay:
+            raise HTTPException(status_code=404, detail="Holding record not found")
     return _populate(animal)
 
 
@@ -579,6 +611,8 @@ def create_animal(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_staff_or_admin)
 ):
+    if current_user.role_id == 2:
+        raise HTTPException(status_code=403, detail="Subdivision Leaders cannot admit new animals to holding places. Coordinate with the Barangay.")
     try:
         from app.utils import report_split as _rs
         _grp = db.get(Report, body.report_id)
@@ -588,7 +622,7 @@ def create_animal(
         # Prevent duplicate intakes for the same report
         existing = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == body.report_id).first()
         if existing:
-            raise HTTPException(status_code=409, detail="Animal already in holding facility for this report")
+            raise HTTPException(status_code=409, detail="Animal already in holding place for this report")
 
         # Automatically associate the logged-in staff member
         intake_staff_id = current_user.user_id if not body.intake_staff_id else body.intake_staff_id
@@ -603,7 +637,7 @@ def create_animal(
         first_log = HoldingTimeline(
             holding_id=animal.holding_id,
             event_type="intake",
-            title="Animal Admitted to Holding Facility",
+            title="Animal Admitted to Holding Place",
             notes=f"Admitted from Report #{body.report_id}.",
             logged_by=current_user.user_id,
         )
@@ -615,7 +649,7 @@ def create_animal(
             action="Intake Holding Animal",
             target_table="holding_animals",
             target_id=animal.holding_id,
-            description=f"Stray animal from Report #{body.report_id} admitted to holding facility (ID: {animal.holding_id}).",
+            description=f"Stray animal from Report #{body.report_id} admitted to holding place (ID: {animal.holding_id}).",
             user_id=current_user.user_id,
             log_type="operation"
         )
@@ -660,23 +694,8 @@ def update_animal(
         if update_data.get("facility_status") == 3 and old_status != 3:
             owner_return_snap = validate_owner_return(body.owner_return, current_user, db, animal.report)
 
+        _require_leader_holding_write(animal, current_user)
         if current_user.role_id == 2:
-            # Check if animal is transferred to barangay or in barangay custody
-            is_in_barangay = False
-            if animal.report and animal.report.facility:
-                is_in_barangay = (
-                    animal.report.facility.facility_type == 'barangay_facility' or
-                    'barangay' in (animal.report.facility.name or '').lower()
-                )
-            elif animal.facility_status == 5:
-                is_in_barangay = True
-            
-            if is_in_barangay:
-                raise HTTPException(
-                    status_code=403,
-                    detail="This animal is currently in a Barangay facility and cannot be modified by Subdivision Leaders. You can only track its progress."
-                )
-
             if update_data.get("facility_status") in (6, 7, 8):
                 raise HTTPException(
                     status_code=403,
@@ -723,7 +742,7 @@ def update_animal(
                     if owner_return_snap:
                         record_owner_return(db, report, owner_return_snap, current_user, holding_id=holding_id)
                         _sum = owner_return_summary(owner_return_snap)
-                        update_notes = f"{update_notes} | {_sum}" if update_notes else f"Animal officially marked as 'Claimed by Owner' after holding facility stay at {animal.facility_name or 'Holding Facility'}. {_sum}. Case resolved."
+                        update_notes = f"{update_notes} | {_sum}" if update_notes else f"Animal officially marked as 'Claimed by Owner' after holding place stay at {animal.facility_name or 'Holding Place'}. {_sum}. Case resolved."
                 elif new_status == 4:
                     report.custody_status = "Deceased"
 
@@ -741,7 +760,7 @@ def update_animal(
                     report_id=report.report_id,
                     report_status_id=history_status_id,
                     updated_by=updated_by or animal.intake_staff_id,
-                    remarks=update_notes or f"Animal officially marked as '{outcome_label}' after holding facility stay at {animal.facility_name or 'Holding Facility'}. Case resolved.",
+                    remarks=update_notes or f"Animal officially marked as '{outcome_label}' after holding place stay at {animal.facility_name or 'Holding Place'}. Case resolved.",
                 )
                 db.add(impound_hist)
 
@@ -844,6 +863,8 @@ def escalate_to_barangay(
         if not animal:
             raise HTTPException(status_code=404, detail="Holding record not found")
 
+        _require_leader_holding_write(animal, current_user)
+
         if animal.facility_status in RESOLVED_STATUSES:
             raise HTTPException(status_code=400, detail="Cannot escalate an animal that has already been resolved or discharged.")
 
@@ -867,7 +888,7 @@ def escalate_to_barangay(
                 Landmark.subdivision_id.is_(None)
             ).first()
             if not brgy_fac:
-                raise HTTPException(status_code=400, detail="Selected facility is not a valid Barangay holding facility.")
+                raise HTTPException(status_code=400, detail="Selected facility is not a valid Barangay holding place.")
         else:
             # Auto-detect target barangay
             target_brgy_id = None
@@ -894,14 +915,14 @@ def escalate_to_barangay(
                 ).first()
 
         if not brgy_fac:
-            raise HTTPException(status_code=400, detail="No active Barangay holding facility found. Please designate a Barangay holding facility in landmarks.")
+            raise HTTPException(status_code=400, detail="No active Barangay holding place found. Please designate a Barangay holding place in landmarks.")
 
         # Identify the current subdivision holding facility
         current_fac = animal.report.facility if (animal.report and animal.report.facility) else None
         if not current_fac and animal.report and animal.report.facility_id:
             current_fac = db.query(Landmark).filter(Landmark.landmark_id == animal.report.facility_id).first()
 
-        prev_fac_name = current_fac.name if current_fac else (animal.report.landmark if animal.report else "Subdivision Holding Facility")
+        prev_fac_name = current_fac.name if current_fac else (animal.report.landmark if animal.report else "Subdivision Holding Place")
         target_brgy_name = brgy_fac.name if brgy_fac else "Barangay Holding Shelter"
 
         reason_str = f" Reason: {body.reason}." if body.reason else ""
@@ -951,7 +972,7 @@ def escalate_to_barangay(
 
             if existing_letter:
                 existing_letter.leader_id = current_user.user_id
-                existing_letter.title = f"Holding Facility Transfer Endorsement: Animal #{animal.holding_id}"
+                existing_letter.title = f"Holding Place Transfer Endorsement: Animal #{animal.holding_id}"
                 existing_letter.letter_content = endorse_content
                 if file_url:
                     existing_letter.file_url = file_url
@@ -960,7 +981,7 @@ def escalate_to_barangay(
                 db_letter = EndorsementLetter(
                     report_id=report.report_id,
                     leader_id=current_user.user_id,
-                    title=f"Holding Facility Transfer Endorsement: Animal #{animal.holding_id}",
+                    title=f"Holding Place Transfer Endorsement: Animal #{animal.holding_id}",
                     letter_content=endorse_content,
                     file_url=file_url,
                     status_id=2  # Sent
@@ -1000,7 +1021,7 @@ def escalate_to_barangay(
                 notif = Notification(
                     user_id=staff.user_id,
                     title=f"🚨 New Escalated Animal Pickup #{report.report_id if report else animal.holding_id}",
-                    message=f"Subdivision Leader {current_user.name} has escalated animal #{animal.holding_id} from {prev_fac_name}. Pickup required at the holding facility.",
+                    message=f"Subdivision Leader {current_user.name} has escalated animal #{animal.holding_id} from {prev_fac_name}. Pickup required at the holding place.",
                     type="alert",
                     related_id=report.report_id if report else animal.holding_id
                 )
@@ -1044,21 +1065,7 @@ def add_timeline_entry(
         if not animal:
             raise HTTPException(status_code=404, detail="Holding record not found")
 
-        if current_user.role_id == 2:
-            is_in_barangay = False
-            if animal.report and animal.report.facility:
-                is_in_barangay = (
-                    animal.report.facility.facility_type == 'barangay_facility' or
-                    'barangay' in (animal.report.facility.name or '').lower()
-                )
-            elif animal.facility_status == 5:
-                is_in_barangay = True
-            
-            if is_in_barangay:
-                raise HTTPException(
-                    status_code=403,
-                    detail="This animal is currently in a Barangay facility and cannot be modified by Subdivision Leaders. You can only track its progress."
-                )
+        _require_leader_holding_write(animal, current_user)
 
         log = HoldingTimeline(
             holding_id=holding_id,
@@ -1114,6 +1121,8 @@ def delete_animal(
     animal = db.query(HoldingAnimal).filter(HoldingAnimal.holding_id == holding_id).first()
     if not animal:
         raise HTTPException(status_code=404, detail="Holding record not found")
+
+    _require_leader_holding_write(animal, current_user)
 
     if current_user.role_id == 2:
         if animal.report and animal.report.subdivision_id != current_user.subdivision_id:

@@ -186,7 +186,7 @@ const categoryMap: Record<number, string> = {
     1: 'Injured Animal',
     2: 'Aggressive Stray',
     3: 'Possible Rabies Risk',
-    4: 'Roaming Pack',
+    4: 'Roaming Animal',
     5: 'Animal Rescue Needed',
     6: 'Lost Pet'
 };
@@ -539,7 +539,7 @@ const BrgyReportView = () => {
                 setSelectedFacilityId(null);
             }
         } catch (err) {
-            console.warn('Could not fetch holding facilities:', err);
+            console.warn('Could not fetch holding places:', err);
         } finally {
             setIsLoadingFacilities(false);
         }
@@ -763,7 +763,7 @@ const BrgyReportView = () => {
             : statusId;
 
         if ((initialStatusId === 7 || initialStatusId === 8) && facilities.length === 0) {
-            alert('Notice: No holding facility registered for this Barangay. Please register a facility under Landmarks & Facilities first.');
+            alert('Notice: No holding place registered for this Barangay. Please register a facility under Landmarks & Facilities first.');
         }
 
         setTargetStatusId(initialStatusId);
@@ -861,7 +861,7 @@ const BrgyReportView = () => {
             return;
         }
         if ((targetStatusId === 7 || targetStatusId === 8) && (!selectedFacilityId || facilities.length === 0)) {
-            alert('No holding facility registered! Please register a holding facility under Landmarks & Facilities before moving this animal to a facility.');
+            alert('No holding place registered! Please register a holding place under Landmarks & Facilities before moving this animal to a facility.');
             return;
         }
         if (targetStatusId === 9) {
@@ -900,7 +900,7 @@ const BrgyReportView = () => {
                 13: 'Approved by Barangay Operations. Mission in preparation.',
                 5: 'Barangay rescue team dispatched to incident location.',
                 6: 'Animal secured and picked up by Barangay response team.',
-                7: 'Animal securely placed in holding facility under observation.',
+                7: 'Animal securely placed in holding place under observation.',
                 8: 'Animal impounded at facility.',
                 9: 'Animal returned to its owner / reunited.',
                 11: 'Incident officially resolved by Barangay Staff.',
@@ -916,7 +916,7 @@ const BrgyReportView = () => {
             let finalRemarks = statusRemarks.trim() || friendlyDefaults[targetStatusId] || `Status updated to ${statusMap[targetStatusId] || 'In Progress'}`;
             if (selectedFac && !statusRemarks.trim()) {
                 const caretakerInfo = selectedFac.contact_person ? ` • Caretaker: ${selectedFac.contact_person}` : '';
-                finalRemarks = `${friendlyDefaults[targetStatusId] || 'Animal admitted to holding facility.'} Secured in holding facility (${selectedFac.name})${caretakerInfo}.`;
+                finalRemarks = `${friendlyDefaults[targetStatusId] || 'Animal admitted to holding place.'} Secured in holding place (${selectedFac.name})${caretakerInfo}.`;
             }
 
             const rescueId = rescueRequest?.rescue_id;
@@ -1631,7 +1631,7 @@ const BrgyReportView = () => {
 
                                                     const hadHoldingHistory = report.history?.some((h: any) => 
                                                         [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
-                                                        (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
+                                                        (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                                         (h.action && h.action.toLowerCase().includes('holding'))
                                                     ) || Boolean(report.facility_id) || Boolean(report.facility);
                                                     const histFacLat = 14.8069;
@@ -1740,7 +1740,7 @@ const BrgyReportView = () => {
                                                                 <span>Animal Picked Up (In Transit)</span>
                                                             </div>
                                                             <p className="text-[11px] text-blue-800 leading-relaxed font-semibold">
-                                                                Animal has been secured by the Barangay Response Team. Click <span className="font-extrabold text-blue-950">"Move to Holding Facility"</span> below once delivered to a holding pen or facility.
+                                                                Animal has been secured by the Barangay Response Team. Click <span className="font-extrabold text-blue-950">"Move to Holding Place"</span> below once delivered to a holding pen or facility.
                                                             </p>
                                                             <p className="text-[10px] text-blue-700/80 font-medium flex items-center gap-1">
                                                                 <MapPin className="w-2.5 h-2.5" /> Pickup Origin: <span className="font-bold text-blue-900">{resolvedAddress || report.landmark || 'Incident Location'}</span>
@@ -1749,7 +1749,7 @@ const BrgyReportView = () => {
                                                     ) : (report.status_id !== 6 && (report.facility_id || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || report.facility || custodyProgression.hasMoved)) ? (
                                                         <>
                                                             <p className="text-amber-900 flex items-center gap-1">
-                                                                <Building2 className="w-3 h-3 shrink-0" /> Current Holding Facility: <span className="font-extrabold">{report.facility?.name || custodyProgression.currentFacility || report.landmark}</span>
+                                                                <Building2 className="w-3 h-3 shrink-0" /> Current Holding Place: <span className="font-extrabold">{report.facility?.name || custodyProgression.currentFacility || report.landmark}</span>
                                                                 {(report.facility?.contact_person || report.facility?.caretaker_name) && (
                                                                     <span className="block text-[10px] text-amber-800 font-semibold mt-0.5">
                                                                         Caretaker: {report.facility?.contact_person || report.facility?.caretaker_name} {(report.facility?.contact_number || report.facility?.caretaker_phone) ? `(${report.facility.contact_number || report.facility.caretaker_phone})` : ''}
@@ -2144,7 +2144,7 @@ const BrgyReportView = () => {
                                                                 </span>
                                                             </div>
                                                             <p className="text-sm font-black text-gray-900 mt-0.5">
-                                                                {report.facility?.name || custodyProgression.currentFacility || report.landmark || 'Holding Facility'}
+                                                                {report.facility?.name || custodyProgression.currentFacility || report.landmark || 'Holding Place'}
                                                             </p>
                                                             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-[10px] font-bold text-gray-600">
                                                                 {(report.facility?.contact_person || report.facility?.caretaker_name) && (
@@ -2323,7 +2323,7 @@ const BrgyReportView = () => {
                                                                     className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-purple-600/20 flex items-center justify-center gap-2 cursor-pointer"
                                                                 >
                                                                     <Hospital className="w-3.5 h-3.5" />
-                                                                    <span>Move to Holding Facility</span>
+                                                                    <span>Move to Holding Place</span>
                                                                 </button>
                                                                 <button
                                                                     type="button"
@@ -2453,7 +2453,7 @@ const BrgyReportView = () => {
                                             }
                                         }
                                         if ((nextId === 7 || nextId === 8) && facilities.length === 0) {
-                                            alert('Notice: No holding facility registered for this Barangay. Please register a facility in Landmarks & Facilities first.');
+                                            alert('Notice: No holding place registered for this Barangay. Please register a facility in Landmarks & Facilities first.');
                                         }
                                     }}
                                     className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-900 focus:outline-none focus:border-role transition-all"
@@ -2468,7 +2468,7 @@ const BrgyReportView = () => {
                                         {getStepLabel(6, 'Picked Up (Animal Secured)')}
                                     </option>
                                     <option value={7} disabled={isStepDone(7)}>
-                                        {getStepLabel(7, 'Holding Facility (Observation)')}
+                                        {getStepLabel(7, 'Holding Place (Observation)')}
                                     </option>
                                     <option value={8} disabled={isStepDone(8)}>
                                         {getStepLabel(8, 'Impounded')}
@@ -2590,7 +2590,7 @@ const BrgyReportView = () => {
                                             </div>
                                             <p className="text-xs font-black text-red-700 uppercase tracking-wider">No Facility Registered</p>
                                             <p className="text-[11px] text-gray-600 leading-relaxed max-w-sm mx-auto">
-                                                There are currently no holding facilities registered for this Barangay. Please register a facility under <strong>Landmarks & Facilities</strong> before placing an animal in a holding facility.
+                                                There are currently no holding places registered for this Barangay. Please register a facility under <strong>Landmarks & Facilities</strong> before placing an animal in a holding place.
                                             </p>
                                         </div>
                                     ) : (
@@ -3470,7 +3470,7 @@ const BrgyReportView = () => {
 
                                 const hadHoldingHistory = report.history?.some((h: any) => 
                                     [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
-                                    (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
+                                    (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                     (h.action && h.action.toLowerCase().includes('holding'))
                                 ) || Boolean(report.facility_id) || Boolean(report.facility);
                                 const histFacLat = 14.8069;
@@ -3566,7 +3566,7 @@ const BrgyReportView = () => {
                         {/* Footer Controls */}
                         <div className="flex items-center justify-between pt-3 sm:pt-4 border-t border-gray-100 shrink-0 gap-3">
                             <span className="text-xs text-gray-400 font-medium hidden sm:inline-flex items-center gap-1">
-                                <Lightbulb className="w-3.5 h-3.5" /> Tip: Zoom in or pan to inspect surroundings, routes, and registered holding facility landmarks.
+                                <Lightbulb className="w-3.5 h-3.5" /> Tip: Zoom in or pan to inspect surroundings, routes, and registered holding place landmarks.
                             </span>
                             <button
                                 type="button"

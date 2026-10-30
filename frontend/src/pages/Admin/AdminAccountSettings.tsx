@@ -601,7 +601,7 @@ const AdminAccountSettings = () => {
                                         <p className="text-xl font-black text-white">{landmarks.length}</p>
                                     </div>
                                     <div className="bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 text-center">
-                                        <p className="text-[10px] font-black text-emerald-300 uppercase tracking-widest">Holding Facilities</p>
+                                        <p className="text-[10px] font-black text-emerald-300 uppercase tracking-widest">Holding Places</p>
                                         <p className="text-xl font-black text-white">{landmarks.filter(l => l.is_holding_facility).length}</p>
                                     </div>
                                 </div>
@@ -643,7 +643,7 @@ const AdminAccountSettings = () => {
                                 }`}
                             >
                                 <span>📍</span>
-                                <span>Landmarks & Holding Facilities</span>
+                                <span>Landmarks & Holding Places</span>
                             </button>
 
                             <button
@@ -978,9 +978,9 @@ const AdminAccountSettings = () => {
                             <div className="bg-white rounded-3xl p-6 md:p-8 border border-gray-100 shadow-sm space-y-6">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                     <div>
-                                        <h3 className="text-base font-black text-gray-900">Jurisdiction Landmarks & Holding Facilities</h3>
+                                        <h3 className="text-base font-black text-gray-900">Jurisdiction Landmarks & Holding Places</h3>
                                         <p className="text-xs text-gray-500 font-medium mt-0.5">
-                                            Configure reference landmarks and designate holding facilities where animals can be placed across all subdivisions.
+                                            Configure reference landmarks and designate holding places where animals can be placed across all subdivisions.
                                         </p>
                                     </div>
 
@@ -994,7 +994,7 @@ const AdminAccountSettings = () => {
                                             <option value="all">All Jurisdictions ({landmarks.length})</option>
                                             <option value="subd_1">Selera Homes Only</option>
                                             <option value="brgy_general">Barangay General Only</option>
-                                            <option value="facilities">Holding Facilities Only ({landmarks.filter(l => l.is_holding_facility).length})</option>
+                                            <option value="facilities">Holding Places Only ({landmarks.filter(l => l.is_holding_facility).length})</option>
                                         </select>
                                     </div>
                                 </div>
@@ -1054,7 +1054,7 @@ const AdminAccountSettings = () => {
                                                             <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${
                                                                 l.is_holding_facility ? 'bg-emerald-100 text-emerald-800' : 'bg-orange-100 text-orange-800'
                                                             }`}>
-                                                                {l.is_holding_facility ? `Holding Facility (${l.capacity || 0} cap)` : 'Landmark'}
+                                                                {l.is_holding_facility ? `Holding Place (${l.capacity || 0} cap)` : 'Landmark'}
                                                             </span>
                                                         </div>
                                                     </Popup>
@@ -1164,8 +1164,8 @@ const AdminAccountSettings = () => {
                                             <div className="flex items-center gap-2.5">
                                                 <span className="text-xl">🐾</span>
                                                 <div>
-                                                    <p className="text-xs font-black uppercase tracking-wider">Designate as Animal Holding Facility</p>
-                                                    <p className="text-[11px] text-gray-500 font-medium">Allows officers and citizens to designate this location as an animal impound or holding facility.</p>
+                                                    <p className="text-xs font-black uppercase tracking-wider">Designate as Animal Holding Place</p>
+                                                    <p className="text-[11px] text-gray-500 font-medium">Allows officers and citizens to designate this location as an animal impound or holding place.</p>
                                                 </div>
                                             </div>
                                             <input
@@ -1323,7 +1323,7 @@ const AdminAccountSettings = () => {
                                                                     : `${cat.badgeBg} ${cat.badgeText}`
                                                             }`}>
                                                                 <span>{cat.emoji}</span>
-                                                                <span className="truncate">{item.is_holding_facility ? 'Holding Facility' : cat.label}</span>
+                                                                <span className="truncate">{item.is_holding_facility ? 'Holding Place' : cat.label}</span>
                                                             </span>
                                                         </div>
 

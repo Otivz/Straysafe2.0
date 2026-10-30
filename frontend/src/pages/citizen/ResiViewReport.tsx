@@ -38,7 +38,7 @@ const categoryMap: Record<number, string> = {
     1: 'Injured Animal',
     2: 'Aggressive Stray',
     3: 'Possible Rabies Risk',
-    4: 'Roaming',
+    4: 'Roaming Animal',
     5: 'Animal Rescue Needed',
     6: 'Lost Pet'
 };
@@ -195,6 +195,11 @@ const ResiViewReport = () => {
     const isLostPetReport = Boolean(
         report && (report.category_id === 6 || (report.description && report.description.includes('[LOST PET REPORT]')))
     );
+    // Directions are for the people in the case (reporter, pet owner, staff). Other residents who only see the
+    // report because the Subdivision Leader made it public get no directions to the animal.
+    const canGetDirections = report?.viewer_access
+        ? report.viewer_access !== 'public'
+        : (isReporter || isMyPetOnReport);
 
     const chatCount = useReportChatCount(report?.report_id || 0, isReporter ? currentUserId : null);
 
@@ -1672,7 +1677,7 @@ const ResiViewReport = () => {
                                             ) : isSecuredInHolding ? (
                                                 <span className="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-400/30 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-xs">
                                                     <PawPrint className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                                                    <span className="hidden sm:inline">Animal Secured at Holding Facility</span>
+                                                    <span className="hidden sm:inline">Animal Secured at Holding Place</span>
                                                     <span className="sm:hidden">Secured</span>
                                                 </span>
                                             ) : null}
@@ -1710,7 +1715,7 @@ const ResiViewReport = () => {
                                                     {isResolvedCase ? 'Original sighting location (resolved)' : isSecuredInHolding ? 'Current location' : 'Reported sighting location'}
                                                 </p>
                                                 <p className="text-sm font-black tracking-tight text-white truncate">
-                                                    {isSecuredInHolding ? (report.facility?.name || report.landmark || 'Holding Facility') : (isResolvedCase ? originalSighting.label || 'Original sighting location unavailable' : sightingLandmark(report) || SIGHTING_TITLE)}
+                                                    {isSecuredInHolding ? (report.facility?.name || report.landmark || 'Holding Place') : (isResolvedCase ? originalSighting.label || 'Original sighting location unavailable' : sightingLandmark(report) || SIGHTING_TITLE)}
                                                 </p>
                                                 <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-0.5">
                                                     {isResolvedCase ? 'Preserved incident location • Pet no longer loose on active map' : (isGeocoding ? 'Resolving street...' : resolvedAddress || 'Santa Maria, Bulacan • Selera Homes')}
@@ -1721,7 +1726,7 @@ const ResiViewReport = () => {
                                                         {report.facility.caretaker_phone ? ` (${report.facility.caretaker_phone})` : ''}
                                                     </p>
                                                 )}
-                                                {!isResolvedCase ? (
+                                                {!isResolvedCase && canGetDirections ? (
                                                     <div className="mt-2.5 pt-2 border-t border-white/10 flex flex-wrap items-center gap-2">
                                                         <button
                                                             onClick={() => handleGetDirections('gps')}
@@ -1776,12 +1781,12 @@ const ResiViewReport = () => {
                                                             </span>
                                                         )}
                                                     </div>
-                                                ) : (
+                                                ) : isResolvedCase ? (
                                                     <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center gap-2 text-slate-300 text-[11px] font-medium">
                                                         <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                                                         <span>Case Resolved: The map displays the preserved location history record.</span>
                                                     </div>
-                                                )}
+                                                ) : null}
                                             </div>
                                         </div>
 
@@ -1941,7 +1946,7 @@ const ResiViewReport = () => {
 
                                 const hadHoldingHistory = report.history?.some((h: any) => 
                                     [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
-                                    (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
+                                    (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                     (h.action && h.action.toLowerCase().includes('holding'))
                                 ) || Boolean(report.facility_id) || Boolean(report.facility);
                                 const histFacLat = 14.8069;
@@ -1989,7 +1994,7 @@ const ResiViewReport = () => {
                                         lat: currentLat,
                                         lng: currentLng,
                                         title: isRelocated 
-                                            ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}` 
+                                            ? `Secured: ${report.facility?.name || report.landmark || 'Holding Place'}`
                                             : (report.status_id === 6 
                                                 ? `Animal Picked Up · ${SIGHTING_TITLE}` 
                                                 : SIGHTING_TITLE),
@@ -1999,8 +2004,8 @@ const ResiViewReport = () => {
                                         time: report.created_at ? new Date(report.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Live',
                                         rawData: {
                                             ...report,
-                                            facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Facility' }) : undefined,
-                                            facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Facility') : undefined
+                                            facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Place' }) : undefined,
+                                            facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Place') : undefined
                                         }
                                     },
                                     ...(hasDifferentInitialSpot ? [{
@@ -2099,7 +2104,8 @@ const ResiViewReport = () => {
                                 </div>
                             </div>
 
-                            {/* In-Modal Quick Controls */}
+                            {/* In-Modal Quick Controls (directions: only for the people in the case) */}
+                            {canGetDirections && (
                             <div className="flex flex-wrap items-center gap-2 mb-3 shrink-0">
                                 <button
                                     type="button"
@@ -2155,6 +2161,7 @@ const ResiViewReport = () => {
                                     </span>
                                 )}
                             </div>
+                            )}
 
                             {/* Expanded Map Canvas */}
                             <div className="flex-1 rounded-none sm:rounded-2xl overflow-hidden relative border-0 sm:border border-white/10 min-h-0">
@@ -2174,7 +2181,7 @@ const ResiViewReport = () => {
 
                                     const hadHoldingHistory = report.history?.some((h: any) => 
                                         [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
-                                        (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
+                                        (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                         (h.action && h.action.toLowerCase().includes('holding'))
                                     ) || Boolean(report.facility_id) || Boolean(report.facility);
                                     const histFacLat = 14.8069;
@@ -2222,7 +2229,7 @@ const ResiViewReport = () => {
                                             lat: currentLat,
                                             lng: currentLng,
                                             title: isRelocated 
-                                                ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}` 
+                                                ? `Secured: ${report.facility?.name || report.landmark || 'Holding Place'}`
                                                 : (report.status_id === 6 
                                                     ? `Animal Picked Up · ${SIGHTING_TITLE}` 
                                                     : SIGHTING_TITLE),
@@ -2232,8 +2239,8 @@ const ResiViewReport = () => {
                                             time: report.created_at ? new Date(report.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Live',
                                             rawData: {
                                                 ...report,
-                                                facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Facility' }) : undefined,
-                                                facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Facility') : undefined
+                                                facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Place' }) : undefined,
+                                                facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Place') : undefined
                                             }
                                         },
                                         ...(hasDifferentInitialSpot ? [{

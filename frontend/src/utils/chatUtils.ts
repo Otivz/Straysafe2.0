@@ -156,7 +156,7 @@ export function generateMemorableTitle(data: MemorableTitleOptions): string {
     else if (cat.includes('injured') || data.categoryId === 1) prefix = 'Injured';
     else if (cat.includes('aggressive') || data.categoryId === 2) prefix = 'Aggressive';
     else if (cat.includes('rabies') || data.categoryId === 3) prefix = 'Rabies Alert';
-    else if (cat.includes('roaming') || data.categoryId === 4) prefix = 'Roaming';
+    else if (cat.includes('roaming') || data.categoryId === 4) prefix = 'Roaming Animal';
     else if (cat.includes('rescue') || data.categoryId === 5) prefix = 'Rescue';
     else if (data.categoryName) prefix = data.categoryName;
 

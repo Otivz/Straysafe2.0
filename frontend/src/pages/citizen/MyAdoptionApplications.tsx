@@ -1778,7 +1778,7 @@ const MyAdoptionApplications = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => setSelectedCertificateAdoptionId(activeApp.adoption_id)}
-                                                className="flex-1 sm:flex-initial justify-center px-3 sm:px-4 py-2 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white font-bold text-[11px] sm:text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                                                className="flex-1 sm:flex-initial justify-center px-3 sm:px-4 py-2 action-primary font-bold text-[11px] sm:text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                                             >
                                                 <Award className="w-3.5 h-3.5 text-amber-400" />
                                                 <span>Digital Certificate</span>
@@ -2453,7 +2453,7 @@ const MyAdoptionApplications = () => {
                             <button
                                 type="button"
                                 onClick={() => setShowApplicantDetailsModal(false)}
-                                className="px-4 sm:px-5 py-2 sm:py-2.5 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white font-black text-[11px] sm:text-xs rounded-lg sm:rounded-xl transition-all cursor-pointer"
+                                className="px-4 sm:px-5 py-2 sm:py-2.5 action-primary font-black text-[11px] sm:text-xs rounded-lg sm:rounded-xl transition-all cursor-pointer"
                             >
                                 Close Details
                             </button>

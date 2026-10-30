@@ -156,13 +156,14 @@ r6 = db.get(Report, r6.report_id)
 r6.facility_id = None
 r6.custody_status = "Impounded"
 db.commit()
-m = holding.get_metrics(barangay_id=1, barangay_only=True, impound_days=3, db=db, current_user=None)
+metric_admin = User(role_id=4)
+m = holding.get_metrics(barangay_id=1, barangay_only=True, impound_days=3, db=db, current_user=metric_admin)
 check("an animal impounded today counts in the shelter's Discharged Today", m.resolved_today >= 1, m.resolved_today)
-ids = [x.holding_id for x in holding.list_animals(barangay_id=1, barangay_only=True, db=db, current_user=None)]
+ids = [x.holding_id for x in holding.list_animals(barangay_id=1, barangay_only=True, db=db, current_user=metric_admin)]
 check("...and stays in the shelter's list (history)", a6.holding_id in ids, ids)
-ids_f = [x.holding_id for x in holding.list_animals(facility_id=brgy_shelter.landmark_id, db=db, current_user=None)]
+ids_f = [x.holding_id for x in holding.list_animals(facility_id=brgy_shelter.landmark_id, db=db, current_user=metric_admin)]
 check("...also when filtering by that facility", a6.holding_id in ids_f, ids_f)
-ids_s = [x.holding_id for x in holding.list_animals(facility_id=subd_pen.landmark_id, db=db, current_user=None)]
+ids_s = [x.holding_id for x in holding.list_animals(facility_id=subd_pen.landmark_id, db=db, current_user=metric_admin)]
 check("...but not under another facility", a6.holding_id not in ids_s, ids_s)
 
 print(f"\n{sum(results)}/{len(results)} checks passed")

@@ -227,7 +227,7 @@ const categoryMap: Record<number, string> = {
     1: 'Injured Animal',
     2: 'Aggressive Stray',
     3: 'Possible Rabies Risk',
-    4: 'Roaming Pack',
+    4: 'Roaming Animal',
     5: 'Animal Rescue Needed',
     6: 'Lost Pet'
 };
@@ -290,7 +290,7 @@ const getActionTitle = (statusId?: number, remarks?: string) => {
     if (rem.includes('verified') || rem.includes('verification')) return 'FIELD VERIFICATION COMPLETED';
     if (rem.includes('escalat') || rem.includes('endorse')) return 'OFFICIAL ESCALATION / ENDORSEMENT';
     if (rem.includes('picked up') || rem.includes('secured')) return 'ANIMAL PICKED UP / SECURED';
-    if (rem.includes('holding') || rem.includes('pen') || rem.includes('admitted')) return 'ADMITTED TO HOLDING FACILITY';
+    if (rem.includes('holding') || rem.includes('pen') || rem.includes('admitted')) return 'ADMITTED TO HOLDING PLACE';
     if (rem.includes('observation') || statusId === 7) return 'TRANSFERRED TO OBSERVATION';
     if (rem.includes('direct action') || rem.includes('override') || rem.includes('admin')) return 'ADMIN DIRECT STATUS OVERRIDE';
     if (rem.includes('resolved') || statusId === 11) return 'INCIDENT RESOLVED';
@@ -887,7 +887,7 @@ export const AdminReportView: React.FC = () => {
                                         {/* Current Facility Pill */}
                                         <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black text-indigo-700 bg-indigo-50 border border-indigo-200">
                                             <Building2 className="w-3.5 h-3.5 text-indigo-600" />
-                                            <span>{holdingRecord.facility_name || report.facility?.name || 'Designated Holding Facility'}</span>
+                                            <span>{holdingRecord.facility_name || report.facility?.name || 'Designated Holding Place'}</span>
                                         </span>
 
                                         {/* Kennel Slot Pill */}
@@ -2266,7 +2266,7 @@ export const AdminReportView: React.FC = () => {
                             </button>
                             <button
                                 onClick={() => setIsEndorsementModalOpen(false)}
-                                className="px-5 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-black uppercase tracking-wider hover:bg-slate-800 transition-all"
+                                className="px-5 py-2.5 rounded-xl action-primary text-xs font-black uppercase tracking-wider transition-all"
                             >
                                 Close
                             </button>

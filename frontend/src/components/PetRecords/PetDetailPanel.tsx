@@ -1051,25 +1051,6 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                     </div>
                 </div>
 
-                {/* Server-side AI check of the pet's photos (main + front/left/right) */}
-                {(() => {
-                    const st = pet.rawPetObj?.photo_check_status as string | undefined;
-                    if (!st || st === 'authentic') return null;
-                    const tone = st === 'ai_generated' || st === 'ineligible_subject'
-                        ? 'bg-rose-50 border-rose-200 text-rose-900'
-                        : st === 'uncertain' ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-slate-50 border-slate-200 text-slate-700';
-                    const title = st === 'ai_generated' ? '⚠️ Photo may be AI-generated'
-                        : st === 'ineligible_subject' ? '⚠️ No dog or cat detected in a photo'
-                        : st === 'uncertain' ? 'Photo authenticity uncertain' : 'Photo authenticity not checked (AI offline)';
-                    return (
-                        <div className={`p-3.5 rounded-2xl border text-xs font-semibold ${tone}`} data-testid="pet-photo-check">
-                            <p className="font-black">{title}</p>
-                            {pet.rawPetObj?.photo_check_details && <p className="mt-0.5 font-medium opacity-90">{pet.rawPetObj.photo_check_details}</p>}
-                            <p className="mt-1 text-[10px] font-medium opacity-80">Look-alike matching compares against these photos. Ask the owner for a real, clear photo if this is wrong.</p>
-                        </div>
-                    );
-                })()}
-
                 {/* Pet Owner Profile & Information (Visible ONLY on Subd, Brgy, and Admin pet records) */}
                 {!hideRegisteredPets && (
                     <div className="bg-gradient-to-br from-role-soft/40 via-amber-50/20 to-white rounded-[2rem] p-6 sm:p-7 border-2 border-role-border/80 shadow-xs space-y-5 animate-in fade-in duration-300">
@@ -1702,7 +1683,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                     type="button"
                                                     onClick={() => setHistoryFilter('all')}
                                                     className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${historyFilter === 'all'
-                                                        ? 'bg-[#1a1208] text-white shadow-xs'
+                                                        ? 'action-primary shadow-xs'
                                                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                                         }`}
                                                 >
@@ -1727,7 +1708,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                     type="button"
                                                     onClick={() => setHistoryFilter('reports')}
                                                     className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${historyFilter === 'reports'
-                                                        ? 'bg-[#1a1208] text-white shadow-xs'
+                                                        ? 'action-primary shadow-xs'
                                                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                                         }`}
                                                 >
@@ -1829,7 +1810,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                                 setSelectedWarningModal(warning);
                                                                                 setIsWarningDetailsOpen(true);
                                                                             }}
-                                                                            className="px-4 py-2 bg-[#1a1208] hover:bg-[#2c2010] text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-xs"
+                                                                            className="px-4 py-2 action-primary rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-xs"
                                                                         >
                                                                             Warning Details
                                                                         </button>
@@ -1947,7 +1928,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                                             setSelectedWarningModal(w);
                                                                                             setIsWarningDetailsOpen(true);
                                                                                         }}
-                                                                                        className="px-3.5 py-1.5 bg-[#1a1208] hover:bg-[#2c2010] text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-xs"
+                                                                                        className="px-3.5 py-1.5 action-primary rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-xs"
                                                                                     >
                                                                                         Warning Details
                                                                                     </button>
@@ -2025,7 +2006,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                                                 : (userRoleId === 3 ? `/brgy/reports/${r.report_id}` : (userRoleId === 4 ? `/admin/reports/${r.report_id}` : `/resident/reports/${r.report_id}`));
                                                                                             navigate(targetUrl);
                                                                                         }}
-                                                                                        className="px-3.5 py-1.5 bg-[#1a1208] hover:bg-[#2c2010] text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                                                                                        className="px-3.5 py-1.5 action-primary rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 shadow-xs"
                                                                                     >
                                                                                         View Report
                                                                                         <ExternalLink className="w-3 h-3" />
@@ -2179,7 +2160,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                                         : (userRoleId === 3 ? `/brgy/reports/${report.report_id}` : (userRoleId === 4 ? `/admin/reports/${report.report_id}` : `/resident/reports/${report.report_id}`));
                                                                                     navigate(targetUrl);
                                                                                 }}
-                                                                                className="px-4 py-2.5 bg-[#1a1208] hover:bg-[#2c2010] text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center gap-1.5 shadow-sm hover:scale-[1.02]"
+                                                                                className="px-4 py-2.5 action-primary rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center gap-1.5 shadow-sm hover:scale-[1.02]"
                                                                             >
                                                                                 <span>View Report</span>
                                                                                 <ExternalLink className="w-3.5 h-3.5" />
@@ -2653,7 +2634,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                             <button
                                 type="button"
                                 onClick={() => setIsQrOpen(false)}
-                                className="w-full py-3 bg-[#1a1208] hover:bg-[#2c2010] text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer"
+                                className="w-full py-3 action-primary rounded-2xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer"
                             >
                                 Close QR Tag
                             </button>

@@ -161,7 +161,7 @@ check("animal no longer in a kennel / facility (status 7, slot cleared)", an.ken
 check("report location restored from the holding facility to the original sighting",
       rp.landmark == "Selera Homes" and float(rp.latitude) == 14.8 and rp.facility_id is None, (rp.landmark, rp.latitude, rp.facility_id))
 check("custody shows it is with the adopter (awaiting confirmation)", "Adopter" in (rp.custody_status or ""), rp.custody_status)
-check("holding timeline records the release", any("Released from holding facility" in (t.title or "") for t in db.query(HoldingTimeline).filter_by(holding_id=hid)))
+check("holding timeline records the release", any("Released from holding place" in (t.title or "") for t in db.query(HoldingTimeline).filter_by(holding_id=hid)))
 check("two-way handover is still NOT final until the adopter confirms", db.get(Adoption, aid).is_handed_over is False)
 
 # ── Catalog shows the pet record's photo first ───────────────────────────────

@@ -20,14 +20,13 @@ import {
     Compass
 } from 'lucide-react';
 
-interface HotspotArea {
-    name: string;
-    count: number;
-    risk: 'High' | 'Medium' | 'Low';
-    trend: 'up' | 'down' | 'stable';
-}
+import {
+    DATE_PRESET_LABELS, DEFAULT_DATE_PRESET, HOTSPOT_RADIUS_M, HOTSPOT_WINDOW_DAYS, LOST_PET_CATEGORY_ID,
+    findHotspots, heatPoints, isActiveReport, isInDateRange, isLostPetReport, isValidIncident,
+    type DatePreset, type Hotspot,
+} from '../../utils/heatmap';
 
-const isResolvedOrClosed = (statusId: number) => [3, 6, 9, 10, 11, 12, 14, 17, 18].includes(statusId);
+const isResolvedOrClosed = (statusId: number) => !isActiveReport({ status_id: statusId });
 
 // Strip the "Notes: ..." segment from pipe-delimited descriptions to keep marker titles concise
 const stripNotes = (desc: string): string => {
@@ -37,11 +36,6 @@ const stripNotes = (desc: string): string => {
         .filter(seg => !seg.trim().toLowerCase().startsWith('notes:'))
         .join('|')
         .trim();
-};
-
-const isReportResolved = (r: any, rescue: any) => {
-    const reportStatusId = r.status_id || r.current_status_id || 1;
-    return isResolvedOrClosed(reportStatusId) || (rescue && rescue.status_id === 6);
 };
 
 // Check if a report has not yet been claimed by a subdivision leader or touched by staff.
@@ -60,19 +54,25 @@ const isUntouchedByStaff = (report: any, rescue: any) => {
 
 const getStatusName = (statusId: number) => {
     switch (statusId) {
-        case 1: return 'Pending Verification';
+        // Names from the report_status table (used only when the server sends no status name)
+        case 1: return 'Reported';
         case 2: return 'Verified';
         case 3: return 'Rejected';
-        case 4: return 'Forwarded to Barangay';
-        case 5: return 'Team Dispatched';
-        case 6: return 'Resolved';
-        case 7: return 'Picked Up';
-        case 8: return 'Under Observation';
-        case 9: return 'Impounded';
+        case 4: return 'Escalated to Barangay';
+        case 5: return 'Rescue In Progress';
+        case 6: return 'Picked Up';
+        case 7: return 'Under Observation';
+        case 8: return 'Impounded';
+        case 9: return 'Claimed by Owner';
         case 10: return 'Released';
         case 11: return 'Incident Resolved';
         case 12: return 'Deceased';
-        case 13: return 'Approved by Barangay';
+        case 13: return 'Approved';
+        case 14: return 'False Alarm / Dismissed';
+        case 15: return 'Disputed';
+        case 16: return 'Under Investigation';
+        case 17: return 'Animal Cannot Be Found';
+        case 18: return 'Merged Duplicate';
         default: return 'Active';
     }
 };
@@ -80,10 +80,10 @@ const getStatusName = (statusId: number) => {
 const getMarkerColor = (report: any, rescue: any) => {
     const statusId = report.status_id;
     // Resolved / Historical
-    if (isResolvedOrClosed(statusId) || rescue?.status_id === 6) return 'gray';
+    if (isResolvedOrClosed(statusId)) return 'gray';
 
-    // Purple: In Holding Pen
-    if (statusId === 7 || statusId === 8) return 'purple';
+    // Purple: in custody (picked up, under observation, impounded)
+    if (statusId === 6 || statusId === 7 || statusId === 8) return 'purple';
 
     // Blue: Team Dispatched
     if (statusId === 5 || rescue?.status_id === 4 || rescue?.status_id === 5 || rescue?.staff_id) return 'blue';
@@ -107,12 +107,14 @@ const AdminHeatMap = () => {
     const [mapZoom, setMapZoom] = useState<number>(16);
 
     // Filters
-    const [datePreset, setDatePreset] = useState<'all' | '24h' | '7d' | '30d' | 'custom'>('7d');
+    const [datePreset, setDatePreset] = useState<DatePreset>(DEFAULT_DATE_PRESET);
     const [customStartDate, setCustomStartDate] = useState('');
     const [customEndDate, setCustomEndDate] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('all');
     const [untouchedOnly, setUntouchedOnly] = useState(false);
+    // Pins show active reports; resolved pins only on request. The heat layer always includes resolved incidents.
     const [includeResolved, setIncludeResolved] = useState(false);
+    const [includeLostPets, setIncludeLostPets] = useState(false);
 
     // Floating UI Panels
     const [showLegend, setShowLegend] = useState(true);
@@ -126,25 +128,6 @@ const AdminHeatMap = () => {
     const [navSource, setNavSource] = useState<'hq' | 'brgy' | 'current'>('hq');
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
 
-    // Dynamic Hotspot Data computed from live database reports
-    const hotspots: HotspotArea[] = useMemo(() => {
-        if (!reports || reports.length === 0) return [];
-        const countsByLandmark: Record<string, number> = {};
-        reports.forEach((r: any) => {
-            const loc = r.landmark || r.location_description || 'San Vicente';
-            countsByLandmark[loc] = (countsByLandmark[loc] || 0) + 1;
-        });
-        return Object.entries(countsByLandmark)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 5)
-            .map(([name, count]) => ({
-                name,
-                count,
-                risk: count >= 5 ? 'High' : count >= 2 ? 'Medium' : 'Low',
-                trend: count > 3 ? 'up' : 'stable'
-            }));
-    }, [reports]);
-
     // Untouched by staff count
     const untouchedCount = useMemo(() => {
         return reports.filter((r: any) => {
@@ -154,12 +137,7 @@ const AdminHeatMap = () => {
     }, [reports, requests]);
 
     // Active cases count
-    const activeCount = useMemo(() => {
-        return reports.filter((r: any) => {
-            const associatedRescue = requests.find(req => req.report_id === r.report_id);
-            return !isReportResolved(r, associatedRescue);
-        }).length;
-    }, [reports, requests]);
+    const activeCount = useMemo(() => reports.filter((r: any) => isActiveReport(r)).length, [reports]);
 
     // Real hourly distribution computed from reports for analytics drawer
     const hourlyDistribution = useMemo(() => {
@@ -233,64 +211,45 @@ const AdminHeatMap = () => {
     }, [isNavigating, navSource]);
 
     // Filter reports based on Date, Category, Untouched, and Resolved status
+    // Category, untouched and lost-pet filters apply to pins, heat and hotspots alike. Choosing the Lost Pets
+    // category shows them even when the lost-pet switch is off.
+    const scopedReports = useMemo(() => {
+        let scoped = [...reports];
+        if (categoryFilter !== 'all') {
+            scoped = scoped.filter(r => r.category_id?.toString() === categoryFilter);
+        } else if (!includeLostPets) {
+            scoped = scoped.filter(r => !isLostPetReport(r));
+        }
+        if (untouchedOnly) {
+            scoped = scoped.filter(r => {
+                const associatedRescue = requests.find(req => req.report_id === r.report_id);
+                return isUntouchedByStaff(r, associatedRescue);
+            });
+        }
+        return scoped;
+    }, [reports, requests, categoryFilter, includeLostPets, untouchedOnly]);
+
+    // Hotspots always use the trailing 30 days, whatever range the map shows
+    const hotspots: Hotspot[] = useMemo(
+        () => findHotspots(scopedReports, { includeLostPets: true }).slice(0, 5),
+        [scopedReports]
+    );
+
     const { heatmapPoints, markers, filteredReportsCount } = useMemo(() => {
         if (!reports.length) {
             return { heatmapPoints: [] as [number, number, number][], markers: [] as any[], filteredReportsCount: 0 };
         }
 
-        let filtered = [...reports];
+        const inRange = scopedReports.filter(r => isInDateRange(r, datePreset, customStartDate, customEndDate));
 
-        // 1. Date Filter
-        const now = new Date();
-        if (datePreset === '24h') {
-            const limit = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-            filtered = filtered.filter(r => new Date(r.created_at) >= limit);
-        } else if (datePreset === '7d') {
-            const limit = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-            filtered = filtered.filter(r => new Date(r.created_at) >= limit);
-        } else if (datePreset === '30d') {
-            const limit = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-            filtered = filtered.filter(r => new Date(r.created_at) >= limit);
-        } else if (datePreset === 'custom') {
-            if (customStartDate) {
-                const start = new Date(customStartDate);
-                start.setHours(0, 0, 0, 0);
-                filtered = filtered.filter(r => new Date(r.created_at) >= start);
-            }
-            if (customEndDate) {
-                const end = new Date(customEndDate);
-                end.setHours(23, 59, 59, 999);
-                filtered = filtered.filter(r => new Date(r.created_at) <= end);
-            }
-        }
+        // Heat: every valid incident in range (resolved included), at its original sighting
+        const points = heatPoints(inRange, true);
 
-        // 2. Category Filter
-        if (categoryFilter !== 'all') {
-            filtered = filtered.filter(r => r.category_id?.toString() === categoryFilter);
-        }
-
-        // 3. Untouched by Staff Filter
-        if (untouchedOnly) {
-            filtered = filtered.filter(r => {
-                const associatedRescue = requests.find(req => req.report_id === r.report_id);
-                return isUntouchedByStaff(r, associatedRescue);
-            });
-        }
-
-        // 4. Resolved Filter
-        filtered = filtered.filter(r => {
+        // Pins: active reports at the animal's current place; resolved (valid) pins only when asked
+        const filtered = inRange.filter(r => {
             if (!r.latitude || !r.longitude) return false;
-            const associatedRescue = requests.find(req => req.report_id === r.report_id);
-            const isResolved = isReportResolved(r, associatedRescue);
-            return includeResolved || !isResolved;
+            return isActiveReport(r) || (includeResolved && isValidIncident(r));
         });
-
-        // Heatmap Points
-        const points = filtered.map((r: any) => [
-            parseFloat(r.latitude.toString()),
-            parseFloat(r.longitude.toString()),
-            r.priority_level === 'High' || r.priority_level === 'Critical' ? 1.0 : 0.6
-        ] as [number, number, number]);
 
         // Markers
         const marks = filtered.map((r: any) => {
@@ -346,7 +305,7 @@ const AdminHeatMap = () => {
         }
 
         return { heatmapPoints: points, markers: marks, filteredReportsCount: filtered.length };
-    }, [reports, requests, datePreset, customStartDate, customEndDate, categoryFilter, untouchedOnly, includeResolved, userLocation]);
+    }, [reports, scopedReports, requests, datePreset, customStartDate, customEndDate, includeResolved, userLocation]);
 
     const handleFlyToSelera = () => {
         setMapCenter([...SELERA_DEFAULT_CENTER]);
@@ -354,15 +313,16 @@ const AdminHeatMap = () => {
     };
 
     const handleResetAllFilters = () => {
-        setDatePreset('7d');
+        setDatePreset(DEFAULT_DATE_PRESET);
         setCustomStartDate('');
         setCustomEndDate('');
         setCategoryFilter('all');
         setUntouchedOnly(false);
         setIncludeResolved(false);
+        setIncludeLostPets(false);
     };
 
-    const isFiltersApplied = datePreset !== '7d' || categoryFilter !== 'all' || untouchedOnly || includeResolved;
+    const isFiltersApplied = datePreset !== DEFAULT_DATE_PRESET || categoryFilter !== 'all' || untouchedOnly || includeResolved || includeLostPets;
 
     return (
         <div className="flex h-screen bg-[#0F172A] text-slate-200 overflow-hidden">
@@ -468,9 +428,9 @@ const AdminHeatMap = () => {
                                         }}
                                         className="bg-transparent text-white font-bold text-xs outline-none cursor-pointer pr-1"
                                     >
-                                        <option value="24h" className="bg-slate-900 text-white">Today (24h)</option>
                                         <option value="7d" className="bg-slate-900 text-white">Past 7 Days</option>
                                         <option value="30d" className="bg-slate-900 text-white">Past 30 Days</option>
+                                        <option value="90d" className="bg-slate-900 text-white">Past 90 Days</option>
                                         <option value="all" className="bg-slate-900 text-white">All Time</option>
                                         <option value="custom" className="bg-slate-900 text-white">Custom Range...</option>
                                     </select>
@@ -498,25 +458,41 @@ const AdminHeatMap = () => {
                                         <option value="1" className="bg-slate-900 text-white">Injured Animals</option>
                                         <option value="2" className="bg-slate-900 text-white">Aggressive Strays</option>
                                         <option value="3" className="bg-slate-900 text-white">Rabies Risks</option>
-                                        <option value="4" className="bg-slate-900 text-white">Roaming Packs</option>
+                                        <option value="4" className="bg-slate-900 text-white">Roaming Animals</option>
                                         <option value="5" className="bg-slate-900 text-white">Animal Rescues</option>
-                                        <option value="6" className="bg-slate-900 text-white">Lost Pets</option>
+                                        <option value={String(LOST_PET_CATEGORY_ID)} className="bg-slate-900 text-white">Lost Pets</option>
                                     </select>
                                 </div>
 
-                                {/* Status Scope: Active vs Include Resolved */}
+                                {/* Pins: active only, or with resolved cases (the heat layer always includes resolved) */}
                                 <button
                                     type="button"
                                     onClick={() => setIncludeResolved(prev => !prev)}
                                     className={`px-3 py-1.5 rounded-xl border text-[10.5px] font-black uppercase tracking-wider transition-all ${
                                         includeResolved
-                                            ? 'bg-slate-800 text-orange-400 border-orange-500/50 ring-1 ring-orange-500/30'
-                                            : 'bg-slate-800/80 text-slate-400 border-slate-700 hover:text-slate-200'
+                                            ? 'action-primary border-orange-500/50 ring-1 ring-orange-500/30'
+                                            : 'bg-orange-500/10 text-orange-200 border-orange-500/40 hover:bg-orange-500/20 hover:text-white'
                                     }`}
-                                    title="Toggle resolved and historical reports"
+                                    title="Show resolved cases as gray pins. The heat layer always counts resolved incidents."
                                 >
-                                    {includeResolved ? 'Inc. Resolved' : 'Active Only'}
+                                    {includeResolved ? 'Resolved Pins: On' : 'Resolved Pins: Off'}
                                 </button>
+
+                                {/* Lost pets are not stray density: off by default */}
+                                {categoryFilter === 'all' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setIncludeLostPets(prev => !prev)}
+                                        className={`px-3 py-1.5 rounded-xl border text-[10.5px] font-black uppercase tracking-wider transition-all ${
+                                            includeLostPets
+                                                ? 'action-primary border-orange-500/50 ring-1 ring-orange-500/30'
+                                                : 'bg-orange-500/10 text-orange-200 border-orange-500/40 hover:bg-orange-500/20 hover:text-white'
+                                        }`}
+                                        title="Lost pet reports are left out of the stray heat map unless included"
+                                    >
+                                        {includeLostPets ? 'Lost Pets: Included' : 'Lost Pets: Excluded'}
+                                    </button>
+                                )}
                             </div>
 
                             {/* Right Group: Selera Quick Center, Legend Toggle & Analytics */}
@@ -551,8 +527,8 @@ const AdminHeatMap = () => {
                                     onClick={() => setShowLegend(prev => !prev)}
                                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[10.5px] font-black uppercase tracking-wider transition-all ${
                                         showLegend
-                                            ? 'bg-slate-800 border-orange-500/50 text-orange-400'
-                                            : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-slate-200'
+                                            ? 'action-primary border-orange-500/50 '
+                                            : 'bg-orange-500/10 border-orange-500/40 text-orange-200 hover:bg-orange-500/20 hover:text-white'
                                     }`}
                                     title="Toggle marker color legend"
                                 >
@@ -566,8 +542,8 @@ const AdminHeatMap = () => {
                                     onClick={() => setShowAnalyticsDrawer(prev => !prev)}
                                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[10.5px] font-black uppercase tracking-wider transition-all ${
                                         showAnalyticsDrawer
-                                            ? 'bg-slate-800 border-orange-500/50 text-orange-400'
-                                            : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-slate-200'
+                                            ? 'action-primary border-orange-500/50 '
+                                            : 'bg-orange-500/10 border-orange-500/40 text-orange-200 hover:bg-orange-500/20 hover:text-white'
                                     }`}
                                     title="Open Hotspot Analysis & Temporal Flow"
                                 >
@@ -586,14 +562,17 @@ const AdminHeatMap = () => {
                                     {untouchedOnly && <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30">Untouched Only</span>}
                                     {datePreset !== 'all' && (
                                         <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 font-bold">
-                                            {datePreset === '24h' ? 'Past 24 Hours' : datePreset === '7d' ? 'Past 7 Days' : datePreset === '30d' ? 'Past 30 Days' : `${customStartDate || 'Start'} to ${customEndDate || 'End'}`}
+                                            {datePreset === 'custom' ? `${customStartDate || 'Start'} to ${customEndDate || 'End'}` : DATE_PRESET_LABELS[datePreset]}
                                         </span>
                                     )}
                                     {categoryFilter !== 'all' && (
                                         <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 font-bold">Category #{categoryFilter}</span>
                                     )}
                                     {includeResolved && (
-                                        <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 font-bold">Including Resolved</span>
+                                        <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 font-bold">Resolved Pins</span>
+                                    )}
+                                    {includeLostPets && categoryFilter === 'all' && (
+                                        <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 font-bold">Lost Pets Included</span>
                                     )}
                                 </div>
                                 <span className="font-mono text-slate-300 font-black">{filteredReportsCount} matching pins</span>
@@ -636,7 +615,7 @@ const AdminHeatMap = () => {
                                 </div>
                                 <div className="flex items-center gap-2.5">
                                     <span className="w-3 h-3 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(139,92,246,0.6)] shrink-0 border border-purple-400"></span>
-                                    <span className="truncate">🟣 Purple: In Holding Pen</span>
+                                    <span className="truncate">🟣 Purple: In Custody / Holding</span>
                                 </div>
                                 <div className={`flex items-center justify-between gap-2.5 transition-all ${includeResolved ? 'opacity-100' : 'opacity-40'}`}>
                                     <div className="flex items-center gap-2.5 truncate">
@@ -645,6 +624,9 @@ const AdminHeatMap = () => {
                                     </div>
                                     {!includeResolved && <span className="text-[8px] font-black uppercase text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded">Off</span>}
                                 </div>
+                                <p className="pt-2 mt-1 border-t border-slate-800 text-[9.5px] font-semibold text-slate-400 leading-snug">
+                                    Heat: where incidents were first sighted, resolved included. High priority counts more. Rejected, false alarm and duplicate reports are not counted.
+                                </p>
                             </div>
                         </div>
                     )}
@@ -688,27 +670,36 @@ const AdminHeatMap = () => {
                                 <div className="mb-5">
                                     <div className="flex items-center justify-between mb-3">
                                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Incident Hotspots</span>
-                                        <span className="text-[9px] font-black text-orange-400 uppercase">Top 5 Landmarks</span>
+                                        <span className="text-[9px] font-black text-orange-400 uppercase">Last {HOTSPOT_WINDOW_DAYS} days · {HOTSPOT_RADIUS_M} m</span>
                                     </div>
                                     <div className="space-y-2">
                                         {hotspots.length === 0 ? (
-                                            <p className="text-xs font-semibold text-slate-500 py-3 text-center">No hotspot clusters detected.</p>
+                                            <p className="text-xs font-semibold text-slate-500 py-3 text-center">No hotspots: no place has 3 or more incidents within {HOTSPOT_RADIUS_M} m in the last {HOTSPOT_WINDOW_DAYS} days.</p>
                                         ) : (
                                             hotspots.map((spot, idx) => (
-                                                <div key={idx} className="bg-slate-800/40 border border-slate-700/40 p-3 rounded-xl flex items-center justify-between">
+                                                <button
+                                                    type="button"
+                                                    key={idx}
+                                                    onClick={() => { setMapCenter([...spot.center]); setMapZoom(18); }}
+                                                    className="w-full text-left bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 p-3 rounded-xl flex items-center justify-between transition-colors"
+                                                    title="Show this hotspot on the map"
+                                                >
                                                     <div className="min-w-0 pr-2">
-                                                        <span className="text-xs font-black text-white truncate block">{spot.name}</span>
-                                                        <span className="text-[9px] font-bold text-slate-400">{spot.count} recorded cases</span>
+                                                        <span className="text-xs font-black text-white truncate block">{spot.label}</span>
+                                                        <span className="text-[9px] font-bold text-slate-400">{spot.count} incidents within {HOTSPOT_RADIUS_M} m</span>
                                                     </div>
                                                     <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded shrink-0 ${
-                                                        spot.risk === 'High' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                                                        spot.level === 'High Incident Density' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
                                                     }`}>
-                                                        {spot.risk} Risk
+                                                        {spot.level}
                                                     </span>
-                                                </div>
+                                                </button>
                                             ))
                                         )}
                                     </div>
+                                    <p className="mt-2 text-[8.5px] font-semibold text-slate-500 leading-snug">
+                                        Hotspot: 3 or more valid incidents within {HOTSPOT_RADIUS_M} m; High Incident Density: 5 or more. Team-defined thresholds, not an official standard.
+                                    </p>
                                 </div>
 
                                 {/* Real Temporal Flow Distribution */}
@@ -746,7 +737,7 @@ const AdminHeatMap = () => {
                             <button
                                 type="button"
                                 onClick={() => setShowAnalyticsDrawer(false)}
-                                className="w-full mt-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white font-black text-xs uppercase tracking-wider transition-colors border border-slate-700"
+                                className="w-full mt-4 py-2 rounded-xl action-primary font-black text-xs uppercase tracking-wider transition-colors border border-slate-700"
                             >
                                 Close Intelligence Panel
                             </button>
@@ -797,7 +788,7 @@ const AdminHeatMap = () => {
                                             setDatePreset('7d');
                                             setShowDateCustomModal(false);
                                         }}
-                                        className="flex-1 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white font-black text-xs uppercase tracking-wider"
+                                        className="flex-1 py-2 rounded-xl action-primary font-black text-xs uppercase tracking-wider"
                                     >
                                         Clear
                                     </button>

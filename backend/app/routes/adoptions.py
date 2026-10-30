@@ -832,7 +832,7 @@ def _release_animal_from_facility(app: Adoption, db: Session, user_id: Optional[
         db.add(HoldingTimeline(
             holding_id=animal.holding_id,
             event_type="outcome",
-            title=f"Released from holding facility to adopter {app.full_name}",
+            title=f"Released from holding place to adopter {app.full_name}",
             notes="Staff handed the animal over. Awaiting the adopter's confirmation of receipt.",
             logged_by=user_id,
         ))
@@ -1468,7 +1468,7 @@ def promote_to_adoption(
     """
     animal = db.query(HoldingAnimal).filter(HoldingAnimal.holding_id == holding_id).first()
     if not animal:
-        raise HTTPException(status_code=404, detail="Animal not found in holding facility")
+        raise HTTPException(status_code=404, detail="Animal not found in holding place")
 
     # Permission check
     if not _can_manage_adoption(current_user, animal, db):
@@ -1587,7 +1587,7 @@ def withdraw_from_adoption(
             report_status_id=animal.report.current_status_id,
             updated_by=current_user.user_id,
             facility_id=animal.report.facility_id,
-            remarks=f"Adoption catalog listing withdrawn by {current_user.name}. Animal remains in holding facility custody under observation.",
+            remarks=f"Adoption catalog listing withdrawn by {current_user.name}. Animal remains in holding place custody under observation.",
         ))
 
     log_activity(
@@ -3635,7 +3635,7 @@ def schedule_adoption_handover(
     app.current_stage = "Handover"
     app.handover_scheduled_date = req.handover_date
     app.handover_scheduled_time = req.handover_time or "10:00 AM"
-    app.handover_location = req.handover_location or "Barangay Holding Facility"
+    app.handover_location = req.handover_location or "Barangay Holding Place"
     app.handover_assigned_staff = handover_staff.name
     app.handover_notes = req.notes
     app.handover_status = "Scheduled"
@@ -3733,7 +3733,7 @@ def complete_adoption_handover(
             raise HTTPException(status_code=400, detail="Only Approved applications can complete pet handover.")
 
     now = req.handover_date or db_now(db)
-    app.handover_location = req.handover_location or "Barangay Holding Facility"
+    app.handover_location = req.handover_location or "Barangay Holding Place"
     app.handover_photo_url = req.handover_photo_url
     app.staff_handed_over = True
     app.staff_handover_date = now

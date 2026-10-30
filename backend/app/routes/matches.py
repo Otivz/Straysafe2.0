@@ -198,6 +198,25 @@ def _serialize_with_case_confirmation(matches: List[ReportMatch], report_id: Opt
     return extra + out
 
 
+# Claim statuses before the owner has filed the claim with proof: no shortcut yet
+_CLAIM_NOT_FILED = ("Potential Owner Match", "Possible Match Found")
+
+
+def _filed_case_claim(db: Session, m: ReportMatch) -> Optional[PetClaim]:
+    """The case's pet claim for this match's pet, once the owner has filed it (follows merged claims)."""
+    if not m.matched_pet_id or m.source_report is None:
+        return None
+    member_ids = [r.report_id for r in case_members(db, case_root(db, m.source_report))]
+    raw = db.query(PetClaim).filter(PetClaim.pet_id == m.matched_pet_id, PetClaim.report_id.in_(member_ids)).all()
+    live = []
+    for c in raw:
+        c = live_claim(db, c)
+        if c is not None and c.pet_id == m.matched_pet_id and c.report_id in member_ids and c not in live:
+            live.append(c)
+    claim = pick_case_claim(live)
+    return claim if claim is not None and claim.status not in _CLAIM_NOT_FILED else None
+
+
 def _serialize_matches(matches: List[ReportMatch], user: User, db: Session, queue: bool = False) -> List[ReportMatchResponse]:
     """Open suggestions of closed or impounded cases are left out everywhere (they need no decision)."""
     out = []
@@ -218,6 +237,9 @@ def _serialize_matches(matches: List[ReportMatch], user: User, db: Session, queu
             if resp.identity_lock_reason:
                 active = active_case_lock(db, m)
                 resp.separate_incident_case_id = active["root"].report_id if active else None
+            claim = _filed_case_claim(db, m)
+            if claim is not None:
+                resp.claim_id, resp.claim_status = claim.claim_id, claim.status
         out.append(_redact_for_resident(resp, user, m, db, scope) if user.role_id == 1 else resp)
     return out
 

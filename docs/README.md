@@ -39,8 +39,14 @@ Status values: **Current** (matches the code when last checked), **Reference** (
 | Document | Status | Notes |
 |---|---|---|
 | [01-system/overview.md](01-system/overview.md) | Current | System boundary, roles, services, known gaps |
+| [01-system/HEATMAP_RULES.md](01-system/HEATMAP_RULES.md) | Current | Incident counting, original sighting heat, active pins, hotspot thresholds, public directions and Phase 1 validation |
+| [01-system/PET_REGISTRATION_AND_MATCH_REVIEW.md](01-system/PET_REGISTRATION_AND_MATCH_REVIEW.md) | Current | Phase 5 pet-photo analysis, form cleanup, behavior preservation, appearance comparison, claim shortcuts and adoption compatibility |
+| [01-system/HOLDING_PLACE_AND_CUSTODY_RULES.md](01-system/HOLDING_PLACE_AND_CUSTODY_RULES.md) | Current | Phase 2 labels, account-scoped leader holding views, read-only Barangay care, earlier pens, resident custody and adoption compatibility |
+| [Phase 5 pet registration and match review change record](05-operations/agents/feature-updates/2026-10-30_1439_phase-5-pet-registration-matches.md) | Reference | Changed files, adoption preservation, 124 API checks, 13 unit checks, 26 browser scenarios, build/lint and audit limitations |
+| [Phase 2 holding and custody change record](05-operations/agents/feature-updates/2026-10-30_1414_phase-2-holding-custody.md) | Reference | Changed files, server scope/custody restrictions, adoption preservation, 146 API checks and 18 browser scenarios |
+| [Phase 1 incident maps change record](05-operations/agents/feature-updates/2026-10-30_1337_phase-1-incident-maps.md) | Reference | Source selection, adoption preservation, changed files, 25 unit checks, 14 browser scenarios, build/lint evidence and audit limitation |
 | [02-project/README.md](02-project/README.md) | Current | Requirements, decisions, milestones, status, stale records |
-| [04-testing/README.md](04-testing/README.md) | Current | Test inventory; results not re-run |
+| [04-testing/README.md](04-testing/README.md) | Current | Inventory plus scoped map, holding, custody, pet/claim and adoption validation; full suite not re-run |
 | [02-project/DEFENSE_PLAN.md](02-project/DEFENSE_PLAN.md) | Current | Capstone defense plan: roles, countdown, outline, demo script, risks, panel questions |
 | [02-project/MANUSCRIPT_CHAPTER1_CHECK_2026-10-26.md](02-project/MANUSCRIPT_CHAPTER1_CHECK_2026-10-26.md) | Current | Manuscript Chapter 1 (STRAYSAFEEE1.pdf) checked against the system, rated 8.4/10 |
 | [03-development/audits/ADOPTION_CHAT_ISOLATION_AUDIT_2026-10-25.md](03-development/audits/ADOPTION_CHAT_ISOLATION_AUDIT_2026-10-25.md) | Current | Chat isolation findings, fixed 2026-10-25; duplicate-thread merge still to run |
@@ -54,6 +60,10 @@ Status values: **Current** (matches the code when last checked), **Reference** (
 | [ERD/](ERD/00_ERD_MODULE_OVERVIEW.md) | Reference | Entity-relationship diagrams and database design; match with the ORM is Unverified |
 | [DFD/](DFD/00_DFD_OVERVIEW.md) | Reference | Data-flow diagrams (context, level 1, level 2) and review notes |
 | [06-future-proposals/TUNNEL_INTEGRATION_RESEARCH_AND_PLANNING.md](06-future-proposals/TUNNEL_INTEGRATION_RESEARCH_AND_PLANNING.md) | Reference | Tunnel integration research, mobile compatibility, and implementation plan |
+| [06-future-proposals/RESTORE_UI_AND_WORKFLOW_IMPROVEMENTS_2026-10-30.md](06-future-proposals/RESTORE_UI_AND_WORKFLOW_IMPROVEMENTS_2026-10-30.md) | Current (plan, partial) | Phases 1, 2 and 5 implemented and verified with isolated checks; remaining phases pending; adoption retained |
+| [Orange primary-action implementation](05-operations/agents/feature-updates/2026-10-30_1316_orange-primary-actions.md) | Reference | Shared orange styling, 38 converted controls, adoption UI preserved, build and synthetic CSS browser evidence |
+| [Restoration implementation checklist change record](05-operations/agents/feature-updates/2026-10-30_1254_restoration-implementation-checklist.md) | Reference | Records the documentation request, files, source inspection and audit limitation |
+| [Orange-button checklist preference](05-operations/agents/feature-updates/2026-10-30_1308_orange-button-checklist-preference.md) | Reference | Explicit orange primary actions across all portals and adoption screens, with dark-style and accessibility checks |
 
 ### At the repository root (not yet moved under `docs/`)
 

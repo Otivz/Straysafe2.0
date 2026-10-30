@@ -94,12 +94,15 @@ const SubdPetClaims = () => {
     const [isViewReportAddressLoading, setIsViewReportAddressLoading] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+    const openedFromLinkRef = useRef<string | null>(null);
+
     // Auto open claim review when navigated from dashboard with claim_id param or location state
     useEffect(() => {
         const targetId = searchParams.get('claim_id') || location.state?.claimId;
-        if (targetId && claims.length > 0) {
+        if (targetId && openedFromLinkRef.current !== String(targetId) && claims.length > 0) {
             const found = claims.find((c: any) => String(c.claim_id) === String(targetId));
             if (found) {
+                openedFromLinkRef.current = String(targetId);
                 openReview(found);
             }
         }
@@ -256,7 +259,7 @@ const SubdPetClaims = () => {
                 bc.registration_record_url && { name: bc.registration_record_url.split('/').pop(), url: bc.registration_record_url, color: 'green' }
             ].filter(Boolean),
             handover_photo_url: bc.handover_photo_url || bc.report_return?.handover_photo_url || bc.report?.returns?.[0]?.handover_photo_url || null,
-            owner_notes: bc.remarks || '',
+            owner_notes: (bc.remarks && bc.remarks !== 'I confirm this is my pet.') ? bc.remarks : '',
             distinctive_markings: bc.distinctive_markings || '',
             distance: computedMeters === null ? '' : computedMeters < 1000 ? `${Math.round(computedMeters)}m` : `${(computedMeters/1000).toFixed(1)}km`,
             distance_meters: computedMeters === null ? null : Math.round(computedMeters),
@@ -408,7 +411,7 @@ const SubdPetClaims = () => {
     const openReview = (claim: any) => { 
         setSelectedClaim(claim); 
         setRoadDistance(claim.distance_meters || null);
-        setRemarks(claim.remarks || ''); 
+        setRemarks('');
         setViewMode('review'); 
     };
 

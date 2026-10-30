@@ -2,6 +2,27 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Primary actions use the brand orange in every portal and theme. */
+@utility action-primary {
+  background-color: #F97316;
+  color: #1A1208;
+
+  &:hover:not(:disabled):not([aria-disabled="true"]) {
+    background-color: #EA580C;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #C2410C;
+    outline-offset: 3px;
+  }
+
+  &:disabled,
+  &[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Role Identity Accent (Subdivision Leader & Barangay Staff only)            */
 /* Purpose: visual role identification ONLY — sidebar active nav, role pill,  */

@@ -734,7 +734,7 @@ const ResidentSettings = () => {
                                         </div>
                                         <button
                                             type="submit"
-                                            className="px-5 py-2.5 bg-gray-900 dark:bg-orange-500 hover:dark:bg-orange-600 text-white rounded-xl text-xs font-bold hover:bg-black transition-all shadow-sm cursor-pointer"
+                                            className="px-5 py-2.5 action-primary rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
                                         >
                                             Update Password
                                         </button>

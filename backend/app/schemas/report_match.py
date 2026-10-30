@@ -80,6 +80,9 @@ class ReportMatchResponse(ReportMatchBase):
     via_case_report_id: Optional[int] = None
     # The owner disputes that this report is the case's pet (shown instead of "Confirmed via Report #N")
     case_identity_disputed: bool = False
+    # Staff only: the case's pet claim for this matched pet, once the owner has filed it with proof (a shortcut to it)
+    claim_id: Optional[int] = None
+    claim_status: Optional[str] = None
 
     class Config:
         from_attributes = True

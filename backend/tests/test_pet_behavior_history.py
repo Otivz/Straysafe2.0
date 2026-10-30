@@ -46,7 +46,7 @@ class PetBehaviorHistoryTests(unittest.TestCase):
     def setUp(self):
         Base.metadata.drop_all(self.engine)
         Base.metadata.create_all(self.engine)
-        for target in ('app.routes.pets.recheck_pet_photos', 'app.routes.pets.auto_extract_pet_colors'):
+        for target in ('app.routes.pets.auto_extract_pet_colors',):
             mock = patch(target)
             mock.start()
             self.addCleanup(mock.stop)

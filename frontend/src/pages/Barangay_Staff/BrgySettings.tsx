@@ -207,7 +207,7 @@ const BrgySettings: React.FC = () => {
     const handleSaveLandmark = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!isHeadOfficer) {
-            showToast('error', 'Permission denied: Only the Barangay Head Officer can manage holding facilities and landmarks.');
+            showToast('error', 'Permission denied: Only the Barangay Head Officer can manage holding places and landmarks.');
             return;
         }
         if (!landmarkForm.name.trim()) {
@@ -264,7 +264,7 @@ const BrgySettings: React.FC = () => {
 
     const handleDeleteLandmark = async (landmarkId: number, landmarkName: string) => {
         if (!isHeadOfficer) {
-            showToast('error', 'Permission denied: Only the Barangay Head Officer can delete holding facilities.');
+            showToast('error', 'Permission denied: Only the Barangay Head Officer can delete holding places.');
             return;
         }
         if (!window.confirm(`Are you sure you want to delete the facility / landmark "${landmarkName}"? This cannot be undone.`)) {
@@ -282,7 +282,7 @@ const BrgySettings: React.FC = () => {
 
     const handleEditLandmark = (item: any) => {
         if (!isHeadOfficer) {
-            showToast('error', 'Permission denied: Only the Barangay Head Officer can edit holding facilities.');
+            showToast('error', 'Permission denied: Only the Barangay Head Officer can edit holding places.');
             return;
         }
         setEditingLandmarkId(item.landmark_id);
@@ -468,18 +468,18 @@ const BrgySettings: React.FC = () => {
         },
         {
             id: 'landmarks' as BrgySettingsTab,
-            label: 'Landmarks & Holding Facilities',
+            label: 'Landmarks & Holding Places',
             icon: (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
             ),
-            description: 'Barangay impound pens, holding facilities, and key jurisdiction reference pins'
+            description: 'Barangay impound pens, holding places, and key jurisdiction reference pins'
         },
         {
             id: 'holding' as BrgySettingsTab,
-            label: 'Holding Facility & Quarantine',
+            label: 'Holding Place & Quarantine',
             icon: (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -673,7 +673,7 @@ const BrgySettings: React.FC = () => {
                                 </nav>
 
                                 <p className="hidden lg:block text-xs text-gray-500 leading-relaxed px-1">
-                                    <span className="font-bold text-gray-700">Barangay mandate:</span> Barangay Staff manage official animal rescues, supervise the municipal holding facility, process rabies quarantine logs, and broadcast emergency alerts.
+                                    <span className="font-bold text-gray-700">Barangay mandate:</span> Barangay Staff manage official animal rescues, supervise the municipal holding place, process rabies quarantine logs, and broadcast emergency alerts.
                                 </p>
                             </div>
 
@@ -826,15 +826,15 @@ const BrgySettings: React.FC = () => {
                                     <div className="space-y-6">
                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                             <div>
-                                                <h3 className="text-base font-black text-gray-900">Barangay Landmarks & Holding Facilities</h3>
-                                                <p className="text-xs text-gray-500 font-medium mt-0.5">Register key reference landmarks and manage official municipal animal holding facilities.</p>
+                                                <h3 className="text-base font-black text-gray-900">Barangay Landmarks & Holding Places</h3>
+                                                <p className="text-xs text-gray-500 font-medium mt-0.5">Register key reference landmarks and manage official municipal animal holding places.</p>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <span className="px-3 py-1 bg-role-soft border border-role-border text-role-strong rounded-xl text-xs font-bold">
                                                     📍 {landmarks.length} Landmarks
                                                 </span>
                                                 <span className="px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold">
-                                                    🐾 {landmarks.filter(l => l.is_holding_facility).length} Holding Facilities
+                                                    🐾 {landmarks.filter(l => l.is_holding_facility).length} Holding Places
                                                 </span>
                                             </div>
                                         </div>
@@ -846,7 +846,7 @@ const BrgySettings: React.FC = () => {
                                                 <div>
                                                     <p className="text-xs font-black uppercase tracking-wider">Barangay Head Officer Authorization Required</p>
                                                     <p className="text-xs text-amber-800/90 font-medium mt-0.5">
-                                                        Only the Barangay Head Officer can add, edit, or delete official Barangay holding facilities and landmarks. You are currently viewing these facilities in read-only mode.
+                                                        Only the Barangay Head Officer can add, edit, or delete official Barangay holding places and landmarks. You are currently viewing these facilities in read-only mode.
                                                     </p>
                                                 </div>
                                             </div>
@@ -1027,7 +1027,7 @@ const BrgySettings: React.FC = () => {
                                                         <div className="flex items-center gap-2.5">
                                                             <span className="text-xl">🐾</span>
                                                             <div>
-                                                                <p className="text-xs font-black uppercase tracking-wider">Designate as Official Animal Holding Facility</p>
+                                                                <p className="text-xs font-black uppercase tracking-wider">Designate as Official Animal Holding Place</p>
                                                                 <p className="text-[11px] text-gray-500 font-medium">Animals rescued or quarantined at the Barangay level can be accommodated here.</p>
                                                             </div>
                                                         </div>
@@ -1150,7 +1150,7 @@ const BrgySettings: React.FC = () => {
                                                 <p className="text-xs text-gray-400 font-bold animate-pulse">Loading registered landmarks...</p>
                                             ) : landmarks.length === 0 ? (
                                                 <div className="p-8 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                                                    <p className="text-gray-400 text-xs font-semibold">No landmarks or holding facilities registered for this Barangay yet.</p>
+                                                    <p className="text-gray-400 text-xs font-semibold">No landmarks or holding places registered for this Barangay yet.</p>
                                                 </div>
                                             ) : (
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1228,7 +1228,7 @@ const BrgySettings: React.FC = () => {
                                 {activeTab === 'holding' && (
                                     <div className="space-y-6">
                                         <div>
-                                            <h3 className="text-base font-black text-gray-900">Holding Facility & Quarantine Thresholds</h3>
+                                            <h3 className="text-base font-black text-gray-900">Holding Place & Quarantine Thresholds</h3>
                                             <p className="text-xs text-gray-500 font-medium mt-0.5">Configure quarantine observation periods and capacity warning triggers.</p>
                                         </div>
 
@@ -1288,7 +1288,7 @@ const BrgySettings: React.FC = () => {
                                                         </span>
                                                     </div>
                                                     <p className="text-xs text-gray-500 font-medium mt-0.5">
-                                                        Number of days an animal remains in the holding facility before scheduled impoundment or transfer to adoption.
+                                                        Number of days an animal remains in the holding place before scheduled impoundment or transfer to adoption.
                                                     </p>
                                                 </div>
                                                 <div className="flex flex-wrap items-center gap-3">
@@ -1536,7 +1536,7 @@ const BrgySettings: React.FC = () => {
                                             <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between">
                                                 <div>
                                                     <p className="text-xs font-bold text-gray-900 uppercase tracking-wider">Clear Local Station Cache</p>
-                                                    <p className="text-xs text-gray-500 font-medium mt-0.5">Purges stored reverse-geocoded landmarks and holding facility offline cache.</p>
+                                                    <p className="text-xs text-gray-500 font-medium mt-0.5">Purges stored reverse-geocoded landmarks and holding place offline cache.</p>
                                                 </div>
                                                 <Button
                                                     type="button"

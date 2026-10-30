@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
 import AIMatchReviewModal from './Modals/AIMatchReviewModal';
 import PetDetailPanel from './PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from './PetRecords/types';
 import { DEFAULT_AVATAR } from '../utils/avatar';
 import { petDescription, petName } from '../utils/petName';
-import { Sparkles, PawPrint, Layers, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Sparkles, PawPrint, Layers, RefreshCw, CheckCircle2, FileCheck2 } from 'lucide-react';
+import { petClaimPath } from '../utils/petClaimLink';
 
 interface AIPotentialMatchesListProps {
     subdivisionId?: number;
@@ -24,6 +26,8 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
     readOnly = false,
     onMatchesUpdated
 }) => {
+    const navigate = useNavigate();
+    const location = useLocation();
     const [matches, setMatches] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeMatch, setActiveMatch] = useState<any | null>(null);
@@ -452,6 +456,8 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                         const ownerRejected = isPet && m.owner_confirmation_status === 'OWNER_REJECTED';
                         const ownerConfirmed = isPet && m.owner_confirmation_status === 'OWNER_CONFIRMED';
                         const isCommunityAnimal = isPet && !m.matched_pet?.owner_id;
+                        // The owner said yes and filed the claim with proof: shortcut to it
+                        const claimPath = isStaff && isPet ? petClaimPath(m.claim_id, location.pathname) : null;
 
                         return (
                             <div
@@ -652,6 +658,16 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                                         <span>🔒</span>
                                         <span>{m.identity_lock_reason}</span>
                                     </div>
+                                )}
+                                {claimPath && (
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate(claimPath)}
+                                        className="w-full py-2.5 font-bold text-xs rounded-xl border border-role-border bg-role-soft text-role-strong hover:bg-role-muted transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                    >
+                                        <FileCheck2 className="w-3.5 h-3.5" />
+                                        Open Pet Claim #{m.claim_id} · {m.claim_status}
+                                    </button>
                                 )}
                                 {/* Review Action Button */}
                                 <button

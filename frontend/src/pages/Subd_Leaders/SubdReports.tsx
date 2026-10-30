@@ -107,7 +107,7 @@ const formatCooldownTimer = (seconds?: number): string => {
 const statusMap = REPORT_STATUS_MAP;
 const categoryMap: Record<number, string> = {
     1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
-    4: 'Roaming Pack', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
+    4: 'Roaming Animal', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
 };
 
 const SubdReports = () => {

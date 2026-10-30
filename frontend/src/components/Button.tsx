@@ -43,7 +43,7 @@ const Button: React.FC<ButtonProps> = ({
   // Set Variant
   switch (variant) {
     case 'primary':
-      variantStyle = "bg-role text-white hover:bg-role-hover shadow-sm border border-role-hover/30 active:scale-[0.98]";
+      variantStyle = "action-primary shadow-sm border border-orange-600/30 active:scale-[0.98]";
       break;
     case 'secondary':
       variantStyle = "bg-role-hover text-white hover:bg-role-strong shadow-sm active:scale-[0.98]";

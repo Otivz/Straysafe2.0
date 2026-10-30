@@ -117,8 +117,11 @@ def create_landmark(
     if not (is_admin or is_subd_leader or is_brgy_head):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Only Barangay Head Officers, Subdivision Leaders, and Administrators can register landmarks & holding facilities."
+            detail="Access denied: Only Barangay Head Officers, Subdivision Leaders, and Administrators can register landmarks & holding places."
         )
+
+    if current_user.role_id == 2 and data.is_holding_facility:
+        raise HTTPException(status_code=403, detail="New subdivision holding places cannot be designated. Register an ordinary landmark or coordinate with the Barangay.")
 
     # If Subd Leader, lock to their subdivision; if Barangay Head, lock to barangay level (subdivision_id = None)
     target_subd_id = current_user.subdivision_id if (is_subd_leader and not is_admin) else (None if is_brgy_head and not is_admin else data.subdivision_id)
@@ -151,7 +154,7 @@ def create_landmark(
         action="CREATE_LANDMARK",
         target_table="landmarks",
         target_id=new_landmark.landmark_id,
-        description=f"Created landmark '{new_landmark.name}' (Holding Facility: {new_landmark.is_holding_facility})",
+        description=f"Created landmark '{new_landmark.name}' (Holding Place: {new_landmark.is_holding_facility})",
         request=req
     )
 
@@ -170,7 +173,7 @@ def update_landmark(
         raise HTTPException(status_code=404, detail="Landmark not found")
 
     is_admin = current_user.role_id == 4
-    is_subd_leader = current_user.role_id == 2 and current_user.subdivision_id == landmark.subdivision_id
+    is_subd_leader = current_user.role_id == 2 and bool(current_user.subdivision_id) and current_user.subdivision_id == landmark.subdivision_id
     is_brgy_head = current_user.role_id == 3 and (current_user.is_head_officer or False) and current_user.barangay_id == landmark.barangay_id
 
     if not (is_admin or is_subd_leader or is_brgy_head):
@@ -180,6 +183,13 @@ def update_landmark(
         )
 
     update_dict = data.model_dump(exclude_unset=True)
+    if current_user.role_id == 2:
+        own = db.get(Subdivision, current_user.subdivision_id)
+        if ("subdivision_id" in update_dict and update_dict["subdivision_id"] != current_user.subdivision_id
+                or "barangay_id" in update_dict and (not own or update_dict["barangay_id"] != own.barangay_id)):
+            raise HTTPException(status_code=403, detail="Subdivision Leaders cannot change a landmark's jurisdiction.")
+    if current_user.role_id == 2 and update_dict.get("is_holding_facility") and not landmark.is_holding_facility:
+        raise HTTPException(status_code=403, detail="New subdivision holding places cannot be designated. Existing designations may be retained or switched off.")
     if "latitude" in update_dict and update_dict["latitude"] is not None:
         landmark.latitude = Decimal(str(update_dict["latitude"]))
     if "longitude" in update_dict and update_dict["longitude"] is not None:

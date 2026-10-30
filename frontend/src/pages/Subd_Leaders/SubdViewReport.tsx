@@ -188,7 +188,7 @@ const statusMap = REPORT_STATUS_MAP;
 
 const categoryMap: Record<number, string> = {
     1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
-    4: 'Roaming Pack', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
+    4: 'Roaming Animal', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
 };
 
 const RESOLVED_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18];
@@ -1885,7 +1885,7 @@ const SubdViewReport = () => {
 
                                                         const hadHoldingHistory = report.history?.some((h: any) =>
                                                             [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) ||
-                                                            (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
+                                                            (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                                             (h.action && h.action.toLowerCase().includes('holding'))
                                                         ) || Boolean(report.facility_id) || Boolean(report.facility);
                                                         const histFacLat = 14.8069;
@@ -1926,7 +1926,7 @@ const SubdViewReport = () => {
                                                                 lat: isRelocated ? holdingLat : (currentLat ?? SELERA_DEFAULT_CENTER[0]),
                                                                 lng: isRelocated ? holdingLng : (currentLng ?? SELERA_DEFAULT_CENTER[1]),
                                                                 title: isRelocated
-                                                                    ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}`
+                                                                    ? `Secured: ${report.facility?.name || report.landmark || 'Holding Place'}`
                                                                     : (report.status_id === 6
                                                                         ? `Animal Picked Up · ${SIGHTING_TITLE}`
                                                                         : SIGHTING_TITLE),
@@ -1934,8 +1934,8 @@ const SubdViewReport = () => {
                                                                 priority: report.priority_level,
                                                                 rawData: {
                                                                     ...report,
-                                                                    facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Facility', latitude: holdingLat, longitude: holdingLng }) : undefined,
-                                                                    facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Facility') : undefined
+                                                                    facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Place', latitude: holdingLat, longitude: holdingLng }) : undefined,
+                                                                    facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Place') : undefined
                                                                 }
                                                             },
                                                             ...(hasDifferentInitialSpot ? [{
@@ -2485,7 +2485,7 @@ const SubdViewReport = () => {
                                                         </span>
                                                     ) : (
                                                         <span className="px-3 py-1 bg-white border border-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
-                                                            <MapPin className="w-3 h-3" /> Barangay Holding Facility
+                                                            <MapPin className="w-3 h-3" /> Barangay Holding Place
                                                         </span>
                                                     )}
                                                 </div>
@@ -2557,7 +2557,7 @@ const SubdViewReport = () => {
                                                                 </span>
                                                             </div>
                                                             <p className="text-sm font-black text-gray-900 mt-0.5">
-                                                                {report.facility?.name || custodyProgression.currentFacility || report.landmark || 'Holding Facility'}
+                                                                {report.facility?.name || custodyProgression.currentFacility || report.landmark || 'Holding Place'}
                                                             </p>
                                                             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-[10px] font-bold text-gray-600">
                                                                 {(report.facility?.contact_person || report.facility?.caretaker_name) && (
@@ -3489,7 +3489,7 @@ const SubdViewReport = () => {
 
                                 const hadHoldingHistory = report.history?.some((h: any) =>
                                     [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) ||
-                                    (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
+                                    (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                     (h.action && h.action.toLowerCase().includes('holding'))
                                 ) || Boolean(report.facility_id) || Boolean(report.facility);
                                 const histFacLat = 14.8069;
@@ -3530,7 +3530,7 @@ const SubdViewReport = () => {
                                         lat: isRelocated ? holdingLat : (currentLat ?? SELERA_DEFAULT_CENTER[0]),
                                         lng: isRelocated ? holdingLng : (currentLng ?? SELERA_DEFAULT_CENTER[1]),
                                         title: isRelocated
-                                            ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}`
+                                            ? `Secured: ${report.facility?.name || report.landmark || 'Holding Place'}`
                                             : (report.status_id === 6
                                                 ? `Animal Picked Up · ${SIGHTING_TITLE}`
                                                 : SIGHTING_TITLE),
@@ -3538,8 +3538,8 @@ const SubdViewReport = () => {
                                         priority: report.priority_level,
                                         rawData: {
                                             ...report,
-                                            facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Facility', latitude: holdingLat, longitude: holdingLng }) : undefined,
-                                            facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Facility') : undefined
+                                            facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Place', latitude: holdingLat, longitude: holdingLng }) : undefined,
+                                            facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Place') : undefined
                                         }
                                     },
                                     ...(hasDifferentInitialSpot ? [{

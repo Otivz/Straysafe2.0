@@ -374,7 +374,7 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             description = rawRemarks || 'Facility observation recorded.';
         }
         else if (statusId === 7 || remarksLower.includes('holding') || remarksLower.includes('facility') || remarksLower.includes('shelter')) {
-            actionTitle = 'MOVED TO HOLDING FACILITY';
+            actionTitle = 'MOVED TO HOLDING PLACE';
             type = 'orange';
             IconComponent = Hospital;
             description = rawRemarks || 'Animal safely admitted to temporary holding pen.';
@@ -477,7 +477,7 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
     };
 
     const isFacilityMovement = (title: string) => 
-        title === 'MOVED TO HOLDING FACILITY' || title === 'FACILITY RELOCATION / TRANSFER';
+        title === 'MOVED TO HOLDING PLACE' || title === 'FACILITY RELOCATION / TRANSFER';
 
     // Deduplicate consecutive events or merge facility movement events occurring within 5 minutes
     const deduplicatedParsedHistory: TimelineItem[] = [];
@@ -501,7 +501,7 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
 
             // Case 2: Redundant facility movement events (e.g. "MOVED TO HOLDING FACILITY" and "FACILITY RELOCATION / TRANSFER") within 5 minutes
             if (isFacilityMovement(last.actionTitle) && isFacilityMovement(item.actionTitle) && timeDiff <= 300000) {
-                last.actionTitle = 'MOVED TO HOLDING FACILITY';
+                last.actionTitle = 'MOVED TO HOLDING PLACE';
                 if (!last.place && item.place) last.place = item.place;
 
                 // Merge media attachments so evidence is preserved

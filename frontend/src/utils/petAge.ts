@@ -229,15 +229,37 @@ export function parseAgeToYearsMonths(birthDateStr?: string | null, estimatedAge
  * Parses existing color_markings string to extract pattern preset and specific details.
  */
 export function parseCoatPattern(rawStr?: string | null): { pattern: string; details: string } {
-    if (!rawStr || !rawStr.trim() || rawStr.trim().toLowerCase() === 'none') {
+    if (!rawStr || !rawStr.trim()) {
         return { pattern: '', details: '' };
     }
 
     const clean = rawStr.trim();
+    const cleanLower = clean.toLowerCase();
+
+    if (['none', 'unknown', 'n/a', 'no markings', 'null', 'undefined', 'not specified'].includes(cleanLower)) {
+        return { pattern: '', details: '' };
+    }
+
+    // Helper to test if a string contains only filler words like "coat", "pattern", etc.
+    const isPureFiller = (s: string): boolean => {
+        const withoutFiller = s
+            .replace(/\b(coat|pattern|patterns|fur|markings?|coloring|colors?|details?)\b/gi, '')
+            .replace(/^[:—\s,-]+|[:—\s,-]+$/g, '')
+            .trim();
+        return withoutFiller.length === 0;
+    };
+
+    // Helper to clean filler words from extracted details
+    const cleanExtractedDetails = (s: string): string => {
+        let trimmed = s.replace(/^[:—\s,-]+|[:—\s,-]+$/g, '').trim();
+        if (isPureFiller(trimmed)) return '';
+        trimmed = trimmed.replace(/^coat\s+(with|and)\s+/i, '').replace(/^coat\s+/i, '').trim();
+        return isPureFiller(trimmed) ? '' : trimmed;
+    };
 
     // Check if it matches a preset id or label directly
     for (const p of COAT_PATTERN_PRESETS) {
-        if (clean.toLowerCase() === p.id.toLowerCase() || clean.toLowerCase() === p.label.toLowerCase()) {
+        if (cleanLower === p.id.toLowerCase() || cleanLower === p.label.toLowerCase()) {
             return { pattern: p.id, details: '' };
         }
     }
@@ -255,17 +277,20 @@ export function parseCoatPattern(rawStr?: string | null): { pattern: string; det
             p => p.id.toLowerCase() === potentialPattern.toLowerCase() || p.label.toLowerCase().includes(potentialPattern.toLowerCase())
         );
         if (match) {
-            return { pattern: match.id, details };
+            return { pattern: match.id, details: cleanExtractedDetails(details) };
         }
     }
 
-    // Try keyword search
-    const lower = clean.toLowerCase();
+    // Try keyword search (e.g. "Tricolor coat", "Bicolor pattern", "Tabby stripes")
     for (const p of COAT_PATTERN_PRESETS) {
-        if (p.id !== 'Other' && p.id !== 'Solid' && lower.includes(p.id.toLowerCase())) {
+        if (p.id !== 'Other' && cleanLower.includes(p.id.toLowerCase())) {
             const remaining = clean.replace(new RegExp(p.id, 'i'), '').replace(/^[:—\s,-]+/, '').trim();
-            return { pattern: p.id, details: remaining };
+            return { pattern: p.id, details: cleanExtractedDetails(remaining) };
         }
+    }
+
+    if (isPureFiller(clean)) {
+        return { pattern: '', details: '' };
     }
 
     return { pattern: 'Other', details: clean };
