@@ -16,7 +16,7 @@ class PetClaim(Base):
         Integer, ForeignKey("pets.pet_id", ondelete="CASCADE"), nullable=False
     )
     status: Mapped[str] = mapped_column(
-        Enum("Potential Owner Match", "Possible Match Found", "Pending Review", "Approved", "Rejected", "Evidence Requested", "Handover Complete", "Pet Received", "Merged", name="claim_status"),
+        Enum("Potential Owner Match", "Possible Match Found", "Pending Review", "Approved", "Rejected", "Evidence Requested", "Handover Complete", "Pet Received", "Merged", "Not Needed", name="claim_status"),
         default="Potential Owner Match",
         nullable=False
     )
@@ -32,6 +32,18 @@ class PetClaim(Base):
     # One claim per pet per merged case: a redundant claim is kept for the record and points at the case's claim
     merged_into_claim_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     status_before_merge: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    # Phase 7 (docs/01-system/CLAIM_ELIGIBILITY_RULES.md)
+    # The report's status just before this claim was approved (approval sets it to Claimed by Owner): lets an erroneous
+    # approval be undone, and keeps an approved claim "held" until handover.
+    status_before_approval: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # The owner's latest answer when nobody holds the animal: home | still_missing
+    owner_whereabouts: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    owner_whereabouts_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    owner_whereabouts_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Closed as Not Needed by staff, with the reason
+    closed_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    closed_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -41,5 +53,6 @@ class PetClaim(Base):
 
     # Transient fields for API responses
     case_report_ids: Optional[List[int]] = None
+    custody: Optional[dict] = None  # Phase 7: is the animal held (claim_custody.attach_custody)
     handover_photo_url: Optional[str] = None
 

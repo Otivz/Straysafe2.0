@@ -92,7 +92,7 @@ export const AdoptionVerificationModal: React.FC<VerificationModalProps> = ({
                             <p className="text-xs text-slate-500">Applicant: {applicantName} (App #{adoptionId})</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 cursor-pointer">
+                    <button aria-label="Close" onClick={onClose} className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 cursor-pointer">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -414,7 +414,7 @@ export const AdoptionInterviewModal: React.FC<InterviewModalProps> = ({
                             <p className="text-xs text-slate-500">Applicant: {applicantName} (App #{adoptionId})</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 cursor-pointer">
+                    <button aria-label="Close" onClick={onClose} className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 cursor-pointer">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -1162,7 +1162,7 @@ export const AdoptionHomeVisitModal: React.FC<HomeVisitModalProps> = ({
                             <p className="text-xs text-slate-500 dark:text-slate-400">Applicant: {applicantName} (App #{adoptionId})</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
+                    <button aria-label="Close" onClick={onClose} className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -1893,7 +1893,7 @@ export const AdoptionReviewModal: React.FC<ReviewModalProps> = ({
                             </p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 cursor-pointer">
+                    <button aria-label="Close" onClick={onClose} className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 cursor-pointer">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -2214,7 +2214,7 @@ export const AdoptionHandoverScheduleModal: React.FC<HandoverScheduleModalProps>
                             <p className="text-xs text-slate-500">Scheduling handover of {animalName} to {applicantName} (App #{adoptionId})</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 cursor-pointer">
+                    <button aria-label="Close" onClick={onClose} className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 cursor-pointer">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -2412,7 +2412,7 @@ export const AdoptionHandoverModal: React.FC<HandoverModalProps> = ({
                             <p className="text-xs text-slate-500">Transferring {animalName} to {applicantName} (App #{adoptionId})</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 cursor-pointer">
+                    <button aria-label="Close" onClick={onClose} className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 cursor-pointer">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -2676,7 +2676,7 @@ export const AdoptionDossierModal: React.FC<DossierModalProps> = ({
                             <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-role" />
                             <span>Print Report</span>
                         </button>
-                        <button 
+                        <button aria-label="Close" 
                             type="button" 
                             onClick={onClose} 
                             className="p-1 sm:p-2 rounded-lg sm:rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"

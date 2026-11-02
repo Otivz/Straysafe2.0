@@ -25,7 +25,10 @@ const animal = (id: number, subdivision_id: number, legacy = false) => ({ holdin
     animal_type: 'Dog', animal_name: id === 1 ? 'Own synthetic animal' : id === 2 ? 'Neighbor synthetic animal' : 'Earlier pen animal',
     facility_status: 2, facility_status_name: 'Healthy', report_status_id: 7, custody_status: legacy ? 'In Subdivision Facility' : 'In Barangay Facility',
     intake_date: new Date(Date.now() - 10 * 86400000).toISOString(), discharge_date: null, timeline: [],
-    report_media: [], media: [], report_category: 'Roaming Animal', report_landmark: 'Synthetic street', breed: 'Aspin' });
+    report_media: [], media: [], report_category: 'Roaming Animal', report_landmark: 'Synthetic street', breed: 'Aspin',
+    // ?returned: the animal went back to its owner (adoption eligibility from the server)
+    adoption_eligible: !params.has('returned'),
+    adoption_block_reason: params.has('returned') ? 'This animal is no longer eligible for adoption because it has already been claimed and handed over to its owner.' : null });
 const rows = [animal(1, 1), animal(2, 2), animal(3, 1, true)];
 const pet = { pet_id: 11, pet_name: 'Synthetic dog', pet_type: 'Dog', status: 'Found', breed: 'Aspin' };
 const report = { report_id: 1, user_id: 41, assigned_leader_id: 42, pet_id: 11, pet, subdivision_id: 1,

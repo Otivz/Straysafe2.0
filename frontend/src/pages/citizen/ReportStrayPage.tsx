@@ -1034,7 +1034,7 @@ export default function ReportStrayPage() {
                                                 {file.type.startsWith('video/') ? (
                                                     <video src={URL.createObjectURL(file)} className="w-full h-full object-cover" />
                                                 ) : (
-                                                    <img src={URL.createObjectURL(file)} className="w-full h-full object-cover" />
+                                                    <img src={URL.createObjectURL(file)} alt="Selected photo to upload" className="w-full h-full object-cover" />
                                                 )}
                                                 <button
                                                     type="button"

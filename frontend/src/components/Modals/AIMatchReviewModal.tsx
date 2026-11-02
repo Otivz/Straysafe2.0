@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { FileCheck2, X } from 'lucide-react';
+import { FileCheck2, X, ZoomIn } from 'lucide-react';
 import { petClaimPath } from '../../utils/petClaimLink';
 import { api, getAuthenticatedUser } from '../../utils/api';
 import { DEFAULT_AVATAR } from '../../utils/avatar';
@@ -12,6 +12,8 @@ import ReportDescription from '../../components/ReportDescription';
 import { petDescription, petName } from '../../utils/petName';
 import MediaLightbox, { type LightboxItem } from '../MediaLightbox';
 import { SeparateIncidentOverride } from '../SeparateIncidentOverride';
+import ManualComparisonCards from '../ManualMatching/ManualComparisonCards';
+import { isManualMatchRecord, NOT_PROVIDED, petFields, petIdLabel, reportFields } from '../../utils/manualMatchFields';
 
 interface AIMatchReviewModalProps {
     isOpen: boolean;
@@ -22,12 +24,18 @@ interface AIMatchReviewModalProps {
     isStaff?: boolean; // true for leader, brgy, admin; false for resident
     readOnly?: boolean; // staff who may only view (e.g. Barangay while the Subdivision Leader handles the case)
     readOnlyReason?: string; // why it is view-only, shown instead of the default note
+    // Deprecated, ignored: the display follows the match record's saved method (matching_mode / ai_evidence.engine)
+    isManual?: boolean;
 }
 
-const getStatusBadge = (status: string, match?: any) => {
+const getStatusBadge = (status: string, match?: any, isManualMode?: boolean) => {
     // Pet matches are official only after both staff and the owner confirm
     if (status === 'CONFIRMED_MATCH' && match?.matched_pet_id && match.matched_pet?.owner_id && match.owner_confirmation_status !== 'OWNER_CONFIRMED') {
         return <span className="px-3 py-1 bg-blue-100 border border-blue-300 text-blue-800 rounded-full font-bold text-xs flex items-center gap-1.5 shadow-sm"><span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>Staff Confirmed · Awaiting Owner</span>;
+    }
+    const isManual = Boolean(isManualMode || match?.matching_mode === 'manual' || match?.ai_evidence?.engine === 'manual');
+    if (isManual && (!status || status === 'AI_SUGGESTED' || status === 'PENDING_VERIFICATION')) {
+        return <span className="px-3 py-1 bg-amber-100 border border-amber-300 text-amber-800 rounded-full font-bold text-xs flex items-center gap-1.5 shadow-sm"><span className="w-2 h-2 rounded-full bg-amber-500"></span>Potential Match</span>;
     }
     switch (status) {
         case 'CONFIRMED_MATCH':
@@ -44,7 +52,11 @@ const getStatusBadge = (status: string, match?: any) => {
             return <span className="px-3 py-1 bg-blue-100 border border-blue-300 text-blue-800 rounded-full font-bold text-xs flex items-center gap-1.5 shadow-sm"><span className="w-2 h-2 rounded-full bg-blue-500"></span>Pending Verification</span>;
         case 'AI_SUGGESTED':
         default:
-            return <span className="px-3 py-1 bg-role-muted border border-role-border text-role-strong rounded-full font-bold text-xs flex items-center gap-1.5 shadow-sm"><span className="w-2 h-2 rounded-full bg-role"></span>AI Suggested Match</span>;
+            return isManual ? (
+                <span className="px-3 py-1 bg-amber-100 border border-amber-300 text-amber-800 rounded-full font-bold text-xs flex items-center gap-1.5 shadow-sm"><span className="w-2 h-2 rounded-full bg-amber-500"></span>Potential Match</span>
+            ) : (
+                <span className="px-3 py-1 bg-role-muted border border-role-border text-role-strong rounded-full font-bold text-xs flex items-center gap-1.5 shadow-sm"><span className="w-2 h-2 rounded-full bg-role"></span>AI Suggested Match</span>
+            );
     }
 };
 
@@ -68,7 +80,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     onVerified,
     isStaff = true,
     readOnly = false,
-    readOnlyReason
+    readOnlyReason,
 }) => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -81,7 +93,16 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     const [isAddPetModalOpen, setIsAddPetModalOpen] = useState(false);
     const [isUnlinking, setIsUnlinking] = useState(false);
     const [showReverse, setShowReverse] = useState(false);
-    const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number; title: string } | null>(null);
+    const [lightbox, setLightbox] = useState<{
+        items?: LightboxItem[];
+        index?: number;
+        title: string;
+        compare?: {
+            left: { title: string; badge?: string; items: LightboxItem[]; initialIndex?: number };
+            right: { title: string; badge?: string; items: LightboxItem[]; initialIndex?: number };
+        };
+        initialMode?: 'split' | 'left' | 'right';
+    } | null>(null);
     const [reverseNotes, setReverseNotes] = useState('');
     const [isReversing, setIsReversing] = useState(false);
     const [reverseError, setReverseError] = useState('');
@@ -125,11 +146,15 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     const targetPet = match.matched_pet;
     const isPetMatch = !!targetPet;
     const identityLock: string | null = match?.identity_lock_reason || null;
+    // MANUAL or AI from the record itself, not the current AI setting or the page that opened it
+    const isManual = isManualMatchRecord(match);
 
     const sourceImage = source?.media?.[0]?.file_url || '/placeholder-pet.png';
     const targetImage = isPetMatch
         ? (targetPet.photo_url || '/placeholder-pet.png')
         : (targetReport?.media?.[0]?.file_url || '/placeholder-pet.png');
+    const sourceLabel = `Report #${source?.report_id || match.source_report_id}`;
+    const targetLabel = isPetMatch ? (petName(targetPet) || 'Registered pet') : `Report #${targetReport?.report_id ?? match.matched_report_id}`;
 
     // Every photo/video of each side, for the full-screen viewer (documents are left out)
     const reportMediaItems = (rep: any): LightboxItem[] =>
@@ -143,8 +168,27 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
             .map(([k, caption]) => ({ url: pet[k], type: 'Image', caption }));
     const sourceItems = reportMediaItems(source);
     const targetItems = isPetMatch ? petMediaItems(targetPet) : reportMediaItems(targetReport);
-    const openLightbox = (items: LightboxItem[], title: string) => {
-        if (items.length) setLightbox({ items, index: 0, title });
+    const openCompareLightbox = (mode: 'split' | 'left' | 'right' = 'split', leftIndex = 0, rightIndex = 0) => {
+        const leftList = sourceItems.length ? sourceItems : [{ url: sourceImage, caption: `${sourceLabel} · Reported animal` }];
+        const rightList = targetItems.length ? targetItems : [{ url: targetImage, caption: isPetMatch ? `${targetLabel} · Registered pet` : `${targetLabel} · Candidate animal` }];
+        setLightbox({
+            title: `Inspecting ${sourceLabel} vs ${targetLabel}`,
+            compare: {
+                left: {
+                    title: sourceLabel,
+                    badge: 'Reported Sighting',
+                    items: leftList,
+                    initialIndex: leftIndex,
+                },
+                right: {
+                    title: targetLabel,
+                    badge: isPetMatch ? 'Registered Pet' : 'Candidate',
+                    items: rightList,
+                    initialIndex: rightIndex,
+                },
+            },
+            initialMode: mode,
+        });
     };
 
     const evidence = match.ai_evidence || {};
@@ -154,6 +198,11 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
         if (!selectedDecision) return;
         if (!verificationNotes.trim() || verificationNotes.trim().length < minNotes) {
             setSubmitError('Please enter a brief verification explanation for your decision.');
+            return;
+        }
+
+        if (selectedDecision === 'CONFIRMED_MATCH' && isPetMatch && !isCommunityAnimal && match.owner_confirmation_status !== 'OWNER_CONFIRMED') {
+            setSubmitError('Owner confirmation is required before this match can be finalized. Please request owner confirmation first.');
             return;
         }
 
@@ -325,10 +374,10 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                         </button>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="px-2.5 py-0.5 bg-role text-white font-black text-[11px] rounded-full">
-                            {match.similarity_score}% AI similarity
+                        <span className={`px-2.5 py-0.5 text-white font-black text-[11px] rounded-full ${isManual ? 'bg-orange-600' : 'bg-role'}`}>
+                            {isManual ? 'Manual Match – Staff Identified' : `${match.similarity_score}% AI similarity`}
                         </span>
-                        {getStatusBadge(match.status, match)}
+                        {getStatusBadge(match.status, match, isManual)}
                     </div>
                     <div className="grid grid-cols-2 sm:inline-grid sm:w-80 gap-1 p-1 bg-gray-100 rounded-xl text-xs font-bold text-gray-600" role="tablist">
                         <button
@@ -374,12 +423,15 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                         const hasAiExtras = features.length > 0 || (vc?.visual_contradictions?.length || 0) > 0 || (evidence.closest_attributes?.length || 0) > 0 || bullets.length > 0 || aiReason.length > 160;
                         const sourceLabel = `Report #${source?.report_id || match.source_report_id}`;
                         const targetLabel = isPetMatch ? (petName(targetPet) || 'Registered pet') : `Report #${targetReport?.report_id ?? match.matched_report_id}`;
+                        // Manual records show only what people entered; the AI-detected fallbacks belong to AI records
+                        const ai = (v: unknown) => (isManual ? undefined : v);
+                        const missing = (aiText: string) => (isManual ? NOT_PROVIDED : aiText);
                         const rows: Array<{ label: string; left: React.ReactNode; right: React.ReactNode; long?: boolean }> = [
-                            { label: 'Species', left: source?.animal_type || source?.ai_animal_type || 'Unknown', right: (isPetMatch ? targetPet?.pet_type : targetReport?.animal_type) || 'Unknown' },
-                            { label: 'Breed', left: source?.animal_breed || source?.ai_possible_breed || 'Not recorded', right: (isPetMatch ? targetPet?.breed : targetReport?.animal_breed) || 'Not recorded' },
-                            { label: 'Color', left: source?.animal_color || source?.ai_dominant_color || 'Not specified', right: isPetMatch ? (`${targetPet?.primary_color || ''} ${targetPet?.secondary_color || ''}`.trim() || 'Not recorded') : (targetReport?.animal_color || 'Not specified') },
-                            { label: 'Size', left: source?.estimated_size || source?.ai_estimated_size || 'Not recorded', right: (isPetMatch ? targetPet?.size_category : targetReport?.estimated_size) || 'Not recorded' },
-                            { label: isPetMatch ? 'Seen at / Registered address' : 'Location', left: source?.landmark || 'Not recorded', right: (isPetMatch ? targetPet?.registered_address : targetReport?.landmark) || 'Not recorded' },
+                            { label: 'Species', left: source?.animal_type || ai(source?.ai_animal_type) || missing('Unknown'), right: (isPetMatch ? targetPet?.pet_type : targetReport?.animal_type) || missing('Unknown') },
+                            { label: 'Breed', left: source?.animal_breed || ai(source?.ai_possible_breed) || missing('Not recorded'), right: (isPetMatch ? targetPet?.breed : targetReport?.animal_breed) || missing('Not recorded') },
+                            { label: 'Color', left: source?.animal_color || ai(source?.ai_dominant_color) || missing('Not specified'), right: isPetMatch ? (`${targetPet?.primary_color || ''} ${targetPet?.secondary_color || ''}`.trim() || missing('Not recorded')) : (targetReport?.animal_color || missing('Not specified')) },
+                            { label: 'Size', left: source?.estimated_size || ai(source?.ai_estimated_size) || missing('Not recorded'), right: (isPetMatch ? targetPet?.size_category : targetReport?.estimated_size) || missing('Not recorded') },
+                            { label: isPetMatch ? 'Seen at / Registered address' : 'Location', left: source?.landmark || missing('Not recorded'), right: (isPetMatch ? targetPet?.registered_address : targetReport?.landmark) || missing('Not recorded') },
                             { label: isPetMatch ? 'Reporter / Owner' : 'Reporter', left: source?.reporter_name || source?.reporter?.name || source?.user?.name || 'Unknown reporter', right: isPetMatch ? (targetPet?.owner?.name || targetPet?.emergency_contact_name || 'No owner on file') : (targetReport?.reporter_name || targetReport?.reporter?.name || targetReport?.user?.name || 'Unknown reporter') },
                             {
                                 label: 'Physical Markings & Traits',
@@ -391,33 +443,67 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                             },
                         ];
 
+                        const manualCards = isManual && isPetMatch;
                         return (
                         <>
+                            {manualCards && (
+                                <ManualComparisonCards
+                                    report={{
+                                        label: sourceLabel,
+                                        photo: sourceItems.find((i) => i.type !== 'Video')?.url || null,
+                                        photoCount: sourceItems.length,
+                                        fields: reportFields({ ...(source || {}), report_id: source?.report_id ?? match.source_report_id }),
+                                    }}
+                                    pet={{
+                                        label: `${petName(targetPet) || 'Registered pet'} · ${petIdLabel({ pet_id: targetPet.pet_id ?? match.matched_pet_id })}`,
+                                        photo: targetItems[0]?.url || null,
+                                        photoCount: targetItems.length,
+                                        fields: petFields({ ...targetPet, pet_id: targetPet.pet_id ?? match.matched_pet_id,
+                                            owner_name: targetPet?.owner?.name || targetPet?.emergency_contact_name || null }),
+                                    }}
+                                    onInspectReport={() => openCompareLightbox('left', 0, 0)}
+                                    onInspectPet={() => openCompareLightbox('right', 0, 0)}
+                                />
+                            )}
                             {/* ── 1. The two photos, next to each other, shown whole ── */}
-                            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                            <div className="space-y-2">
+                                {!manualCards && <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => openCompareLightbox('split', 0, 0)}
+                                        className="relative aspect-square sm:aspect-[4/3] rounded-xl overflow-hidden bg-gray-100 border-2 border-role-border cursor-zoom-in group transition-transform hover:scale-[1.01]"
+                                        aria-label="View and compare the reported photo"
+                                        title="Click to inspect & magnify photo"
+                                    >
+                                        <img src={sourceImage} alt="Reported animal" className="w-full h-full object-contain" onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }} />
+                                        <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-role text-white text-[10px] font-black rounded-md">Reported</span>
+                                        <span className="absolute bottom-1.5 left-1.5 right-1.5 px-1.5 py-0.5 bg-black/60 text-white text-[10px] font-bold rounded-md truncate flex items-center justify-between">
+                                            <span className="truncate">{sourceLabel}{sourceItems.length > 1 ? ` · ${sourceItems.length} photos` : ''}</span>
+                                            <span className="shrink-0 flex items-center gap-0.5 text-[9px] opacity-80"><ZoomIn className="w-2.5 h-2.5" /> Inspect</span>
+                                        </span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => openCompareLightbox('split', 0, 0)}
+                                        className="relative aspect-square sm:aspect-[4/3] rounded-xl overflow-hidden bg-gray-100 border-2 border-amber-300 cursor-zoom-in group transition-transform hover:scale-[1.01]"
+                                        aria-label="View and compare the candidate photo"
+                                        title="Click to inspect & magnify photo"
+                                    >
+                                        <img src={targetImage} alt="Candidate animal" className="w-full h-full object-contain" onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }} />
+                                        <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-amber-500 text-white text-[10px] font-black rounded-md">{isPetMatch ? 'Registered pet' : 'Candidate'}</span>
+                                        <span className="absolute bottom-1.5 left-1.5 right-1.5 px-1.5 py-0.5 bg-black/60 text-white text-[10px] font-bold rounded-md truncate flex items-center justify-between">
+                                            <span className="truncate">{targetLabel}{targetItems.length > 1 ? ` · ${targetItems.length} photos` : ''}</span>
+                                            <span className="shrink-0 flex items-center gap-0.5 text-[9px] opacity-80"><ZoomIn className="w-2.5 h-2.5" /> Inspect</span>
+                                        </span>
+                                    </button>
+                                </div>}
                                 <button
                                     type="button"
-                                    onClick={() => openLightbox(sourceItems, `${sourceLabel} · Original sighting`)}
-                                    className="relative aspect-square sm:aspect-[4/3] rounded-xl overflow-hidden bg-gray-100 border-2 border-role-border cursor-zoom-in"
-                                    aria-label="View the reported photo full screen"
+                                    onClick={() => openCompareLightbox('split', 0, 0)}
+                                    className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-orange-200 bg-orange-50/80 hover:bg-orange-100 text-orange-950 text-xs font-black transition cursor-pointer shadow-2xs"
                                 >
-                                    <img src={sourceImage} alt="Reported animal" className="w-full h-full object-contain" onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }} />
-                                    <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-role text-white text-[10px] font-black rounded-md">Reported</span>
-                                    <span className="absolute bottom-1.5 left-1.5 right-1.5 px-1.5 py-0.5 bg-black/60 text-white text-[10px] font-bold rounded-md truncate">
-                                        {sourceLabel}{sourceItems.length > 1 ? ` · ${sourceItems.length} photos` : ''}
-                                    </span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => openLightbox(targetItems, isPetMatch ? `${targetLabel} · Registered pet` : `${targetLabel} · Candidate sighting`)}
-                                    className="relative aspect-square sm:aspect-[4/3] rounded-xl overflow-hidden bg-gray-100 border-2 border-amber-300 cursor-zoom-in"
-                                    aria-label="View the candidate photo full screen"
-                                >
-                                    <img src={targetImage} alt="Candidate animal" className="w-full h-full object-contain" onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }} />
-                                    <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-amber-500 text-white text-[10px] font-black rounded-md">{isPetMatch ? 'Registered pet' : 'Candidate'}</span>
-                                    <span className="absolute bottom-1.5 left-1.5 right-1.5 px-1.5 py-0.5 bg-black/60 text-white text-[10px] font-bold rounded-md truncate">
-                                        {targetLabel}{targetItems.length > 1 ? ` · ${targetItems.length} photos` : ''}
-                                    </span>
+                                    <ZoomIn className="w-4 h-4 text-orange-600" />
+                                    <span>Side-by-Side Dual-Zoom (Inspect Markings & Details)</span>
                                 </button>
                             </div>
                             {isPetMatch && (
@@ -434,7 +520,23 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                 </button>
                             )}
 
-                            {/* ── 2. AI verdict first, reasoning on demand ── */}
+                            {/* ── 2. Comparison verdict / details (Staff Comparison for manual, AI comparison for AI) ── */}
+                            {isManual ? (
+                                <section className="rounded-2xl border border-orange-200 bg-orange-50/50 p-3 sm:p-4 space-y-2">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                        <h3 className="text-sm font-black text-gray-900">Staff Comparison</h3>
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-amber-100 text-amber-800 border border-amber-300">
+                                            Staff-Identified Potential Match
+                                        </span>
+                                        {isPetMatch && getOwnerFeedbackBadge(match.owner_confirmation_status)}
+                                    </div>
+                                    <p className="text-xs text-gray-700 leading-relaxed break-words">
+                                        {isPetMatch
+                                            ? 'Manual match: compare the stray report and the registered pet record above, then send a confirmation request to the owner. The owner\'s answer does not confirm the match; authorized staff make the final decision.'
+                                            : 'Staff identified this possible match. Compare the two reports field by field below before deciding.'}
+                                    </p>
+                                </section>
+                            ) : (
                             <section className="rounded-2xl border border-role-border/80 bg-role-soft/40 p-3 sm:p-4 space-y-2">
                                 <div className="flex flex-wrap items-center gap-1.5">
                                     <h3 className="text-sm font-black text-gray-900">AI comparison</h3>
@@ -525,14 +627,15 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                     </div>
                                 )}
                             </section>
+                            )}
 
-                            {/* ── 3. Details lined up field by field ── */}
-                            <section className="rounded-2xl border border-gray-200 overflow-hidden">
+                            {/* ── 3. Details lined up field by field (manual pet matches use the record cards above) ── */}
+                            {!manualCards && <section className="rounded-2xl border border-gray-200 overflow-hidden">
                                 <div className="grid grid-cols-2 gap-3 px-3 py-2 bg-gray-50 text-[11px] font-black">
                                     <span className="flex items-center gap-1.5 min-w-0 text-role-hover"><span className="w-2 h-2 rounded-full bg-role shrink-0" /><span className="truncate">{sourceLabel}</span></span>
                                     <span className="flex items-center gap-1.5 min-w-0 text-amber-800"><span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" /><span className="truncate">{targetLabel}</span></span>
                                 </div>
-                                {isPetMatch && petDescription(targetPet) && (
+                                {isPetMatch && !isManual && petDescription(targetPet) && (
                                     <p className="px-3 pb-2 -mt-0.5 bg-gray-50 text-[11px] text-amber-800 text-right break-words">{petDescription(targetPet)}</p>
                                 )}
                                 {rows.map((row) => (
@@ -550,7 +653,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                         </div>
                                     </div>
                                 ))}
-                            </section>
+                            </section>}
 
                             {/* ── 4. Pet matches: who to contact ── */}
                             {/* ── Callout: Look-Alike Owned Pet OR Duplicate Stray Sighting ── */}
@@ -565,7 +668,9 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                 const petLabel = targetPet ? petName(targetPet) : "this pet";
                                 const reportRef = `Report #${source?.report_id || match.source_report_id}`;
                                 const smsBody = `Hello${offlineName ? ` ${offlineName}` : ''}, this is ${currentUser?.name || 'the subdivision office'} from StraySafe. `
-                                    + `An animal that looks like your pet ${petLabel} (${match.similarity_score}% similar) was reported${source?.landmark ? ` near ${source.landmark}` : ''} (${reportRef}). `
+                                    + (isManual
+                                        ? `An animal matching your pet ${petLabel} was reported${source?.landmark ? ` near ${source.landmark}` : ''} (${reportRef}). `
+                                        : `An animal that looks like your pet ${petLabel} (${match.similarity_score}% similar) was reported${source?.landmark ? ` near ${source.landmark}` : ''} (${reportRef}). `)
                                     + `Please check if your pet is home, and reply or call us to confirm.`;
                                 const telHref = offlinePhone ? `tel:${offlinePhone.replace(/[^\d+]/g, '')}` : '';
                                 const smsHref = offlinePhone ? `sms:${offlinePhone.replace(/[^\d+]/g, '')}?body=${encodeURIComponent(smsBody)}` : '';
@@ -578,12 +683,14 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-lg font-black shrink-0">🐾</div>
                                             <div className="space-y-1">
                                                 <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide flex items-center gap-2 flex-wrap">
-                                                    <span>Look-Alike Animal Record Detected</span>
+                                                    <span>{isManual ? "Animal Record Potential Match" : "Look-Alike Animal Record Detected"}</span>
                                                     <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-[10px] font-extrabold lowercase">no known owner</span>
                                                 </h4>
                                                 <p className="text-xs text-gray-600 font-medium leading-relaxed">
-                                                    This sighting has a {match.similarity_score}% similarity with animal record {targetPet?.pet_id ? `P-${String(targetPet.pet_id).padStart(5, '0')}` : ''}
-                                                    {petLabel !== 'this pet' ? ` ('${petLabel}')` : ''}. That record is a community / unassigned animal with no owner on file, so there is
+                                                    {isManual
+                                                        ? `Staff identified a potential match between this sighting and animal record ${targetPet?.pet_id ? `P-${String(targetPet.pet_id).padStart(5, '0')}` : ''}${petLabel !== 'this pet' ? ` ('${petLabel}')` : ''}. `
+                                                        : `This sighting has a ${match.similarity_score}% similarity with animal record ${targetPet?.pet_id ? `P-${String(targetPet.pet_id).padStart(5, '0')}` : ''}${petLabel !== 'this pet' ? ` ('${petLabel}')` : ''}. `}
+                                                    That record is a community / unassigned animal with no owner on file, so there is
                                                     no one to message. If it is the same animal, confirm the match so the sighting is added to that animal's record.
                                                 </p>
                                             </div>
@@ -600,15 +707,16 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                 </div>
                                                 <div className="space-y-0.5 min-w-0">
                                                     <h4 className="text-xs font-black text-sky-950 uppercase tracking-wide flex items-center gap-2 flex-wrap">
-                                                        <span>Look-Alike Registered Pet Detected</span>
+                                                        <span>{isManual ? "Potential Registered Pet Match" : "Look-Alike Registered Pet Detected"}</span>
                                                         <span className="px-2 py-0.5 bg-sky-100 text-sky-800 rounded-full text-[10px] font-extrabold lowercase">
                                                             owner has no account
                                                         </span>
                                                     </h4>
                                                     <p className="text-xs text-gray-600 font-medium leading-relaxed">
-                                                        This sighting has a {match.similarity_score}% similarity with {petLabel === 'this pet' ? 'a registered pet' : `registered pet '${petLabel}'`}
-                                                        {offlineName ? <> owned by <strong>{offlineName}</strong></> : null}. The owner has no StraySafe account, so they
-                                                        can't be messaged in the app. Contact them directly so they can check their pet.
+                                                        {isManual
+                                                            ? `Staff identified a potential match between this sighting and ${petLabel === 'this pet' ? 'a registered pet' : `registered pet '${petLabel}'`}${offlineName ? <> owned by <strong>{offlineName}</strong></> : null}. `
+                                                            : `This sighting has a ${match.similarity_score}% similarity with ${petLabel === 'this pet' ? 'a registered pet' : `registered pet '${petLabel}'`}${offlineName ? <> owned by <strong>{offlineName}</strong></> : null}. `}
+                                                        The owner has no StraySafe account, so they can't be messaged in the app. Contact them directly so they can check their pet.
                                                     </p>
                                                 </div>
                                             </div>
@@ -671,7 +779,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             </div>
                                             <div className="space-y-0.5">
                                                 <h4 className="text-xs font-black text-blue-950 uppercase tracking-wide flex items-center gap-2">
-                                                    <span>{isOwner ? "Look-Alike Pet Sighting" : "Look-Alike Registered Pet Detected"}</span>
+                                                    <span>{isOwner ? "Potential Pet Sighting" : (isManual ? "Staff-Identified Potential Match" : "Look-Alike Registered Pet Detected")}</span>
                                                     <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-[10px] font-extrabold lowercase">
                                                         {isOwner ? "direct confirmation" : "message owner"}
                                                     </span>
@@ -679,6 +787,8 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                 <p className="text-xs text-gray-600 font-medium leading-relaxed">
                                                     {isOwner ? (
                                                         `Does this sighting resemble your registered pet '${petLabel}'? You can message the original reporter or subdivision case handler directly to ask questions, request more photos, or verify identifying marks for yourself.`
+                                                    ) : isManual ? (
+                                                        `Staff identified a potential match with registered pet '${petLabel}' owned by ${ownerName}. Message the registered pet owner directly so they can check their pet and confirm for themselves.`
                                                     ) : (
                                                         `This sighting has a ${match.similarity_score}% similarity with registered pet '${petLabel}' owned by ${ownerName}. Message the registered pet owner directly so they can check their pet and confirm for themselves.`
                                                     )}
@@ -702,8 +812,66 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                         </>
                         );
                     })() : (
-                        /* ── Audit Trail Tab ── */
+                        /* ── Audit Trail / Verification Log Tab ── */
                         <div className="space-y-4">
+                            {/* Match Identification & Selected Pet */}
+                            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5">
+                                <h3 className="text-sm font-extrabold text-gray-900 uppercase tracking-wider mb-3">
+                                    Match Identification & Target Animal
+                                </h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                    <div className="bg-white p-3 rounded-xl border border-gray-100">
+                                        <span className="block text-[10px] font-bold text-gray-400 uppercase">Identification Source</span>
+                                        <span className="font-bold text-gray-900">
+                                            {isManual
+                                                ? `Potential match identified by staff${match.ai_evidence?.staff_name ? ` (${match.ai_evidence.staff_name})` : ''}`
+                                                : 'AI Pattern Match'}
+                                        </span>
+                                    </div>
+                                    <div className="bg-white p-3 rounded-xl border border-gray-100">
+                                        <span className="block text-[10px] font-bold text-gray-400 uppercase">{isPetMatch ? 'Selected Registered Pet' : 'Matched Sighting'}</span>
+                                        <span className="font-bold text-gray-900">
+                                            {isPetMatch ? `Pet #${targetPet?.pet_id} · ${petName(targetPet)}` : `Report #${match.matched_report_id}`}
+                                        </span>
+                                    </div>
+                                    {match.owner_verification_requested_at && (
+                                        <div className="bg-white p-3 rounded-xl border border-gray-100">
+                                            <span className="block text-[10px] font-bold text-gray-400 uppercase">Owner Confirmation Sent</span>
+                                            <span className="font-semibold text-gray-800">
+                                                {new Date(match.owner_verification_requested_at).toLocaleString()}
+                                            </span>
+                                        </div>
+                                    )}
+                                    {match.owner_verification_answered_at && (
+                                        <div className="bg-white p-3 rounded-xl border border-gray-100">
+                                            <span className="block text-[10px] font-bold text-gray-400 uppercase">Owner Responded</span>
+                                            <span className="font-semibold text-gray-800">
+                                                {new Date(match.owner_verification_answered_at).toLocaleString()}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Owner Response Audit */}
+                            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5">
+                                <h3 className="text-sm font-extrabold text-gray-900 uppercase tracking-wider mb-3">
+                                    Pet Owner Supporting Evidence
+                                </h3>
+                                <div className="text-xs space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-gray-700">Response Status:</span>
+                                        {getOwnerFeedbackBadge(match.owner_confirmation_status)}
+                                    </div>
+                                    {match.owner_notes && (
+                                        <div className="bg-white p-3 rounded-xl border border-gray-100 text-gray-600">
+                                            <span className="font-semibold block text-gray-800 mb-1">Owner Remarks:</span>
+                                            "{match.owner_notes}"
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
                             <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5">
                                 <h3 className="text-sm font-extrabold text-gray-900 uppercase tracking-wider mb-4">
                                     Verification Decision History
@@ -724,27 +892,12 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                         </div>
                                     </div>
                                 ) : (
-                                    <p className="text-xs text-gray-500 italic">No human verification action recorded yet. Match is currently under AI recommendation status.</p>
+                                    <p className="text-xs text-gray-500 italic">
+                                        {isManual
+                                            ? 'No staff verification action recorded yet. Awaiting review and owner confirmation.'
+                                            : 'No human verification action recorded yet. Match is currently under AI recommendation status.'}
+                                    </p>
                                 )}
-                            </div>
-
-                            {/* Owner Response Audit */}
-                            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5">
-                                <h3 className="text-sm font-extrabold text-gray-900 uppercase tracking-wider mb-3">
-                                    Pet Owner Supporting Evidence
-                                </h3>
-                                <div className="text-xs space-y-2">
-                                    <div className="flex items-center gap-2">
-                                        <span className="font-semibold text-gray-700">Response Status:</span>
-                                        {getOwnerFeedbackBadge(match.owner_confirmation_status)}
-                                    </div>
-                                    {match.owner_notes && (
-                                        <div className="bg-white p-3 rounded-xl border border-gray-100 text-gray-600">
-                                            <span className="font-semibold block text-gray-800 mb-1">Owner Remarks:</span>
-                                            "{match.owner_notes}"
-                                        </div>
-                                    )}
-                                </div>
                             </div>
                         </div>
                     )}
@@ -783,8 +936,18 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                     <div className="px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-xs text-gray-700 flex flex-wrap items-center justify-between gap-2">
                                         <span className="font-semibold">Two-Way Confirmation:</span>
                                         <div className="flex items-center gap-2 flex-wrap">
-                                            <span className={`px-2.5 py-0.5 rounded-full border font-semibold ${match.status === 'CONFIRMED_MATCH' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-gray-100 border-gray-200 text-gray-600'}`}>
-                                                {match.status === 'CONFIRMED_MATCH' ? '✓ Staff Confirmed' : '• Staff Pending'}
+                                            <span className={`px-2.5 py-0.5 rounded-full border font-semibold ${
+                                                match.status === 'CONFIRMED_MATCH'
+                                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                                    : match.status === 'NOT_A_MATCH'
+                                                        ? 'bg-rose-50 border-rose-200 text-rose-700'
+                                                        : 'bg-gray-100 border-gray-200 text-gray-600'
+                                            }`}>
+                                                {match.status === 'CONFIRMED_MATCH'
+                                                    ? '✓ Staff Confirmed'
+                                                    : match.status === 'NOT_A_MATCH'
+                                                        ? '✕ Staff Rejected'
+                                                        : '• Staff Pending'}
                                             </span>
                                             {isCommunityAnimal ? (
                                                 <span className="px-2.5 py-0.5 rounded-full border bg-gray-100 border-gray-200 text-gray-600 font-semibold">No owner — staff confirmation only</span>
@@ -937,20 +1100,37 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             ) : (
                                                 <button
                                                     type="button"
-                                                    disabled={match.status === 'NOT_A_MATCH' || !!identityLock}
+                                                    disabled={
+                                                        match.status === 'NOT_A_MATCH' ||
+                                                        !!identityLock ||
+                                                        (isPetMatch && !isCommunityAnimal && match.owner_confirmation_status === 'OWNER_REJECTED')
+                                                    }
                                                     onClick={() => {
-                                                        if (match.status !== 'NOT_A_MATCH' && !identityLock) {
+                                                        if (
+                                                            match.status !== 'NOT_A_MATCH' &&
+                                                            !identityLock &&
+                                                            !(isPetMatch && !isCommunityAnimal && match.owner_confirmation_status === 'OWNER_REJECTED')
+                                                        ) {
                                                             setSelectedDecision('CONFIRMED_MATCH');
                                                             setVerificationNotes('');
                                                             setSubmitError('');
                                                         }
                                                     }}
                                                     className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${
-                                                        match.status === 'NOT_A_MATCH' || identityLock
+                                                        match.status === 'NOT_A_MATCH' ||
+                                                        identityLock ||
+                                                        (isPetMatch && !isCommunityAnimal && match.owner_confirmation_status === 'OWNER_REJECTED')
                                                             ? 'border border-gray-300 bg-gray-200 text-gray-400 cursor-not-allowed opacity-50'
                                                             : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20 cursor-pointer'
                                                     }`}
-                                                    title={identityLock || (match.status === 'NOT_A_MATCH' ? 'Cannot confirm match because it is already marked as not a match' : undefined)}
+                                                    title={
+                                                        identityLock ||
+                                                        (match.status === 'NOT_A_MATCH'
+                                                            ? 'Cannot confirm match because it is already marked as not a match'
+                                                            : isPetMatch && !isCommunityAnimal && match.owner_confirmation_status === 'OWNER_REJECTED'
+                                                                ? 'The owner reported this is not their pet'
+                                                                : undefined)
+                                                    }
                                                 >
                                                     <span>✓</span> Confirm Match
                                                 </button>
@@ -1129,7 +1309,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                     </h3>
                                     <p className="text-xs text-gray-500 font-medium">
                                         {selectedDecision === 'CONFIRMED_MATCH'
-                                            ? `Match #${match.match_id} • ${match.similarity_score}% AI Similarity`
+                                            ? `Match #${match.match_id} • ${isManual ? 'Manual Match – Staff Identified' : `${match.similarity_score}% AI Similarity`}`
                                             : `Reject potential correlation for Match #${match.match_id}`}
                                     </p>
                                 </div>
@@ -1157,10 +1337,10 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                         </>
                                     ) : isPetMatch ? (
                                         <>
-                                            <strong>Confirmation Notice:</strong> Report #{source?.report_id || match.source_report_id} will be linked to <strong>{targetPet?.name || targetPet?.pet_name || 'the registered pet record'}</strong>'s pet record once the owner also confirms.
+                                            <strong>Confirmation Notice:</strong> Report #{source?.report_id || match.source_report_id} will be linked to <strong>{targetPet?.name || targetPet?.pet_name || 'the registered pet record'}</strong>'s pet record only after both staff and the pet owner confirm it.
                                             {match.owner_confirmation_status === 'OWNER_CONFIRMED'
                                                 ? ' The owner has already confirmed, so the link will be created immediately.'
-                                                : ' The owner will be notified to confirm.'}
+                                                : ' The owner has not yet confirmed. Do not finalize the match while owner confirmation is pending.'}
                                         </>
                                     ) : isLoadingPreview ? (
                                         <>Checking which case these reports belong to…</>
@@ -1179,7 +1359,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                 </span>
                             ) : (
                                 <span>
-                                    <strong>Rejection Notice:</strong> Marking as <strong>Not a Match</strong> rejects this suggestion{!isPetMatch ? ' for the whole case: open suggestions between these two reports\' cases are closed too, and the AI stops pairing them' : ''}. You will no longer be able to click &quot;Confirm Match&quot; for this pair once marked.
+                                    <strong>Rejection Notice:</strong> Marking as <strong>Not a Match</strong> rejects this {isManual ? 'potential match' : 'suggestion'}{!isPetMatch ? ` for the whole case${!isManual ? ': open suggestions between these two reports\' cases are closed too, and the AI stops pairing them' : ''}` : ''}. You will no longer be able to click &quot;Confirm Match&quot; for this pair once marked.
                                 </span>
                             )}
                         </div>
@@ -1269,7 +1449,12 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                             <button
                                 type="button"
                                 onClick={handleVerifySubmit}
-                                disabled={isSubmitting || verificationNotes.trim().length < minNotes || (isReportPairConfirm && (isLoadingPreview || !!casePreview?.blocked_reason))}
+                                disabled={
+                                    isSubmitting ||
+                                    verificationNotes.trim().length < minNotes ||
+                                    (selectedDecision === 'CONFIRMED_MATCH' && isPetMatch && !isCommunityAnimal && match.owner_confirmation_status !== 'OWNER_CONFIRMED') ||
+                                    (isReportPairConfirm && (isLoadingPreview || !!casePreview?.blocked_reason))
+                                }
                                 className={`px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                                     selectedDecision === 'CONFIRMED_MATCH'
                                         ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
@@ -1278,6 +1463,8 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                             >
                                 {isSubmitting ? (
                                     <span>Saving Decision...</span>
+                                ) : selectedDecision === 'CONFIRMED_MATCH' && isPetMatch && !isCommunityAnimal && match.owner_confirmation_status !== 'OWNER_CONFIRMED' ? (
+                                    <span>Awaiting Owner Confirmation</span>
                                 ) : (
                                     <span>
                                         {selectedDecision === 'CONFIRMED_MATCH' ? (isReportPairConfirm && casePreview?.effect !== 'already_same_case' ? `✓ Confirm & Join Case #${casePreview?.main_report_id ?? ''}` : '✓ Confirm & Save Match') : '✕ Confirm Not a Match'}
@@ -1317,7 +1504,9 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                 
                 const initialSnippet = isOwner
                     ? ''
-                    : `Hello ${ownerName}!
+                    : isManual
+                        ? `Hello, ${ownerName}! A STRAYSAFE staff member identified a possible match between your registered pet and Report #${source.report_id}. Please review the animal information and confirm whether the reported animal is yours.`
+                        : `Hello ${ownerName}!
 
 STRAY-SAFE AI detected a ${match.similarity_score}% look-alike match for your registered pet '${chatPetName}' in Report #${source.report_id}.
 
@@ -1353,7 +1542,8 @@ Please review the comparison photos above and let us know if this is your pet.`;
                             size: targetPet?.size_category || targetPet?.size || "Medium",
                             owner_name: ownerName,
                             registered_address: targetPet?.registered_address || (ownerName ? `Registered by ${ownerName}` : 'Registered Pet'),
-                            similarity_score: match.similarity_score,
+                            similarity_score: isManual ? 0 : match.similarity_score,
+                            is_manual: isManual,
                             sighting_photo_url: sourceImage,
                             sighting_species: source?.animal_type || source?.ai_animal_type || "Dog",
                             sighting_breed: source?.animal_breed || source?.ai_possible_breed || "Reported Breed",
@@ -1372,6 +1562,8 @@ Please review the comparison photos above and let us know if this is your pet.`;
                     items={lightbox.items}
                     startIndex={lightbox.index}
                     title={lightbox.title}
+                    compare={lightbox.compare}
+                    initialMode={lightbox.initialMode}
                     onClose={() => setLightbox(null)}
                 />
             )}

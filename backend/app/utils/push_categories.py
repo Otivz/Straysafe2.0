@@ -23,6 +23,7 @@ _TYPE_CATEGORY = {
     "rescue_assignment": RESCUES, "alert": RESCUES, "holding_overdue_alert": RESCUES,
     # Pet matches
     "potential_match": PET_MATCHES, "pet_owner_confirmation": PET_MATCHES, "pet_owner_confirmation_result": PET_MATCHES,
+    "pet_match_confirmation": PET_MATCHES, "pet_match_confirmation_result": PET_MATCHES, "leader_identity_verified": PET_MATCHES,
     "wrong_identity": PET_MATCHES, "qr_recovery_request": PET_MATCHES, "qr_finder_thanks": PET_MATCHES, "reunion_photo_requested": PET_MATCHES,
     # Claims
     "claim": CLAIMS,
@@ -90,6 +91,8 @@ def notification_link(role_id: int, ntype: Optional[str], related_id: Optional[i
     if role_id == 1:  # Resident (ResiNavbar)
         if t == "pet_owner_confirmation":
             return "/resident/pets"
+        if t == "pet_match_confirmation":
+            return f"/resident/pets?confirm={rid}" if rid else "/resident/pets"
         if t == "adoption_available_again" and rid:
             return f"/adopt/apply/{rid}"
         if t.startswith("adoption") and rid:
@@ -110,6 +113,8 @@ def notification_link(role_id: int, ntype: Optional[str], related_id: Optional[i
     if role_id == 2:  # Subdivision Leader (SubdNavbar)
         if t == "pet_owner_confirmation_result":
             return "/subd/pet-records"
+        if t == "pet_match_confirmation_result":
+            return f"/subd/manual-matching?report={rid}&kind=pet" if rid else "/subd/manual-matching"
         if t in ("message", "comment"):
             return f"/subd/reports/{rid}?openChat=true" if rid else "/subd/reports?openChat=true"
         if t == "claim":
@@ -121,6 +126,8 @@ def notification_link(role_id: int, ntype: Optional[str], related_id: Optional[i
             return "/brgy/adoption-tasks"
         if t == "pet_owner_confirmation_result":
             return "/brgy/pet-records"
+        if t == "pet_match_confirmation_result":
+            return f"/brgy/manual-matching?report={rid}&kind=pet" if rid else "/brgy/manual-matching"
         if t == "adoption_chat" and rid:
             return f"/brgy/messages?adoptionId={rid}"
         if t.startswith("adoption") and rid:

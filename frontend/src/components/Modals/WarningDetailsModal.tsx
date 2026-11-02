@@ -164,7 +164,7 @@ const WarningDetailsModal: React.FC<WarningDetailsModalProps> = ({
                             </p>
                         </div>
                     </div>
-                    <button 
+                    <button aria-label="Close" 
                         type="button"
                         onClick={onClose} 
                         className="w-8 h-8 flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 rounded-full hover:bg-stone-100 dark:hover:bg-stone-800 transition-all cursor-pointer"

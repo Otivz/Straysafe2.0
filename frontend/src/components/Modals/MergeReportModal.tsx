@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { isManualMatchRecord } from '../../utils/manualMatchFields';
 import { api } from '../../utils/api';
 import { getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
 
@@ -147,7 +148,8 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
                         const r = (await api.get(`/reports/${otherId}`)).data;
                         if (!fits(r)) continue;
                         seen.add(otherId);
-                        found.push({ report: r, similarity: m.similarity_score, aiNote: m.ai_explanation });
+                        // A staff-identified (manual) pair has no AI score or AI note
+                        found.push(isManualMatchRecord(m) ? { report: r } : { report: r, similarity: m.similarity_score, aiNote: m.ai_explanation });
                     } catch { /* skip */ }
                 }
             } catch { /* AI suggestions are optional */ }

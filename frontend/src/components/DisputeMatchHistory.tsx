@@ -16,7 +16,9 @@ export default function DisputeMatchHistory({ history }: { history?: any }) {
             <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
                 Disputed match #{history.match_id} (Report #{history.source_report_id})
             </p>
-            <p><strong>AI similarity:</strong> {history.similarity_score ?? '—'}%</p>
+            {history.matching_mode === 'manual'
+                ? <p><strong>Matching method:</strong> Staff-identified potential match (manual comparison)</p>
+                : <p><strong>AI similarity:</strong> {history.similarity_score ?? '—'}%</p>}
             <p>
                 <strong>Staff decision:</strong> {STATUS_LABEL[history.status] || history.status}
                 {history.reviewer_name && <> by {history.reviewer_name}{history.reviewer_role ? ` (${history.reviewer_role})` : ''}</>}

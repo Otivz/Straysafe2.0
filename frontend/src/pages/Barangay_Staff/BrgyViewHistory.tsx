@@ -934,7 +934,7 @@ const BrgyViewHistory = () => {
                                 </div>
                             );
                         }
-                        return <img src={currentMedia.file_url} className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()} />;
+                        return <img src={currentMedia.file_url} alt="Report photo" className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()} />;
                     })()}
                 </div>
             )}

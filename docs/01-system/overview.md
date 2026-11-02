@@ -34,9 +34,11 @@ Authorization is enforced in the backend (subdivision and barangay scope checks)
 
 - Stray and lost-animal **reports** with photos or video, location (geofenced to a configurable reporting radius), priority, status timeline, disputes, multi-animal split, and report visibility rules.
 - **AI assistance** that only suggests (animal present, photo authenticity, colour/breed/size, risk, duplicate sightings, look-alike pet matches); staff confirm.
+- **Manual matching**, which works with Gemini on or off: staff search and compare reports and registered pets, with no similarity scores. Registered-pet matches are owner-first: the owner must answer YES before staff can make the final decision ([MANUAL_REPORT_MATCHING](MANUAL_REPORT_MATCHING.md)).
 - **Rescue and holding**: dispatch, holding facility records, care logs, stay limits.
 - **Pet registry** with QR tags, scan history, ownership requests and records access.
-- **Claims and reunification** with proof and evidence review.
+- **Claims and reunification** with proof and evidence review. A claim needs an animal someone holds, and Pet Recovered is only for lost-pet reports ([CLAIM_ELIGIBILITY_RULES](CLAIM_ELIGIBILITY_RULES.md)). Barangay staff assess claiming charges (the RA 9482 dog fine; cat, impounding and boarding charges only when configured from an ordinance), and the owner handover waits until they are paid or waived ([CLAIM_FEE_ASSESSMENT_RULES](CLAIM_FEE_ASSESSMENT_RULES.md)).
+- **Owner observation and warnings**: 3-day owner observation with one extension; leader-only warnings to the pet's actual owner; verbal warnings for owners without an account; repeat incidents; leader identity verification ([OWNER_FOLLOWUP_RULES](OWNER_FOLLOWUP_RULES.md), [OWNER_WARNING_RULES](OWNER_WARNING_RULES.md)). Observation events appear on the report timeline without owner details ([ACTIVITY_TIMELINE_RULES](ACTIVITY_TIMELINE_RULES.md)).
 - **Adoption** pipeline (catalog, applications, home assessment, agreement, certificates, monitoring).
 - **Communication**: chat, announcements, notifications, email (SMTP or Resend), web push.
 - **Analytics** dashboards for administrators and subdivision leaders ([ANALYTICS_SPECIFICATION](../../ANALYTICS_SPECIFICATION.md)).

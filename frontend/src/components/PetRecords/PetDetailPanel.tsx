@@ -20,6 +20,7 @@ import api, { getStoredToken } from '../../utils/api';
 import { refreshScope, startAutoRefresh } from '../../utils/dataRefresh';
 import WarningDetailsModal from '../Modals/WarningDetailsModal';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
+import PetFollowUpSummary from './PetFollowUpSummary';
 
 interface PetDetailPanelProps {
     pet: PetRecord | null;
@@ -718,7 +719,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                     <h1 className="text-sm sm:text-lg font-black text-[#1a1208] uppercase tracking-wider truncate">Pet Profile Detailed Panel</h1>
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                    <button
+                    <button aria-label="Close"
                         onClick={onClose}
                         className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#1a1208] hover:bg-gray-50 transition-all cursor-pointer shrink-0"
                     >
@@ -1740,6 +1741,9 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                 </button>
                                             </div>
                                         </div>
+
+                                        {/* Phase 6: staff-only observation, repeat-incident and warning counts */}
+                                        {[2, 3, 4].includes(userRoleId) && pet?.id && <PetFollowUpSummary petId={Number(pet.id)} />}
 
                                         {/* VIEW 1: WARNINGS ONLY FILTER */}
                                         {historyFilter === 'warnings' && (

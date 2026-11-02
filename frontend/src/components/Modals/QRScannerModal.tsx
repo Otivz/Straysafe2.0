@@ -1047,7 +1047,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                         </div>
                     </div>
 
-                    <button
+                    <button aria-label="Close"
                         onClick={onClose}
                         className="bg-white/10 hover:bg-white/20 text-white rounded-full p-1.5 sm:p-2.5 transition-all z-10 cursor-pointer shrink-0 ml-2"
                     >

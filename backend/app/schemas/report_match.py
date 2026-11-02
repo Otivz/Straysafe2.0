@@ -83,6 +83,8 @@ class ReportMatchResponse(ReportMatchBase):
     # Staff only: the case's pet claim for this matched pet, once the owner has filed it with proof (a shortcut to it)
     claim_id: Optional[int] = None
     claim_status: Optional[str] = None
+    # How this record was created, from its saved evidence: "manual" (staff) or "ai". Decides which review is shown.
+    matching_mode: Optional[str] = None
 
     class Config:
         from_attributes = True

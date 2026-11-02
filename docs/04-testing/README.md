@@ -6,13 +6,13 @@ Status: Current inventory (written 2026-10-25 from repository evidence). **Pass/
 
 | Suite | Location | How it runs | Covers (from file names and headers) |
 |---|---|---|---|
-| Backend scripts | `backend/tests/` (95 `.py` files) | `.venv\Scripts\python.exe backend/tests/<file>.py`, one at a time; each prints its own pass count | sessions and sign-in (`test_session_security`, `test_app_stay_signed_in`), report visibility and edit authorization (`test_report_visibility`, `test_report_edit_auth`), AI pipeline and matching, claims, adoption stages and authority, pet records and ownership, admin controls, notifications, analytics |
-| Frontend unit | `frontend/tests/*.test.mjs` | `node frontend/tests/<file>.test.mjs` | claim evidence, data refresh, original sighting, personnel availability |
-| Frontend browser | `frontend/tests/*.browser.mjs` with `fixtures/*.tsx` | `node frontend/tests/<file>.browser.mjs`; needs Vite on port 5173 and local Chrome | claim evidence, match-review location, notifications, pet claim records, pet photo access, adoption details |
+| Backend scripts | `backend/tests/` (109 `test_*.py` files) | `.venv\Scripts\python.exe backend/tests/<file>.py`, one at a time; each prints its own pass count | sessions and sign-in (`test_session_security`, `test_app_stay_signed_in`), report visibility and edit authorization (`test_report_visibility`, `test_report_edit_auth`), AI pipeline and matching, claims, adoption stages and authority, pet records and ownership, admin controls, notifications, analytics |
+| Frontend unit | `frontend/tests/*.test.mjs` (10 files) | `node --test frontend/tests/*.test.mjs` | claim evidence, data refresh, original sighting, personnel availability, heatmap rules, follow-up rules, monitoring logs, observation updates, pet registration, case stages with owner observation |
+| Frontend browser | `frontend/tests/*.browser.mjs` (12 files) with `fixtures/*.tsx` | `node frontend/tests/<file>.browser.mjs`; needs local Vite (port per file, or the file's `*_TEST_URL` variable) and local Chrome | claim evidence, match-review location, notifications, pet claim records, pet photo access, adoption details, Phase 1 maps, Phase 2 holding, Phase 5 pets, Phases 6–8 (manual matching, owner confirmation, repeat incidents, leader identity, notices, claims, timeline) |
 | Type check and build | `frontend/` | `npm --prefix frontend run build` | TypeScript and Vite build |
-| Lint | `frontend/` | `npm --prefix frontend run lint` | ESLint; last result **Unverified** |
+| Lint | `frontend/` | `npm --prefix frontend run lint` | ESLint; 2026-11-01: 2,013 problems (1,887 errors, 126 warnings) across the frontend, mostly pre-existing; see the Phase 9 section |
 
-Backend tests build throwaway SQLite databases; they must not be pointed at the application database. **Exception:** `test_admin_001_users_rbac.py` and `test_admin_003_admin_create_user.py` import the real app and use the configured database (`.env`); `test_admin_003` creates two user accounts there and deletes them at the end. Run them only against a database you can restore, or convert them to an in-memory database first. There is no aggregate test command, no coverage measurement, and no CI that runs tests (the only workflow builds the APK).
+Backend tests build throwaway SQLite databases; they must not be pointed at the application database. **Exception:** eight scripts import the real app and use the configured database (`.env`): `test_admin_001_users_rbac`, `test_admin_002_notifications_rbac`, `test_admin_003_admin_create_user`, `test_admin_010_direct_action`, `test_admin_011_warnings`, `test_admin_012_gemini_governance`, `test_admin_013_real_metrics` and `test_phase_2_stability`. Importing the app also runs its startup schema steps against that database. `test_admin_003` creates two user accounts there and deletes them at the end. Run them only against a database you can restore, or convert them to an in-memory database first. There is no aggregate test command, no coverage measurement, and no CI that runs tests (the only workflow builds the APK).
 
 ## Results recorded elsewhere (point in time, not re-run for this baseline)
 
@@ -125,3 +125,70 @@ node node_modules/eslint/bin/eslint.js src/utils/petClaimLink.ts tests/fixtures/
 ```
 
 `PHASE5_PETS_TEST_URL` and `CHROME_BIN` override the local test address and Chrome path. Production services, real YOLO accuracy, live uploads/identity-document processing and Android remain unverified. Current behavior: [Pet registration and match review](../01-system/PET_REGISTRATION_AND_MATCH_REVIEW.md).
+
+## Phase 9 full regression — 2026-11-01
+
+Point-in-time results for the restore plan's Phase 9. They cover the working tree after Manual Matching, owner-first pet matching and Phases 6–8.
+
+| Check | Command | Result |
+|---|---|---|
+| Backend scripts (isolated) | Each `backend/tests/test_*.py` with `DATABASE_URL=sqlite:///:memory:` set, and `GEMINI_API_KEY`, `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `CLOUDINARY_URL` and `VAPID_PRIVATE_KEY` set empty, so no test can reach external services | **101/101 passed**. The 8 scripts that use the configured database (listed above) were **not run** |
+| Frontend unit | `node --test frontend/tests/*.test.mjs` | **79/79 passed** |
+| Phases 6–8 browser | `npx vite --port 5175 --strictPort --host 127.0.0.1` in `frontend/`, then `node frontend/tests/phase6to8.browser.mjs` | **24 scenarios passed** at 390 px, 1280 px and 390 px dark. Backend requests: 0 |
+| Earlier browser suites | Same server, with `PHASE1_MAPS_TEST_URL`, `PHASE2_HOLDING_TEST_URL` and `PHASE5_PETS_TEST_URL` set to `http://127.0.0.1:5175` | Phase 1 maps 14, Phase 2 holding 18 and Phase 5 pets 26 scenarios passed |
+| Older browser suites | `adoptionDetails`, `chatCache`, `claimEvidence`, `matchReviewLocation`, `notifications`, `petBehaviorHistory`, `petClaimRecords` and `petPhotoAccess` with their `*_TEST_URL` set to the same server | **Could not run in this environment.** Each timed out on its first page evaluation, including `chatCache` and `adoptionDetails`, which mount screens this work didn't change. These suites serve their page through request interception, unlike the passing ones. Not evidence either way |
+| Type check and build | `npm --prefix frontend run build` | Passed (existing large-chunk warning remains) |
+| Lint | `npm --prefix frontend run lint` | 2,013 problems. For the 20 existing frontend files this work changed, ESLint was compared with each file's committed version: no new errors on lines this work wrote. The only increases are on lines already changed before this work (`SubdSidebar.tsx` +1, `BrgyReportView.tsx` +7). New files lint clean |
+| Whitespace | `git diff --check` | Clean |
+| Documentation | `npx @ghostbyte/agent-docs-kit@latest audit documentation --strict` | PASS |
+
+Phase 9 also fixed two problems:
+
+- A note on a report under owner observation was titled "Moved to holding place" on the timeline. It is now "Observation update".
+- The `test_multi_animal_split` claim fixture claimed animals nobody held, so the fixture now marks them as held.
+
+Not done: the 8 database-backed scripts, native Android, live GPS and network, and checks against real data.
+
+## Claiming fines and fees - 2026-11-01
+
+`backend/tests/test_claim_fees.py` passes 66 isolated checks (its own temporary SQLite file):
+- the RA 9482 dog range;
+- the manual cat claiming charge: nothing added automatically; amount, description and reason / basis required; negative, letters and more than 2 decimals refused; "no charge applicable" with a reason; adjustments on record; dog and cat fields kept separate; no configured cat fine;
+- impounding and boarding fees;
+- permissions;
+- adjustments and waivers with reasons, and the change log;
+- payment with the official receipt;
+- the handover gate on the claim endpoint and in `record_owner_return`;
+- cancellation on rejection;
+- audit actions.
+
+Run it with `.venv/Scripts/python.exe backend/tests/test_claim_fees.py`.
+
+With local Vite on port 5175, `node frontend/tests/claimFees.browser.mjs` passes 14 scenarios at 390 and 1280 px. It covers:
+- the dog assessment with the range check, total preview and confirmation step, payment with OR, and the settled state;
+- a cat claiming charge typed in by staff (no default, invalid amounts refused, description and basis required, the total is the entered amount);
+- a cat with "no charge applicable" and its reason;
+- a waiver with a reason;
+- Subdivision Leader and resident read-only views;
+- the settings tab, where a legal basis is required.
+
+All APIs are mocked with synthetic data. Backend and external requests are blocked. `CLAIM_FEES_TEST_URL` and `CHROME_BIN` override the address and Chrome path.
+
+```powershell
+npm --prefix frontend run dev -- --host 127.0.0.1 --port 5175 --strictPort
+# In a second terminal:
+node frontend/tests/claimFees.browser.mjs
+```
+
+Current behavior: [Claim fee assessment rules](../01-system/CLAIM_FEE_ASSESSMENT_RULES.md). Not verified: real payments and receipts, and the legal citations themselves.
+
+## Improvement pass: access, performance, build, accessibility - 2026-11-02
+
+- `backend/tests/test_announcement_access.py` (16 checks, isolated SQLite) covers announcement reads:
+  - anonymous requests are refused;
+  - the subdivision and barangay listings (drafts included) are only for that area's officials;
+  - a resident's feed is only their own.
+- `backend/tests/test_holding_list_queries.py` (11 checks):
+  - the batched adoption-eligibility check gives the same answers and reasons as the per-animal check for every kind of evidence;
+  - `GET /holding/` uses a constant number of queries (10, measured) as the list grows.
+- `npm --prefix frontend run build` (type check, then bundle) passes again.

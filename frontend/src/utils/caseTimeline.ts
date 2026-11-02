@@ -51,6 +51,7 @@ export function buildCaseTimeline(report: any, holdingAnimal: any | null): any[]
             // An intake/transfer log that the case history already records: merge its media into that entry
             if (log.event_type === 'intake' || log.event_type === 'transfer') {
                 const existingIndex = h.findIndex((rh: any) => {
+                    if (/^observation (started|extended|ended)/i.test(rh.remarks || '')) return false;  // owner observation, not holding
                     const isFacility = rh.report_status_id === 7 || rh.report_status_id === 8 ||
                         (rh.remarks && (rh.remarks.toLowerCase().includes('holding') || rh.remarks.toLowerCase().includes('facility')));
                     if (!isFacility) return false;

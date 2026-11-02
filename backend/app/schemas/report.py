@@ -294,6 +294,8 @@ class ReportResponse(ReportBase):
 
     # Owner Return Tracking
     owner_return: Optional[OwnerReturnInfo] = None
+    # Phase 8: the case's latest owner observation (open, due date, extended, outcome). No owner details.
+    observation: Optional[dict[str, Any]] = None
     # Who confirmed the return to the owner: 'owner' (the owner's own Confirm Pet Recovered) or 'officer' (staff
     # recorded the handover). No names or details, so every viewer of the report may get it (timeline reunion card).
     reunion_confirmed_by: Optional[str] = None

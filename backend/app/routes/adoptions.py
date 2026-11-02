@@ -26,6 +26,7 @@ from app.utils.adoption_authority import (
     require_task_actor,
     resolve_handover_staff,
 )
+from app.utils.adoption_eligibility import require_adoption_eligible, returned_holding_ids
 from app.utils.adoption_assignments import (
     assign_task,
     close_open_tasks,
@@ -814,6 +815,7 @@ def _release_animal_from_facility(app: Adoption, db: Session, user_id: Optional[
     animal = app.animal
     if animal is None:
         return
+    require_adoption_eligible(db, animal, None, "Mark as Adopted")
     now = db_now(db)
     was_in_facility = bool(animal.kennel_slot) or animal.facility_status != 7 or bool(animal.report and animal.report.facility_id)
     animal.kennel_slot = None
@@ -998,9 +1000,12 @@ def get_adoption_catalog(include_reserved: bool = False, db: Session = Depends(g
     )
     reserved = _reserved_holding_ids(db, [a.holding_id for a in animals])
     owned = _owned_holding_ids(db, [a.holding_id for a in animals])
+    returned = returned_holding_ids(db, [a.holding_id for a in animals])
 
     results: List[CatalogAnimalResponse] = []
     for a in animals:
+        if a.holding_id in returned:
+            continue  # returned to its owner: never in the catalog, not even for staff views
         if (a.holding_id in reserved or a.holding_id in owned) and not include_reserved:
             continue
         rep = a.report
@@ -1064,7 +1069,8 @@ def get_adoption_catalog_detail(holding_id: int, db: Session = Depends(get_db)):
     if not animal:
         raise HTTPException(status_code=404, detail="Animal not found")
     # Public detail only for animals that can still be adopted (not reserved, adopted, or out of the catalog).
-    if animal.facility_status != 6 or _reserved_holding_ids(db, [animal.holding_id]) or _owned_holding_ids(db, [animal.holding_id]):
+    if (animal.facility_status != 6 or _reserved_holding_ids(db, [animal.holding_id]) or _owned_holding_ids(db, [animal.holding_id])
+            or returned_holding_ids(db, [animal.holding_id])):
         raise HTTPException(status_code=404, detail="This pet is no longer available for adoption.")
 
     rep = animal.report
@@ -1476,6 +1482,8 @@ def promote_to_adoption(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission Denied: Adoption promotion is managed exclusively by the Barangay Head Officer.",
         )
+    # Returned to its owner (from the records, not only the status): never listed
+    require_adoption_eligible(db, animal, current_user, "Add to Adoption Catalog", http_req)
 
     # Business rule: Deceased (4), Claimed (3), Transferred (5), Adopted (7), or Impounded (8) cannot be promoted
     if animal.facility_status in [3, 4, 5, 7, 8] or (animal.report and animal.report.custody_status == "Impounded") or (animal.report and animal.report.current_status_id == 8):
@@ -1716,6 +1724,7 @@ def apply_for_adoption(
     if not animal:
         logger.warning(f"[ADOPTION APPLY] Animal not found for holding_id={req.holding_id}")
         raise HTTPException(status_code=404, detail="Animal not found")
+    require_adoption_eligible(db, animal, current_user, "Adoption application", http_req)
 
     logger.info(f"[ADOPTION APPLY] Animal facility_status={animal.facility_status}, custody_status={animal.report.custody_status if animal.report else 'N/A'}")
     if animal.facility_status == 7:
@@ -1975,6 +1984,9 @@ def review_adoption_application(
     app = db.query(Adoption).options(joinedload(Adoption.animal)).filter(Adoption.adoption_id == adoption_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found")
+    if (req.decision or "").strip().capitalize() == "Approved":
+        if app.animal is not None:
+            require_adoption_eligible(db, app.animal, current_user, 'Approve adoption application', http_req)
 
     _require_adoption_access(app, current_user, db, decision=True)
 
@@ -2198,6 +2210,8 @@ def staff_confirm_handover(
     )
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found")
+    if app.animal is not None:
+        require_adoption_eligible(db, app.animal, current_user, 'Adoption handover', http_req)
     asg = require_task_actor(app, current_user, db, "Handover")
     complete_task(db, asg, current_user)
 
@@ -2286,6 +2300,8 @@ def adopter_confirm_received(
     )
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found")
+    if app.animal is not None:
+        require_adoption_eligible(db, app.animal, current_user, 'Adoption handover', http_req)
 
     if app.applicant_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="You can only confirm adoptions submitted from your own account.")
@@ -2663,6 +2679,8 @@ def approve_initial_adoption_application(
     app = db.query(Adoption).options(joinedload(Adoption.animal)).filter(Adoption.adoption_id == adoption_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
+    if app.animal is not None:
+        require_adoption_eligible(db, app.animal, current_user, 'Approve adoption application', http_req)
 
     _require_adoption_access(app, current_user, db, decision=True)
 
@@ -3723,6 +3741,8 @@ def complete_adoption_handover(
     )
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
+    if app.animal is not None:
+        require_adoption_eligible(db, app.animal, current_user, 'Adoption handover', http_req)
     asg = require_task_actor(app, current_user, db, "Handover")
     complete_task(db, asg, current_user)
 

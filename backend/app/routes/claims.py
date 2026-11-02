@@ -14,6 +14,7 @@ from app.schemas.pet_claim import PetClaimCreate, PetClaimResponse, PetClaimStat
 from app.utils.uploads import validate_cloudinary_url
 from app.utils.audit import log_activity
 from app.utils.case_groups import case_members, case_root, live_claim, pick_case_claim
+from app.utils import claim_custody
 from app.utils.owner_returns import record_owner_return, _report_media_url
 from app.utils.report_loading import embedded_report_loads
 from app.utils.notification_dispatcher import (
@@ -30,6 +31,28 @@ def _barangay_of_subdivision(db: Session, subdivision_id: Optional[int]) -> Opti
         return None
     sub = db.query(Subdivision).filter(Subdivision.subdivision_id == subdivision_id).first()
     return sub.barangay_id if sub else None
+
+
+def _match_method(match_rec) -> str:
+    """The saved method of a match record: "manual" (staff-identified) or "ai"."""
+    ev = match_rec.ai_evidence if isinstance(match_rec.ai_evidence, dict) else {}
+    return "manual" if ev.get("engine") == "manual" else "ai"
+
+
+def _apply_match_method(db: Session, claim: PetClaim) -> None:
+    """
+    Response-only: the claim's matching method, and a match score only for AI matches. A manual match's placeholder
+    score (0 / 50) is never shown as an AI similarity, also on claims saved before this rule. Nothing is written.
+    """
+    match_rec = (db.query(ReportMatch).filter(ReportMatch.source_report_id == claim.report_id,
+                                              ReportMatch.matched_pet_id == claim.pet_id)
+                 .order_by(ReportMatch.match_id.desc()).first())
+    method = _match_method(match_rec) if match_rec else None
+    claim.matching_mode = method  # type: ignore[attr-defined]
+    if method == "manual":
+        claim.__dict__["match_score"] = None
+    elif not claim.match_score and match_rec is not None:
+        claim.__dict__["match_score"] = match_rec.similarity_score
 
 
 def claim_visible_to(db: Session, user: User, claim: PetClaim) -> bool:
@@ -84,13 +107,7 @@ def get_claims(
     claims = [c for c in query.order_by(PetClaim.created_at.desc()).all() if claim_visible_to(db, current_user, c)]
     for c in claims:
         _attach_case_reports(db, c)
-        if not c.match_score:
-            match_rec = db.query(ReportMatch).filter(
-                ReportMatch.source_report_id == c.report_id,
-                ReportMatch.matched_pet_id == c.pet_id
-            ).first()
-            if match_rec:
-                c.match_score = match_rec.similarity_score
+        _apply_match_method(db, c)
 
         if c.pet and c.pet.owner:
             if not c.pet.registered_address and c.pet.owner.address:
@@ -107,6 +124,7 @@ def _attach_case_reports(db: Session, claim: PetClaim) -> None:
     ret = db.query(ReportReturn).filter(ReportReturn.report_id.in_(claim.case_report_ids)).first()
     if ret and ret.handover_photo_url:
         claim.handover_photo_url = ret.handover_photo_url
+    claim_custody.attach_custody(db, claim)
 
 
 MAX_CLAIM_PHOTOS = 5  # the owner's additional pet photos / videos per claim
@@ -243,13 +261,7 @@ def get_claim(claim_id: int, db: Session = Depends(get_db), current_user: User =
     claim = live_claim(db, claim)  # a merged claim opens the case's claim
     _attach_case_reports(db, claim)
     
-    if not claim.match_score:
-        match_rec = db.query(ReportMatch).filter(
-            ReportMatch.source_report_id == claim.report_id,
-            ReportMatch.matched_pet_id == claim.pet_id
-        ).first()
-        if match_rec:
-            claim.match_score = match_rec.similarity_score
+    _apply_match_method(db, claim)
 
     if claim.pet and claim.pet.owner:
         if not claim.pet.registered_address and claim.pet.owner.address:
@@ -280,6 +292,15 @@ def create_or_update_claim(
             detail="This pet is marked as deceased and cannot be claimed or matched."
         )
 
+    # Phase 7: a claim is for an animal someone holds. Checked before anything is saved (incl. owner assignment).
+    _case_ids = [m.report_id for m in case_members(db, case_root(db, report))]
+    _approved = db.query(PetClaim).filter(PetClaim.report_id.in_(_case_ids), PetClaim.pet_id == claim_in.pet_id,
+                                          PetClaim.status.in_(claim_custody.CONTINUATION)).first()
+    if _approved is not None:
+        claim_custody.require_completion_allowed(db, report, _approved, "Updating this claim")
+    else:
+        claim_custody.require_held(db, report, "Filing a claim")
+
     # Ownership checks: Assign ownership if unowned; enforce owner identity for resident claims
     if pet.owner_id is None:
         pet.owner_id = current_user.user_id
@@ -302,7 +323,8 @@ def create_or_update_claim(
         ReportMatch.source_report_id == claim_in.report_id,
         ReportMatch.matched_pet_id == claim_in.pet_id
     ).first()
-    match_score_val = match_rec.similarity_score if match_rec else None
+    # Only an AI match has a similarity score; a staff-identified (manual) match has none
+    match_score_val = match_rec.similarity_score if (match_rec and _match_method(match_rec) == "ai") else None
 
     # One claim per pet per case: reuse the claim already filed on any report of the merged case
     root = case_root(db, report)
@@ -410,6 +432,11 @@ def upload_claim_evidence(
 
     # File already lives in Cloudinary (browser uploaded directly via the
     # unsigned preset); just verify the URL is genuinely ours before trusting it.
+    if claim.status in ("Handover Complete", "Pet Received", "Not Needed"):
+        raise HTTPException(status_code=409, detail=f"This claim is closed ({claim.status}); no more evidence is needed.")
+    if claim.report is not None:
+        claim_custody.require_completion_allowed(db, claim.report, claim, "Adding evidence")
+
     validate_cloudinary_url(payload.file_url, allowed={'Image', 'Video', 'Document'})
     file_url = payload.file_url
     document_type = payload.document_type
@@ -462,7 +489,11 @@ def update_claim_status(
         raise HTTPException(status_code=404, detail="Claim not found")
     if status_update.status == "Merged":
         raise HTTPException(status_code=400, detail="Claims are combined automatically when reports are merged.")
+    if status_update.status == "Not Needed":
+        raise HTTPException(status_code=400, detail="Close a claim that isn't needed with its own action and a reason.")
     claim = live_claim(db, claim)  # a merged claim's decision applies to the case's claim
+    if claim.status == "Not Needed":
+        raise HTTPException(status_code=409, detail="This claim was closed as not needed.")
 
     is_owner = (claim.pet and claim.pet.owner_id == current_user.user_id)
     is_staff_or_admin = (current_user.role_id in [2, 3, 4])
@@ -487,6 +518,32 @@ def update_claim_status(
                 detail="Permission Denied: Staff or Administrator privileges required."
             )
 
+    # Phase 7: decisions that move a claim forward need a held animal; completing an approved claim stays allowed
+    # (never for an adopted animal). Rejecting is always allowed.
+    if claim.report is not None:
+        if status_update.status in ("Approved", "Evidence Requested", "Pending Review"):
+            claim_custody.require_held(db, claim.report, f"Setting the claim to {status_update.status}", claim)
+        elif status_update.status in ("Handover Complete", "Pet Received"):
+            claim_custody.require_completion_allowed(db, claim.report, claim)
+            # Claiming charges (docs/01-system/CLAIM_FEE_ASSESSMENT_RULES.md): settle (payment + receipt) or waive first.
+            # Payment never completes the handover by itself; this is the handover step.
+            from app.routes.claim_assessments import unsettled_assessment
+            owed = unsettled_assessment(db, claim.claim_id)
+            if owed is not None:
+                raise HTTPException(status_code=409, detail=(
+                    f"The claiming charges (PHP {owed.total_due:,.2f}) aren't settled yet. "
+                    f"Record the payment and official receipt, or an authorized waiver, before the handover."))
+
+    # A rejected claim's unpaid assessment is cancelled (kept on record)
+    if status_update.status == "Rejected":
+        from app.models.claim_assessment import ClaimAssessment, ClaimAssessmentChange
+        for open_a in db.query(ClaimAssessment).filter(ClaimAssessment.claim_id == claim.claim_id,
+                                                        ClaimAssessment.status == "Assessed").all():
+            open_a.status = "Cancelled"
+            db.add(ClaimAssessmentChange(assessment_id=open_a.assessment_id, action="cancelled", field="status",
+                                         previous_value="Assessed", new_value="Cancelled",
+                                         reason="The claim was rejected.", changed_by=current_user.user_id))
+
     claim.status = status_update.status
     if status_update.remarks:
         claim.remarks = status_update.remarks
@@ -495,6 +552,9 @@ def update_claim_status(
     if status_update.status == "Approved":
         # 1. Update report status to 'Claimed by Owner' (ID 9)
         if claim.report:
+            # Remember where the case was, so an erroneous approval can be undone (and the animal stays "held")
+            if claim.report.current_status_id != 9:
+                claim.status_before_approval = claim.report.current_status_id
             claim.report.current_status_id = 9
             # Add to report status history
             history_entry = StatusHistory(
@@ -700,6 +760,10 @@ def update_claim_status(
             claim.handover_photo_url = photo_url
 
         if claim.report:
+            # The owner has the animal: discharge it from holding and take it out of adoption (same as a staff handover)
+            from app.utils.owner_returns import finalize_owner_handover
+            finalize_owner_handover(db, claim.report, current_user,
+                                    f"Owner {current_user.name} confirmed receiving the animal (claim #{claim.claim_id}).")
             claim.report.current_status_id = 9
             claim.report.custody_status = "Claimed by Owner"
             history_entry = StatusHistory(
@@ -926,3 +990,111 @@ def delete_claim(
     )
 
     return {"message": f"Claim #{claim_id} deleted successfully", "claim_id": claim_id}
+
+
+# ── Phase 7: claims for animals nobody holds ────────────────────────────────
+from pydantic import BaseModel, Field  # noqa: E402
+from datetime import datetime  # noqa: E402
+
+
+class WhereaboutsAnswer(BaseModel):
+    answer: str = Field(..., pattern="^(home|still_missing)$")
+    note: Optional[str] = Field(None, max_length=1000)
+
+
+def _handling_leader_ids(db: Session, report: Optional[Report]) -> List[int]:
+    if report is None:
+        return []
+    root = case_root(db, report)
+    if root.assigned_leader_id:
+        return [root.assigned_leader_id]
+    return [u.user_id for u in db.query(User).filter(User.subdivision_id == report.subdivision_id, User.role_id == 2).all()]
+
+
+@router.post("/{claim_id}/whereabouts", response_model=PetClaimResponse)
+def answer_whereabouts(claim_id: int, payload: WhereaboutsAnswer, db: Session = Depends(get_db),
+                       current_user: User = Depends(get_current_user)):
+    """
+    The owner's answer when nobody holds the animal: Home or Still missing (with an optional note). The latest answer
+    is kept on the claim and shown to the handling leader.
+    """
+    claim = db.query(PetClaim).options(joinedload(PetClaim.pet), joinedload(PetClaim.report)).filter(PetClaim.claim_id == claim_id).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    claim = live_claim(db, claim)
+    if not (claim.pet and claim.pet.owner_id == current_user.user_id):
+        raise HTTPException(status_code=403, detail="Only the pet's owner can answer this.")
+    if not claim_custody.claim_not_needed(db, claim):
+        raise HTTPException(status_code=409, detail="The animal is being held, so the claim continues as usual.")
+    claim.owner_whereabouts = payload.answer
+    claim.owner_whereabouts_note = (payload.note or "").strip() or None
+    claim.owner_whereabouts_at = datetime.now()
+    label = "is home" if payload.answer == "home" else "is still missing"
+    pet_label = claim.pet.display_name if claim.pet else "The pet"
+    for lid in set(_handling_leader_ids(db, claim.report)):
+        db.add(Notification(
+            user_id=lid, type="claim", related_id=claim.report_id,
+            title=f"Owner: {pet_label} {label}",
+            message=(f"The owner answered on claim #{claim.claim_id} (Report #{claim.report_id}) that {pet_label} {label}."
+                     + (f" Note: {claim.owner_whereabouts_note}" if claim.owner_whereabouts_note else "")),
+        ))
+    db.commit()
+    db.refresh(claim)
+    _attach_case_reports(db, claim)
+    return claim
+
+
+class CloseNotNeeded(BaseModel):
+    reason: str = Field(..., min_length=10, max_length=2000)
+
+
+@router.post("/{claim_id}/close-not-needed", response_model=PetClaimResponse)
+def close_claim_not_needed(claim_id: int, payload: CloseNotNeeded, db: Session = Depends(get_db),
+                           current_user: User = Depends(get_current_staff_or_admin)):
+    """
+    Staff close an open claim whose animal nobody holds, with a reason. If its approval had moved the report to
+    Claimed by Owner, the report goes back to its earlier status (with history). A completed return or adoption is
+    never undone.
+    """
+    claim = db.query(PetClaim).options(joinedload(PetClaim.pet), joinedload(PetClaim.report)).filter(PetClaim.claim_id == claim_id).first()
+    if not claim or not claim_visible_to(db, current_user, claim):
+        raise HTTPException(status_code=404, detail="Claim not found")
+    claim = live_claim(db, claim)
+    if not claim_custody.claim_not_needed(db, claim):
+        raise HTTPException(status_code=409, detail=(
+            "This claim is still needed: the animal is being held, or the claim is already closed."))
+    reason = payload.reason.strip()
+    previous = claim.status
+    restored = None
+    report = claim.report
+    if previous == "Approved" and report is not None and report.current_status_id == 9 and claim.status_before_approval:
+        c = claim_custody.case_custody(db, report, claim)
+        if not (c["returned"] or c["adopted"]):
+            restored = claim.status_before_approval
+            report.current_status_id = restored
+            db.add(StatusHistory(report_id=report.report_id, report_status_id=restored, updated_by=current_user.user_id,
+                                 remarks=(f"Claim #{claim.claim_id} closed as not needed by {current_user.name}: {reason} "
+                                          f"The approval's 'Claimed by Owner' status was undone.")))
+    if restored is None and report is not None:
+        db.add(StatusHistory(report_id=report.report_id, report_status_id=report.current_status_id, updated_by=current_user.user_id,
+                             remarks=f"Claim #{claim.claim_id} closed as not needed by {current_user.name}: {reason}"))
+    claim.status = "Not Needed"
+    claim.closed_reason = reason
+    claim.closed_by = current_user.user_id
+    claim.closed_at = datetime.now()
+    if claim.pet and claim.pet.owner_id:
+        db.add(Notification(
+            user_id=claim.pet.owner_id, type="status_update", related_id=claim.report_id,
+            title="Pet Claim Closed: Not Needed",
+            message=(f"Your claim #{claim.claim_id} for {claim.pet.display_name} was closed because nobody is holding the animal. "
+                     f"Reason: {reason}"),
+        ))
+    log_activity(db=db, action="CLOSE_CLAIM_NOT_NEEDED", target_table="pet_claims", target_id=claim.claim_id,
+                 description=f"{current_user.name} closed claim #{claim.claim_id} as not needed: {reason}",
+                 user_id=current_user.user_id, log_type="operation",
+                 old_values={"status": previous}, new_values={"status": "Not Needed", "restored_report_status": restored},
+                 commit=False)
+    db.commit()
+    db.refresh(claim)
+    _attach_case_reports(db, claim)
+    return claim

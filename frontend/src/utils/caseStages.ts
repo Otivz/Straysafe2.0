@@ -40,6 +40,34 @@ const STEP_LABELS: Record<StepKey, string> = {
 
 const IN_FACILITY = /facility|impound|holding|shelter|secured in/i;
 
+/** The report's owner observation (Phase 8), from the report detail's `observation` summary. */
+export interface ObservationSummary {
+    open: boolean;
+    status: string;
+    due_at: string | null;
+    extended: boolean;
+    ended_at: string | null;
+    outcome: string | null;
+}
+
+/** "Nov 4, 2026" in the viewer's local time. */
+export function formatObservationDue(iso: string | null | undefined): string | null {
+    if (!iso) return null;
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/**
+ * An owner observation is the subdivision watching an owned pet at home, not physical custody. Status 7 is also used
+ * for a bite case observed at a facility, so only an observation summary marks the owner case.
+ */
+function ownerObservation(report: { observation?: ObservationSummary | null } | null | undefined, custody: string): { open: boolean; due: string | null; ended: boolean } | null {
+    const obs = report?.observation;
+    if (!obs) return null;
+    if (IN_FACILITY.test(custody)) return null;
+    return { open: !!obs.open, due: formatObservationDue(obs.due_at), ended: !obs.open };
+}
+
 function stepOfStatus(statusId: number | null | undefined): StepKey {
     const id = Number(statusId) || 1;
     return (STEP_ORDER.find((k) => STEP_STATUSES[k].includes(id)) || 'reported');
@@ -80,6 +108,9 @@ export function getCaseStages(report: any, holding?: any | null): CaseStages {
     let current = stepOfStatus(statusId);
     // Still open but already in a facility (custody says so): the animal is in care
     if (current !== 'closed' && current !== 'care' && IN_FACILITY.test(custody)) current = 'care';
+    // An owner observation (status 7 at home) is the subdivision's check, not safe care at a holding place
+    const observation = ownerObservation(report, custody);
+    if (current === 'care' && statusId === 7 && observation) current = 'checked';
     const currentIndex = STEP_ORDER.indexOf(current);
 
     // First entry that reached each step (real history entries only, oldest first)
@@ -109,9 +140,13 @@ export function getCaseStages(report: any, holding?: any | null): CaseStages {
         };
     });
 
-    const currentLabel = closed
+    let currentLabel = closed
         ? closed.label
         : (current === 'care' && ![7, 8].includes(statusId) ? OPEN_LABELS[7] : (OPEN_LABELS[statusId] || OPEN_LABELS[1]));
+    if (!closed && observation) {
+        if (observation.open) currentLabel = observation.due ? `Under observation until ${observation.due}` : 'Under observation by the subdivision';
+        else if (statusId === 7) currentLabel = 'Observation ended; the subdivision decides the next step';
+    }
     return { steps, currentIndex, currentLabel, outcome: closed ? closed.outcome : null };
 }
 
@@ -187,6 +222,18 @@ export function getWhereNow(report: any, stages: CaseStages, holding?: any | nul
         return { tone: 'rescue', parts: [{ text: 'Sent to the Barangay for rescue.' }, ...near(' Last seen near ')] };
     }
     if (key === 'checked') {
+        const observation = ownerObservation(report, String(report?.custody_status || holding?.custody_status || ''));
+        if (observation?.open) {
+            return {
+                tone: 'progress',
+                parts: observation.due
+                    ? [{ text: 'Under observation: the owner has until ' }, { text: observation.due, strong: true }, { text: ' to address the report.' }]
+                    : [{ text: 'Under observation by the subdivision.' }],
+            };
+        }
+        if (observation && statusId === 7) {
+            return { tone: 'progress', parts: [{ text: 'The observation has ended; the subdivision decides the next step.' }] };
+        }
         return { tone: 'progress', parts: [{ text: statusId === 15 ? 'Ownership is being reviewed.' : statusId === 16 ? 'The subdivision is looking into it.' : 'Checked by the subdivision.' }, ...near(' Last seen near ')] };
     }
     return { tone: 'progress', parts: [{ text: 'Waiting for the subdivision to check it.' }, ...near(' Reported near ')] };

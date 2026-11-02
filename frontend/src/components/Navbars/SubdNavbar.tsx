@@ -243,6 +243,18 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
             return;
         }
 
+        // Owner answered a pet match confirmation request -> that report's registered-pet candidates (related_id = report id)
+        if (typeStr === 'pet_match_confirmation_result') {
+            navigate(notif.related_id ? `/subd/manual-matching?report=${notif.related_id}&kind=pet` : '/subd/manual-matching');
+            return;
+        }
+
+        // Observation notices (owner updates, owner reports resolved, deadline expired) -> that case (related_id = report id)
+        if (typeStr.startsWith('followup')) {
+            navigate(notif.related_id ? `/subd/under-observation/${notif.related_id}?by=report` : '/subd/under-observation');
+            return;
+        }
+
         const isMessageOrComment =
             typeStr.includes('message') ||
             titleStr.includes('message') ||

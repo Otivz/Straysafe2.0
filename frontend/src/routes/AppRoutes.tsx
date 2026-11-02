@@ -31,6 +31,8 @@ const CommunityStaffLogin = lazy(() => import('../pages/Subd_Leaders/CommunitySt
 const SubdDashboard = lazy(() => import('../pages/Subd_Leaders/SubdDashboard'));
 const SubdReports = lazy(() => import('../pages/Subd_Leaders/SubdReports'));
 const SubdViewReport = lazy(() => import('../pages/Subd_Leaders/SubdViewReport'));
+const SubdUnderObservation = lazy(() => import('../pages/Subd_Leaders/SubdUnderObservation'));
+const SubdManualMatching = lazy(() => import('../pages/Subd_Leaders/SubdManualMatching'));
 
 const SubdHistoryReport = lazy(() => import('../pages/Subd_Leaders/SubdHistoryReport'));
 const SubdViewHistory = lazy(() => import('../pages/Subd_Leaders/SubdViewHistory'));
@@ -68,12 +70,14 @@ const BrgyMessages = lazy(() => import('../pages/Barangay_Staff/BrgyMessages'));
 const BrgySettings = lazy(() => import('../pages/Barangay_Staff/BrgySettings'));
 const BrgyPetRecords = lazy(() => import('../pages/Barangay_Staff/BrgyPetRecords'));
 const BrgyPetClaims = lazy(() => import('../pages/Barangay_Staff/BrgyPetClaims'));
+const BrgyManualMatching = lazy(() => import('../pages/Barangay_Staff/BrgyManualMatching'));
 const BrgyAdoptions = lazy(() => import('../pages/Barangay_Staff/BrgyAdoptions'));
 const BrgyAdoptionTasks = lazy(() => import('../pages/Barangay_Staff/BrgyAdoptionTasks'));
 const PetMatchReview = lazy(() => import('../pages/citizen/PetMatchReview'));
 const PetClaimsDashboard = lazy(() => import('../pages/citizen/PetClaimsDashboard'));
 const ReportStrayPage = lazy(() => import('../pages/citizen/ReportStrayPage'));
 const ResidentSettings = lazy(() => import('../pages/citizen/ResidentSettings'));
+const ResiObservations = lazy(() => import('../pages/citizen/ResiObservations'));
 const AdoptionCatalog = lazy(() => import('../pages/citizen/AdoptionCatalog'));
 const AnimalJourneyMap = lazy(() => import('../pages/citizen/AnimalJourneyMap'));
 const AdoptionApplyForm = lazy(() => import('../pages/citizen/AdoptionApplyForm'));
@@ -120,6 +124,7 @@ const AppRoutes = () => {
                 <Route path="/resident/pets" element={<ResidentPet />} />
                 <Route path="/resident/profile" element={<ResiProfile />} />
                 <Route path="/resident/settings" element={<ResidentSettings />} />
+                <Route path="/resident/observations" element={<ResiObservations />} />
                 <Route path="/resident/reports/:reportId/match-review" element={<PetMatchReview />} />
                 <Route path="/resident/pet/:petId/claims-dashboard" element={<PetClaimsDashboard />} />
             </Route>
@@ -148,10 +153,13 @@ const AppRoutes = () => {
                 <Route path="/subd-messages" element={<SubdMessages />} />
                 <Route path="/subd/reports" element={<SubdReports />} />
                 <Route path="/subd/reports/:id" element={<SubdViewReport />} />
+                <Route path="/subd/under-observation" element={<SubdUnderObservation />} />
+                <Route path="/subd/under-observation/:id" element={<SubdUnderObservation />} />
                 <Route path="/subd/history" element={<SubdHistoryReport />} />
                 <Route path="/subd/history/:id" element={<SubdViewHistory />} />
                 <Route path="/subd/escalated" element={<Navigate to="/subd/reports?status=Escalated%20to%20Barangay" replace />} />
                 <Route path="/subd/pet-claims" element={<SubdPetClaims />} />
+                <Route path="/subd/manual-matching" element={<SubdManualMatching />} />
                 <Route path="/subd/endorsements" element={<EndorsementArch />} />
                 <Route path="/subd/pet-records" element={<SubdPetRecords />} />
                 <Route path="/subd/removed-pets" element={<SubdRemovedPetRecords />} />
@@ -176,6 +184,7 @@ const AppRoutes = () => {
                 <Route path="/brgy/holding-facility" element={<BrgyHoldingFacility />} />
                 <Route path="/brgy/pet-records" element={<BrgyPetRecords />} />
                 <Route path="/brgy/pet-claims" element={<BrgyPetClaims />} />
+                <Route path="/brgy/manual-matching" element={<BrgyManualMatching />} />
                 <Route path="/brgy/adoptions" element={<BrgyAdoptions />} />
                 <Route path="/brgy/adoption-tasks" element={<BrgyAdoptionTasks />} />
                 <Route path="/brgy/history" element={<BrgyHistoryReports />} />

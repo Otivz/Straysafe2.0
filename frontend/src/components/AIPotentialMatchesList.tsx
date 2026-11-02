@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { isManualMatchRecord } from '../utils/manualMatchFields';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
 import AIMatchReviewModal from './Modals/AIMatchReviewModal';
@@ -159,7 +160,10 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                 return <span className="px-2.5 py-0.5 bg-gray-100 text-gray-600 rounded-full font-bold text-[11px] border border-gray-200">Superseded</span>;
             case 'AI_SUGGESTED':
             default:
-                return <span className="px-2.5 py-0.5 bg-role-muted text-role rounded-full font-bold text-[11px] border border-role-border">AI Suggested</span>;
+                // A staff-identified (manual) record is never labelled as an AI suggestion
+                return isManualMatchRecord(match)
+                    ? <span className="px-2.5 py-0.5 bg-orange-50 text-orange-800 rounded-full font-bold text-[11px] border border-orange-200">Staff-Identified Potential Match</span>
+                    : <span className="px-2.5 py-0.5 bg-role-muted text-role rounded-full font-bold text-[11px] border border-role-border">AI Suggested</span>;
         }
     };
 
@@ -469,7 +473,7 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                                     <div className="flex items-center justify-between flex-wrap gap-2 border-b border-gray-100 pb-2.5">
                                         <div className="flex items-center gap-2">
                                             <span className="px-2.5 py-0.5 bg-gradient-to-r from-role to-amber-500 text-white font-extrabold text-xs rounded-full shadow-2xs">
-                                                {m.similarity_score}% Similarity
+                                                {isManualMatchRecord(m) ? 'Staff-identified match' : `${m.similarity_score}% Similarity`}
                                             </span>
                                             {getStatusPill(m.status, m)}
                                             {ownerRejected && (

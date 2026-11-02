@@ -42,6 +42,7 @@ import GroupAISummary from '../../components/GroupAISummary';
 import InheritedIdentityNotice from '../../components/InheritedIdentityNotice';
 import IdentityDisputePanel from '../../components/IdentityDisputePanel';
 import DisputeMatchHistory from '../../components/DisputeMatchHistory';
+import OwnerFollowUpCard from '../../components/OwnerFollowUpCard';
 interface Report {
     report_id: number;
     category_id: number;
@@ -1266,6 +1267,18 @@ const BrgyReportView = () => {
                                         >
                                             Team Chat{chatCount > 0 ? ` (${chatCount})` : ''}
                                         </button>
+                                        <Link
+                                            to={`/brgy/manual-matching?report=${report.report_id}`}
+                                            className="h-9 px-3.5 bg-white hover:bg-orange-50 text-orange-700 border border-orange-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
+                                        >
+                                            Find matches manually
+                                        </Link>
+                                        <Link
+                                            to={`/brgy/manual-matching?report=${report.report_id}&kind=pet`}
+                                            className="h-9 px-3.5 bg-white hover:bg-orange-50 text-orange-700 border border-orange-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
+                                        >
+                                            Check registered pets
+                                        </Link>
                                         {endorsementFileUrl && (
                                             <button
                                                 type="button"
@@ -2235,6 +2248,22 @@ const BrgyReportView = () => {
 
                                             {/* Who can see this report: decided by the Subdivision Leader (read-only for the Barangay) */}
                                             <ReportVisibilityPanel report={report} canEdit={false} />
+
+                                            {/* Owner Follow-up Observation (read-only for Barangay staff) */}
+                                            <OwnerFollowUpCard
+                                                reportId={report.report_id}
+                                                subdivisionId={(report as any).subdivision_id}
+                                                assignedLeaderId={(report as any).assigned_leader_id}
+                                                currentUserId={currentUserId}
+                                                petId={report.pet_id}
+                                                petName={(report as any).pet_name}
+                                                isPossibleOwned={(report as any).is_possible_owned}
+                                                initialOwnerName={(report as any).owner_name}
+                                                initialOwnerPhone={(report as any).owner_phone}
+                                                initialOwnerAddress={(report as any).owner_address}
+                                                reportStatusId={report.status_id}
+                                                onFollowUpChanged={() => fetchReportDetails()}
+                                            />
 
                                             {/* Animal record (pet record / community animal) */}
                                             {![3, 14, 18].includes(report.status_id) && !report.duplicate_of_report_id && (

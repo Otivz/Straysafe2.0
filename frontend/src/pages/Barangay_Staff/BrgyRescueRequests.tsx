@@ -1986,7 +1986,7 @@ const BrgyRescueRequests = () => {
                                 </div>
                             );
                         }
-                        return <img src={currentMedia.file_url} className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl ring-1 ring-white/10" onClick={e => e.stopPropagation()} />;
+                        return <img src={currentMedia.file_url} alt="Report photo" className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl ring-1 ring-white/10" onClick={e => e.stopPropagation()} />;
                     })()}
                 </div>
             )}

@@ -1,19 +1,36 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Activity, ArrowDownUp, Building2, CheckCircle2, Clock3, Download, Filter, Menu, Printer, RefreshCw, RotateCcw, Search, ShieldAlert } from 'lucide-react';
+import { Activity, ArrowDownUp, Building2, CheckCircle2, Clock3, Download, Filter, HeartHandshake, MapPin, Menu, Printer, RefreshCw, RotateCcw, Search, ShieldAlert, Siren, Warehouse } from 'lucide-react';
 import AdminSidebar from '../AdminSidebar';
 import SubdSidebar from '../SubdSidebar';
 import AdminNavbar from '../Navbars/AdminNavbar';
 import SubdNavbar from '../Navbars/SubdNavbar';
 import SubdBottomNav from '../Navbars/SubdBottomNav';
 import { CategoryChart, Distribution, IncidentChart } from './AnalyticsCharts';
-import { count, dateLabel, duration, exportAnalytics, manilaToday, periods, rate, readFilters, requestParams, useAnalytics, useBenchmarkRows } from './analytics';
+import { count, dateLabel, duration, exportAnalytics, manilaToday, periods, rate, readFilters, requestParams, statusOptions, useAnalytics, useBenchmarkRows } from './analytics';
 import type { AnalyticsMode, Benchmark } from './analytics';
 import './analytics.css';
 
 function Stat({ label, value, detail, icon }: { label: string; value: string; detail: ReactNode; icon: ReactNode }) {
     return <div className="analytics-card !p-5"><div className="flex items-center justify-between gap-3"><h2 className="text-xs font-semibold text-slate-500 dark:text-zinc-400">{label}</h2><span className="rounded-lg bg-emerald-50 p-2 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">{icon}</span></div><p className="mt-3 text-3xl font-bold tracking-tight tabular-nums">{value}</p><div className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-zinc-400">{detail}</div></div>;
+}
+
+function MetricCard({ eyebrow, title, rows, note }: { eyebrow: string; title: string; rows: [string, ReactNode][]; note?: ReactNode }) {
+    return <section className="analytics-card"><p className="analytics-eyebrow">{eyebrow}</p><h2 className="analytics-title">{title}</h2>
+        <dl className="analytics-metrics mt-5">{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+        {note && <p className="mt-4 text-xs leading-relaxed text-slate-500">{note}</p>}</section>;
+}
+
+function TopLocations({ rows }: { rows: { location: string; count: number }[] }) {
+    const max = Math.max(1, ...rows.map(row => row.count));
+    return <section className="analytics-card"><p className="analytics-eyebrow">WHERE REPORTS COME FROM</p><h2 className="analytics-title">Most frequent locations</h2>
+        {!rows.length ? <div className="analytics-empty mt-6">No location recorded for these incidents.</div> : <ol className="mt-5 space-y-3">{rows.map((row, i) => <li key={row.location} className="flex items-center gap-3 text-sm">
+            <span className="w-5 shrink-0 text-xs font-semibold text-slate-400 tabular-nums">{i + 1}</span>
+            <span className="min-w-0 flex-1"><span className="flex items-center gap-1.5 truncate font-medium"><MapPin size={13} className="shrink-0 text-emerald-600" />{row.location}</span>
+                <span className="mt-1 block h-1.5 rounded-full bg-slate-100 dark:bg-zinc-800"><span className="block h-full rounded-full bg-emerald-500" style={{ width: `${row.count / max * 100}%` }} /></span></span>
+            <span className="w-10 shrink-0 text-right font-semibold tabular-nums">{count(row.count)}</span></li>)}</ol>}
+        <p className="mt-4 text-xs text-slate-500">Landmarks as entered on the reports in this period (same place, different spacing or capitalization counted together). See the heat map for exact positions.</p></section>;
 }
 
 function BenchmarkTable({ rows, onSelect }: { rows: Benchmark[]; onSelect: (id: string) => void }) {
@@ -50,7 +67,9 @@ export default function AnalyticsDashboard({ mode }: { mode: AnalyticsMode }) {
     const today = manilaToday();
     const title = admin ? 'Municipal analytics' : 'Community analytics';
     const selectedArea = options.subdivisions.find(option => String(option.id) === filters.subdivision);
-    const scope = admin ? selectedArea?.name || (filters.subdivision ? 'Selected subdivision' : 'All subdivisions') : data?.subdivision?.name || 'Your subdivision';
+    const scope = admin ? selectedArea?.name || (filters.subdivision ? 'Selected subdivision' : 'All subdivisions')
+        : data?.subdivision?.name || 'Your subdivision';
+    const statusLabel = (key: string) => statusOptions.find(([id]) => id === key)?.[1] || key;
     const filteredCount = [admin && filters.subdivision, filters.animal, filters.priority, filters.category, filters.status !== 'all'].filter(Boolean).length;
     const update = (key: string, value: string) => {
         setSearch(current => { const next = new URLSearchParams(current); if (value) next.set(key, value); else next.delete(key); return next; });
@@ -97,7 +116,7 @@ export default function AnalyticsDashboard({ mode }: { mode: AnalyticsMode }) {
                         {admin && <label className="analytics-label">Subdivision<select className="analytics-input" value={filters.subdivision} onChange={event => update('subdivision', event.target.value)}><option value="">All subdivisions</option>{options.subdivisions.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>}
                         <label className="analytics-label">Animal<select className="analytics-input" value={filters.animal} onChange={event => update('animal', event.target.value)}><option value="">All animals</option>{['Dog', 'Cat', 'Other'].map(value => <option key={value}>{value}</option>)}</select></label>
                         <label className="analytics-label">Priority<select className="analytics-input" value={filters.priority} onChange={event => update('priority', event.target.value)}><option value="">All priorities</option>{['Low', 'Medium', 'High'].map(value => <option key={value}>{value}</option>)}</select></label>
-                        <label className="analytics-label">Case status<select className="analytics-input" value={filters.status} onChange={event => update('status', event.target.value)}><option value="all">All statuses</option><option value="active">Active</option><option value="closed">Closed</option><option value="resolved">Successfully resolved</option></select></label>
+                        <label className="analytics-label">Case status<select className="analytics-input" value={filters.status} onChange={event => update('status', event.target.value)}>{statusOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
                         <label className="analytics-label">Category<select className="analytics-input" value={filters.category} onChange={event => update('category', event.target.value)}><option value="">All categories</option>{options.categories.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
                         <label className="analytics-label">Chart interval<select className="analytics-input" value={filters.interval} onChange={event => update('interval', event.target.value)}><option value="auto">Automatic</option><option value="day">Daily</option><option value="week">Weekly</option><option value="month">Monthly</option></select></label>
                     </div>
@@ -108,11 +127,11 @@ export default function AnalyticsDashboard({ mode }: { mode: AnalyticsMode }) {
                     </div>}
                 </section>
 
-                {error && <div role="alert" className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"><ShieldAlert size={19} className="shrink-0" /><div><p className="font-semibold">{error}</p>{data && <p className="mt-1 text-xs">Showing saved results for these exact filters. Check the update time below.</p>}<button type="button" onClick={refresh} className="mt-2 font-semibold underline">Try again</button></div></div>}
+                {error && <div role="alert" className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"><ShieldAlert size={19} className="shrink-0" /><div><p className="font-semibold">{error}</p><button type="button" onClick={refresh} disabled={refreshing} className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-60 dark:bg-transparent dark:text-amber-200"><RefreshCw size={13} />Retry</button>{data && <p className="mt-1 text-xs">Showing saved results for these exact filters. Check the update time below.</p>}<button type="button" onClick={refresh} className="mt-2 font-semibold underline">Try again</button></div></div>}
 
                 {loading ? <div role="status" aria-label="Loading analytics" className="space-y-6"><div className="grid grid-cols-2 gap-4 xl:grid-cols-4">{[0, 1, 2, 3].map(i => <div key={i} className="h-36 animate-pulse rounded-2xl bg-slate-200 motion-reduce:animate-none dark:bg-zinc-800" />)}</div><div className="h-96 animate-pulse rounded-2xl bg-slate-200 motion-reduce:animate-none dark:bg-zinc-800" /><span className="sr-only">Loading analytics</span></div> : data && <>
                     <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-zinc-400"><p><strong className="text-slate-700 dark:text-zinc-200">{scope}</strong> · {dateLabel(data.metadata.start_date)} {data.metadata.start_date.slice(0, 4)} – {dateLabel(data.metadata.end_date)} {data.metadata.end_date.slice(0, 4)} · {data.metadata.group_by === 'day' ? 'Daily' : data.metadata.group_by === 'week' ? 'Weekly' : 'Monthly'} · Philippine time</p><p>{refreshing ? 'Updating…' : 'Updated'} {new Date(data.metadata.generated_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p></div>
-                    <p className="text-xs text-slate-500 dark:text-zinc-400">Applied filters: {data.metadata.filters.animal_type || 'All animals'} &middot; {data.metadata.filters.priority ? `${data.metadata.filters.priority} priority` : 'All priorities'} &middot; {data.metadata.filters.status === 'all' ? 'All statuses' : data.metadata.filters.status === 'resolved' ? 'Successfully resolved' : data.metadata.filters.status === 'closed' ? 'Closed' : 'Active'} &middot; {options.categories.find(option => option.id === data.metadata.filters.category_id)?.name || 'All categories'}</p>
+                    <p className="text-xs text-slate-500 dark:text-zinc-400">Applied filters: {data.metadata.filters.animal_type || 'All animals'} &middot; {data.metadata.filters.priority ? `${data.metadata.filters.priority} priority` : 'All priorities'} &middot; {statusLabel(String(data.metadata.filters.status || 'all'))} &middot; {options.categories.find(option => option.id === data.metadata.filters.category_id)?.name || 'All categories'}</p>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                         <Stat label="Incidents filed" value={count(data.kpis.total_reports)} detail={comparisonText} icon={<Activity size={17} />} />
                         <Stat label="Still active" value={count(data.kpis.active_reports)} detail={`${count(data.kpis.closed_reports)} closed from the selected reporting cohort`} icon={<ShieldAlert size={17} />} />
@@ -121,16 +140,40 @@ export default function AnalyticsDashboard({ mode }: { mode: AnalyticsMode }) {
                     </div>
                     {comparison?.available && <p className="text-xs text-slate-500">Incident count comparison: {comparison.previous_start_date} – {comparison.previous_end_date}. This compares reports filed, not the number of individual stray animals.</p>}
 
+                    {admin && data.rescue_summary && data.custody_snapshot && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Operations">
+                        <Stat label="Rescue requests" value={count(data.rescue_summary.total)} detail={`${count(data.rescue_summary.pending)} pending · ${count(data.rescue_summary.active)} active · ${count(data.rescue_summary.completed)} completed · ${count(data.rescue_summary.cancelled)} rejected`} icon={<Siren size={17} />} />
+                        <Stat label="In Barangay custody now" value={count(data.custody_snapshot.in_custody_now)} detail={`Current snapshot, not limited to the period. ${count(data.custody_snapshot.returned_to_owner_total)} returned to owners in total`} icon={<Warehouse size={17} />} />
+                        <Stat label="Available for adoption now" value={count(data.custody_snapshot.available_for_adoption_now)} detail="Listed for adoption and not returned to an owner" icon={<HeartHandshake size={17} />} />
+                        <Stat label="Successful adoptions" value={count(data.holding_and_adoption?.successful_adoptions || 0)} detail={`Completed handovers from applications in this period; ${count(data.holding_and_adoption?.pending_adoptions || 0)} pending, ${count(data.holding_and_adoption?.approved_adoptions || 0)} approved`} icon={<CheckCircle2 size={17} />} />
+                    </div>}
+
                     <IncidentChart key={`${data.metadata.start_date}-${data.metadata.end_date}-${data.metadata.group_by}`} points={data.incident_timeline} grouping={data.metadata.group_by} />
                     <div className="grid gap-6 xl:grid-cols-2"><CategoryChart rows={data.category_breakdown} selected={selectedCategory} onSelect={name => { const category = options.categories.find(option => option.name === name); if (category) update('category', String(category.id) === filters.category ? '' : String(category.id)); }} />
                         <div className="grid gap-6 sm:grid-cols-2"><Distribution title="Animal types" description="Select a type to filter." values={data.animal_distribution} onSelect={value => update('animal', filters.animal === value ? '' : value)} /><Distribution title="Priority levels" description="Select a priority to filter." values={data.priority_distribution} onSelect={value => update('priority', filters.priority === value ? '' : value)} /></div>
                     </div>
+                    <div className="grid gap-6 lg:grid-cols-3">
+                        <Distribution title="Report status" description="Each report counted once, by its current status. Select a status to filter."
+                            values={Object.fromEntries((data.status_distribution || []).map(item => [item.label, item.count]))}
+                            onSelect={label => { const key = data.status_distribution.find(item => item.label === label)?.key; if (key) update('status', filters.status === key ? 'all' : key); }} />
+                        <TopLocations rows={data.top_locations || []} />
+                        <MetricCard eyebrow="OBSERVATION" title="Owner observations"
+                            rows={[['Under observation now', count(data.observations?.active_now || 0)], ['Resolved in this period', count(data.observations?.resolved_in_period || 0)], ['Ended otherwise in this period', count(data.observations?.other_endings_in_period || 0)]]}
+                            note="Owner follow-up observations on the cases in this view. Resolving one resolves its report (counted under Resolved)." />
+                    </div>
+                    {admin && data.rescue_summary && <div className="grid gap-6 lg:grid-cols-2">
+                        <MetricCard eyebrow="RESCUE PERFORMANCE" title="Rescue requests for these incidents"
+                            rows={[['Pending', count(data.rescue_summary.pending)], ['Approved / dispatched / started', count(data.rescue_summary.active)], ['Completed', count(data.rescue_summary.completed)], ['Rejected', count(data.rescue_summary.cancelled)], ['Report → rescue started', duration(data.rescue_summary.avg_report_to_start_hours)], ['Timed samples', count(data.rescue_summary.response_samples)]]}
+                            note="Rescue requests have no creation time of their own, so they follow their report's filing date. Times use only requests with a recorded start." />
+                        {data.claims_summary && <MetricCard eyebrow="OWNERSHIP CLAIMS" title="Claims filed in this period"
+                            rows={[['Submitted', count(data.claims_summary.submitted)], ['Approved, awaiting handover', count(data.claims_summary.approved_pending_handover)], ['Handed over to owner', count(data.claims_summary.handed_over)], ['Rejected', count(data.claims_summary.rejected)]]}
+                            note="Claims on the cases in this view. An animal handed over to its owner is never counted as available for adoption." />}
+                    </div>}
                     {admin && <BenchmarkTable rows={data.subdivisions_comparison || []} onSelect={id => update('subdivision', id)} />}
 
                     <div className="grid gap-6 lg:grid-cols-3">
                         <section className="analytics-card"><p className="analytics-eyebrow">RESPONSE DURATION</p><h2 className="analytics-title">From report to action</h2><dl className="analytics-metrics mt-5"><div><dt>Report → verified</dt><dd>{duration(data.kpis.avg_verification_hours)}</dd></div><div><dt>Valid verification samples</dt><dd>{count(data.kpis.verified_reports)}</dd></div>{admin && <><div><dt>Rescue started → completed</dt><dd>{duration(data.sla_metrics?.avg_rescue_hours)}</dd></div><div><dt>Completed rescue samples</dt><dd>{count(data.sla_metrics?.total_completed_rescues || 0)}</dd></div></>}</dl><p className="mt-4 text-xs leading-relaxed text-slate-500">N/A means no valid timing samples. These are measured durations, not compliance with a defined response-time target.</p></section>
                         <section className="analytics-card"><p className="analytics-eyebrow">HOLDING & OUTCOMES</p><h2 className="analytics-title">Intakes in this period</h2><dl className="analytics-metrics mt-5"><div><dt>Total intakes</dt><dd>{count(data.holding_summary.total_intake)}</dd></div><div><dt>Still held from those intakes</dt><dd>{count(data.holding_summary.currently_held)}</dd></div><div><dt>Returned to owner</dt><dd>{count(data.holding_summary.returned_to_owner)}</dd></div><div><dt>Transferred</dt><dd>{count(data.holding_summary.transferred_to_shelter)}</dd></div></dl><p className="mt-4 text-xs leading-relaxed text-slate-500">Includes treatment, healthy, for-adoption and impounded animals still in care. Counts follow intake dates and current outcomes.</p></section>
-                        {admin ? <section className="analytics-card"><p className="analytics-eyebrow">ADOPTION APPLICATIONS</p><h2 className="analytics-title">Applications in this period</h2><dl className="analytics-metrics mt-5"><div><dt>Applications received</dt><dd>{count(data.holding_and_adoption?.total_adoptions || 0)}</dd></div><div><dt>Approved applications</dt><dd>{count(data.holding_and_adoption?.approved_adoptions || 0)}</dd></div><div><dt>Pending applications</dt><dd>{count(data.holding_and_adoption?.pending_adoptions || 0)}</dd></div><div><dt>Completed handovers</dt><dd>{count(data.holding_and_adoption?.completed_handovers || 0)}</dd></div></dl><p className="mt-4 text-xs text-slate-500">Approval rate: {rate(data.holding_and_adoption?.adoption_rate)}. Approval and physical handover are separate outcomes.</p></section>
+                        {admin ? <section className="analytics-card"><p className="analytics-eyebrow">ADOPTION APPLICATIONS</p><h2 className="analytics-title">Applications in this period</h2><dl className="analytics-metrics mt-5"><div><dt>Applications received</dt><dd>{count(data.holding_and_adoption?.total_adoptions || 0)}</dd></div><div><dt>Approved applications</dt><dd>{count(data.holding_and_adoption?.approved_adoptions || 0)}</dd></div><div><dt>Pending applications</dt><dd>{count(data.holding_and_adoption?.pending_adoptions || 0)}</dd></div><div><dt>Successful adoptions (handed over)</dt><dd>{count(data.holding_and_adoption?.completed_handovers || 0)}</dd></div></dl><p className="mt-4 text-xs text-slate-500">Approval rate: {rate(data.holding_and_adoption?.adoption_rate)}. Only a completed handover counts as a successful adoption; pending and approved applications don't.</p></section>
                             : <Distribution title="Owner warnings" description="Warnings issued in this period, scoped to your subdivision." values={Object.fromEntries(data.warnings_breakdown.map(item => [item.violation, item.count]))} />}
                     </div>
                     {admin ? <div className="grid gap-6 lg:grid-cols-2"><section className="analytics-card"><p className="analytics-eyebrow">AI MATCH REVIEWS</p><h2 className="analytics-title">Review outcomes, not accuracy claims</h2><dl className="analytics-metrics mt-5"><div><dt>Suggestions created</dt><dd>{count(data.ai_performance?.total_matches_suggested || 0)}</dd></div><div><dt>Human-reviewed suggestions</dt><dd>{count(data.ai_performance?.reviewed_matches || 0)}</dd></div><div><dt>Confirmed suggestions</dt><dd>{count(data.ai_performance?.confirmed_matches || 0)}</dd></div><div><dt>Accepted among reviewed</dt><dd>{rate(data.ai_performance?.review_acceptance_rate)}</dd></div><div><dt>Mean confirmed-match similarity</dt><dd>{rate(data.ai_performance?.average_confidence_score)}</dd></div></dl><p className="mt-4 text-xs leading-relaxed text-slate-500">A similarity score is not measured AI accuracy, and a confirmed match is not a completed reunion.</p></section>

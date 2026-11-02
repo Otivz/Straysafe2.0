@@ -98,7 +98,7 @@ const IMPOUND_DAYS = 0; // Temporarily 0 for testing
 const FACILITY_STATUSES = [
     { id: 1, name: 'Need Treatment', color: 'bg-red-50 text-red-600 border-red-200' },
     { id: 2, name: 'Healthy', color: 'bg-green-50 text-green-600 border-green-200' },
-    { id: 3, name: 'Claimed by Owner', color: 'bg-blue-50 text-blue-600 border-blue-200' },
+    { id: 3, name: 'Returned to Owner', color: 'bg-blue-50 text-blue-600 border-blue-200' },
     { id: 4, name: 'Deceased', color: 'bg-gray-100 text-gray-500 border-gray-200' },
     { id: 5, name: 'Transferred to Shelter', color: 'bg-purple-50 text-purple-600 border-purple-200' },
     { id: 6, name: 'For Adoption', color: 'bg-teal-50 text-teal-600 border-teal-200' },
@@ -812,7 +812,7 @@ const SubdHoldingFacility = () => {
             border: 'border-purple-100',
         },
         {
-            label: 'Claimed by Owner',
+            label: 'Returned to Owner',
             value: historyAnimals.filter(a => a.facility_status === 3).length,
             icon: PartyPopper,
             color: 'bg-blue-50 text-blue-600',
@@ -944,7 +944,7 @@ const SubdHoldingFacility = () => {
                                 {overdueExpanded && (
                                     <div className="px-3 pb-3 space-y-2">
                                         <p className="text-xs text-red-900/90 leading-relaxed">
-                                            {overdueAnimals.length === 1 ? '1 animal has' : `${overdueAnimals.length} animals have`} reached or exceeded the {impoundStayDuration}-day temporary holding limit. Animals past temporary subdivision holding should be transferred to the Barangay shelter for impoundment or official adoption listing.
+                                            {overdueAnimals.length === 1 ? '1 animal has' : `${overdueAnimals.length} animals have`} reached or exceeded the {impoundStayDuration}-day temporary care limit. Animals kept in temporary community care past this limit should be transferred to the Barangay Holding Facility for impoundment or official adoption listing.
                                         </p>
                                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
                                             {overdueAnimals.map((animal) => {
@@ -987,7 +987,7 @@ const SubdHoldingFacility = () => {
                         <div className={`grid ${activeAnimals.length > 0 ? 'grid-cols-3' : 'grid-cols-2'} gap-1 p-1 bg-gray-100 rounded-2xl`} role="tablist">
                             {([
                                 { key: 'barangay' as const, short: 'At Barangay', long: 'At Barangay Holding Place', count: barangayAnimals.length, icon: Building2 },
-                                ...(activeAnimals.length > 0 ? [{ key: 'active' as const, short: 'Earlier Pen', long: 'Earlier Subdivision Pen', count: activeAnimals.length, icon: PawPrint }] : []),
+                                ...(activeAnimals.length > 0 ? [{ key: 'active' as const, short: 'Earlier Care', long: 'Earlier Community Care Records', count: activeAnimals.length, icon: PawPrint }] : []),
                                 { key: 'history' as const, short: 'History', long: 'Past Records', count: historyAnimals.length, icon: ScrollText },
                             ]).map((t) => (
                                 <button
@@ -1131,14 +1131,14 @@ const SubdHoldingFacility = () => {
                                 <div className="flex justify-center text-gray-300">{tabMode === 'active' ? <PawPrint className="w-10 h-10" /> : tabMode === 'barangay' ? <Building2 className="w-10 h-10" /> : <ScrollText className="w-10 h-10" />}</div>
                                 <p className="text-base font-black text-gray-700">
                                     {tabMode === 'active'
-                                        ? 'No animals currently held in the subdivision shelter'
+                                        ? 'No animals in earlier community care records'
                                         : tabMode === 'barangay'
                                             ? 'No animals are currently held at your Barangay holding place'
                                             : 'No past or transferred animals found in history'}
                                 </p>
                                 <p className="text-xs text-gray-400">
                                     {tabMode === 'active'
-                                        ? 'Animals admitted to the subdivision shelter or secured here will appear here.'
+                                        ? 'The subdivision has no holding facility. Animals recorded at an earlier community care spot appear here; new animals are secured by a resident or picked up by Barangay responders.'
                                         : tabMode === 'barangay'
                                             ? 'Animals from every subdivision in your Barangay appear here while held. You can follow their status; the Barangay manages their care.'
                                             : 'Animals transferred to Barangay facilities or resolved will be archived in this history view.'}
@@ -1362,7 +1362,7 @@ const SubdHoldingFacility = () => {
                                             {isSelectedTransferred ? 'In Brgy Holding' : getStatusMeta(selected.facility_status).name}
                                         </span>
                                     </div>
-                                    <p className="text-xs text-gray-500 truncate">Report #{selected.report_id.toString().padStart(4, '0')} · {selected.facility_name || selected.report_landmark || 'Subdivision Shelter'}</p>
+                                    <p className="text-xs text-gray-500 truncate">Report #{selected.report_id.toString().padStart(4, '0')} · {selected.facility_name || selected.report_landmark || (selected.facility_type === 'barangay_facility' ? 'Barangay Holding Facility' : 'Earlier community care spot')}</p>
                                 </div>
                                 <button
                                     onClick={() => setSelected(null)}
@@ -1501,7 +1501,7 @@ const SubdHoldingFacility = () => {
                                                 { label: 'Breed', value: selected.breed || '—' },
                                                 { label: 'Color', value: selected.color || '—' },
                                                 { label: 'Estimated size', value: selected.estimated_size || '—' },
-                                                { label: 'Kennel slot', value: selected.kennel_slot || '—' },
+                                                { label: 'Care spot / slot', value: selected.kennel_slot || '—' },
                                                 { label: 'Current facility', value: selected.facility_name || selected.report_landmark || '—' },
                                                 { label: 'Intake staff / leader', value: selected.intake_staff_name || 'Leader', wide: true },
                                             ].map(row => (
@@ -1676,10 +1676,10 @@ const SubdHoldingFacility = () => {
                                                     </div>
 
                                                     <div>
-                                                        <label className={labelCls}>Kennel / bay slot</label>
+                                                        <label className={labelCls}>Care spot / slot</label>
                                                         <input
                                                             type="text"
-                                                            placeholder="e.g. Pen A-1, Bay 2"
+                                                            placeholder="e.g. Finder's yard, Cage 1"
                                                             className={inputCls}
                                                             value={updateForm.kennel_slot}
                                                             onChange={e => setUpdateForm(f => ({ ...f, kennel_slot: e.target.value }))}
@@ -2149,7 +2149,7 @@ const SubdHoldingFacility = () => {
                                         'Stay limit reached (overdue)',
                                         'Requires municipal veterinary treatment',
                                         'Aggressive / specialized handling',
-                                        'Subdivision holding unit at full capacity',
+                                        'Awaiting Barangay rescue (finder can no longer keep the animal)',
                                         'Long-term custody / municipal impoundment',
                                     ].map((chip) => (
                                         <button

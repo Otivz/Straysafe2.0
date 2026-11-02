@@ -20,7 +20,8 @@ import {
     AlertTriangle,
     X,
     MapPin,
-    Building2
+    Building2,
+    Eye
 } from 'lucide-react';
 import RelativeTimestamp from './RelativeTimestamp';
 import { sightingLandmark } from '../utils/sighting';
@@ -223,7 +224,19 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             [/^status follows group report/i, 'STATUS FOLLOWS GROUP', 'gray'],
         ];
         const multiAnimalRule = multiAnimal.find(([re]) => re.test(rawRemarks));
-        if (multiAnimalRule) {
+        // Owner observation (Phase 8): these keep the report's status, so the status rules below would mislabel them
+        const observationRule = ([
+            [/^observation started/i, 'OBSERVATION STARTED', 'orange'],
+            [/^observation extended/i, 'OBSERVATION EXTENDED', 'orange'],
+            [/^observation ended/i, 'OBSERVATION ENDED', 'green'],
+        ] as [RegExp, string, 'blue' | 'green' | 'orange' | 'red' | 'gray'][]).find(([re]) => re.test(rawRemarks));
+        if (observationRule) {
+            actionTitle = observationRule[1];
+            type = observationRule[2];
+            IconComponent = Eye;
+            description = rawRemarks;
+        }
+        else if (multiAnimalRule) {
             actionTitle = multiAnimalRule[1];
             type = multiAnimalRule[2];
             IconComponent = Layers;
@@ -373,11 +386,19 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             IconComponent = Clock;
             description = rawRemarks || 'Facility observation recorded.';
         }
-        else if (statusId === 7 || remarksLower.includes('holding') || remarksLower.includes('facility') || remarksLower.includes('shelter')) {
+        else if (remarksLower.includes('holding') || remarksLower.includes('facility') || remarksLower.includes('shelter')
+            || remarksLower.includes('impound') || remarksLower.includes('admitted') || (statusId === 7 && !rawRemarks)) {
             actionTitle = 'MOVED TO HOLDING PLACE';
             type = 'orange';
             IconComponent = Hospital;
             description = rawRemarks || 'Animal safely admitted to temporary holding pen.';
+        }
+        // Status 7 is also an owner observation at home (Phase 8): a note on it is not a move to a holding place
+        else if (statusId === 7) {
+            actionTitle = 'OBSERVATION UPDATE';
+            type = 'orange';
+            IconComponent = Eye;
+            description = rawRemarks;
         }
         // 13. Animal Picked Up / Secured (Status 6 in-transit only)
         else if (statusId === 6 || remarksLower.includes('picked up') || remarksLower.includes('animal secured')) {

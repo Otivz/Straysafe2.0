@@ -174,7 +174,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
     const [location, setLocation] = useState<string>('');
     const [remarks, setRemarks] = useState<string>(
         initiallySecured
-            ? 'The animal was secured alive and is currently held at the Subdivision holding area / facility while coordinating next steps.'
+            ? 'The animal was secured alive and is being kept safe while next steps are coordinated with the Barangay.'
             : (hasRegisteredPet
                 ? 'The lost pet was located alive and safely returned to the owner.'
                 : 'The animal was located alive and safely reunited with or returned to the owner / caregiver.')
@@ -335,9 +335,9 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
         : isEscalatedEffective;
 
     const facilityTitle = isBrgyFacility
-        ? 'Barangay Holding Place / Shelter'
-        : 'Subdivision Facility / Shelter';
-    const facilityBadge = isBrgyFacility ? 'In Brgy Facility' : 'In Subd Facility';
+        ? 'Barangay Holding Facility'
+        : 'Temporary Community Care';
+    const facilityBadge = isBrgyFacility ? 'In Barangay Facility' : 'Community Care';
 
     // Synchronize initial choices whenever the modal opens or report details change
     useEffect(() => {
@@ -349,8 +349,8 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
             if (currentRep?.facility_id) {
                 setSelectedFacilityId(currentRep.facility_id);
             }
-            const facName = currentRep?.facility?.name || (isBrgyFacility ? 'Barangay Holding Place' : 'Subdivision Holding Place');
-            setRemarks(`The animal was secured alive and is currently held at ${facName} while coordinating next steps.`);
+            const facName = currentRep?.facility?.name || (isBrgyFacility ? 'the Barangay Holding Facility' : "a resident's home (temporary community care)");
+            setRemarks(`The animal was secured alive and is being kept safe at ${facName} while next steps are coordinated with the Barangay.`);
         } else {
             setPrimaryChoice('pet_found');
             setSubChoice('returned_to_owner');
@@ -379,7 +379,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                     ? 'The lost pet was located alive and safely returned to the owner. Identity and ownership confirmed.'
                     : 'The animal was located alive and safely reunited with or returned to the owner / caregiver.');
             } else if (sub === 'temporary_care') {
-                const facName = facObj?.name || (isBrgyFacility ? 'Barangay Holding Place' : 'Subdivision Holding Place');
+                const facName = facObj?.name || (isBrgyFacility ? 'the Barangay Holding Facility' : "a resident's home (temporary community care)");
                 const caretakerInfo = facObj?.contact_person ? ` (Caretaker: ${facObj.contact_person}${facObj.contact_number ? `, ${facObj.contact_number}` : ''})` : '';
                 setRemarks(`The animal was secured alive and is currently held at ${facName}${caretakerInfo} while coordinating next steps.`);
             } else if (sub === 'owner_not_located') {
@@ -673,7 +673,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                             </p>
                         </div>
                     </div>
-                    <button 
+                    <button aria-label="Close" 
                         onClick={handleClose}
                         disabled={isSubmitting}
                         className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer shrink-0"
@@ -889,8 +889,8 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                             </h5>
                                             <p className="text-[10px] font-bold text-amber-800/80 dark:text-stone-400">
                                                 {isBrgyFacility
-                                                    ? 'Animal was secured and is currently held at the Barangay Holding Place.'
-                                                    : 'Animal was secured and is currently held at the Subdivision holding area / facility.'}
+                                                    ? 'Animal was secured and is currently held at the Barangay Holding Facility.'
+                                                    : 'Animal was secured and is kept by a resident or finder until Barangay responders pick it up.'}
                                             </p>
                                         </div>
                                     </div>
@@ -1043,9 +1043,9 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                             </div>
                                         ) : (
                                             <div className="p-3 bg-white/80 dark:bg-stone-900/80 rounded-xl border border-amber-200 text-xs text-stone-600 dark:text-stone-300">
-                                                <p className="font-semibold text-amber-900">Standard Subdivision Holding Area</p>
+                                                <p className="font-semibold text-amber-900">Temporary Community Care</p>
                                                 <p className="text-[10px] text-stone-500 mt-0.5">
-                                                    No custom landmarks registered as holding places yet. The report will update custody to Subdivision Holding.
+                                                    The subdivision has no holding facility. The animal stays with the resident or finder until Barangay responders pick it up and bring it to the Barangay Holding Facility.
                                                 </p>
                                             </div>
                                         )}
@@ -1263,7 +1263,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                         )}
                                     </h4>
                                     <p className="text-[11px] text-stone-500 dark:text-stone-400">
-                                        {selectedFacility.contact_person ? `Caretaker: ${selectedFacility.contact_person}` : 'Subdivision Holding Place'}
+                                        {selectedFacility.contact_person ? `Caretaker: ${selectedFacility.contact_person}` : (selectedFacility.subdivision_id == null ? 'Barangay Holding Facility' : 'Earlier community care spot')}
                                         {selectedFacility.contact_number && ` • 📞 ${selectedFacility.contact_number}`}
                                     </p>
                                 </div>

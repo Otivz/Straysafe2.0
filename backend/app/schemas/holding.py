@@ -56,6 +56,9 @@ class HoldingAnimalUpdate(BaseModel):
 
 class HoldingAnimalResponse(BaseModel):
     holding_id:        int
+    # False once the animal was claimed and handed over to its owner (never listed for adoption again)
+    adoption_eligible:     bool = True
+    adoption_block_reason: Optional[str] = None
     report_id:         int
     rescue_id:         Optional[int] = None
     facility_id:       Optional[int] = None

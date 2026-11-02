@@ -11,6 +11,7 @@ import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import MapComponent from '../../components/MapComponent';
 import { Camera, X, CheckCircle2, Loader2, Sparkles, PawPrint } from 'lucide-react';
+import MediaLightbox from '../../components/MediaLightbox';
 
 
 import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
@@ -18,6 +19,8 @@ import { petName } from '../../utils/petName';
 import { compressImageFile } from '../../utils/imageCompress';
 import { getReportSighting } from '../../utils/originalSighting';
 import { saveClaimEvidence, type ClaimEvidenceFile } from '../../utils/claimEvidence';
+import ManualComparisonCards from '../../components/ManualMatching/ManualComparisonCards';
+import { isManualMatchRecord, NOT_PROVIDED, petFields, petIdLabel, reportFields } from '../../utils/manualMatchFields';
 const parseReportDescription = (description: string) => {
     if (!description) return { cleanNotes: '', pattern: '', conditions: '', markings: '' };
     
@@ -327,7 +330,7 @@ const PetMatchReview = () => {
                 pet_id: selectedPetId,
                 status: "Pending Review",
                 remarks: "",
-                similarity_score: typeof getSimilarityScore === 'function' ? parseInt(getSimilarityScore()) : 90,
+                similarity_score: isManualRecord ? 0 : (typeof getSimilarityScore === 'function' ? parseInt(getSimilarityScore()) : 90),
                 reported_date: new Date().toISOString().slice(0, 10),
                 sighting_location: report.landmark || "Selera Homes",
                 sighting_lat: parseFloat(report.latitude) || null,
@@ -960,6 +963,8 @@ const PetMatchReview = () => {
 
     const activeMatch = currentMatch || (isInitialClaimTab ? (allReportMatches.find(m => m.matched_pet_id === selectedPetId) || (reportMatchRecord?.matched_pet_id === selectedPetId ? reportMatchRecord : null)) : null);
     const ownerStatus: string | undefined = activeMatch?.owner_confirmation_status;
+    // A staff-made (manual) match record: the actual records side by side, never an AI score or analysis
+    const isManualRecord = isManualMatchRecord(activeMatch);
 
     const getSimilarityScore = () => {
         if (activeMatch && activeMatch.similarity_score !== undefined && activeMatch.similarity_score !== null) {
@@ -1495,8 +1500,36 @@ const PetMatchReview = () => {
                             </div>
                         )}
 
-                        {/* Match Analysis Details */}
-                        {matchedPet && (
+                        {/* Manual match: the stray report as submitted and your pet's record as saved */}
+                        {matchedPet && isManualRecord && currentReport && (
+                            <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl p-6 sm:p-8 space-y-4">
+                                <div>
+                                    <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight">Compare the Records</h3>
+                                    <p className="text-xs text-gray-500 font-medium mt-1">
+                                        Staff found this possible match by hand. Compare the report with your pet's record; your answer helps staff decide, and staff make the final decision.
+                                    </p>
+                                </div>
+                                <ManualComparisonCards
+                                    report={{
+                                        label: `Report #${currentReport.report_id}`,
+                                        photo: (currentReport.media as Array<{ media_type?: string; file_url?: string }> | undefined)?.find((m) => m?.media_type !== 'Video')?.file_url || null,
+                                        photoCount: (currentReport.media || []).length,
+                                        fields: reportFields(currentReport),
+                                    }}
+                                    pet={{
+                                        label: `${matchedPet.pet_name || 'Your pet'} · ${petIdLabel(matchedPet)}`,
+                                        photo: matchedPet.photo_url || matchedPet.photo_front_url || null,
+                                        photoCount: [matchedPet.photo_url, matchedPet.photo_front_url, matchedPet.photo_left_url, matchedPet.photo_right_url].filter(Boolean).length,
+                                        fields: petFields({ ...matchedPet, owner_name: matchedPet.owner?.name || currentUser?.name || null }),
+                                    }}
+                                    onInspectReport={() => setIsSideBySideModalOpen(true)}
+                                    onInspectPet={() => setIsSideBySideModalOpen(true)}
+                                />
+                            </div>
+                        )}
+
+                        {/* Match Analysis Details (AI match records only) */}
+                        {matchedPet && !isManualRecord && (
                             <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl p-6 sm:p-8 space-y-6">
                                 <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight">AI Matching Analysis</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -2907,7 +2940,9 @@ const PetMatchReview = () => {
 
             {/* Case Chat Drawer for Look-Alike Inquiries */}
             {isChatOpen && report && (() => {
-                const score = typeof getSimilarityScore === 'function' ? parseInt(getSimilarityScore()) : 95;
+                const score = isManualRecord ? 0 : (typeof getSimilarityScore === 'function' ? parseInt(getSimilarityScore()) : 95);
+                // Manual records: actual values or "Not Provided", never the placeholder defaults
+                const fill = (v: unknown, aiDefault: string) => (v ? String(v) : (isManualRecord ? NOT_PROVIDED : aiDefault));
 
                 return (
                     <ReportChatDrawer
@@ -2922,109 +2957,104 @@ const PetMatchReview = () => {
                             pet_name: matchedPet?.pet_name,
                             photo_url: matchedPet?.photo_url,
                             species: matchedPet?.pet_type || matchedPet?.species || "Dog",
-                            breed: matchedPet?.breed || "Registered Breed",
-                            color: [matchedPet?.primary_color, matchedPet?.secondary_color].filter(Boolean).join(' ') || matchedPet?.color || "Registered Color",
-                            size: matchedPet?.size_category || matchedPet?.size || "Medium",
+                            breed: fill(matchedPet?.breed, "Registered Breed"),
+                            color: fill([matchedPet?.primary_color, matchedPet?.secondary_color].filter(Boolean).join(' ') || matchedPet?.color, "Registered Color"),
+                            size: fill(matchedPet?.size_category || matchedPet?.size, "Medium"),
                             owner_name: currentUser?.name || 'You',
                             registered_address: matchedPet?.registered_address || 'Registered Resident',
                             similarity_score: score,
+                            is_manual: isManualRecord,
                             sighting_photo_url: report.media?.[0]?.file_url || report.media?.[0]?.media_url || report.media_url || report.photo_url || DEFAULT_PET_AVATAR,
-                            sighting_species: report.animal_type || "Dog",
-                            sighting_breed: report.animal_breed || report.breed || "Reported Breed",
-                            sighting_color: report.animal_color || report.color || "Reported Color",
-                            sighting_size: report.estimated_size || report.animal_size || "Medium",
-                            sighting_landmark: report.landmark || "Subdivision Area",
+                            sighting_species: fill(report.animal_type, "Dog"),
+                            sighting_breed: fill(report.animal_breed || report.breed, "Reported Breed"),
+                            sighting_color: fill(report.animal_color || report.color, "Reported Color"),
+                            sighting_size: fill(report.estimated_size || report.animal_size, "Medium"),
+                            sighting_landmark: fill(report.landmark, "Subdivision Area"),
                             sighting_description: report.description
                         }}
                     />
                 );
             })()}
 
-            {/* ── MINIMAL LIGHTBOX MODAL (MATCHING USER SCREENSHOT) ── */}
-            {(viewingImage || isSideBySideModalOpen) && (
-                <div 
-                    className="fixed inset-0 z-[99999] bg-[#191512]/92 backdrop-blur-sm flex flex-col items-center justify-center p-4 sm:p-8 animate-in fade-in duration-200"
-                    onClick={() => { setViewingImage(null); setIsSideBySideModalOpen(false); }}
-                >
-                    {/* Top Right Close Button */}
-                    <button
-                        type="button"
-                        onClick={() => { setViewingImage(null); setIsSideBySideModalOpen(false); }}
-                        className="fixed top-6 right-6 z-10 w-8 h-8 rounded-full bg-white/20 hover:bg-white/35 text-white flex items-center justify-center transition-all cursor-pointer shadow-lg"
-                        title="Close"
-                    >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
+            {/* ── INTERACTIVE DUAL-VIEW ZOOM & LIGHTBOX ── */}
+            {isSideBySideModalOpen && (
+                <MediaLightbox
+                    title={`Detail Inspection: Report #${currentReport?.report_id || report?.report_id} vs ${petName(matchedPet)}`}
+                    onClose={() => setIsSideBySideModalOpen(false)}
+                    compare={{
+                        left: {
+                            title: `Report #${currentReport?.report_id || report?.report_id}`,
+                            badge: 'Reported Stray',
+                            items: (currentReport?.media?.length ? currentReport.media : report?.media?.length ? report.media : [{ file_url: report?.media?.[0]?.file_url || DEFAULT_PET_AVATAR }])
+                                .filter((m: any) => m?.file_url)
+                                .map((m: any, i: number) => ({
+                                    url: m.file_url,
+                                    caption: `Report #${currentReport?.report_id || report?.report_id} · Photo ${i + 1}`,
+                                })),
+                        },
+                        right: {
+                            title: petName(matchedPet),
+                            badge: 'Your Registered Pet',
+                            items: [
+                                matchedPet?.photo_url,
+                                matchedPet?.photo_front_url,
+                                matchedPet?.photo_left_url,
+                                matchedPet?.photo_right_url,
+                                ...(activePhotos || []),
+                            ]
+                                .filter(Boolean)
+                                .filter((url, i, arr) => arr.indexOf(url) === i)
+                                .map((url, i) => ({
+                                    url,
+                                    caption: `${petName(matchedPet)} · Photo ${i + 1}`,
+                                })),
+                        },
+                    }}
+                />
+            )}
 
-                    {/* Center Image Container */}
+            {viewingImage && !isSideBySideModalOpen && (
+                viewingImage.url && viewingImage.url.toLowerCase().includes('.pdf') ? (
                     <div 
-                        className="relative flex flex-col items-center justify-center max-w-5xl max-h-[85vh] w-full h-full my-auto"
-                        onClick={(e) => e.stopPropagation()}
+                        className="fixed inset-0 z-[99999] bg-[#191512]/92 backdrop-blur-sm flex flex-col items-center justify-center p-4 sm:p-8 animate-in fade-in duration-200"
+                        onClick={() => setViewingImage(null)}
                     >
-                        {isSideBySideModalOpen ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-h-[80vh] items-center justify-center">
-                                <div className="flex flex-col items-center space-y-2">
-                                    <span className="text-[11px] font-black text-[#F97316] uppercase tracking-wider bg-black/50 px-3 py-1 rounded-full border border-white/10">Reported Stray</span>
-                                    <img
-                                        src={report?.media?.[0]?.file_url}
-                                        alt="Reported Stray"
-                                        className="rounded-xl max-h-[72vh] max-w-full object-contain shadow-2xl"
-                                    />
-                                </div>
-                                <div className="flex flex-col items-center space-y-2">
-                                    <span className="text-[11px] font-black text-emerald-400 uppercase tracking-wider bg-black/50 px-3 py-1 rounded-full border border-white/10">Your Pet: {petName(matchedPet)}</span>
-                                    <img
-                                        src={getPetPicture(matchedPet?.photo_url)}
-                                        alt={matchedPet?.pet_name}
-                                        className="rounded-xl max-h-[72vh] max-w-full object-contain shadow-2xl"
-                                        onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
-                                    />
-                                </div>
+                        <button
+                            type="button"
+                            onClick={() => setViewingImage(null)}
+                            className="fixed top-6 right-6 z-10 w-8 h-8 rounded-full bg-white/20 hover:bg-white/35 text-white flex items-center justify-center transition-all cursor-pointer shadow-lg"
+                            title="Close"
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                        <div className="bg-white rounded-3xl p-8 text-center max-w-md shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
+                            <div className="w-16 h-16 mx-auto rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center text-3xl">
+                                📄
                             </div>
-                        ) : viewingImage ? (
-                            <div className="flex flex-col items-center justify-center max-h-[82vh] max-w-[88vw] space-y-3">
-                                {viewingImage.title && (
-                                    <div className="px-4 py-1.5 rounded-full bg-black/60 border border-white/20 text-white text-xs font-bold tracking-wide shadow-md">
-                                        {viewingImage.title}
-                                    </div>
-                                )}
-                                {viewingImage.url && viewingImage.url.toLowerCase().includes('.pdf') ? (
-                                    <div className="bg-white rounded-3xl p-8 text-center max-w-md shadow-2xl space-y-4">
-                                        <div className="w-16 h-16 mx-auto rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center text-3xl">
-                                            📄
-                                        </div>
-                                        <div>
-                                            <h4 className="text-base font-extrabold text-[#1a1208]">{viewingImage.title}</h4>
-                                            <p className="text-xs font-semibold text-gray-500 mt-1">This document is in PDF format.</p>
-                                        </div>
-                                        <a
-                                            href={viewingImage.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#F97316] hover:bg-orange-600 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md cursor-pointer"
-                                        >
-                                            <span>Open / Download PDF Document</span>
-                                            <span>↗</span>
-                                        </a>
-                                    </div>
-                                ) : (
-                                    <img
-                                        src={viewingImage.url}
-                                        alt={viewingImage.title}
-                                        className="rounded-xl shadow-2xl max-h-[75vh] max-w-[85vw] object-contain"
-                                    />
-                                )}
+                            <div>
+                                <h4 className="text-base font-extrabold text-[#1a1208]">{viewingImage.title}</h4>
+                                <p className="text-xs font-semibold text-gray-500 mt-1">This document is in PDF format.</p>
                             </div>
-                        ) : null}
-
-                        {/* Bottom Center Orange Indicator Bar */}
-                        <div className="mt-8 flex items-center justify-center">
-                            <span className="w-6 h-1 bg-[#F97316] rounded-full inline-block"></span>
+                            <a
+                                href={viewingImage.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#F97316] hover:bg-orange-600 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md cursor-pointer"
+                            >
+                                <span>Open / Download PDF Document</span>
+                                <span>↗</span>
+                            </a>
                         </div>
                     </div>
-                </div>
+                ) : (
+                    <MediaLightbox
+                        items={[{ url: viewingImage.url, caption: viewingImage.title }]}
+                        title={viewingImage.title || 'Photo Inspection'}
+                        onClose={() => setViewingImage(null)}
+                    />
+                )
             )}
 
             {/* ── MODAL: CONFIRM PET RECEIVED & UPLOAD REUNION PHOTO ── */}

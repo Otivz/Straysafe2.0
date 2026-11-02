@@ -183,6 +183,11 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
             navigate('/brgy/pet-records');
             return;
         }
+        // Owner answered a pet match confirmation request -> that report's registered-pet candidates (related_id = report id)
+        if (typeStr === 'pet_match_confirmation_result') {
+            navigate(notif.related_id ? `/brgy/manual-matching?report=${notif.related_id}&kind=pet` : '/brgy/manual-matching');
+            return;
+        }
         if (['adoption_task_accepted', 'adoption_task_declined', 'adoption_task_completed', 'adoption_decision_needed', 'adoption_case_transferred'].includes(typeStr) && notif.related_id) {
             navigate(`/brgy/adoptions?view=${notif.related_id}`);
             return;

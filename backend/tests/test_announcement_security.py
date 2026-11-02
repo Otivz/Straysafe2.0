@@ -107,8 +107,10 @@ reacts = db.query(AnnouncementReaction).filter(AnnouncementReaction.announcement
 check("a reaction is saved as the logged-in user", r.status_code == 200 and [x.user_id for x in reacts] == [resident.user_id],
       (r.text[:200], [x.user_id for x in reacts]))
 
-# ---- reading stays public
-check("reading a subdivision's alerts still works without login", client.get("/announcements/subdivision/1").status_code == 200)
+# ---- the full subdivision listing (drafts and members-only posts included) is for that area's officials
+# (2026-11-02, tests/test_announcement_access.py); residents read published posts through their own feed
+check("reading a subdivision's full alert list needs an official's login", client.get("/announcements/subdivision/1").status_code == 401)
+check("the subdivision's leader can read it", client.get("/announcements/subdivision/1", headers=H(leader)).status_code == 200)
 
 r = client.put(f"/announcements/{A}", json={**EDIT, "title": "Rabies advisory", "subdivision_id": 2, "barangay_id": 2}, headers=H(leader))
 check("the author can't move the alert to another subdivision", r.status_code == 403, r.text[:200])

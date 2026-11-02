@@ -231,9 +231,21 @@ const ResiNavbar = ({
         const titleStr = (notif.title || '').toLowerCase();
         const msgStr = (notif.message || '').toLowerCase();
 
+        // Observation notices (started, reminders, updates received, extended) -> Observation Updates
+        if (typeStr.startsWith('followup')) {
+            navigate('/resident/observations');
+            return;
+        }
+
         // Staff recorded this resident as a pet's owner -> accept / reject on My Pets
         if (typeStr === 'pet_owner_confirmation') {
             navigate('/resident/pets');
+            return;
+        }
+
+        // Staff ask "Is this your pet?" for a reported animal -> answer on My Pets (related_id = request id)
+        if (typeStr === 'pet_match_confirmation') {
+            navigate(notif.related_id ? `/resident/pets?confirm=${notif.related_id}` : '/resident/pets');
             return;
         }
 
@@ -575,6 +587,9 @@ const ResiNavbar = ({
                                             <Link to="/resident/pets" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
                                                 My Pets
                                             </Link>
+                                            <Link to="/resident/observations" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
+                                                Observation Updates
+                                            </Link>
                                             <Link to="/adopt" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
                                                 Adopt a Pet
                                             </Link>
@@ -702,6 +717,17 @@ const ResiNavbar = ({
                                 🐾
                             </div>
                             <span className="font-black text-xs uppercase tracking-[0.15em] transition-colors">Adopt a Pet</span>
+                        </Link>
+
+                        <Link
+                            to="/resident/observations"
+                            onClick={() => setIsMobileHamburgerOpen(false)}
+                            className="flex items-center gap-4 px-4 py-3.5 rounded-2xl hover:bg-orange-50/50 hover:pl-6 text-[#4a3b28] hover:text-[#F97316] transition-all duration-300 ease-out group active:scale-[0.98]"
+                        >
+                            <div className="w-10 h-10 bg-orange-50 group-hover:bg-orange-100 rounded-xl flex items-center justify-center text-[#F97316] shadow-sm shadow-orange-100/50 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shrink-0 text-base">
+                                👁️
+                            </div>
+                            <span className="font-black text-xs uppercase tracking-[0.15em] transition-colors">Observation Updates</span>
                         </Link>
 
                         <Link

@@ -87,14 +87,14 @@ try {
         }
         await waitFor('document.body.textContent.includes("Neighbor synthetic animal")', 'same-Barangay neighboring animal');
         assert.equal(await evaluate('document.querySelector("[aria-label=\\"Stay limit in days\\"]") !== null'), false);
-        assert.equal(await evaluate('document.body.textContent.includes("Earlier Subdivision Pen")'), false);
+        assert.equal(await evaluate('document.body.textContent.includes("Earlier Community Care Records")'), false);
         await click(`[...document.querySelectorAll('button')].find(e => e.textContent.trim() === 'Manage')`);
         await waitFor('document.body.textContent.includes("At the Barangay holding place (view only)")', 'read-only detail');
         assert.equal(await evaluate(`[...document.querySelectorAll('button')].some(e => /Update condition|Save changes|Add care/i.test(e.textContent))`), false);
         scenarios++;
         await navigate('mode=holding&legacy');
-        await waitFor('document.body.textContent.includes("Earlier Subdivision Pen")', 'earlier pen retained');
-        await click(`[...document.querySelectorAll('button')].find(e => e.textContent.includes('Earlier Subdivision Pen'))`);
+        await waitFor('document.body.textContent.includes("Earlier Community Care Records")', 'earlier pen retained');
+        await click(`[...document.querySelectorAll('button')].find(e => e.textContent.includes('Earlier Community Care Records'))`);
         await waitFor('document.body.textContent.includes("Earlier pen animal")', 'earlier pen animals accessible');
         scenarios++;
         await navigate('mode=dashboard');
@@ -133,6 +133,18 @@ try {
         assert(promote, 'Barangay adoption promotion retained');
         await click(`[...document.querySelectorAll('button')].find(e => /adopt/i.test(e.title) && !e.disabled)`);
         await waitFor('document.body.textContent.includes("Adoption")', 'adoption promotion screen opens');
+        scenarios++;
+        // Returned to its owner: no adoption action, a clear label, and For Adoption / Adopted unavailable
+        await navigate('mode=barangay&returned');
+        await waitFor('document.body.textContent.includes("Own synthetic animal")', 'Barangay holding (returned)');
+        assert(await evaluate('document.body.textContent.includes("Returned to Owner")'), 'Returned to Owner label');
+        assert.equal(await evaluate(`[...document.querySelectorAll('button')].some(e => /adopt/i.test(e.title) && !e.disabled)`), false,
+            'no adoption action for an animal returned to its owner');
+        await click(`[...document.querySelectorAll('button')].find(e => e.textContent.trim() === 'Manage')`);
+        await waitFor('document.body.textContent.includes("no longer eligible for adoption")', 'returned notice in the detail');
+        assert.equal(await evaluate(`[...document.querySelectorAll('button')].some(e => /promote to adoption/i.test(e.textContent))`), false, 'no promote button');
+        assert.equal(await evaluate(`[...document.querySelectorAll('option')].filter(o => o.value === '6' || o.value === '7').every(o => o.disabled || o.closest('select')?.querySelector('option[value="0"]'))`), true,
+            'For Adoption / Adopted disabled in the status form');
         scenarios++;
     }
     assert.deepEqual(backendAttempts, [], 'no backend requests');

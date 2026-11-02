@@ -74,7 +74,8 @@ class ClaimIdentityTests(unittest.TestCase):
         return Report(report_id=rid, user_id=1, subdivision_id=1, category_id=1,
                       current_status_id=kwargs.pop('current_status_id', 2), latitude=14.8, longitude=121.0,
                       initial_latitude=14.801418, initial_longitude=121.004062,
-                      initial_landmark='Original Street', animal_type='Dog', **kwargs)
+                      initial_landmark='Original Street', animal_type='Dog',
+                      custody_status=kwargs.pop('custody_status', 'Secured in Facility'), **kwargs)  # Phase 7: a claim needs a held animal
 
     def decide(self, decision='Approved', uid=2, **extra):
         return self.client.patch('/claims/1/status', json={'status': decision, **extra}, headers=self.headers[uid])

@@ -28,12 +28,16 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Local imports (now safe to import after path fix)
 from app.database import engine, Base, SessionLocal
-from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches, landmarks, adoptions, admin, adoption_chat, adoption_tasks, adoption_certificates, report_returns, pet_ownership, analytics
+from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches, landmarks, adoptions, admin, adoption_chat, adoption_tasks, adoption_certificates, report_returns, pet_ownership, analytics, owner_followups
 from app.routes import audit_logs as audit_logs_router
 from app.routes import push as push_routes
 from app.routes import sidebar as sidebar_routes
 from app.services.push_service import start_push_queue_worker  # also registers the push hook
 from app.routes import ai_jobs as ai_jobs_routes
+from app.routes import manual_matching as manual_matching_routes  # also registers manual_match_decisions for create_all
+from app.routes import pet_match_confirmations as pet_match_confirmation_routes  # owner-first pet matching (owner side)
+from app.routes import leader_identity as leader_identity_routes  # Phase 6 leader identity verification
+from app.routes import claim_assessments as claim_assessment_routes  # pet claiming fees (also registers its tables)
 from app.models.pet_qr import PetQRCode, PetQRScan
 from app.models.audit_log import AuditLog  # noqa: F401 — ensures table is in Base.metadata
 from app.models.pet_claim import PetClaim  # noqa: F401 — ensures table is in Base.metadata
@@ -317,12 +321,26 @@ def ensure_pet_claims_status_enum():
         try:
             conn.execute(text(
                 "ALTER TABLE pet_claims MODIFY COLUMN status "
-                "ENUM('Potential Owner Match', 'Possible Match Found', 'Pending Review', 'Approved', 'Rejected', 'Evidence Requested', 'Handover Complete', 'Pet Received', 'Merged') "
+                "ENUM('Potential Owner Match', 'Possible Match Found', 'Pending Review', 'Approved', 'Rejected', 'Evidence Requested', 'Handover Complete', 'Pet Received', 'Merged', 'Not Needed') "
                 "DEFAULT 'Potential Owner Match' NOT NULL"
             ))
             print("Successfully migrated pet_claims.status ENUM values.")
         except Exception as e:
             print(f"Error migrating pet_claims.status ENUM: {e}")
+    # Phase 7 claim eligibility columns (non-destructive: only added when missing)
+    with engine.begin() as conn:
+        for col_name, col_def in [("status_before_approval", "INT NULL"), ("owner_whereabouts", "VARCHAR(20) NULL"),
+                                  ("owner_whereabouts_note", "TEXT NULL"), ("owner_whereabouts_at", "DATETIME NULL"),
+                                  ("closed_reason", "TEXT NULL"), ("closed_by", "INT NULL"), ("closed_at", "DATETIME NULL")]:
+            try:
+                exists = conn.execute(text(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                    f"AND TABLE_NAME = 'pet_claims' AND COLUMN_NAME = '{col_name}'"
+                )).scalar()
+                if not exists:
+                    conn.execute(text(f"ALTER TABLE pet_claims ADD COLUMN {col_name} {col_def}"))
+            except Exception as e:
+                print(f"Notice in pet_claims Phase 7 columns ({col_name}): {e}")
 
 def ensure_pet_side_photos_columns():
     """Add photo_front_url, photo_left_url, photo_right_url, chase_incident_count columns to pets table if missing."""
@@ -630,6 +648,193 @@ ensure_pet_claims_status_enum()
 ensure_pet_side_photos_columns()
 ensure_pet_declared_behavior_columns()
 ensure_endorsement_letters_columns()
+
+def ensure_owner_followup_tables():
+    """Ensure owner_followups and followup_contact_logs tables exist (non-destructive)."""
+    with engine.begin() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS owner_followups (
+                    followup_id INT AUTO_INCREMENT PRIMARY KEY,
+                    report_id INT NOT NULL,
+                    pet_id INT NULL,
+                    subdivision_id INT NOT NULL,
+                    leader_id INT NOT NULL,
+                    owner_id INT NULL,
+                    owner_name VARCHAR(150) NULL,
+                    owner_phone VARCHAR(50) NULL,
+                    owner_address VARCHAR(255) NULL,
+                    status ENUM('observing', 'complied', 'closed', 'escalated', 'cancelled') NOT NULL DEFAULT 'observing',
+                    due_at DATETIME NOT NULL,
+                    duration_days INT NOT NULL DEFAULT 3,
+                    notes TEXT NULL,
+                    is_extended TINYINT(1) NOT NULL DEFAULT 0,
+                    extended_at DATETIME NULL,
+                    extended_by INT NULL,
+                    extension_reason TEXT NULL,
+                    extension_days INT NULL,
+                    compliance_notes TEXT NULL,
+                    closed_at DATETIME NULL,
+                    closed_by INT NULL,
+                    close_reason TEXT NULL,
+                    owner_acknowledged_at DATETIME NULL,
+                    owner_acknowledgement_method VARCHAR(50) NULL,
+                    owner_notes TEXT NULL,
+                    owner_photo_url VARCHAR(255) NULL,
+                    owner_photo_submitted_at DATETIME NULL,
+                    reminder_sent_at DATETIME NULL,
+                    due_notice_sent_at DATETIME NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX idx_followup_report (report_id),
+                    INDEX idx_followup_pet (pet_id),
+                    INDEX idx_followup_subd (subdivision_id),
+                    INDEX idx_followup_leader (leader_id),
+                    INDEX idx_followup_owner (owner_id),
+                    INDEX idx_followup_status (status),
+                    INDEX idx_followup_due (due_at)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS followup_contact_logs (
+                    contact_log_id INT AUTO_INCREMENT PRIMARY KEY,
+                    followup_id INT NOT NULL,
+                    logged_by INT NOT NULL,
+                    contact_type ENUM('Phone Call', 'In-Person Visit', 'SMS', 'Verbal Warning', 'Other') NOT NULL DEFAULT 'Phone Call',
+                    contact_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    notes TEXT NOT NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_contact_log_followup (followup_id),
+                    INDEX idx_contact_log_logger (logged_by)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            """))
+        except Exception as e:
+            pass
+
+ensure_owner_followup_tables()
+
+def ensure_followup_monitoring_log_columns():
+    """Add Under Observation monitoring columns and foreign keys to followup_contact_logs (non-destructive)."""
+    columns = {
+        "report_id": "INT NULL",
+        "pet_id": "INT NULL",
+        "inspection_method": "VARCHAR(50) NULL",
+        "inspection_outcome": "VARCHAR(50) NULL",
+        "client_request_id": "VARCHAR(64) NULL",
+    }
+    with engine.begin() as conn:
+        for col_name, col_def in columns.items():
+            exists = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'followup_contact_logs' "
+                "AND COLUMN_NAME = :col"
+            ), {"col": col_name}).scalar()
+            if not exists:
+                conn.execute(text(f"ALTER TABLE followup_contact_logs ADD COLUMN {col_name} {col_def}"))
+
+        indexes = {
+            "idx_contact_log_report": "INDEX idx_contact_log_report (report_id)",
+            "idx_contact_log_pet": "INDEX idx_contact_log_pet (pet_id)",
+            "uq_contact_log_client_request": "UNIQUE INDEX uq_contact_log_client_request (client_request_id)",
+        }
+        for index_name, index_def in indexes.items():
+            exists = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.STATISTICS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'followup_contact_logs' "
+                "AND INDEX_NAME = :idx"
+            ), {"idx": index_name}).scalar()
+            if not exists:
+                conn.execute(text(f"ALTER TABLE followup_contact_logs ADD {index_def}"))
+
+        # Link older contact-log rows to the report and animal of their observation record.
+        conn.execute(text(
+            "UPDATE followup_contact_logs l "
+            "JOIN owner_followups f ON f.followup_id = l.followup_id "
+            "SET l.report_id = f.report_id, l.pet_id = COALESCE(l.pet_id, f.pet_id) "
+            "WHERE l.report_id IS NULL"
+        ))
+
+    # Foreign keys are added one at a time so an orphaned legacy row only skips its own constraint.
+    foreign_keys = {
+        "fk_contact_log_followup": "FOREIGN KEY (followup_id) REFERENCES owner_followups(followup_id) ON DELETE CASCADE",
+        "fk_contact_log_logger": "FOREIGN KEY (logged_by) REFERENCES users(user_id)",
+        "fk_contact_log_report": "FOREIGN KEY (report_id) REFERENCES reports(report_id) ON DELETE CASCADE",
+        "fk_contact_log_pet": "FOREIGN KEY (pet_id) REFERENCES pets(pet_id) ON DELETE SET NULL",
+    }
+    for fk_name, fk_def in foreign_keys.items():
+        try:
+            with engine.begin() as conn:
+                exists = conn.execute(text(
+                    "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS "
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'followup_contact_logs' "
+                    "AND CONSTRAINT_NAME = :fk AND CONSTRAINT_TYPE = 'FOREIGN KEY'"
+                ), {"fk": fk_name}).scalar()
+                if not exists:
+                    conn.execute(text(f"ALTER TABLE followup_contact_logs ADD CONSTRAINT {fk_name} {fk_def}"))
+        except Exception as e:
+            logger.warning(f"Could not add foreign key {fk_name} on followup_contact_logs: {e}")
+
+ensure_followup_monitoring_log_columns()
+
+def ensure_owner_observation_update_tables():
+    """Create owner observation update tables and the update-reminder column (non-destructive)."""
+    with engine.begin() as conn:
+        exists = conn.execute(text(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'owner_followups' "
+            "AND COLUMN_NAME = 'update_reminder_sent_at'"
+        )).scalar()
+        if not exists:
+            conn.execute(text("ALTER TABLE owner_followups ADD COLUMN update_reminder_sent_at DATETIME NULL"))
+
+    statements = [
+        """
+        CREATE TABLE IF NOT EXISTS owner_observation_updates (
+            update_id INT AUTO_INCREMENT PRIMARY KEY,
+            followup_id INT NOT NULL,
+            report_id INT NOT NULL,
+            pet_id INT NULL,
+            owner_user_id INT NOT NULL,
+            compliance_status VARCHAR(30) NOT NULL,
+            owner_remarks TEXT NOT NULL,
+            client_request_id VARCHAR(64) NULL,
+            submitted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            reviewed_at DATETIME NULL,
+            reviewed_by INT NULL,
+            review_remarks TEXT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_owner_update_client_request (client_request_id),
+            INDEX idx_owner_update_followup (followup_id),
+            INDEX idx_owner_update_report (report_id),
+            INDEX idx_owner_update_pet (pet_id),
+            INDEX idx_owner_update_owner (owner_user_id),
+            CONSTRAINT fk_owner_update_followup FOREIGN KEY (followup_id) REFERENCES owner_followups(followup_id) ON DELETE CASCADE,
+            CONSTRAINT fk_owner_update_report FOREIGN KEY (report_id) REFERENCES reports(report_id) ON DELETE CASCADE,
+            CONSTRAINT fk_owner_update_pet FOREIGN KEY (pet_id) REFERENCES pets(pet_id) ON DELETE SET NULL,
+            CONSTRAINT fk_owner_update_owner FOREIGN KEY (owner_user_id) REFERENCES users(user_id),
+            CONSTRAINT fk_owner_update_reviewer FOREIGN KEY (reviewed_by) REFERENCES users(user_id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS owner_observation_update_photos (
+            photo_id INT AUTO_INCREMENT PRIMARY KEY,
+            update_id INT NOT NULL,
+            photo_url VARCHAR(500) NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_owner_update_photo_update (update_id),
+            CONSTRAINT fk_owner_update_photo_update FOREIGN KEY (update_id) REFERENCES owner_observation_updates(update_id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """,
+    ]
+    for stmt in statements:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+        except Exception as e:
+            logger.error(f"Could not create owner observation update table: {e}")
+
+ensure_owner_observation_update_tables()
 
 try:
     from scripts.migrate_adoption_9_stages import migrate_adoption_workflow
@@ -1512,6 +1717,44 @@ def ensure_email_retry_columns():
 ensure_email_retry_columns()
 
 
+def ensure_manual_match_pet_column():
+    """manual_match_decisions can record a report-to-registered-pet decision: pet_id column, report_b_id nullable."""
+    with engine.begin() as conn:
+        try:
+            exists = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                "AND TABLE_NAME = 'manual_match_decisions' AND COLUMN_NAME = 'pet_id'"
+            )).scalar()
+            if not exists:
+                conn.execute(text("ALTER TABLE manual_match_decisions ADD COLUMN pet_id INT NULL, ADD INDEX ix_manual_match_decisions_pet_id (pet_id)"))
+                conn.execute(text("ALTER TABLE manual_match_decisions MODIFY COLUMN report_b_id INT NULL"))
+        except Exception as e:
+            logger.warning(f"ensure_manual_match_pet_column: {e}")
+
+ensure_manual_match_pet_column()
+
+
+def ensure_claim_assessment_cat_charge_columns():
+    """Manual cat claiming charge (docs/01-system/CLAIM_FEE_ASSESSMENT_RULES.md): charge description and the
+    "no charge applicable" flag on claim_assessments, for databases created before them. Non-destructive."""
+    columns = {
+        "charge_description": "ALTER TABLE claim_assessments ADD COLUMN charge_description VARCHAR(200) NULL",
+        "no_charge_applicable": "ALTER TABLE claim_assessments ADD COLUMN no_charge_applicable TINYINT(1) NOT NULL DEFAULT 0",
+    }
+    with engine.begin() as conn:
+        try:
+            for name, ddl in columns.items():
+                exists = conn.execute(text(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                    "AND TABLE_NAME = 'claim_assessments' AND COLUMN_NAME = :c"), {"c": name}).scalar()
+                if not exists:
+                    conn.execute(text(ddl))
+        except Exception as e:
+            logger.warning(f"ensure_claim_assessment_cat_charge_columns: {e}")
+
+ensure_claim_assessment_cat_charge_columns()
+
+
 def ensure_push_tables():
     """Push notifications (PUSH_NOTIFICATION_IMPLEMENTATION.md): device subscriptions, the outbox, push preferences."""
     from app.models.push import PushDelivery, PushSubscription
@@ -1757,7 +2000,12 @@ app.include_router(adoption_certificates.router)
 app.include_router(report_returns.router)
 app.include_router(pet_ownership.router)
 app.include_router(warnings.router)
+app.include_router(owner_followups.router)
 app.include_router(matches.router)
+app.include_router(manual_matching_routes.router)
+app.include_router(pet_match_confirmation_routes.router)
+app.include_router(leader_identity_routes.router)
+app.include_router(claim_assessment_routes.router)
 app.include_router(landmarks.router)
 app.include_router(adoptions.router)
 app.include_router(admin.router)

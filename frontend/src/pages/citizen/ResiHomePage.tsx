@@ -390,6 +390,8 @@ const ResiHomePage = () => {
 
     // Warning Acknowledgment State
     const [pendingWarning, setPendingWarning] = useState<any>(null);
+    // The owner must tick the acknowledgement checkbox; the server refuses an acknowledgement without it
+    const [ackChecked, setAckChecked] = useState(false);
     const [showWarningModal, setShowWarningModal] = useState(false);
 
     const fetchMyWarnings = async () => {
@@ -413,7 +415,9 @@ const ResiHomePage = () => {
     const handleAcknowledgeWarning = async () => {
         if (!pendingWarning) return;
         try {
-            await api.patch(`/warnings/${pendingWarning.warning_id}/acknowledge`);
+            if (!ackChecked) return;
+            await api.patch(`/warnings/${pendingWarning.warning_id}/acknowledge`, { confirmed: true });
+            setAckChecked(false);
             setPendingWarning(null);
             setShowWarningModal(false);
             fetchMyWarnings();
@@ -1122,6 +1126,12 @@ const ResiHomePage = () => {
         const titleStr = (notif.title || '').toLowerCase();
         const msgStr = (notif.message || '').toLowerCase();
 
+        // Observation notices (started, reminders, updates received, extended) -> Observation Updates
+        if (typeStr.startsWith('followup')) {
+            navigate('/resident/observations');
+            return;
+        }
+
         // An animal someone applied for is available again: open that animal's adoption page (related_id = holding id)
         if (typeStr === 'adoption_available_again' && notif.related_id) {
             navigate(`/adopt/apply/${notif.related_id}`);
@@ -1716,7 +1726,7 @@ const ResiHomePage = () => {
                                 </div>
 
                                 <div className="flex items-start gap-3 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
-                                    <input type="checkbox" id="ack" className="mt-1 w-5 h-5 rounded border-gray-300 text-blue-500 focus:ring-blue-500" required />
+                                    <input type="checkbox" id="ack" checked={ackChecked} onChange={(e) => setAckChecked(e.target.checked)} className="mt-1 w-5 h-5 rounded border-gray-300 text-blue-500 focus:ring-blue-500" />
                                     <label htmlFor="ack" className="text-[11px] font-semibold text-gray-700 leading-relaxed">
                                         I acknowledge receipt of this warning. I understand that repeated violations may result in escalation to the Barangay or HOA management.
                                     </label>
@@ -1724,7 +1734,8 @@ const ResiHomePage = () => {
 
                                 <button
                                     onClick={handleAcknowledgeWarning}
-                                    className="w-full py-4 action-primary rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl active:scale-[0.98]"
+                                    disabled={!ackChecked}
+                                    className="w-full py-4 action-primary rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
                                 >
                                     ACKNOWLEDGE NOTICE
                                 </button>
@@ -1784,7 +1795,7 @@ const ResiHomePage = () => {
                                         {reportStep === 9 && <><Rocket className="w-5 h-5 shrink-0" /> Step 9: Submit Report</>}
                                     </h2>
                                 </div>
-                                <button
+                                <button aria-label="Close"
                                     onClick={handleCloseModal}
                                     className="p-3 bg-gray-50 text-gray-400 hover:text-[#1a1208] rounded-2xl transition-all"
                                 >
@@ -1865,7 +1876,7 @@ const ResiHomePage = () => {
                                                 <div className="grid grid-cols-3 gap-3">
                                                     {formData.existingMedia.map((media) => (
                                                         <div key={media.media_id} className="relative aspect-square rounded-2xl overflow-hidden border border-gray-200">
-                                                            <img src={media.file_url} className="w-full h-full object-cover" />
+                                                            <img src={media.file_url} alt="Existing report photo" className="w-full h-full object-cover" />
                                                             <span className="absolute top-1 left-1 bg-black/60 text-white text-[8px] px-1.5 py-0.5 rounded font-bold">Existing</span>
                                                         </div>
                                                     ))}
@@ -1874,7 +1885,7 @@ const ResiHomePage = () => {
                                                             {file.type.startsWith('video/') ? (
                                                                 <video src={URL.createObjectURL(file)} className="w-full h-full object-cover" />
                                                             ) : (
-                                                                <img src={URL.createObjectURL(file)} className="w-full h-full object-cover" />
+                                                                <img src={URL.createObjectURL(file)} alt="New photo to upload" className="w-full h-full object-cover" />
                                                             )}
                                                             <button
                                                                 type="button"

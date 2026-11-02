@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import PushSettingsCard from '../../components/PushSettingsCard';
+import ClaimFeeSettingsCard from '../../components/ClaimFeeSettingsCard';
 import PhoneInput from '../../components/PhoneInput';
 import axios from 'axios';
 import api, { signOutAfterPasswordChange } from '../../utils/api';
@@ -63,7 +64,7 @@ const RecenterMap = ({ position }: { position: [number, number] | null }) => {
     return null;
 };
 
-type BrgySettingsTab = 'profile' | 'landmarks' | 'holding' | 'dispatch' | 'alerts' | 'security' | 'preferences';
+type BrgySettingsTab = 'profile' | 'landmarks' | 'holding' | 'fees' | 'dispatch' | 'alerts' | 'security' | 'preferences';
 
 interface BrgySettingsPreferences {
     quarantineDays: number;
@@ -486,6 +487,16 @@ const BrgySettings: React.FC = () => {
                 </svg>
             ),
             description: 'Rabies observation quarantine duration and cage capacity threshold alerts'
+        },
+        {
+            id: 'fees' as BrgySettingsTab,
+            label: 'Claiming Fines & Fees',
+            icon: (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+                </svg>
+            ),
+            description: 'Dog impounding fine (RA 9482) and ordinance-based cat fine, impounding and boarding fees'
         },
         {
             id: 'dispatch' as BrgySettingsTab,
@@ -1362,6 +1373,8 @@ const BrgySettings: React.FC = () => {
                                         </div>
                                     </div>
                                 )}
+
+                                {activeTab === 'fees' && <ClaimFeeSettingsCard />}
 
                                 {/* TAB 3: Rescue Operations & SLA */}
                                 {activeTab === 'dispatch' && (

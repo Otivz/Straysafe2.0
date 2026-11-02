@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { isManualMatchRecord } from '../../utils/manualMatchFields';
 import MediaLightbox from '../MediaLightbox';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
@@ -44,6 +45,7 @@ export interface MatchedPetInfo {
     owner_name?: string;
     registered_address?: string;
     similarity_score?: number;
+    is_manual?: boolean;
     sighting_photo_url?: string;
     sighting_species?: string;
     sighting_breed?: string;
@@ -186,6 +188,9 @@ export default function ReportChatDrawer({
     const [canInteract, setCanInteract] = useState<boolean>(true);
     const [selectedPetDetail, setSelectedPetDetail] = useState<PetRecord | null>(null);
     const [isLoadingPetDetail, setIsLoadingPetDetail] = useState(false);
+    const [pendingConfirmation, setPendingConfirmation] = useState<any>(null);
+    const [answeringConfirm, setAnsweringConfirm] = useState(false);
+    const [confirmSuccessNotice, setConfirmSuccessNotice] = useState<string | null>(null);
 
     const handleOpenPetDetail = async (petData: any) => {
         if (!petData) return;
@@ -389,7 +394,8 @@ export default function ReportChatDrawer({
                                 size: myMatch.matched_pet.size,
                                 owner_name: myMatch.matched_pet.owner?.name,
                                 registered_address: myMatch.matched_pet.owner?.address || myMatch.matched_pet.registered_address,
-                                similarity_score: myMatch.similarity_score ?? undefined,
+                                similarity_score: isManualMatchRecord(myMatch) ? undefined : (myMatch.similarity_score ?? undefined),
+                                is_manual: isManualMatchRecord(myMatch),  // the record's saved method, not a guess from the score
                                 sighting_photo_url: sightingPhotoFromMatch,
                                 sighting_species: myMatch.source_report?.animal_type || report?.animal_type,
                                 sighting_breed: myMatch.source_report?.animal_breed || (report as any)?.animal_breed,
@@ -427,6 +433,56 @@ export default function ReportChatDrawer({
             setInputText(initialMessageSnippet);
         }
     }, [isOpen, initialMessageSnippet]);
+
+    useEffect(() => {
+        if (isOpen && isResidentUser && reportId) {
+            api.get('/pet-match-confirmations/mine?status=pending')
+                .then(res => {
+                    const results = res.data?.results || [];
+                    const found = results.find((r: any) => r.reported_animal?.report_id === reportId);
+                    setPendingConfirmation(found || null);
+                })
+                .catch(() => setPendingConfirmation(null));
+        } else {
+            setPendingConfirmation(null);
+        }
+    }, [isOpen, isResidentUser, reportId]);
+
+    const handleRespondToConfirmation = async (answer: 'YES' | 'NO') => {
+        if (!pendingConfirmation) return;
+        setAnsweringConfirm(true);
+        try {
+            const res = await api.post(`/pet-match-confirmations/${pendingConfirmation.request_id}/respond`, { answer });
+            setConfirmSuccessNotice(res.data?.message || (answer === 'YES' ? 'Confirmed: you verified this is your pet.' : 'Reported: you verified this is not your pet.'));
+            setPendingConfirmation(null);
+            lastPollSigRef.current = '';
+            const fetchUrl = isAdoptionMode
+                ? `/chat/adoptions/${adoptionId}/messages`
+                : isMatchMode
+                ? `/chat/matches/${effectiveMatchId}/messages`
+                : `/chat/reports/${reportId}/messages`;
+            const resMsg = await api.get(fetchUrl);
+            if (Array.isArray(resMsg.data)) {
+                const mapped: ChatMessage[] = resMsg.data.map((m: any) => ({
+                    id: `msg-${m.message_id}`,
+                    senderId: m.sender_id,
+                    senderName: m.sender_name || 'User',
+                    senderRole: m.sender_role || 'Staff Official',
+                    senderAvatar: m.sender_avatar,
+                    text: m.message_text,
+                    mediaUrl: m.media_url,
+                    timestamp: m.sent_at ? new Date(m.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently',
+                    isRead: true,
+                    isSystemMessage: m.is_system
+                }));
+                setMessages(mapped);
+            }
+        } catch (err: any) {
+            alert(err?.response?.data?.detail || 'Could not send confirmation response.');
+        } finally {
+            setAnsweringConfirm(false);
+        }
+    };
 
     // Load messages from Backend API with localStorage cache
     useEffect(() => {
@@ -812,13 +868,15 @@ export default function ReportChatDrawer({
                             }`}>
                                 <div className="flex items-center justify-between gap-2 border-b border-role-muted dark:border-role-strong/40 pb-2">
                                     <div className="flex items-center gap-1.5">
-                                        <span className="w-2.5 h-2.5 rounded-full bg-role animate-pulse"></span>
+                                        <span className={`w-2.5 h-2.5 rounded-full ${localMatchedPet.is_manual ? 'bg-orange-500' : 'bg-role animate-pulse'}`}></span>
                                         <span className="text-[11px] font-black uppercase tracking-wider text-role-strong dark:text-role-border">
-                                            AI Potential Match Sighting
+                                            {localMatchedPet.is_manual ? 'Potential Match Sighting' : 'AI Potential Match Sighting'}
                                         </span>
                                     </div>
-                                    <span className="px-2 py-0.5 bg-gradient-to-r from-role to-amber-500 text-white rounded-full text-[9px] font-black shadow-2xs">
-                                        {localMatchedPet.similarity_score != null ? `${localMatchedPet.similarity_score}% Match` : 'Match score N/A'}
+                                    <span className={`px-2 py-0.5 text-white rounded-full text-[9px] font-black shadow-2xs ${
+                                        localMatchedPet.is_manual ? 'bg-orange-600' : 'bg-gradient-to-r from-role to-amber-500'
+                                    }`}>
+                                        {localMatchedPet.is_manual ? 'Manual Match – Staff Identified' : (localMatchedPet.similarity_score != null ? `${localMatchedPet.similarity_score}% Match` : 'Match score N/A')}
                                     </span>
                                 </div>
 
@@ -965,6 +1023,67 @@ export default function ReportChatDrawer({
                             </div>
                         )}
 
+                        {confirmSuccessNotice && (
+                            <div className="mx-3 my-2 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 flex items-center justify-between">
+                                <span>✓ {confirmSuccessNotice}</span>
+                                <button type="button" onClick={() => setConfirmSuccessNotice(null)} className="text-emerald-700 hover:text-emerald-900 cursor-pointer font-black text-sm">✕</button>
+                            </div>
+                        )}
+
+                        {isResidentUser && pendingConfirmation && (
+                            <div className="mx-3 my-2 p-3.5 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50/80 border-2 border-amber-300 dark:border-amber-700/60 dark:bg-amber-950/20 text-gray-900 dark:text-gray-100 shadow-sm space-y-2.5 animate-in fade-in">
+                                <div className="flex items-center justify-between gap-2 border-b border-amber-200/80 dark:border-amber-800/60 pb-2">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-base">🔎</span>
+                                        <span className="text-xs font-black uppercase tracking-wider text-amber-900 dark:text-amber-200">
+                                            Pet Confirmation Request
+                                        </span>
+                                    </div>
+                                    <span className="px-2 py-0.5 rounded-full bg-amber-200/80 dark:bg-amber-800 text-[9px] font-black text-amber-950 dark:text-amber-100">
+                                        Awaiting Your Confirmation
+                                    </span>
+                                </div>
+                                <p className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                                    Staff asked: Is the reported animal in Report #{pendingConfirmation.reported_animal?.report_id || reportId} your registered pet <span className="text-amber-800 dark:text-amber-300 font-black">{pendingConfirmation.your_pet?.pet_name}</span>?
+                                </p>
+                                {pendingConfirmation.staff_message && (
+                                    <p className="text-xs italic bg-white/80 dark:bg-gray-800/80 px-2.5 py-1.5 rounded-xl border border-amber-200 text-gray-700 dark:text-gray-300">
+                                        "{pendingConfirmation.staff_message}"
+                                    </p>
+                                )}
+                                <div className="flex items-center gap-2 pt-1">
+                                    <button
+                                        type="button"
+                                        disabled={answeringConfirm}
+                                        onClick={() => handleRespondToConfirmation('YES')}
+                                        className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-xs cursor-pointer transition-all text-center disabled:opacity-50"
+                                    >
+                                        {answeringConfirm ? 'Saving…' : "✓ Yes, It's My Pet"}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={answeringConfirm}
+                                        onClick={() => handleRespondToConfirmation('NO')}
+                                        className="flex-1 py-2 px-3 bg-white dark:bg-gray-800 border border-rose-300 hover:bg-rose-50 text-rose-700 dark:text-rose-400 rounded-xl text-xs font-black uppercase tracking-wider shadow-xs cursor-pointer active:scale-95 transition-all text-center disabled:opacity-50"
+                                    >
+                                        {answeringConfirm ? 'Saving…' : '✕ Not My Pet'}
+                                    </button>
+                                </div>
+                                <div className="text-center pt-0.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            onClose();
+                                            navigate(`/resident/pets?confirm=${pendingConfirmation.request_id}`);
+                                        }}
+                                        className="text-[11px] font-bold text-amber-800 dark:text-amber-300 hover:underline cursor-pointer"
+                                    >
+                                        Open side-by-side photo comparison in My Pets →
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         {messages.map((msg) => {
                             if (msg.isSystemMessage) {
                                 return (
@@ -994,7 +1113,10 @@ export default function ReportChatDrawer({
                                         const isLookAlikeMsg = (msg.text.toLowerCase().includes('look-alike') || 
                                                                 msg.text.toLowerCase().includes('look-alik') || 
                                                                 msg.text.toLowerCase().includes('similarity') || 
-                                                                msg.text.toLowerCase().includes('detected a')) && !!localMatchedPet;
+                                                                msg.text.toLowerCase().includes('detected a') ||
+                                                                msg.text.toLowerCase().includes('possible match') ||
+                                                                msg.text.toLowerCase().includes('potential match') ||
+                                                                msg.text.toLowerCase().includes('identified a possible match')) && !!localMatchedPet;
 
                                         return (
                                             <div className={`${isLookAlikeMsg ? 'max-w-[95%]' : 'max-w-[80%]'} flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
@@ -1033,14 +1155,16 @@ export default function ReportChatDrawer({
                                                         >
                                                             <div className="flex items-center justify-between gap-2 border-b border-role-muted pb-2">
                                                                 <div className="flex items-center gap-1.5">
-                                                                    <span className="w-2 h-2 rounded-full bg-role animate-pulse"></span>
+                                                                    <span className={`w-2 h-2 rounded-full ${localMatchedPet.is_manual ? 'bg-orange-500' : 'bg-role animate-pulse'}`}></span>
                                                                     <span className="text-[10px] font-black uppercase tracking-wider text-role-strong">
-                                                                        Look-Alike Sighting Comparison
+                                                                        {localMatchedPet.is_manual ? 'Staff-Identified Potential Match' : 'Look-Alike Sighting Comparison'}
                                                                     </span>
                                                                 </div>
                                                                 <div className="flex items-center gap-1">
-                                                                    <span className="px-2 py-0.5 bg-gradient-to-r from-role to-amber-500 text-white rounded-full text-[9px] font-extrabold shadow-2xs">
-                                                                        {localMatchedPet.similarity_score != null ? `${localMatchedPet.similarity_score}% Match` : 'Match score N/A'}
+                                                                    <span className={`px-2 py-0.5 text-white rounded-full text-[9px] font-extrabold shadow-2xs ${
+                                                                        localMatchedPet.is_manual ? 'bg-orange-600' : 'bg-gradient-to-r from-role to-amber-500'
+                                                                    }`}>
+                                                                        {localMatchedPet.is_manual ? 'Manual Match – Staff Identified' : (localMatchedPet.similarity_score != null ? `${localMatchedPet.similarity_score}% Match` : 'Match score N/A')}
                                                                     </span>
                                                                     <span className="text-[9px] font-extrabold text-role">Review ↗</span>
                                                                 </div>

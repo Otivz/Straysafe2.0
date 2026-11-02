@@ -699,6 +699,8 @@ const SubdReports = () => {
                 return 'bg-purple-50 text-purple-600 border-purple-100';
             case 'approved':
                 return 'bg-indigo-50 text-indigo-600 border-indigo-100';
+            case 'under observation':
+                return 'bg-orange-50 text-orange-700 border-orange-200';
             case 'in action':
             case 'ongoing':
             case 'rescue in progress':
@@ -819,6 +821,7 @@ const SubdReports = () => {
                                                 { value: 'all', label: 'All Status' },
                                                 { value: 'Reported', label: 'Reported' },
                                                 { value: 'Verified', label: 'Verified' },
+                                                { value: 'Under Observation', label: 'Under Observation' },
                                                 { value: 'Escalated to Barangay', label: 'Escalated' },
                                                 { value: 'Approved', label: 'Approved' },
                                                 { value: 'Rescue In Progress', label: 'In Progress' }

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Any, Dict, Optional, List
 from datetime import datetime
 from app.schemas.pet import PetResponse
 from app.schemas.report import ReportResponse
@@ -64,6 +64,9 @@ class PetClaimUpdate(BaseModel):
 
 class PetClaimResponse(PetClaimBase):
     claim_id: int
+    # How the claimed pet was matched to the report: "manual" (staff-identified, no score) or "ai" (match_score is
+    # the AI similarity). None when no match record exists.
+    matching_mode: Optional[str] = None
     merged_into_claim_id: Optional[int] = None
     # Every report of the merged case this claim covers (the claim is shared by all of them)
     case_report_ids: List[int] = []
@@ -71,6 +74,14 @@ class PetClaimResponse(PetClaimBase):
     updated_at: datetime
     pet: Optional[PetResponse] = None
     report: Optional[ReportResponse] = None
+    # Phase 7: whether anyone holds the animal (a claim needs a held animal), and the owner's / staff's answers
+    custody: Optional[Dict[str, Any]] = None
+    status_before_approval: Optional[int] = None
+    owner_whereabouts: Optional[str] = None
+    owner_whereabouts_note: Optional[str] = None
+    owner_whereabouts_at: Optional[datetime] = None
+    closed_reason: Optional[str] = None
+    closed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

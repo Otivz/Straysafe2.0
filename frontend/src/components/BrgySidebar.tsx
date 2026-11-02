@@ -224,6 +224,15 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                     )
                 },
                 {
+                    path: '/brgy/manual-matching',
+                    label: 'Manual Matching',
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4" />
+                        </svg>
+                    )
+                },
+                {
                     path: '/brgy/adoptions',
                     label: 'Adoptions',
                     badgeCount: pendingAdoptionsCount,
@@ -329,7 +338,7 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                     </Link>
                 )}
                 {isMobileView && handleDrawerClose && (
-                    <button 
+                    <button aria-label="Close" 
                         onClick={handleDrawerClose}
                         className="text-gray-400 hover:text-gray-600 p-1.5 hover:bg-gray-50 rounded-xl transition-all shrink-0 cursor-pointer ml-1"
                     >

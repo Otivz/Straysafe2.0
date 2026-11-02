@@ -281,7 +281,7 @@ const AdminSidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }
                     </Link>
                 )}
                 {isMobileView && handleDrawerClose && (
-                    <button 
+                    <button aria-label="Close" 
                         onClick={handleDrawerClose}
                         className="text-gray-400 hover:text-gray-600 p-1.5 hover:bg-gray-50 rounded-xl transition-all shrink-0 cursor-pointer ml-1"
                     >

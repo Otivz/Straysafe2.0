@@ -43,6 +43,39 @@ def close_open_rescues(session: Session, report_id: int, report_status_id: int) 
     return closed
 
 
+def close_open_followups(session: Session, report_id: int, report_status_id: int) -> int:
+    """End the report's active owner follow-up observation on case closure, merge or escalation."""
+    try:
+        from app.models.owner_followup import OwnerFollowUp
+    except ImportError:
+        return 0
+
+    outcome = "escalated" if report_status_id == 13 else "closed"
+    closed = 0
+    with session.no_autoflush:
+        followups = session.query(OwnerFollowUp).filter(
+            OwnerFollowUp.report_id == report_id,
+            OwnerFollowUp.status == "observing"
+        ).all()
+        from app.models.report import StatusHistory
+        for f in followups:
+            # The SQL filter sees the stored row: an observation already concluded in this same transaction (e.g.
+            # resolved as complied, which is what resolves the report) keeps its own outcome and single end entry.
+            if f.status != "observing":
+                continue
+            f.status = outcome
+            f.closed_at = f.closed_at or _now()
+            f.close_reason = f"Case ended due to report status transition to {report_status_id}."
+            # Phase 8: the end of the observation shows on the timeline (no owner details)
+            session.add(StatusHistory(
+                report_id=f.report_id, report_status_id=report_status_id,
+                remarks=("Observation ended: endorsed to the Barangay." if outcome == "escalated"
+                         else "Observation ended: closed with the case."),
+            ))
+            closed += 1
+    return closed
+
+
 @event.listens_for(Session, "before_flush")
 def _sync_rescues_with_closed_reports(session: Session, flush_context, instances):
     from app.models.report import Report
@@ -54,5 +87,7 @@ def _sync_rescues_with_closed_reports(session: Session, flush_context, instances
         if not hist.has_changes():
             continue
         new_status = obj.current_status_id
-        if new_status in CLOSED_REPORT_STATUS_IDS and obj.report_id is not None:
-            close_open_rescues(session, obj.report_id, new_status)
+        if (new_status in CLOSED_REPORT_STATUS_IDS or new_status == 13) and obj.report_id is not None:
+            if new_status in CLOSED_REPORT_STATUS_IDS:
+                close_open_rescues(session, obj.report_id, new_status)
+            close_open_followups(session, obj.report_id, new_status)

@@ -299,6 +299,19 @@ def published_lost_pet_contact(rep_data, report: Report) -> Optional[tuple]:
     return m.group(1).strip(), (phone if phone and phone != _NO_PHONE else None)
 
 
+def _observation_owner_names(report: Report, viewer_id: Optional[int]) -> list:
+    """Names of owners observed on this case (other than the viewer), to take out of the timeline text."""
+    from sqlalchemy.orm import object_session
+    from app.models.owner_followup import OwnerFollowUp
+    db = object_session(report)
+    if db is None:
+        return []
+    root_id = report.duplicate_of_report_id or report.report_id
+    rows = db.query(OwnerFollowUp.owner_name, OwnerFollowUp.owner_id).filter(
+        OwnerFollowUp.report_id.in_({report.report_id, root_id})).all()
+    return [name for name, oid in rows if name and len(name) >= 3 and (viewer_id is None or oid != viewer_id)]
+
+
 def redact_response(rep_data, viewer: Optional[User], access: str, report: Report):
     """
     Fill the visibility fields and remove what this viewer may not see. Staff get everything. Other residents never
@@ -329,6 +342,8 @@ def redact_response(rep_data, viewer: Optional[User], access: str, report: Repor
     reporter_is_official = bool(report.reporter and report.reporter.role_id in STAFF_ROLE_IDS)
     names = [n for n in (report.reporter.name if (report.reporter and not is_reporter and not reporter_is_official) else None,
                          rep_data.owner_name if not is_owner else None) if n and len(n) >= 3]
+    # Phase 8: the observed owner's name (an owner without an account exists only on the follow-up) stays out too
+    names += [n for n in _observation_owner_names(report, uid) if n not in names]
     reporter_full = report.reporter.name if report.reporter else None
     if not is_reporter:
         rep_data.user_id = None
@@ -399,8 +414,11 @@ def redact_response(rep_data, viewer: Optional[User], access: str, report: Repor
         c.user_name = COMMUNITY_REPORTER if c.user_id == report.user_id else first_name(c.user_name)
         c.user_photo = None
         c.user_id = 0
+    from app.utils.push_categories import scrub_contact
     for h in rep_data.history or []:
         h.remarks = scrub(h.remarks, names)
+        if h.remarks:
+            h.remarks = scrub_contact(h.remarks)  # no phone numbers or emails on a resident's timeline
         if h.updater_name and h.updater_name in names:
             h.updater_name = COMMUNITY_REPORTER if h.updater_name == reporter_full else REGISTERED_OWNER
             h.updater_photo = None
