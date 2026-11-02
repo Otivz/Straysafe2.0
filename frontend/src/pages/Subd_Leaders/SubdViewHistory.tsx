@@ -14,6 +14,7 @@ import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 
 import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
 import ReportDescription from '../../components/ReportDescription';
+import CaseSummaryPanel from '../../components/History/CaseSummaryPanel';
 interface Report {
     report_id: number;
     category_id: number;
@@ -30,9 +31,9 @@ interface Report {
     animal_count: number;
     animal_type: string;
     animal_color?: string | null;
-    breed?: string;
+    animal_breed?: string | null;
+    ai_coat_pattern?: string | null;
     condition: string;
-    behavior_tags?: string;
     description: string;
     visibility: string;
     created_at: string;
@@ -45,16 +46,13 @@ interface Report {
     ai_animal_type?: string | null;
     ai_dominant_color?: string | null;
     ai_estimated_size?: string | null;
-    ai_suggested_risk_level?: string | null;
     ai_suggested_priority?: string | null;
     ai_possible_breed?: string | null;
     ai_suggested_priority_reason?: string | null;
     history?: any[];
     endorsement_letter?: any;
-    verification_status?: string | null;
     verification_notes?: string | null;
     verified_at?: string | null;
-    verified_by_user_id?: number | null;
     verified_by_name?: string | null;
     false_alarm_reason?: string | null;
     subdivision_id?: number | null;
@@ -368,17 +366,6 @@ const SubdViewHistory = () => {
         fetchAddress();
     }, [report]);
 
-    const getPriorityColor = (priority: string) => {
-        switch (priority?.toLowerCase()) {
-            case 'emergency':
-            case 'high': return 'bg-red-50 text-red-600 border-red-100';
-            case 'regular':
-            case 'medium': return 'bg-amber-50 text-amber-600 border-amber-100';
-            case 'low': return 'bg-blue-50 text-blue-600 border-blue-100';
-            default: return 'bg-gray-50 text-gray-600 border-gray-100';
-        }
-    };
-
     const getStatusColor = (status: string) => {
         switch (status?.toLowerCase()) {
             case 'resolved':
@@ -450,6 +437,10 @@ const SubdViewHistory = () => {
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                <div className="lg:col-span-3 min-w-0">
+                                    <CaseSummaryPanel report={report} reportHref={(reportId) => `/subd/history/${reportId}`} printable />
+                                </div>
+
                                 {/* LEFT COLUMN: Report Details, Map, Letter */}
                                 <div className="lg:col-span-2 space-y-8">
                                     {/* General details Card */}
@@ -482,34 +473,6 @@ const SubdViewHistory = () => {
                                             <div>
                                                 <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Category</span>
                                                 <span className="text-sm font-semibold text-gray-900">{categoryMap[report.category_id] || 'Other'}</span>
-                                            </div>
-                                            <div>
-                                                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Priority</span>
-                                                <span className={`text-sm font-bold ${getPriorityColor(report.priority_level).replace('bg-', 'text-').replace('-50', '-600')}`}>
-                                                    {report.priority_level}
-                                                </span>
-                                            </div>
-                                            <div>
-                                                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Animal Type</span>
-                                                <span className="text-sm font-semibold text-gray-900">{report.animal_type || 'Unknown'}</span>
-                                            </div>
-                                            <div>
-                                                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Detected Animal Type</span>
-                                                <span className="text-sm font-semibold text-gray-900">{report.ai_animal_type || 'Unknown'}</span>
-                                            </div>
-                                            <div>
-                                                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Dominant Color</span>
-                                                <span className="text-sm font-semibold text-gray-900">{report.animal_color || report.ai_dominant_color || 'Unknown'}</span>
-                                            </div>
-                                            <div>
-                                                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Estimated Size</span>
-                                                <span className="text-sm font-semibold text-gray-900">
-                                                    {report.estimated_size || report.ai_estimated_size || 'Unknown'}
-                                                </span>
-                                            </div>
-                                            <div>
-                                                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Animal Count</span>
-                                                <span className="text-sm font-semibold text-gray-900">{report.animal_count} observed</span>
                                             </div>
                                             <div>
                                                 <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Landmark</span>

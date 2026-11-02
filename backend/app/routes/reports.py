@@ -3061,12 +3061,35 @@ def get_report(report_id: int, db: Session = Depends(get_db), current_user: User
         populate_duplicate_and_merge_info(rep_data, report, db)
         populate_warning_info(rep_data, report, db)
         from app.utils.owner_followups import observation_summary
-        rep_data.observation = observation_summary(db, report)
+        rep_data.observation = observation_summary(db, report, staff_details=current_user.role_id in (2, 3, 4))
 
         return report_visibility.redact_response(rep_data, current_user, access, report)
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error fetching report: {str(e)}")
+
+
+PRINT_ROLE_NAMES = {2: "Subdivision Leader", 3: "Barangay Staff", 4: "Administrator"}
+
+
+@router.post("/{report_id}/print-log")
+def log_report_print(report_id: int, request: Request, db: Session = Depends(get_db),
+                     current_user: User = Depends(get_current_user)):
+    """Audit entry for Print / Save as PDF of a case record (history pages). The browser can't tell whether the page was
+    really printed, so the entry records that an export was requested. Officials only, for reports they may see.
+    Returns who is printing and when, for the printout's footer."""
+    if current_user.role_id not in PRINT_ROLE_NAMES:
+        raise HTTPException(status_code=403, detail="Only officials can print case records.")
+    report = db.get(Report, report_id)
+    if not report or report_visibility.viewer_access(db, current_user, report) == report_visibility.NONE:
+        raise HTTPException(status_code=404, detail="Report not found")
+    role = PRINT_ROLE_NAMES[current_user.role_id]
+    log_activity(db=db, action="EXPORT_CASE_RECORD", target_table="reports", target_id=report_id,
+                 description=f"Case record of report #{report_id} opened for printing / PDF by {current_user.name} ({role}).",
+                 user_id=current_user.user_id, log_type="security", request=request)
+    from app.utils.holding_stay import db_now
+    return {"report_id": report_id, "printed_by": current_user.name, "role": role,
+            "printed_at": db_now(db).isoformat(timespec="seconds")}
 
 
 @router.delete("/{report_id}")
