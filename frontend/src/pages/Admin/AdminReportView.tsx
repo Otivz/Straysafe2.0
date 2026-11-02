@@ -5,10 +5,10 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
     ArrowLeft, MapPin, Calendar, AlertTriangle,
     CheckCircle2, Zap, Trash2, Eye, MessageCircle, ChevronRight,
-    Phone, Mail, Sparkles, Navigation, X, Check,
+    Phone, Mail, Navigation, X, Check,
     Building2, Activity, AlertOctagon, Clock, Shield,
-    UserCheck, Timer,
-    FileText, Plus, AlertCircle, ShieldAlert, FileCheck
+    Timer,
+    FileText, Plus, ShieldAlert, FileCheck
 } from 'lucide-react';
 import { api } from '../../utils/api';
 import { nominatimReverse } from '../../utils/geocode';
@@ -33,6 +33,7 @@ import { printElementById } from '../../utils/exportUtils';
 import MapAutoResize from '../../components/MapControls/MapAutoResize';
 import ReportDescription from '../../components/ReportDescription';
 import ReportVisibilityPanel from '../../components/ReportVisibilityPanel';
+import CaseSummaryPanel from '../../components/History/CaseSummaryPanel';
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
     iconRetinaUrl: markerIconRetina,
@@ -859,6 +860,9 @@ export const AdminReportView: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* Case record: outcome, verification, animal, events, visibility, comments (same panel as the history pages) */}
+                        <CaseSummaryPanel report={report} reportHref={(reportId) => `/admin/incidents/${reportId}`} printable />
+
                         {/* Animal Custody Telemetry & Multi-Jurisdictional Care Monitor */}
                         {holdingRecord ? (
                             <div className="bg-white rounded-3xl p-6 shadow-xs border border-slate-100 space-y-6">
@@ -1225,27 +1229,8 @@ export const AdminReportView: React.FC = () => {
                                             📋
                                         </div>
                                         <div>
-                                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Animal Profile & Characteristics</h3>
-                                            <p className="text-[11px] text-slate-400 font-medium">Recorded specifications of the animal involved</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                        <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Species</span>
-                                            <p className="text-xs font-black text-slate-800 mt-0.5">{report.animal_type || 'Stray / Unknown'}</p>
-                                        </div>
-                                        <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Breed</span>
-                                            <p className="text-xs font-black text-slate-800 mt-0.5">{report.breed || report.animal_breed || 'Aspin / Mixed'}</p>
-                                        </div>
-                                        <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Count</span>
-                                            <p className="text-xs font-black text-slate-800 mt-0.5">{report.animal_count || 1} animal(s)</p>
-                                        </div>
-                                        <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Condition</span>
-                                            <p className="text-xs font-black text-slate-800 mt-0.5">{animalCondition}</p>
+                                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Resident's Description</h3>
+                                            <p className="text-[11px] text-slate-400 font-medium">What the resident wrote and the behaviors they reported</p>
                                         </div>
                                     </div>
 
@@ -1268,108 +1253,6 @@ export const AdminReportView: React.FC = () => {
                                                         #{tag.trim()}
                                                     </span>
                                                 ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Field Verification Dossier Card */}
-                                <div className="bg-white rounded-3xl p-6 shadow-xs border border-slate-100 space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-                                                <UserCheck className="w-4 h-4" />
-                                            </div>
-                                            <div>
-                                                <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Subdivision Field Verification Dossier</h3>
-                                                <p className="text-[11px] text-slate-400 font-medium">On-site physical inspection & community validation provenance</p>
-                                            </div>
-                                        </div>
-                                        {report.status_id >= 2 && report.status_id !== 3 ? (
-                                            <span className="px-3 py-1 rounded-xl bg-emerald-100 text-emerald-800 text-[11px] font-black uppercase tracking-wider border border-emerald-200 flex items-center gap-1.5">
-                                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                                Verified On-Site
-                                            </span>
-                                        ) : report.status_id === 3 ? (
-                                            <span className="px-3 py-1 rounded-xl bg-rose-100 text-rose-800 text-[11px] font-black uppercase tracking-wider border border-rose-200 flex items-center gap-1.5">
-                                                <AlertOctagon className="w-3.5 h-3.5" />
-                                                Verification Rejected
-                                            </span>
-                                        ) : (
-                                            <span className="px-3 py-1 rounded-xl bg-amber-100 text-amber-800 text-[11px] font-black uppercase tracking-wider border border-amber-200 flex items-center gap-1.5 animate-pulse">
-                                                <Clock className="w-3.5 h-3.5" />
-                                                Pending HOA Inspection
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {report.status_id >= 2 && report.status_id !== 3 ? (
-                                        <div className="space-y-3 pt-1">
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                <div className="p-3 bg-slate-50/80 rounded-2xl border border-slate-100">
-                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Inspecting Officer / First Responder</span>
-                                                    <div className="flex items-center gap-2 mt-1">
-                                                        <div className="w-7 h-7 rounded-full bg-amber-100 text-amber-800 border border-amber-200 flex items-center justify-center text-xs font-black">
-                                                            🛡️
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-xs font-black text-slate-800">
-                                                                {report.verified_by_name || report.assigned_leader_name || 'Designated Subdivision Officer'}
-                                                            </p>
-                                                            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60">
-                                                                {report.subdivision_name ? `${report.subdivision_name} Leader` : 'Subdivision Leader'}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="p-3 bg-slate-50/80 rounded-2xl border border-slate-100">
-                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Verification Recorded At</span>
-                                                    <div className="flex items-center gap-1.5 mt-2">
-                                                        <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                                        <p className="text-xs font-bold text-slate-700">
-                                                            {report.verified_at ? formatDateTime(report.verified_at) : (report.created_at ? formatDateTime(report.created_at) : 'Recorded During Triage')}
-                                                        </p>
-                                                    </div>
-                                                    {report.verified_at && (
-                                                        <span className="text-[10.5px] text-slate-400 font-semibold block mt-0.5">
-                                                            <RelativeTimestamp date={report.verified_at} />
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Verification Findings & Notes */}
-                                            <div className="p-3.5 bg-emerald-50/50 rounded-2xl border border-emerald-100">
-                                                <div className="flex items-center justify-between mb-1">
-                                                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1">
-                                                        <FileText className="w-3 h-3" />
-                                                        On-Site Physical Inspection Notes & Findings
-                                                    </span>
-                                                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                                                        Protocol Compliant
-                                                    </span>
-                                                </div>
-                                                <p className="text-xs text-slate-700 font-medium leading-relaxed italic bg-white/70 p-2.5 rounded-xl border border-emerald-200/50">
-                                                    "{report.verification_notes || 'Physical inspection confirmed presence, health indicators, and reported behavior of stray animal matching citizen complaint.'}"
-                                                </p>
-                                            </div>
-                                        </div>
-                                    ) : report.status_id === 3 ? (
-                                        <div className="p-3.5 bg-rose-50 rounded-2xl border border-rose-200">
-                                            <p className="text-xs text-rose-800 font-bold mb-1">Incident Marked as Invalid / Duplicate</p>
-                                            <p className="text-xs text-rose-700 italic">
-                                                "{report.verification_notes || 'On-site investigation determined animal was either claimed by resident owner or could not be found within subdivision perimeter.'}"
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <div className="p-4 bg-amber-50/70 rounded-2xl border border-amber-200 flex items-start gap-3">
-                                            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                                            <div>
-                                                <h4 className="text-xs font-black text-amber-900">Awaiting Physical Field Inspection</h4>
-                                                <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                                                    This citizen incident report is currently queued for physical dispatch and validation by designated {report.subdivision_name || 'subdivision'} officers before inter-jurisdictional escalation.
-                                                </p>
                                             </div>
                                         </div>
                                     )}
@@ -1454,54 +1337,6 @@ export const AdminReportView: React.FC = () => {
                                         </div>
                                     )}
                                 </div>
-
-                                {/* AI Computer Vision & Intelligent Analysis */}
-                                {(report.ai_animal_type || report.ai_dominant_color || report.ai_possible_breed || report.ai_suggested_priority) && (
-                                    <div className="bg-gradient-to-br from-indigo-50/60 to-purple-50/40 rounded-3xl p-6 border border-indigo-100 space-y-3">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-xs">
-                                                <Sparkles className="w-4 h-4" />
-                                            </div>
-                                            <div>
-                                                <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">AI Vision Analysis</h3>
-                                                <p className="text-[11px] text-indigo-700 font-semibold">Automated multi-modal model analysis results</p>
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
-                                            {report.ai_dominant_color && (
-                                                <div className="p-2.5 bg-white/80 rounded-xl border border-indigo-100">
-                                                    <span className="text-[9.5px] font-bold uppercase text-slate-400">Color Pattern</span>
-                                                    <p className="text-xs font-black text-slate-800 mt-0.5">{report.ai_dominant_color} {report.ai_coat_pattern ? `(${report.ai_coat_pattern})` : ''}</p>
-                                                </div>
-                                            )}
-                                            {report.ai_possible_breed && (
-                                                <div className="p-2.5 bg-white/80 rounded-xl border border-indigo-100">
-                                                    <span className="text-[9.5px] font-bold uppercase text-slate-400">Likely Breed</span>
-                                                    <p className="text-xs font-black text-slate-800 mt-0.5">{report.ai_possible_breed}</p>
-                                                </div>
-                                            )}
-                                            {report.ai_estimated_size && (
-                                                <div className="p-2.5 bg-white/80 rounded-xl border border-indigo-100">
-                                                    <span className="text-[9.5px] font-bold uppercase text-slate-400">Est. Size</span>
-                                                    <p className="text-xs font-black text-slate-800 mt-0.5">{report.ai_estimated_size}</p>
-                                                </div>
-                                            )}
-                                            {report.ai_suggested_priority && (
-                                                <div className="p-2.5 bg-white/80 rounded-xl border border-indigo-100">
-                                                    <span className="text-[9.5px] font-bold uppercase text-slate-400">AI Urgency</span>
-                                                    <p className="text-xs font-black text-indigo-800 mt-0.5">{report.ai_suggested_priority}</p>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {report.ai_suggested_priority_reason && (
-                                            <p className="text-[11px] text-indigo-950 font-medium bg-white/60 p-2.5 rounded-xl border border-indigo-100/60 leading-relaxed">
-                                                <strong>AI Reasoning:</strong> {report.ai_suggested_priority_reason}
-                                            </p>
-                                        )}
-                                    </div>
-                                )}
 
                                 {/* Location & Interactive Map */}
                                 <div className="bg-white rounded-3xl p-6 shadow-xs border border-slate-100 space-y-4">

@@ -36,6 +36,7 @@ from app.models.report import Report, EndorsementLetter, StatusHistory
 from app.utils.auth import get_current_user
 from app.utils.owner_followups import (
     _now,
+    db_local_to_utc,
     get_default_duration_days,
     set_default_duration_days,
     validate_followup_start,
@@ -50,6 +51,7 @@ from app.utils.owner_followups import (
 from app.utils.uploads import read_and_validate_upload
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.audit import log_activity
+from app.utils.holding_stay import db_now
 from app.utils.notification_dispatcher import dispatch_notification
 from app.utils.observation_resolution import notify_case_resolved, require_resolvable, resolve_observation_case
 
@@ -280,7 +282,9 @@ def get_under_observation_dashboard(
                 OwnerWarning.report_id == rep.report_id
             ).order_by(OwnerWarning.created_at.asc()).first()
             if first_w:
-                w_time = first_w.created_at or _now()
+                # The warning's time is on the database clock (local); due dates are kept in UTC like _now() (F18)
+                w_time = first_w.created_at or db_now(db)
+                w_time_utc = db_local_to_utc(db, w_time)
                 owner_user = db.query(User).filter(User.user_id == first_w.user_id).first() if first_w.user_id else None
                 new_fu = OwnerFollowUp(
                     report_id=rep.report_id,
@@ -293,7 +297,7 @@ def get_under_observation_dashboard(
                     owner_address=getattr(owner_user, 'address', None) or getattr(rep, 'landmark', None),
                     status="observing",
                     duration_days=3,
-                    due_at=w_time + timedelta(days=3),
+                    due_at=w_time_utc + timedelta(days=3),
                     notes=f"Observation automatically tracked from First Warning ({first_w.violation_type}): {first_w.description}",
                     created_at=w_time
                 )

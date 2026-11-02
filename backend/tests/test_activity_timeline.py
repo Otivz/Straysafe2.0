@@ -100,7 +100,8 @@ check("timeline: the start entry names no owner", not any("Juan" in x for x in h
 d = detail(r1, HV).json()
 check("summary: open observation with a UTC due date on the public report", d.get("observation", {}).get("open") is True
       and (d["observation"]["due_at"] or "").endswith("+00:00"), d.get("observation"))
-check("summary: no owner details in it", set(d["observation"].keys()) == {"open", "status", "due_at", "extended", "ended_at", "outcome"})
+check("summary: no owner details in it", set(d["observation"].keys()) == {"open", "status", "due_at", "extended", "ended_at", "outcome", "started_at"},
+      sorted(d["observation"].keys()))
 
 r = client.post(f"/owner-followups/{fu1}/extend", json={"extension_reason": "Owner is fixing the gate latch", "extension_days": 2}, headers=HL)
 check("extend: extended once", r.status_code == 200, r.text[:200])

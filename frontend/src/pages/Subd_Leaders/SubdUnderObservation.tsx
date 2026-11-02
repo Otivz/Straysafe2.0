@@ -1527,11 +1527,6 @@ export default function SubdUnderObservation() {
                                     </div>
 
                                     <div className="flex items-center gap-3.5">
-                                        <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 text-xl shrink-0 shadow-2xs">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                        </div>
                                         <div>
                                             <div className="text-3xl font-black text-slate-900 tracking-tight">
                                                 {formatCount(metrics.active_observation_count)}
@@ -1565,11 +1560,6 @@ export default function SubdUnderObservation() {
                                     </div>
 
                                     <div className="flex items-center gap-3.5">
-                                        <div className="w-12 h-12 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 text-xl shrink-0 shadow-2xs">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                            </svg>
-                                        </div>
                                         <div>
                                             <div className="text-3xl font-black text-slate-900 tracking-tight">
                                                 {formatCount(metrics.for_second_warning_count + metrics.second_warning_issued_count)}
@@ -1603,11 +1593,6 @@ export default function SubdUnderObservation() {
                                     </div>
 
                                     <div className="flex items-center gap-3.5">
-                                        <div className="w-12 h-12 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 text-xl shrink-0 shadow-2xs">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
-                                            </svg>
-                                        </div>
                                         <div>
                                             <div className="text-3xl font-black text-slate-900 tracking-tight">
                                                 {formatCount(metrics.endorsed_count)}
@@ -1641,11 +1626,6 @@ export default function SubdUnderObservation() {
                                     </div>
 
                                     <div className="flex items-center gap-3.5">
-                                        <div className="w-12 h-12 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 text-xl shrink-0 shadow-2xs">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                        </div>
                                         <div>
                                             <div className="text-3xl font-black text-slate-900 tracking-tight">
                                                 {formatCount(metrics.resolved_count)}

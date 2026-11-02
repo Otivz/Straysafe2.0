@@ -24,6 +24,16 @@ def _now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def db_local_to_utc(db: Session, value: Optional[datetime]) -> Optional[datetime]:
+    """A time from the database clock (server_default NOW(), local time) as naive UTC, the clock _now() writes.
+    The offset is measured, not assumed, and rounded to 15 minutes."""
+    if value is None:
+        return None
+    from app.utils.holding_stay import db_now
+    offset_seconds = (db_now(db) - _now()).total_seconds()
+    return value - timedelta(minutes=round(offset_seconds / 900) * 15)
+
+
 def get_default_duration_days(db: Session) -> int:
     """Read the administrator-configured default observation duration, or 3 days if unset."""
     setting = db.query(SystemSetting).filter(SystemSetting.setting_key == SETTING_KEY_DURATION).first()
@@ -718,19 +728,30 @@ def record_observation_event(db: Session, followup: OwnerFollowUp, kind: str, ac
                          updated_by=actor_id, remarks=text))
 
 
-def observation_summary(db: Session, report: Report) -> Optional[Dict[str, Any]]:
-    """The case's latest owner observation, without any owner detail (safe for every viewer of the report)."""
+def observation_summary(db: Session, report: Report, staff_details: bool = False) -> Optional[Dict[str, Any]]:
+    """The case's latest owner observation, without any owner detail (safe for every viewer of the report).
+    staff_details adds the extension reason and who closed it, for officials only (the reason may describe the owner)."""
     from app.utils.case_groups import case_members, case_root
     ids = [m.report_id for m in case_members(db, case_root(db, report))]
     f = (db.query(OwnerFollowUp).filter(OwnerFollowUp.report_id.in_(ids))
          .order_by(OwnerFollowUp.created_at.desc(), OwnerFollowUp.followup_id.desc()).first()) if ids else None
     if f is None:
         return None
-    return {
+    summary = {
         "open": f.status == "observing",
         "status": f.status,
         "due_at": _utc_iso(f.due_at),
         "extended": bool(f.is_extended),
         "ended_at": _utc_iso(f.closed_at),
         "outcome": None if f.status == "observing" else OBS_OUTCOME_TEXT.get(f.status, f.status),
+        # created_at comes from the database clock (local time); the other times are written in UTC
+        "started_at": _utc_iso(db_local_to_utc(db, f.created_at)),
     }
+    if staff_details:
+        closer = db.get(User, f.closed_by) if f.closed_by else None
+        summary.update({
+            "extension_days": f.extension_days if f.is_extended else None,
+            "extension_reason": f.extension_reason if f.is_extended else None,
+            "closed_by_name": closer.name if closer else None,
+        })
+    return summary

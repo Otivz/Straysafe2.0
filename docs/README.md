@@ -93,6 +93,9 @@ Status values: **Current** (matches the code when last checked), **Reference** (
 | [04-testing/README.md](04-testing/README.md) | Current | Inventory plus scoped map, holding, custody, pet/claim and adoption validation; full suite not re-run |
 | [02-project/DEFENSE_PLAN.md](02-project/DEFENSE_PLAN.md) | Current | Capstone defense plan: roles, countdown, outline, demo script, risks, panel questions |
 | [02-project/MANUSCRIPT_CHAPTER1_CHECK_2026-10-26.md](02-project/MANUSCRIPT_CHAPTER1_CHECK_2026-10-26.md) | Current | Manuscript Chapter 1 (STRAYSAFEEE1.pdf) checked against the system, rated 8.4/10 |
+| [03-development/audits/HISTORY_REPORT_DETAILS_AUDIT_2026-11-02.md](03-development/audits/HISTORY_REPORT_DETAILS_AUDIT_2026-11-02.md) | Current | Missing details on the Subdivision, Barangay and Admin history report pages; phased fix checklist |
+| [03-development/audits/reportprocess.md](03-development/audits/reportprocess.md) | Current | Whole-system and report process audit: remaining work, thesis alignment, database sync, AI test set, and roadmap |
+| [03-development/audits/SYSTEM_AUDIT_2026-11-02.md](03-development/audits/SYSTEM_AUDIT_2026-11-02.md) | Current | Dated pointer to whole-system and report process audit |
 | [03-development/audits/ADOPTION_CHAT_ISOLATION_AUDIT_2026-10-25.md](03-development/audits/ADOPTION_CHAT_ISOLATION_AUDIT_2026-10-25.md) | Current | Chat isolation findings, fixed 2026-10-25; duplicate-thread merge still to run |
 | [05-operations/README.md](05-operations/README.md) | Current | Local setup, run, validate, build; deployment, monitoring and recovery are not set up |
 | [05-operations/LOCAL_NETWORK_IP_AND_APK_SETUP_GUIDE.md](05-operations/LOCAL_NETWORK_IP_AND_APK_SETUP_GUIDE.md) | Current | Guide for finding PC IP and changing address in the APK without rebuilds |
