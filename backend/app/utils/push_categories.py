@@ -22,6 +22,7 @@ _TYPE_CATEGORY = {
     # Rescues
     "rescue_assignment": RESCUES, "alert": RESCUES, "holding_overdue_alert": RESCUES,
     # Pet matches
+    "lost_pet_alert": PET_MATCHES, "lost_pet_sighting": PET_MATCHES, "lost_pet_alert_request": PET_MATCHES,
     "potential_match": PET_MATCHES, "pet_owner_confirmation": PET_MATCHES, "pet_owner_confirmation_result": PET_MATCHES,
     "pet_match_confirmation": PET_MATCHES, "pet_match_confirmation_result": PET_MATCHES, "leader_identity_verified": PET_MATCHES,
     "wrong_identity": PET_MATCHES, "qr_recovery_request": PET_MATCHES, "qr_finder_thanks": PET_MATCHES, "reunion_photo_requested": PET_MATCHES,
@@ -93,6 +94,8 @@ def notification_link(role_id: int, ntype: Optional[str], related_id: Optional[i
             return "/resident/pets"
         if t == "pet_match_confirmation":
             return f"/resident/pets?confirm={rid}" if rid else "/resident/pets"
+        if t in ("lost_pet_alert", "lost_pet_sighting"):
+            return f"/resident/lost-pets/{rid}" if rid else "/resident-home"
         if t == "adoption_available_again" and rid:
             return f"/adopt/apply/{rid}"
         if t.startswith("adoption") and rid:
@@ -115,6 +118,8 @@ def notification_link(role_id: int, ntype: Optional[str], related_id: Optional[i
             return "/subd/pet-records"
         if t == "pet_match_confirmation_result":
             return f"/subd/manual-matching?report={rid}&kind=pet" if rid else "/subd/manual-matching"
+        if t in ("lost_pet_alert", "lost_pet_sighting", "lost_pet_alert_request"):
+            return f"/subd/lost-pet-alerts/{rid}" if rid else "/subd/dashboard"
         if t in ("message", "comment"):
             return f"/subd/reports/{rid}?openChat=true" if rid else "/subd/reports?openChat=true"
         if t == "claim":

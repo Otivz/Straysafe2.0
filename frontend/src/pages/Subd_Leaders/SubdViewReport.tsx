@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import LostPetAlertSummary from '../../components/LostPets/LostPetAlertSummary';
 import { isManualMatchRecord } from '../../utils/manualMatchFields';
 import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { SIGHTING_TITLE } from '../../utils/sighting';
@@ -2898,6 +2899,12 @@ const SubdViewReport = () => {
                                             {/* Multi-animal reports: one record per animal (the leader adds them; cropped photos) */}
                                             <AnimalRecordsPanel reportId={report.report_id} basePath="/subd/reports" animalCount={report.animal_count}
                                                 onChanged={() => fetchReportDetails()} />
+
+                                            {/* Neighbor-to-Neighbor Lost Pet Sighting Ping: review / activate the alert, latest sighting */}
+                                            <LostPetAlertSummary reportId={report.report_id}
+                                                isLostPetReport={report.category_id === 6 || String(report.description || '').includes('[LOST PET REPORT]')}
+                                                reportOpen={![3, 8, 9, 10, 11, 12, 14, 17, 18].includes(Number(report.status_id))}
+                                                alertPath={id => `/subd/lost-pet-alerts/${id}`} requestLabel="Prepare Neighborhood Alert" />
 
                                             {/* Who can see this report: Private at first; the handling leader can make it Public (with a confirmation) */}
                                             <ReportVisibilityPanel report={report} canEdit={report.assigned_leader_id === currentUserId}

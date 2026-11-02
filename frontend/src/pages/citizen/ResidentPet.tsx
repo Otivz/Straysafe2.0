@@ -354,14 +354,17 @@ const ResidentPet = () => {
         reward: '',
         contactName: '',
         contactPhone: '',
-        additionalNotes: ''
+        additionalNotes: '',
+        // Neighbor-to-Neighbor Lost Pet Sighting Ping: ask the Subdivision Leader to broadcast a Neighborhood Alert
+        requestNeighborhoodAlert: true,
+        contactPreference: 'app_message' as 'app_message' | 'through_leader',
     });
     // Real landmarks (not holding facilities) for the quick picks, and whether the area text was filled for the
     // owner (pin / quick pick) or typed by them: typed text is never overwritten when the pin moves
     const [lostLandmarks, setLostLandmarks] = useState<LostSpotLandmark[]>([]);
     const [lostAreaAuto, setLostAreaAuto] = useState(true);
-    // Shown after the alert is broadcast (instead of the browser's confirm / alert boxes)
-    const [lostAlertSent, setLostAlertSent] = useState<{ name: string; photo: string; landmark: string; reportId: number | null } | null>(null);
+    // Shown after the Lost Pet Report is filed (instead of the browser's confirm / alert boxes)
+    const [lostAlertSent, setLostAlertSent] = useState<{ name: string; photo: string; landmark: string; reportId: number | null; alertRequested: 'yes' | 'no' | 'failed' } | null>(null);
     const lostSpotSeq = useRef(0);
     const [breedsData, setBreedsData] = useState<any[]>([]);
     const [breedImageUrl, setBreedImageUrl] = useState<string | null>(null);
@@ -894,7 +897,9 @@ const ResidentPet = () => {
             reward: '',
             contactName: currentUser?.name || petObj.owner_name || '',
             contactPhone: currentUser?.phone || petObj.emergency_contact_phone || '',
-            additionalNotes: ''
+            additionalNotes: '',
+            requestNeighborhoodAlert: true,
+            contactPreference: 'app_message',
         });
 
         setLostAreaAuto(true);
@@ -1018,6 +1023,23 @@ const ResidentPet = () => {
             });
 
             const createdReportId = res.data?.report_id;
+            // The report is filed; asking for the Neighborhood Alert is separate, so a failure here never loses it
+            let alertRequested: 'yes' | 'no' | 'failed' = 'no';
+            if (lostPetForm.requestNeighborhoodAlert && createdReportId) {
+                try {
+                    await api.post(`/lost-pet-alerts/reports/${createdReportId}/request`, {
+                        last_seen_at: lostPetForm.lastSeenAt || null,
+                        last_seen_location: lostPetForm.landmark.trim() || null,
+                        last_seen_lat: lostPetForm.latitude || null,
+                        last_seen_lng: lostPetForm.longitude || null,
+                        contact_preference: lostPetForm.contactPreference,
+                        owner_note: lostPetForm.additionalNotes.trim() || null,
+                    });
+                    alertRequested = 'yes';
+                } catch {
+                    alertRequested = 'failed';
+                }
+            }
             fetchPets();
             setReportingLostPet(null);
 
@@ -1025,7 +1047,8 @@ const ResidentPet = () => {
                 name: reportingLostPet.name,
                 photo: reportingLostPet.avatar || DEFAULT_PET_AVATAR,
                 landmark: lostPetForm.landmark.trim(),
-                reportId: createdReportId || null
+                reportId: createdReportId || null,
+                alertRequested,
             });
         } catch (error: any) {
             console.error("Failed to mark pet as lost and file report:", error);
@@ -2583,6 +2606,30 @@ const ResidentPet = () => {
                                 </div>
                             </div>
 
+                            {/* Subdivision Neighborhood Alert (Neighbor-to-Neighbor Lost Pet Sighting Ping) */}
+                            <div className="p-3 rounded-2xl border border-orange-200 bg-orange-50/40 space-y-2" data-testid="neighborhood-alert-option">
+                                <label className="flex items-start gap-2.5 text-xs font-bold text-[#1a1208] cursor-pointer">
+                                    <input type="checkbox" className="mt-0.5" checked={lostPetForm.requestNeighborhoodAlert}
+                                        onChange={(e) => setLostPetForm({ ...lostPetForm, requestNeighborhoodAlert: e.target.checked })}
+                                        aria-label="Request a Subdivision Neighborhood Alert" />
+                                    <span>
+                                        Request a Subdivision Neighborhood Alert
+                                        <span className="block text-[10px] font-medium text-gray-600 mt-0.5">Your Subdivision Leader reviews it and alerts residents. Neighbors can then pin "Spotted Here" sightings on a map, and you are notified of each one.</span>
+                                    </span>
+                                </label>
+                                {lostPetForm.requestNeighborhoodAlert && (
+                                    <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest">How should neighbors reach you?
+                                        <select className="mt-1 w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-[#1a1208] normal-case tracking-normal"
+                                            value={lostPetForm.contactPreference}
+                                            onChange={(e) => setLostPetForm({ ...lostPetForm, contactPreference: e.target.value as 'app_message' | 'through_leader' })}>
+                                            <option value="app_message">Message me through StraySafe</option>
+                                            <option value="through_leader">Through the Subdivision Leader</option>
+                                        </select>
+                                        <span className="block mt-1 text-[10px] font-medium normal-case tracking-normal text-gray-500">Your phone number and address are not shown on the neighborhood alert.</span>
+                                    </label>
+                                )}
+                            </div>
+
                             {/* Information Notice */}
                             <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-[10px] text-amber-900 font-medium leading-relaxed flex items-start gap-2">
                                 <span className="text-amber-600 text-sm">💡</span>
@@ -2637,14 +2684,18 @@ const ResidentPet = () => {
                             <span className="absolute -bottom-2 -right-2 w-9 h-9 rounded-2xl bg-red-600 text-white flex items-center justify-center text-base shadow-md border-2 border-white">📢</span>
                         </div>
                         <span className="inline-block mt-5 px-2.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-[9px] font-black uppercase tracking-widest">
-                            Alert broadcast
+                            Report filed
                         </span>
                         <h3 id="lost-alert-sent-title" className="mt-2 text-lg sm:text-xl font-black text-[#1a1208] uppercase tracking-tight">
                             {lostAlertSent.name} is marked as lost
                         </h3>
                         <p className="mt-2 text-xs text-gray-500 font-medium leading-relaxed">
-                            An alert was sent to your neighborhood{lostAlertSent.landmark ? <> with the last-seen area <strong className="text-gray-700">{lostAlertSent.landmark}</strong></> : null}.
-                            Neighbors who spot {lostAlertSent.name} can call you or scan the StraySafe QR tag.
+                            Your Lost Pet Report was filed{lostAlertSent.landmark ? <> with the last-seen area <strong className="text-gray-700">{lostAlertSent.landmark}</strong></> : null}.{' '}
+                            {lostAlertSent.alertRequested === 'yes'
+                                ? <>Your Subdivision Leader was asked to send a Neighborhood Alert; residents are notified once it is approved, and you'll be notified of every sighting.</>
+                                : lostAlertSent.alertRequested === 'failed'
+                                    ? <>The Neighborhood Alert request didn't go through; you can request it again from the report.</>
+                                    : <>No Neighborhood Alert was requested. Neighbors who find {lostAlertSent.name} can scan the StraySafe QR tag.</>}
                         </p>
                         <div className="mt-6 flex flex-col sm:flex-row gap-2.5">
                             <button type="button" onClick={() => setLostAlertSent(null)}

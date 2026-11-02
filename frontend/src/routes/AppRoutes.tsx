@@ -26,6 +26,9 @@ const PetRecords = lazy(() => import('../pages/Admin/PetRecords'));
 const AdminAnalytics = lazy(() => import('../pages/Admin/AdminAnalytics'));
 import ProtectedRoute from '../components/ProtectedRoute';
 import RoleThemeSync from '../components/RoleThemeSync';
+import ErrorBoundary from '../components/ErrorBoundary';
+import ResiLostPets from '../pages/citizen/ResiLostPets';
+import SubdLostPetAlerts from '../pages/Subd_Leaders/SubdLostPetAlerts';
 
 const CommunityStaffLogin = lazy(() => import('../pages/Subd_Leaders/CommunityStaffLogin'));
 const SubdDashboard = lazy(() => import('../pages/Subd_Leaders/SubdDashboard'));
@@ -58,6 +61,7 @@ const PetScanSuccessPage = lazy(() => import('../pages/citizen/PetScanSuccessPag
 const PetQrCardPage = lazy(() => import('../pages/citizen/PetQrCardPage'));
 const PetScanHistoryPage = lazy(() => import('../pages/citizen/PetScanHistoryPage'));
 const BrgyDashboard = lazy(() => import('../pages/Barangay_Staff/BrgyDashboard'));
+
 const BrgyRescueRequests = lazy(() => import('../pages/Barangay_Staff/BrgyRescueRequests'));
 const BrgyReportView = lazy(() => import('../pages/Barangay_Staff/BrgyReportView'));
 const BrgyCommunityAlerts = lazy(() => import('../pages/Barangay_Staff/BrgyCommunityAlerts'));
@@ -90,6 +94,7 @@ const AppRoutes = () => {
         <RoleThemeSync />
         <PushBridge />
         <SessionGuard />
+        <ErrorBoundary>
         <Suspense fallback={<PageLoading />}>
         <Routes>
             {/* Public Routes */}
@@ -125,6 +130,8 @@ const AppRoutes = () => {
                 <Route path="/resident/profile" element={<ResiProfile />} />
                 <Route path="/resident/settings" element={<ResidentSettings />} />
                 <Route path="/resident/observations" element={<ResiObservations />} />
+                <Route path="/resident/lost-pets" element={<Navigate to="/resident-home" replace />} />
+                <Route path="/resident/lost-pets/:alertId" element={<ResiLostPets />} />
                 <Route path="/resident/reports/:reportId/match-review" element={<PetMatchReview />} />
                 <Route path="/resident/pet/:petId/claims-dashboard" element={<PetClaimsDashboard />} />
             </Route>
@@ -149,6 +156,8 @@ const AppRoutes = () => {
             <Route element={<ProtectedRoute allowedRoles={[2]} />}>
                 <Route path="/subd/dashboard" element={<SubdDashboard />} />
                 <Route path="/subd/analytics" element={<SubdAnalytics />} />
+                <Route path="/subd/lost-pet-alerts" element={<Navigate to="/subd/dashboard" replace />} />
+                <Route path="/subd/lost-pet-alerts/:alertId" element={<SubdLostPetAlerts />} />
                 <Route path="/subd/messages" element={<SubdMessages />} />
                 <Route path="/subd-messages" element={<SubdMessages />} />
                 <Route path="/subd/reports" element={<SubdReports />} />
@@ -220,6 +229,7 @@ const AppRoutes = () => {
             <Route path="*" element={<ResidentsLogin />} />
         </Routes>
         </Suspense>
+        </ErrorBoundary>
         </>
     );
 };
