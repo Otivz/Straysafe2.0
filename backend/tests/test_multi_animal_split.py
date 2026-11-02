@@ -224,6 +224,8 @@ db.commit()
 check("a held animal record can still be matched (owner search)", rs.held_scan_allowed(db, c1))
 
 # ------------------------------------------------------------------ claims, returns, group auto-resolve
+for k in kids[1:3]:  # Phase 7: a claim needs a held animal (these two were taken in at intake)
+    db.get(Report, k).custody_status = "In Barangay Facility"
 pet_b = Pet(pet_name="Brownie", pet_type="Dog", owner_id=owner_b.user_id, status="Active")
 pet_c = Pet(pet_name="Choco", pet_type="Dog", owner_id=owner_a.user_id, status="Active")
 db.add_all([pet_b, pet_c])

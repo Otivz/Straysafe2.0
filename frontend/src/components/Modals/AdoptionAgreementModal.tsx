@@ -78,7 +78,7 @@ export const AdoptionAgreementModal: React.FC<AdoptionAgreementModalProps> = ({
                             </p>
                         </div>
                     </div>
-                    <button
+                    <button aria-label="Close"
                         onClick={onClose}
                         disabled={submitting}
                         className="p-1 sm:p-1.5 rounded-lg sm:rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer disabled:opacity-50"

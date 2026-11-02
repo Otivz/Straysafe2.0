@@ -106,7 +106,55 @@ def _should_try_next_model(e: Exception) -> bool:
             or any(code in err for code in ("429", "404", "503", "504")))
 
 
+# The outcome of the most recent Gemini request in this process (Manual Matching shows "AI unavailable" from it).
+# Only real calls are recorded: Gemini switched OFF or no API key is reported by gemini_status() directly.
+GEMINI_ERROR_WINDOW_SECONDS = 15 * 60
+_gemini_health: Dict[str, Any] = {"last_success_at": None, "last_failure_at": None, "last_error": None}
+
+
+def gemini_status(db: Optional[Any] = None) -> Dict[str, Any]:
+    """
+    Whether Gemini matching can be used right now:
+    - disabled: the Admin turned Gemini OFF
+    - not_configured: no GEMINI_API_KEY on the server
+    - error: the latest Gemini request failed (within the last 15 minutes) and none has succeeded since
+    - operational: otherwise
+    """
+    import time
+    if not is_gemini_enabled_in_db(db):
+        state, reason = "disabled", "Google Gemini is turned OFF in Admin Settings."
+    elif not os.getenv("GEMINI_API_KEY"):
+        state, reason = "not_configured", "No Gemini API key is configured on the server."
+    else:
+        failed, ok = _gemini_health["last_failure_at"], _gemini_health["last_success_at"]
+        recent_failure = failed is not None and time.time() - failed < GEMINI_ERROR_WINDOW_SECONDS
+        if recent_failure and (ok is None or failed > ok):
+            state, reason = "error", "The latest Gemini request failed. AI matching may be unavailable."
+        else:
+            state, reason = "operational", None
+    return {
+        "state": state,
+        "ai_available": state == "operational",
+        "reason": reason,
+        "last_error": _gemini_health["last_error"] if state == "error" else None,
+    }
+
+
 def call_gemini_with_fallback(contents: Any, generation_config: Optional[Dict[str, Any]] = None) -> GeminiResponse:
+    """call_gemini, recording whether the request succeeded (see gemini_status)."""
+    import time
+    try:
+        response = _call_gemini(contents, generation_config)
+    except Exception as e:
+        if is_gemini_enabled_in_db() and os.getenv("GEMINI_API_KEY"):
+            _gemini_health["last_failure_at"] = time.time()
+            _gemini_health["last_error"] = f"{type(e).__name__}: {str(e)[:160]}"
+        raise
+    _gemini_health["last_success_at"] = time.time()
+    return response
+
+
+def _call_gemini(contents: Any, generation_config: Optional[Dict[str, Any]] = None) -> GeminiResponse:
     """
     One Gemini request through the google-genai SDK, with model fallback and time limits.
     - Refuses to call Google when the Admin has Gemini turned OFF.

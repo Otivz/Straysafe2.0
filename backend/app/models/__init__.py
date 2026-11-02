@@ -12,9 +12,14 @@ from app.models.report import (
     StatusHistory, RescueAssignment, FacilityStatus, HoldingAnimal, HoldingTimeline
 )
 from app.models.pet_claim import PetClaim
+from app.models.claim_assessment import ClaimFeeSchedule, ClaimAssessment, ClaimAssessmentChange  # noqa: F401
 from app.models.report_dispute import ReportDispute
 from app.models.report_match import ReportMatch
+from app.models.manual_match import ManualMatchDecision  # noqa: F401
+from app.models.pet_match_confirmation import PetMatchConfirmationRequest  # noqa: F401
 from app.models.warning import OwnerWarning
+from app.models.owner_followup import OwnerFollowUp, FollowUpContactLog, OwnerObservationUpdate, OwnerObservationUpdatePhoto, FollowUpRepeatedIncident  # noqa: F401
+from app.models.leader_identity import LeaderIdentityVerification  # noqa: F401
 from app.models.chat import ChatThread, ChatMessage
 from app.models.notification import Notification
 from app.models.notification_preference import UserNotificationPreference
@@ -40,6 +45,7 @@ __all__ = [
     "ReportDispute",
     "ReportMatch",
     "OwnerWarning",
+    "OwnerFollowUp", "FollowUpContactLog",
     "ChatThread", "ChatMessage",
     "Notification",
     "UserNotificationPreference",

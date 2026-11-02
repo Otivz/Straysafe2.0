@@ -18,6 +18,8 @@ import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 
 import MapAutoResize from '../../components/MapControls/MapAutoResize';
 import { petName } from '../../utils/petName';
+import ClaimNotNeededPanel from '../../components/ClaimNotNeededPanel';
+import ClaimAssessmentPanel from '../../components/ClaimAssessmentPanel';
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
     iconRetinaUrl: markerIconRetina,
@@ -78,6 +80,10 @@ const PetClaimsDashboard = () => {
                     status: c.status,
                     remarks: c.remarks || "",
                     similarity_score: c.match_score ?? null,
+                    // "manual" (staff-identified, no score) or "ai"; from the match record on the server
+                    matching_mode: c.matching_mode ?? null,
+                    // what the reporter submitted about the sighted animal (never the pet record or AI values)
+                    sighting: { animal_type: c.report?.animal_type || null, breed: c.report?.animal_breed || null, color: c.report?.animal_color || null },
                     reported_date: c.report?.created_at?.slice(0, 10) || (c.created_at ? c.created_at.slice(0, 10) : ""),
                     sighting_location: c.report?.landmark || c.report?.location_description || "Selera Homes",
                     sighting_lat: isValidLatLng(c.report?.latitude, c.report?.longitude) ? parseFloat(c.report.latitude) : null,
@@ -104,7 +110,9 @@ const PetClaimsDashboard = () => {
                     additional_photos_url: c.additional_photos_url || "",
                     previous_photos: c.additional_photos_url ? String(c.additional_photos_url).split(',').map((u: string) => u.trim()).filter(Boolean) : [],
                     supporting_docs: [c.vaccine_card_url, c.vet_record_url, c.registration_record_url].filter(Boolean),
-                    owner_notes: c.remarks || ""
+                    owner_notes: c.remarks || "",
+                    // Phase 7: custody explanation, Home / Still missing answer, Not Needed closure
+                    raw: c
                 }));
                 setClaims(transformed);
                 setSelectedClaim((prev: any) => {
@@ -205,13 +213,15 @@ const PetClaimsDashboard = () => {
     };
 
     // Timeline helpers
-    const getTimelineProgress = (status: string) => {
+    const getTimelineProgress = (status: string, manual = false) => {
         const isHandoverDone = ["Handover Complete", "Pet Received", "Claimed"].includes(status);
         const isApproved = status === "Approved" || isHandoverDone;
         const isRejected = status === "Rejected";
 
         return [
-            { step: "Potential Match Found", done: true, desc: "AI Matching system detected a similarity score above the safety threshold." },
+            { step: "Potential Match Found", done: true, desc: manual
+                ? "Staff identified this possible match by comparing the stray report with your pet's record."
+                : "AI Matching system detected a similarity score above the safety threshold." },
             { step: "Claim Submitted", done: status !== "Possible Match Found" && status !== "Potential Owner Match", desc: "Citizen claimed matching identity and supplied verification notes." },
             { step: "Under Review", done: ["Pending Review", "Under Review", "Evidence Requested", "Approved", "Handover Complete", "Pet Received", "Rejected"].includes(status), desc: "Barangay / Subdivision administrators reviewing the documentation." },
             { step: "Evidence Requested", done: ["Evidence Requested", "Approved", "Handover Complete", "Pet Received", "Rejected"].includes(status), active: status === "Evidence Requested", desc: "Verification team requested additional vaccination files or documentation." },
@@ -339,7 +349,7 @@ const PetClaimsDashboard = () => {
                                             <div className="flex justify-between items-start gap-1">
                                                 <h4 className="text-xs font-black text-[#1a1208] uppercase truncate leading-tight">{petName(c.pet)}</h4>
                                                 <span className="text-[9px] font-black text-[#F97316] bg-orange-50 px-1.5 py-0.5 rounded leading-none shrink-0">
-                                                    {c.similarity_score != null ? `${c.similarity_score}% Match` : 'Match score N/A'}
+                                                    {c.matching_mode === 'manual' ? 'Staff-identified match' : c.similarity_score != null ? `${c.similarity_score}% Match` : 'Match score N/A'}
                                                 </span>
                                             </div>
                                             <div className="flex items-center justify-between gap-1 mt-0.5">
@@ -374,6 +384,18 @@ const PetClaimsDashboard = () => {
                         {selectedClaim ? (
                             <div className="bg-white rounded-3xl border border-gray-150 shadow-sm p-6 sm:p-8 flex flex-col justify-between flex-1">
                                 
+                                {/* Phase 7: nobody holds the animal -> why, and the owner's Home / Still missing answer */}
+                                <div className="mb-4">
+                                    <ClaimNotNeededPanel claim={selectedClaim.raw} viewer="owner" onChanged={() => fetchResidentClaims()} />
+                                </div>
+
+                                {/* Claiming charges assessed by the Barangay (view only) */}
+                                {['Approved', 'Handover Complete', 'Pet Received'].includes(selectedClaim.status) && selectedClaim.claim_id && (
+                                    <div className="mb-4">
+                                        <ClaimAssessmentPanel key={selectedClaim.claim_id} claimId={selectedClaim.claim_id} claimStatus={selectedClaim.status} viewer="owner" />
+                                    </div>
+                                )}
+
                                 {/* Detail Header */}
                                 <div className="flex justify-between items-start border-b border-gray-100 pb-5 shrink-0 gap-4 flex-wrap">
                                     <div>
@@ -484,9 +506,10 @@ const PetClaimsDashboard = () => {
                                                         </button>
                                                     </div>
                                                     <div className="bg-[#FAFAF9] rounded-xl p-4 text-xs space-y-1.5 border border-gray-150">
-                                                        <p className="font-black text-[#1a1208] uppercase mb-1">AI Sighting Markers</p>
-                                                        <p className="text-gray-500 font-bold">Estimated Species: <span className="text-gray-800">{selectedClaim.pet.pet_type}</span></p>
-                                                        <p className="text-gray-500 font-bold">AI Breed Match: <span className="text-gray-800">{selectedClaim.pet.breed}</span></p>
+                                                        <p className="font-black text-[#1a1208] uppercase mb-1">Sighting Details</p>
+                                                        <p className="text-gray-500 font-bold">Species: <span className="text-gray-800">{selectedClaim.sighting?.animal_type || 'Not Provided'}</span></p>
+                                                        <p className="text-gray-500 font-bold">Breed: <span className="text-gray-800">{selectedClaim.sighting?.breed || 'Not Provided'}</span></p>
+                                                        <p className="text-gray-500 font-bold">Color: <span className="text-gray-800">{selectedClaim.sighting?.color || 'Not Provided'}</span></p>
                                                         <p className="text-gray-500 font-bold">Description: <span className="text-gray-700 italic font-medium">"{selectedClaim.description}"</span></p>
                                                     </div>
                                                 </div>
@@ -517,28 +540,18 @@ const PetClaimsDashboard = () => {
                                                 </div>
                                             </div>
 
-                                            {/* AI matching statistics card */}
+                                            {/* AI matching statistics: AI-matched claims only, real saved score only (no placeholder figures) */}
+                                            {selectedClaim.matching_mode !== 'manual' && (
                                             <div className="bg-orange-50/20 border border-orange-100 rounded-2xl p-5 space-y-4">
                                                 <h4 className="text-xs font-black text-[#F97316] uppercase tracking-widest">AI Sighting Confidence Metrics</h4>
-                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                     <div className="bg-white p-3 rounded-xl border border-orange-100/50 text-center">
                                                         <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Visual Similarity</p>
                                                         <p className="text-xl font-black text-[#F97316]">{selectedClaim.similarity_score != null ? `${selectedClaim.similarity_score}%` : 'N/A'}</p>
                                                     </div>
-                                                    <div className="bg-white p-3 rounded-xl border border-orange-100/50 text-center">
-                                                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Species Match</p>
-                                                        <p className="text-sm font-black text-green-600 uppercase mt-1">CONFIRMED</p>
-                                                    </div>
-                                                    <div className="bg-white p-3 rounded-xl border border-orange-100/50 text-center">
-                                                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Breed Analysis</p>
-                                                        <p className="text-sm font-black text-green-600 uppercase mt-1">94% PROB</p>
-                                                    </div>
-                                                    <div className="bg-white p-3 rounded-xl border border-orange-100/50 text-center">
-                                                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Color Coats</p>
-                                                        <p className="text-sm font-black text-green-600 uppercase mt-1">MATCHED</p>
-                                                    </div>
                                                 </div>
                                             </div>
+                                            )}
                                         </div>
                                     )}
 
@@ -713,7 +726,7 @@ const PetClaimsDashboard = () => {
                                             <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">Process Lifecycle Progress</h4>
                                             
                                             <div className="relative pl-6 space-y-6 border-l-2 border-orange-100 mt-2">
-                                                {getTimelineProgress(selectedClaim.status).map((step, idx) => (
+                                                {getTimelineProgress(selectedClaim.status, selectedClaim.matching_mode === 'manual').map((step, idx) => (
                                                     <div key={idx} className="relative">
                                                         <span className={`absolute -left-[31px] top-0.5 w-4.5 h-4.5 rounded-full border-2 flex items-center justify-center shrink-0 text-[8px] font-black ${
                                                             step.done 
@@ -784,7 +797,7 @@ const PetClaimsDashboard = () => {
                                 {/* Bottom Info panel */}
                                 <div className="border-t border-gray-100 pt-5 mt-4 shrink-0 flex items-center justify-between text-xs font-semibold text-gray-400">
                                     <span>Claim Reference ID: #CLM-{(selectedClaim.claim_id).toString()}</span>
-                                    <span>Match Score Confidence: {selectedClaim.similarity_score != null ? `${selectedClaim.similarity_score}%` : 'N/A'}</span>
+                                    <span>{selectedClaim.matching_mode === 'manual' ? 'Matching method: staff-identified' : `Match Score Confidence: ${selectedClaim.similarity_score != null ? `${selectedClaim.similarity_score}%` : 'N/A'}`}</span>
                                 </div>
 
                             </div>

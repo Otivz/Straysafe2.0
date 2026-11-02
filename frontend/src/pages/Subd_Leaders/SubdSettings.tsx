@@ -54,6 +54,15 @@ import { LANDMARK_CATEGORIES, getLandmarkCategory, createLandmarkPinIcon } from 
 
 import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
 import MapAutoResize from '../../components/MapControls/MapAutoResize';
+
+// Subdivisions have no holding facility. Earlier landmark designations keep their stored type values
+// (e.g. 'Temporary Holding Pen'); these are only the words shown for them.
+const CARE_SPOT_LABELS: Record<string, string> = {
+    'Temporary Holding Pen': 'Temporary community care spot',
+    'Community Kennel': 'Community care spot',
+    'Quarantine Cage': 'Isolation cage (short stay)',
+};
+const careSpotLabel = (type?: string | null) => (type && CARE_SPOT_LABELS[type]) || type || 'Temporary community care spot';
 const RecenterMap = ({ position }: { position: [number, number] | null }) => {
     const map = useMap();
     useEffect(() => {
@@ -882,8 +891,8 @@ const SubdSettings: React.FC = () => {
                                                                     {l.description && <p className="text-gray-600 text-[11px] mb-1">{l.description}</p>}
                                                                     {l.is_holding_facility && (
                                                                         <div className="mt-1 pt-1 border-t border-gray-100 text-emerald-700 font-bold text-[10px]">
-                                                                            <p>Type: {l.facility_type || 'Holding Pen'}</p>
-                                                                            <p>Capacity: {l.capacity || 'N/A'} animals</p>
+                                                                            <p>Earlier care spot: {careSpotLabel(l.facility_type)}</p>
+                                                                            <p>Space for: {l.capacity || 'N/A'} animals</p>
                                                                             {l.contact_person && <p>Caretaker: {l.contact_person}</p>}
                                                                             {l.contact_number && <p>Phone: {l.contact_number}</p>}
                                                                         </div>
@@ -1012,8 +1021,8 @@ const SubdSettings: React.FC = () => {
                                                     <div className="flex items-center gap-2.5">
                                                         <span className="text-xl">🐾</span>
                                                         <div>
-                                                            <p className="text-xs font-black uppercase tracking-wider">Designate as Animal Holding Place</p>
-                                                            <p className="text-[11px] text-gray-500 font-medium">Earlier designation: keep it or switch it off. Coordinate new animal admissions with the Barangay.</p>
+                                                            <p className="text-xs font-black uppercase tracking-wider">Earlier Community Care Spot</p>
+                                                            <p className="text-[11px] text-gray-500 font-medium">The subdivision has no holding facility. Switch this earlier designation off once it is no longer used; new animals are secured by a resident or picked up by Barangay responders.</p>
                                                         </div>
                                                     </div>
                                                     <input
@@ -1031,19 +1040,19 @@ const SubdSettings: React.FC = () => {
                                                 {landmarkForm.is_holding_facility && (
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4 pt-3 border-t border-emerald-200/60">
                                                         <div>
-                                                            <label className="block text-[11px] font-bold text-emerald-900 uppercase tracking-wider mb-1">Facility Type</label>
+                                                            <label className="block text-[11px] font-bold text-emerald-900 uppercase tracking-wider mb-1">Care Spot Type</label>
                                                             <select
                                                                 value={landmarkForm.facility_type}
                                                                 onChange={(e) => setLandmarkForm(prev => ({ ...prev, facility_type: e.target.value }))}
                                                                 className="w-full px-3 py-1.5 bg-white border border-emerald-300 rounded-xl text-xs font-semibold text-gray-800 outline-none"
                                                             >
-                                                                <option value="Temporary Holding Pen">Temporary Holding Pen</option>
-                                                                <option value="Community Kennel">Community Kennel</option>
-                                                                <option value="Quarantine Cage">Quarantine Cage</option>
+                                                                <option value="Temporary Holding Pen">{careSpotLabel('Temporary Holding Pen')}</option>
+                                                                <option value="Community Kennel">{careSpotLabel('Community Kennel')}</option>
+                                                                <option value="Quarantine Cage">{careSpotLabel('Quarantine Cage')}</option>
                                                             </select>
                                                         </div>
                                                         <div>
-                                                            <label className="block text-[11px] font-bold text-emerald-900 uppercase tracking-wider mb-1">Animal Capacity</label>
+                                                            <label className="block text-[11px] font-bold text-emerald-900 uppercase tracking-wider mb-1">Space For (Animals)</label>
                                                             <input
                                                                 type="number"
                                                                 min="1"
@@ -1165,14 +1174,14 @@ const SubdSettings: React.FC = () => {
                                                                             : `${cat.badgeBg} ${cat.badgeText}`
                                                                     }`}>
                                                                         <span>{cat.emoji}</span>
-                                                                        <span className="truncate">{item.is_holding_facility ? 'Holding Place' : cat.label}</span>
+                                                                        <span className="truncate">{item.is_holding_facility ? 'Earlier Care Spot' : cat.label}</span>
                                                                     </span>
                                                                 </div>
 
                                                                 {item.is_holding_facility && (
                                                                     <div className="mt-2.5 pt-2 border-t border-emerald-200/50 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-emerald-900 font-semibold">
-                                                                        <span>Type: <strong>{item.facility_type || 'Holding Pen'}</strong></span>
-                                                                        <span>Capacity: <strong>{item.capacity || 0} animals</strong></span>
+                                                                        <span>Type: <strong>{careSpotLabel(item.facility_type)}</strong></span>
+                                                                        <span>Space for: <strong>{item.capacity || 0} animals</strong></span>
                                                                         {item.contact_person && <span>Contact: <strong>{item.contact_person}</strong></span>}
                                                                         {item.contact_number && <span>Phone: <strong>{item.contact_number}</strong></span>}
                                                                     </div>

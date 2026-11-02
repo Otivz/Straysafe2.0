@@ -10,7 +10,7 @@ from app.database import get_db
 from app.models.announcement import Announcement, AnnouncementMedia, AnnouncementCategory, AnnouncementComment, AnnouncementReaction
 from app.utils.audit import log_activity
 from app.models.user import User, Subdivision
-from app.utils.auth import get_current_user, get_current_staff_or_admin
+from app.utils.auth import get_current_user, get_current_staff_or_admin, verify_subdivision_scope
 from app.schemas.announcement import (
     AnnouncementCreate,
     AnnouncementResponse,
@@ -128,7 +128,11 @@ def _to_response(ann: Announcement) -> AnnouncementResponse:
 
 
 @router.get("/subdivision/{subdivision_id}", response_model=List[AnnouncementResponse])
-def get_subdivision_announcements(subdivision_id: int, db: Session = Depends(get_db)):
+def get_subdivision_announcements(subdivision_id: int, db: Session = Depends(get_db),
+                                  current_user: User = Depends(get_current_staff_or_admin)):
+    """A subdivision's announcements in every status (drafts and archive included), for officials managing them:
+    the subdivision's leader, the barangay's staff, or an admin. Residents use /feed/resident (published only)."""
+    verify_subdivision_scope(current_user, subdivision_id, db=db)
     rows = (
         db.query(Announcement)
         .options(
@@ -155,9 +159,12 @@ def get_subdivision_announcements(subdivision_id: int, db: Session = Depends(get
 def get_barangay_announcements(
     barangay_id: int,
     status: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
 ):
-    """Retrieve community alerts and announcements scoped to a specific barangay or its subdivisions."""
+    """Community alerts of a barangay and its subdivisions, in every status, for that barangay's staff or an admin."""
+    if current_user.role_id != 4 and not (current_user.role_id == 3 and current_user.barangay_id == barangay_id):
+        raise HTTPException(status_code=403, detail="Only this barangay's staff can list all of its announcements.")
     query = (
         db.query(Announcement)
         .options(
@@ -216,8 +223,12 @@ def update_announcement_status(
 
 
 @router.get("/feed/resident/{user_id}", response_model=List[AnnouncementResponse])
-def get_resident_announcement_feed(user_id: int, db: Session = Depends(get_db)):
-    """Announcements visible to a resident: Public (system-wide) and Subdivision Only (their subdivision)."""
+def get_resident_announcement_feed(user_id: int, db: Session = Depends(get_db),
+                                   current_user: User = Depends(get_current_user)):
+    """Announcements visible to a resident: Public (system-wide) and Subdivision Only (their subdivision).
+    Only the resident's own feed (an admin may view anyone's), so subdivision-only posts don't leak by user id."""
+    if current_user.user_id != user_id and current_user.role_id != 4:
+        raise HTTPException(status_code=403, detail="You can only view your own announcement feed.")
     user = db.query(User).filter(User.user_id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

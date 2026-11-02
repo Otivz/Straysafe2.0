@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import and_, or_
@@ -68,8 +68,23 @@ def _format_duration(delta_seconds: float, is_finalized: bool = False) -> str:
     return ", ".join(parts)
 
 
-def _populate(animal: HoldingAnimal) -> HoldingAnimal:
-    """Populate transient fields and calculate Subdivision & Barangay stay durations for a HoldingAnimal."""
+_NOT_GIVEN = object()
+
+
+def _populate(animal: HoldingAnimal, returned: Any = _NOT_GIVEN, now: Optional[datetime] = None) -> HoldingAnimal:
+    """
+    Populate transient fields and calculate Subdivision & Barangay stay durations for a HoldingAnimal.
+    Lists pass the batch-computed owner-return evidence and one database time (no per-row queries for them).
+    """
+    # Adoption eligibility (docs/01-system/ADOPTION_ELIGIBILITY_RULES.md): an animal returned to its owner, by the records
+    from sqlalchemy.orm import object_session
+    from app.utils.adoption_eligibility import INELIGIBLE_DETAIL, owner_handover_evidence
+    _session = object_session(animal)
+    if returned is _NOT_GIVEN:
+        returned = owner_handover_evidence(_session, animal) if _session is not None else None
+    _returned = returned
+    animal.adoption_eligible = _returned is None  # type: ignore[attr-defined]
+    animal.adoption_block_reason = INELIGIBLE_DETAIL if _returned else None  # type: ignore[attr-defined]
     if animal.intake_staff:
         animal.intake_staff_name = animal.intake_staff.name  # type: ignore[attr-defined]
     if animal.status_obj:
@@ -197,8 +212,8 @@ def _populate(animal: HoldingAnimal) -> HoldingAnimal:
         animal.escalation_status = None  # type: ignore[attr-defined]
 
     # Calculate Subdivision and Barangay Stay Durations
-    from sqlalchemy.orm import object_session
-    now = db_now(object_session(animal))   # same clock as the stored dates
+    if now is None:
+        now = db_now(object_session(animal))   # same clock as the stored dates
     intake_time = animal.intake_date or animal.created_at or now
     resolved = animal.facility_status in RESOLVED_STATUSES
     discharge_time = animal.discharge_date if resolved else None
@@ -505,8 +520,18 @@ def list_animals(
     query = _scope_for_actor(query, db, current_user, subdivision_id, barangay_id, facility_id, barangay_only)
 
     animals = query.order_by(HoldingAnimal.intake_date.desc()).all()
+    # One batch for the owner-return evidence and one database time for the whole list (not per animal)
+    from app.utils.adoption_eligibility import owner_handover_evidence_map
+    evidence = owner_handover_evidence_map(db, animals)
+    now = db_now(db)
+    pet_ids = {a.report.pet_id for a in animals if a.report is not None and a.report.pet_id}
+    # Loaded once and kept referenced (the session's identity map holds objects weakly), so _populate's
+    # per-animal session.get() finds them without a query
+    from app.models.pet import Pet
+    _pets = db.query(Pet).filter(Pet.pet_id.in_(pet_ids)).all() if pet_ids else []
     for a in animals:
-        _populate(a)
+        _populate(a, evidence.get(a.holding_id), now)
+    del _pets
     return animals
 
 
@@ -701,6 +726,10 @@ def update_animal(
                     status_code=403,
                     detail="Only Barangay staff and administrators have the authority to manage adoption or mark an animal as Impounded."
                 )
+
+        if update_data.get("facility_status") in (6, 7) and update_data.get("facility_status") != old_status:
+            from app.utils.adoption_eligibility import require_adoption_eligible
+            require_adoption_eligible(db, animal, current_user, "Change status to For Adoption / Adopted")
 
         if update_data.get("facility_status") in (6, 7) and old_status == 8:
             raise HTTPException(

@@ -1481,6 +1481,8 @@ def merge_pet_records(db: Session, dup: Pet, keep: Pet, actor: User, reason: str
     move(PetQRScan, "pet_id", "QR scans")
     from app.models.pet_owner_confirmation import PetOwnerConfirmation
     move(PetOwnerConfirmation, "pet_id", "owner confirmations")
+    from app.models.pet_match_confirmation import PetMatchConfirmationRequest
+    move(PetMatchConfirmationRequest, "pet_id", "pet match confirmation requests")
     from app.models.report import Adoption, ReportReturn
     move(Adoption, "created_pet_id", "adoptions")
     move(ReportReturn, "pet_id", "owner returns")

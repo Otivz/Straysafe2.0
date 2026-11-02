@@ -394,6 +394,8 @@ class HoldingAnimal(Base):
     # Transient fields populated at runtime
     intake_staff_name: Optional[str] = None
     facility_status_name: Optional[str] = None
+    adoption_eligible: Optional[bool] = None
+    adoption_block_reason: Optional[str] = None
     report_category: Optional[str] = None
     report_landmark: Optional[str] = None
     report_media: Optional[List[Any]] = None

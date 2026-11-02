@@ -299,14 +299,54 @@ def check_and_notify_monitoring_schedules() -> int:
         db.close()
 
 
+def check_and_notify_owner_followups() -> int:
+    """
+    Checks all active owner observations for 24h owner reminders
+    and leader due notices without duplicate delivery.
+    """
+    from app.utils.owner_followups import check_and_notify_due_followups
+
+    db: Session = SessionLocal()
+    try:
+        return check_and_notify_due_followups(db)
+    except Exception as e:
+        logger.error(f"Error in check_and_notify_owner_followups: {e}")
+        return 0
+    finally:
+        db.close()
+
+
+def reconcile_adoption_after_owner_return() -> int:
+    """
+    Existing records: an animal returned to its owner but still listed for adoption (or with open applications) is
+    taken out of adoption, with history kept (docs/01-system/ADOPTION_ELIGIBILITY_RULES.md).
+    """
+    from app.utils.adoption_eligibility import reconcile_returned_listings
+
+    db: Session = SessionLocal()
+    try:
+        out = reconcile_returned_listings(db)
+        n = len(out["removed_from_catalog"]) + len(out["applications_closed"])
+        if n:
+            logger.info(f"Adoption reconciliation: removed {out['removed_from_catalog']}, closed {out['applications_closed']}")
+        return n
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error in reconcile_adoption_after_owner_return: {e}")
+        return 0
+    finally:
+        db.close()
+
+
 async def start_unassigned_reports_watcher(interval_seconds: int = 60, threshold_minutes: int = 30):
     """
     Background loop that wakes up every `interval_seconds` to check for stale unassigned reports,
-    overdue holding facility animals, and post-adoption monitoring milestone alerts (due/overdue).
+    overdue holding facility animals, post-adoption monitoring milestone alerts (due/overdue),
+    and active owner observation follow-up milestones.
     Also triggers nightly pruning of old archived notifications.
     """
     logger.info(
-        f"Starting Operations Watcher: checking every {interval_seconds}s for unassigned reports, overdue holding animals, and monitoring schedules."
+        f"Starting Operations Watcher: checking every {interval_seconds}s for unassigned reports, overdue holding animals, monitoring schedules, and owner follow-ups."
     )
     iteration = 0
     while True:
@@ -314,6 +354,10 @@ async def start_unassigned_reports_watcher(interval_seconds: int = 60, threshold
             await asyncio.to_thread(check_and_notify_unassigned_reports, threshold_minutes)
             await asyncio.to_thread(check_and_notify_overdue_holding_animals, 3)
             await asyncio.to_thread(check_and_notify_monitoring_schedules)
+            await asyncio.to_thread(check_and_notify_owner_followups)
+            # Roughly every 10 minutes (and on the first pass): animals returned to their owner leave adoption
+            if iteration % 10 == 0:
+                await asyncio.to_thread(reconcile_adoption_after_owner_return)
 
             iteration += 1
             # Run notification pruning roughly once per 24 hours (1440 iterations at 60s)

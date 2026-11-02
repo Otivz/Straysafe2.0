@@ -173,7 +173,7 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
                             </p>
                         </div>
                     </div>
-                    <button
+                    <button aria-label="Close"
                         onClick={onClose}
                         className="p-1 sm:p-1.5 rounded-lg sm:rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                     >

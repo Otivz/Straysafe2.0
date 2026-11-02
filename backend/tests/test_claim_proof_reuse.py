@@ -52,7 +52,7 @@ db.flush()
 
 def report():
     r = Report(user_id=res.user_id, subdivision_id=1, category_id=1, latitude=14.8, longitude=121.0, current_status_id=2,
-               animal_type="Dog", ai_suggested_risk_level="Low")
+               animal_type="Dog", ai_suggested_risk_level="Low", custody_status="Secured in Facility")  # Phase 7: a claim needs a held animal
     db.add(r)
     db.flush()
     return r.report_id

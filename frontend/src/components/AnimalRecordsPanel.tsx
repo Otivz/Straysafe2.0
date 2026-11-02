@@ -377,7 +377,7 @@ function SplitAnimalsModal({ reportId, info, reported, onClose, onDone }: {
                     <p className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-2">
                         <Layers className="w-4 h-4 text-role" /> {firstBatch ? 'Add a record for each animal' : 'Add more animals'}
                     </p>
-                    <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 cursor-pointer"><X className="w-4 h-4" /></button>
+                    <button aria-label="Close" type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 cursor-pointer"><X className="w-4 h-4" /></button>
                 </div>
                 <p className="text-[11px] font-semibold text-gray-500">
                     Crop each animal out of the report photo (or upload a close-up). The original photo stays on this report as evidence.

@@ -34,6 +34,9 @@ interface TimelineEntry {
 
 interface HoldingAnimal {
     holding_id: number;
+    /** False once the animal was claimed and handed over to its owner: never listed for adoption again */
+    adoption_eligible?: boolean;
+    adoption_block_reason?: string | null;
     report_id: number;
     rescue_id: number | null;
     facility_id: number | null;
@@ -120,7 +123,7 @@ const IMPOUND_DAYS = 7;
 const FACILITY_STATUSES = [
     { id: 1, name: 'Need Treatment', color: 'bg-red-50 text-red-600 border-red-200' },
     { id: 2, name: 'Healthy', color: 'bg-green-50 text-green-600 border-green-200' },
-    { id: 3, name: 'Claimed by Owner', color: 'bg-blue-50 text-blue-600 border-blue-200' },
+    { id: 3, name: 'Returned to Owner', color: 'bg-blue-50 text-blue-600 border-blue-200' },
     { id: 4, name: 'Deceased', color: 'bg-gray-100 text-gray-500 border-gray-200' },
     { id: 5, name: 'Transferred to Shelter', color: 'bg-purple-50 text-purple-600 border-purple-200' },
     { id: 6, name: 'For Adoption', color: 'bg-teal-50 text-teal-600 border-teal-200' },
@@ -129,6 +132,13 @@ const FACILITY_STATUSES = [
 ];
 
 const RESOLVED_IDS = new Set([3, 4, 5, 7, 8]);
+
+// Adoption eligibility (docs/01-system/ADOPTION_ELIGIBILITY_RULES.md); the server refuses the same actions
+const ADOPTION_INELIGIBLE_MESSAGE = 'This animal is no longer eligible for adoption because it has already been claimed and handed over to its owner.';
+const RETURNED_TO_OWNER = 3;
+/** The status to show: an animal returned to its owner reads "Returned to Owner" even if its stored status lags behind */
+const displayStatus = (a: { facility_status: number; adoption_eligible?: boolean }) =>
+    a.adoption_eligible === false ? RETURNED_TO_OWNER : a.facility_status;
 
 const EVENT_TYPE_META: Record<string, { icon: ReactNode; color: string }> = {
     intake: { icon: <PawPrint className="w-3.5 h-3.5" />, color: 'bg-emerald-100 text-emerald-700' },
@@ -498,6 +508,10 @@ const BrgyHoldingFacility = () => {
     };
 
     const openPromoteModalForAnimal = (animal: HoldingAnimal) => {
+        if (animal.adoption_eligible === false) {
+            alert(animal.adoption_block_reason || ADOPTION_INELIGIBLE_MESSAGE);
+            return;
+        }
         setSelected(animal);
         setPromoteNotes(animal.medical_notes || animal.adoption_catalog_notes || '');
         setPromoteError(null);
@@ -1212,11 +1226,11 @@ const BrgyHoldingFacility = () => {
                         ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                                 {filtered.map(animal => {
-                                    const statusMeta = getStatusMeta(animal.facility_status);
+                                    const statusMeta = getStatusMeta(displayStatus(animal));
                                     const days = daysSince(stayStart(animal));
                                     const remaining = daysRemaining(stayStart(animal), impoundStayDuration);
-                                    const isResolved = RESOLVED_IDS.has(animal.facility_status);
-                                    const isForAdoption = animal.facility_status === 6;
+                                    const isResolved = RESOLVED_IDS.has(displayStatus(animal));
+                                    const isForAdoption = displayStatus(animal) === 6;
                                     const isOverdue = !isResolved && !isForAdoption && days >= impoundStayDuration;
                                     const isNearExpiry = !isResolved && !isForAdoption && !isOverdue && remaining <= 2;
                                     const photo = getCardPhoto(animal);
@@ -1403,11 +1417,12 @@ const BrgyHoldingFacility = () => {
 
             {/* ─── Detail / Manage Modal ────────────────────────────────────── */}
             {selected && (() => {
-                const isResolved = RESOLVED_IDS.has(selected.facility_status);
-                const isForAdoptionSel = selected.facility_status === 6;
+                const isResolved = RESOLVED_IDS.has(displayStatus(selected));
+                const isForAdoptionSel = displayStatus(selected) === 6;
+                const adoptionBlocked = selected.adoption_eligible === false;
                 const heldDays = daysSince(stayStart(selected));
                 const isOverdueSel = !isResolved && !isForAdoptionSel && heldDays >= impoundStayDuration;
-                const statusMetaSel = getStatusMeta(selected.facility_status);
+                const statusMetaSel = getStatusMeta(displayStatus(selected));
                 const inputCls = 'w-full h-10 px-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-role-border focus:border-role outline-none';
                 const labelCls = 'text-[11px] font-bold text-gray-500 block mb-1';
                 const fileCls = 'block w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-black file:bg-role-soft file:text-role-hover hover:file:bg-role-muted cursor-pointer';
@@ -1674,8 +1689,15 @@ const BrgyHoldingFacility = () => {
                                             </div>
                                         )}
 
+                                        {/* Returned to its owner: no adoption controls (the server refuses them too) */}
+                                        {adoptionBlocked && (
+                                            <div className="border border-blue-200 bg-blue-50/70 rounded-2xl p-3" role="status">
+                                                <p className="text-sm font-black text-blue-900">Returned to Owner</p>
+                                                <p className="text-xs text-blue-800 mt-0.5">{selected.adoption_block_reason || ADOPTION_INELIGIBLE_MESSAGE}</p>
+                                            </div>
+                                        )}
                                         {/* Before the stay limit; overdue animals use the action panel below. */}
-                                        {!isResolved && !isForAdoptionSel && !isOverdueSel && !isSubdLeader && (
+                                        {!adoptionBlocked && !isResolved && !isForAdoptionSel && !isOverdueSel && !isSubdLeader && (
                                             <div className="border border-emerald-200 bg-emerald-50/70 rounded-2xl p-3 space-y-2.5">
                                                 <div className="flex items-start gap-2.5">
                                                     <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
@@ -1708,7 +1730,7 @@ const BrgyHoldingFacility = () => {
                                         )}
 
                                         {/* Stay limit reached (urgent): promote or impound */}
-                                        {isOverdueSel && (
+                                        {isOverdueSel && !adoptionBlocked && (
                                             <div className="bg-red-50 border border-red-200 rounded-2xl p-3 space-y-2.5">
                                                 <div className="flex items-start gap-2.5">
                                                     <div className="w-8 h-8 rounded-lg bg-red-600 text-white flex items-center justify-center shrink-0">
@@ -1768,7 +1790,10 @@ const BrgyHoldingFacility = () => {
                                                             className={inputCls}
                                                         >
                                                             {FACILITY_STATUSES.map(s => (
-                                                                <option key={s.id} value={s.id}>{s.name}</option>
+                                                                <option key={s.id} value={s.id}
+                                                                    disabled={adoptionBlocked && (s.id === 6 || s.id === 7)}>
+                                                                    {s.name}{adoptionBlocked && (s.id === 6 || s.id === 7) ? ' (not available: returned to owner)' : ''}
+                                                                </option>
                                                             ))}
                                                         </select>
                                                         {RESOLVED_IDS.has(updateForm.facility_status) && (

@@ -1,5 +1,5 @@
 import { useAutoRefresh } from '../../utils/useAutoRefresh';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { Zap } from 'lucide-react';
@@ -17,13 +17,19 @@ import { getCachedData, setCachedData } from '../../utils/cache';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
 import { petName } from '../../utils/petName';
 import CompleteHandoverModal from '../../components/Modals/CompleteHandoverModal';
+import ClaimNotNeededPanel from '../../components/ClaimNotNeededPanel';
+import ClaimAssessmentPanel from '../../components/ClaimAssessmentPanel';
 import { usePersistentState } from '../../utils/useCachedState';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmtScore = (v: number | null | undefined) => (v === null || v === undefined ? 'N/A' : `${v}%`);
 
 // Compact AI similarity read-out: the score exactly as returned. A hint for staff, not proof of ownership.
-const AiSimilarity = ({ score, label = 'AI similarity' }: { score: number | null | undefined; label?: string }) => (
+const AiSimilarity = ({ score, label = 'AI similarity', manual = false }: { score: number | null | undefined; label?: string; manual?: boolean }) => manual ? (
+    <span className="inline-flex items-center gap-1.5 min-w-0" title="Matched by staff comparison of the records; no score">
+        <span className="px-2 py-0.5 rounded-full bg-orange-50 border border-orange-200 text-[10px] font-black text-orange-800 whitespace-nowrap">Staff-identified match</span>
+    </span>
+) : (
     <span className="inline-flex items-center gap-1.5 min-w-0" title="AI similarity: a hint for staff, not proof of ownership">
         {label && <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">{label}</span>}
         {score !== null && score !== undefined && (
@@ -40,6 +46,7 @@ const getStatusStyles = (status: string) => {
         case 'Handover Complete':
         case 'Pet Received': return 'bg-emerald-100 border-emerald-300 text-emerald-800 font-bold';
         case 'Approved': return 'bg-green-50 border-green-200 text-green-700';
+        case 'Not Needed': return 'bg-slate-50 border-slate-200 text-slate-600';
         case 'Rejected': return 'bg-red-50 border-red-200 text-red-600';
         case 'Evidence Requested': return 'bg-blue-50 border-blue-200 text-blue-600';
         case 'Under Review':
@@ -94,6 +101,9 @@ const BrgyPetClaims = () => {
     const [openKebab, setOpenKebab] = useState<number | null>(null);
     const kebabRef = useRef<HTMLDivElement>(null);
     const [isHandoverModalOpen, setIsHandoverModalOpen] = useState(false);
+    // Claiming charges must be paid or waived before the handover (the server refuses it otherwise)
+    const [chargesSettled, setChargesSettled] = useState(true);
+    const onChargesSettled = useCallback((settled: boolean) => setChargesSettled(settled), []);
     const [viewReportAddress, setViewReportAddress] = useState('');
     const [isViewReportAddressLoading, setIsViewReportAddressLoading] = useState(false);
 
@@ -193,6 +203,8 @@ const BrgyPetClaims = () => {
             pet_id: bc.pet_id,
             status: bc.status,
             remarks: bc.remarks || '',
+            // "manual" (staff-identified, no score) or "ai"; from the match record on the server
+            matching_mode: bc.matching_mode ?? null,
             similarity_score: (() => {
                 if (bc.match_score !== undefined && bc.match_score !== null) {
                     return bc.match_score;
@@ -373,7 +385,10 @@ const BrgyPetClaims = () => {
 
         let matchesMatch = true;
         const score = c.similarity_score || 0;
-        if (matchFilter === '90%+') matchesMatch = score >= 90;
+        const manualMatch = c.matching_mode === 'manual';
+        if (matchFilter === 'Manual') matchesMatch = manualMatch;
+        else if (manualMatch && matchFilter !== 'All Matches') matchesMatch = false;
+        else if (matchFilter === '90%+') matchesMatch = score >= 90;
         else if (matchFilter === '80%+') matchesMatch = score >= 80;
         else if (matchFilter === '70%+') matchesMatch = score >= 70;
         else if (matchFilter === '<70%') matchesMatch = score < 70;
@@ -402,7 +417,9 @@ const BrgyPetClaims = () => {
     const pendingCount = claims.filter(c => c.status === 'Under Review' || c.status === 'Pending Review').length;
     const approvedCount = claims.filter(c => c.status === 'Approved').length;
     const rejectedCount = claims.filter(c => c.status === 'Rejected').length;
-    const avgMatch = claims.length > 0 ? Math.round(claims.reduce((a, c) => a + (c.similarity_score || 0), 0) / claims.length) : 0;
+    const aiScored = claims.filter(c => c.matching_mode !== 'manual' && c.similarity_score != null);
+    // AI-scored claims only: a manual (staff-identified) claim has no score and isn't counted as 0
+    const avgMatch: number | null = aiScored.length > 0 ? Math.round(aiScored.reduce((a, c) => a + Number(c.similarity_score), 0) / aiScored.length) : null;
 
     const openReview = (claim: any) => { 
         setSelectedClaim(claim); 
@@ -461,7 +478,7 @@ const BrgyPetClaims = () => {
                                     <p className="text-[11px] font-semibold text-slate-400 leading-tight">total rejected</p>
                                 </div>
                                 <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200/80 flex flex-col gap-1.5 h-full min-w-0">
-                                    <p className="text-2xl sm:text-3xl font-black text-sky-700 leading-none">{avgMatch}%</p>
+                                    <p className="text-2xl sm:text-3xl font-black text-sky-700 leading-none">{avgMatch == null ? '—' : `${avgMatch}%`}</p>
                                     <p className="text-xs font-bold text-slate-700 leading-tight">Avg AI Match</p>
                                     <p className="text-[11px] font-semibold text-slate-400 leading-tight">average of all claims</p>
                                 </div>
@@ -518,7 +535,7 @@ const BrgyPetClaims = () => {
                                         <select
                                             value={matchFilter}
                                             onChange={e => setMatchFilter(e.target.value)}
-                                            aria-label="AI match filter"
+                                            aria-label="Match filter"
                                             className="w-full h-10 pl-3 pr-8 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 appearance-none cursor-pointer truncate"
                                         >
                                         <option value="All Matches">All Matches</option>
@@ -526,6 +543,7 @@ const BrgyPetClaims = () => {
                                         <option value="80%+">80%+ Match</option>
                                         <option value="70%+">70%+ Match</option>
                                         <option value="<70%">&lt; 70% Match</option>
+                                        <option value="Manual">Staff-identified (manual)</option>
                                         </select>
                                         <svg className="w-3.5 h-3.5 text-slate-400 pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
@@ -641,7 +659,7 @@ const BrgyPetClaims = () => {
 
                                             {/* Bottom: AI similarity + claim date */}
                                             <div className="flex items-center justify-between gap-2 mt-2.5 min-w-0">
-                                                <AiSimilarity score={claim.similarity_score} />
+                                                <AiSimilarity score={claim.similarity_score} manual={claim.matching_mode === 'manual'} />
                                                 <span className="text-[11px] font-semibold text-slate-400 truncate">{claim.claim_date}</span>
                                             </div>
                                         </button>
@@ -707,7 +725,7 @@ const BrgyPetClaims = () => {
 
                                                     {/* Match % */}
                                                     <td className="py-4 px-5">
-                                                        <AiSimilarity score={claim.similarity_score} label="" />
+                                                        <AiSimilarity score={claim.similarity_score} label="" manual={claim.matching_mode === 'manual'} />
                                                     </td>
 
                                                     {/* Distance */}
@@ -814,8 +832,10 @@ const BrgyPetClaims = () => {
                                     <div className="flex items-start gap-3 shrink-0">
                                         {/* AI Match Score Badge */}
                                         <div className="text-center bg-green-50 border border-green-200 rounded-xl px-5 py-3">
-                                            <p className="text-[9px] font-black text-green-600 uppercase tracking-widest mb-0.5">AI Match Score</p>
-                                            <p className="text-3xl font-black text-green-600 leading-none">{fmtScore(selectedClaim.similarity_score)}</p>
+                                            <p className="text-[9px] font-black text-green-600 uppercase tracking-widest mb-0.5">{selectedClaim.matching_mode === 'manual' ? 'Matching Method' : 'AI Match Score'}</p>
+                                            {selectedClaim.matching_mode === 'manual'
+                                                ? <p className="text-sm font-black text-green-700 leading-tight">Staff-identified</p>
+                                                : <p className="text-3xl font-black text-green-600 leading-none">{fmtScore(selectedClaim.similarity_score)}</p>}
                                         </div>
                                         {/* Status Badge */}
                                         <div className={`text-center rounded-xl px-5 py-3 border ${getStatusStyles(selectedClaim.status)}`}>
@@ -1085,6 +1105,26 @@ const BrgyPetClaims = () => {
 
                                         const speciesMatches = selectedClaim.pet?.pet_type?.toLowerCase() === (selectedClaim.report?.animal_type || selectedClaim.report?.ai_animal_type || 'dog').toLowerCase();
                                         const markingsExist = !!(selectedClaim.pet?.distinctive_markings || selectedClaim.pet?.color_markings);
+
+                                        // Manual (staff-identified) match: no automated comparison, score or verdict
+
+                                        if (selectedClaim.matching_mode === 'manual') return (
+
+                                            <div className="order-2 lg:order-3 flex flex-col gap-2.5">
+
+                                                <SectionStep n={3} title="Matching Details" />
+
+                                                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-1.5" data-testid="manual-claim-matching">
+
+                                                    <p className="text-xs font-black text-gray-900">Staff-identified potential match</p>
+
+                                                    <p className="text-[11px] text-gray-600 leading-relaxed">Staff found this match by comparing the stray report with the registered pet record. Review the report and pet details, the owner's confirmation and the ownership evidence; the final decision is made by authorized staff.</p>
+
+                                                </div>
+
+                                            </div>
+
+                                        );
 
                                         return (
                                             <div className="order-2 lg:order-3 flex flex-col gap-2.5">
@@ -1388,6 +1428,8 @@ const BrgyPetClaims = () => {
                                         {/* Action Panel Content */}
                                         <div>
                                             {selectedClaim.status === 'Handover Complete' || selectedClaim.status === 'Pet Received' ? (
+                                                <div className="space-y-3">
+                                                <ClaimAssessmentPanel key={selectedClaim.claim_id} claimId={selectedClaim.claim_id} claimStatus={selectedClaim.status} viewer="staff" />
                                                 <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-3">
                                                     <div className="flex items-center gap-2 text-emerald-800 font-black text-xs uppercase tracking-wider">
                                                         <span>🎉</span>
@@ -1422,6 +1464,7 @@ const BrgyPetClaims = () => {
                                                         </div>
                                                     )}
                                                 </div>
+                                                </div>
                                             ) : selectedClaim.status === 'Approved' ? (
                                                 <div className="space-y-3">
                                                     <div className="p-3.5 bg-green-50 border border-green-200 rounded-2xl space-y-1.5">
@@ -1434,12 +1477,26 @@ const BrgyPetClaims = () => {
                                                         </p>
                                                     </div>
 
+                                                    <ClaimAssessmentPanel
+                                                        key={selectedClaim.claim_id}
+                                                        claimId={selectedClaim.claim_id}
+                                                        claimStatus={selectedClaim.status}
+                                                        viewer="staff"
+                                                        onSettledChange={onChargesSettled}
+                                                    />
+
+                                                    {!chargesSettled && (
+                                                        <p className="text-[11px] font-bold text-amber-800 px-1" data-testid="handover-blocked-charges">
+                                                            Record the payment and official receipt, or an authorized waiver, before completing the handover.
+                                                        </p>
+                                                    )}
+
                                                     <div className="flex flex-col gap-2.5">
                                                         <Button
                                                             fullWidth
-                                                            disabled={isSubmitting}
+                                                            disabled={isSubmitting || !chargesSettled}
                                                             onClick={() => setIsHandoverModalOpen(true)}
-                                                            className="w-full py-3 px-4 justify-start gap-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-md shadow-emerald-100 cursor-pointer"
+                                                            className="w-full py-3 px-4 justify-start gap-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-md shadow-emerald-100 cursor-pointer"
                                                             variant={'none' as any}
                                                             size="none"
                                                         >
@@ -1477,9 +1534,19 @@ const BrgyPetClaims = () => {
                                                 </div>
                                             ) : (
                                                 <div className="flex flex-col gap-2.5">
+                                                    {/* Phase 7: nobody holds the animal -> explanation, owner's answer, Close as not needed */}
+                                                    <ClaimNotNeededPanel
+                                                        claim={selectedClaim.raw}
+                                                        viewer="staff"
+                                                        onChanged={(updated) => {
+                                                            const transformed = transformClaim(updated);
+                                                            setClaims(prev => prev.map(c => c.claim_id === updated.claim_id ? transformed : c));
+                                                            setSelectedClaim(transformed);
+                                                        }}
+                                                    />
                                                     <Button
                                                         fullWidth
-                                                        disabled={isSubmitting}
+                                                        disabled={isSubmitting || selectedClaim.raw?.custody?.held === false}
                                                         onClick={() => handleUpdateStatus('Approved')}
                                                         className="w-full py-3 px-4 justify-start gap-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-md shadow-green-100 cursor-pointer"
                                                         variant={'none' as any}
@@ -1493,7 +1560,7 @@ const BrgyPetClaims = () => {
                                                     </Button>
                                                     <Button
                                                         fullWidth
-                                                        disabled={isSubmitting || selectedClaim.status === 'Evidence Requested'}
+                                                        disabled={isSubmitting || selectedClaim.status === 'Evidence Requested' || selectedClaim.raw?.custody?.held === false}
                                                         onClick={() => handleUpdateStatus('Evidence Requested')}
                                                         className="w-full py-3 px-4 justify-start gap-3 bg-role hover:bg-role-hover disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-md shadow-role/20 cursor-pointer"
                                                         variant={'none' as any}

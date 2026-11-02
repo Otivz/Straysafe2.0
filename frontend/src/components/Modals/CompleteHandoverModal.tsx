@@ -252,7 +252,7 @@ const CompleteHandoverModal: React.FC<Props> = ({
                             </p>
                         </div>
                     </div>
-                    <button
+                    <button aria-label="Close"
                         onClick={onClose}
                         disabled={isSubmitting}
                         className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all cursor-pointer"
@@ -605,7 +605,7 @@ const CompleteHandoverModal: React.FC<Props> = ({
                         </div>
                         <ul className="text-[11px] text-emerald-800 space-y-1 pl-4 list-disc font-medium">
                             <li>Report #{claim.report_id} status moves to <strong>Claimed by Owner (Status 9)</strong>.</li>
-                            <li>Holding Place animal record is discharged automatically.</li>
+                            <li>If the animal is at the Barangay Holding Facility, its record there is discharged automatically.</li>
                             <li>Registered pet record is set to <strong>Active</strong> with audit history.</li>
                             <li>Report Management is locked with <strong>"Animal Already Reunited"</strong>.</li>
                         </ul>

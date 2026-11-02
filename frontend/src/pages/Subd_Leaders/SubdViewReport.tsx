@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import { isManualMatchRecord } from '../../utils/manualMatchFields';
+import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { SIGHTING_TITLE } from '../../utils/sighting';
 import NoticeModal from '../../components/Modals/NoticeModal';
 import ActivityPhotos from '../../components/ActivityPhotos';
@@ -24,6 +26,8 @@ import SuccessModal from '../../components/Modals/SuccessModal';
 import MapComponent from '../../components/MapComponent';
 import AISuggestionPanel from '../../components/AISuggestionPanel';
 import AIPotentialMatchesList from '../../components/AIPotentialMatchesList';
+import RepeatedReportBanner from '../../components/RepeatedReportBanner';
+import LeaderIdentityConfirm from '../../components/LeaderIdentityConfirm';
 import ResolveLostPetModal from '../../components/Modals/ResolveLostPetModal';
 import AddPetModal from '../../components/PetRecords/AddPetModal';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
@@ -375,6 +379,23 @@ const SubdViewReport = () => {
     const [warningEvidence, setWarningEvidence] = useState(true);
     const [priorWarnings, setPriorWarnings] = useState<any[]>([]);
     const [isLoadingPriorWarnings, setIsLoadingPriorWarnings] = useState(false);
+    // Server suggestion for this incident (tier from history, default instructions, comply-by date). Remarks stay editable.
+    const [tierReason, setTierReason] = useState<string | null>(null);
+
+    const applyWarningSuggestion = async (violation: string, prefillRemarks: boolean) => {
+        if (!report) return;
+        try {
+            const r = await api.get('/warnings/suggestion', { params: { violation_type: violation, report_id: report.report_id } });
+            setWarningTier(r.data.suggested_tier);
+            setTierReason(r.data.reason || null);
+            if (prefillRemarks) {
+                const by = r.data.comply_by ? new Date(r.data.comply_by).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+                setWarningDescription((prev) => prev.trim() ? prev : `${r.data.instructions}${by ? ` Please comply by ${by}.` : ''}`);
+            }
+        } catch {
+            setTierReason(null);
+        }
+    };
 
     const [noOwnerNotice, setNoOwnerNotice] = useState(false);
     const caseHolding = useCaseHolding(report?.report_id, report?.duplicate_of_report_id, `${report?.status_id}-${report?.history?.length ?? 0}`);
@@ -408,30 +429,12 @@ const SubdViewReport = () => {
             const history = res.data || [];
             setPriorWarnings(history);
 
-            // Calculate next tier in progression: Notice -> 1st Warning -> 2nd Warning -> Final Notice / Escalation
-            if (history.length === 0) {
-                setWarningTier('Notice');
-            } else {
-                const tierOrder = ['Notice', '1st Warning', '2nd Warning', 'Final Notice / Escalation'];
-                const maxIdx = history.reduce((max: number, w: any) => {
-                    const idx = tierOrder.indexOf(w.warning_level);
-                    return Math.max(max, idx);
-                }, -1);
-
-                if (maxIdx === 0) setWarningTier('1st Warning');
-                else if (maxIdx === 1) setWarningTier('2nd Warning');
-                else if (maxIdx >= 2) setWarningTier('Final Notice / Escalation');
-                else {
-                    const count = history.length;
-                    if (count === 1) setWarningTier('1st Warning');
-                    else if (count === 2) setWarningTier('2nd Warning');
-                    else setWarningTier('Final Notice / Escalation');
-                }
-            }
+            // Tier from the server: one warning per incident and tier, never back to a lower tier
+            await applyWarningSuggestion(warningViolation, true);
         } catch (err) {
             console.error('Error fetching prior warnings:', err);
             setPriorWarnings([]);
-            setWarningTier('Notice');
+            await applyWarningSuggestion(warningViolation, true);
         } finally {
             setIsLoadingPriorWarnings(false);
         }
@@ -587,6 +590,16 @@ const SubdViewReport = () => {
     useEffect(() => {
         fetchReportDetails();
     }, [id]);
+
+    // Status sync: another user (e.g. the subdivision resolving an observation) can change this report's status.
+    // A light check keeps it current; the full reload (with its spinner) only runs when the status really changed.
+    const shownStatusRef = useRef<number | null | undefined>(undefined);
+    useEffect(() => { shownStatusRef.current = report?.status_id; }, [report?.status_id]);
+    useAutoRefresh(async () => {
+        if (!id || shownStatusRef.current === undefined) return;
+        const res = await api.get(`/reports/${id}`);
+        if (res.data && res.data.status_id !== shownStatusRef.current) await fetchReportDetails();
+    }, !!id, 30000);
 
     useEffect(() => {
         if (searchParams.get('openChat') === 'true' || (location.state as any)?.openChat) {
@@ -1300,7 +1313,8 @@ const SubdViewReport = () => {
                                         // the other report of the pair: this report may be either side of the match
                                         const m = duplicateMatches[0];
                                         const other = m && (m.matched_report?.report_id === report.report_id ? m.source_report : m.matched_report);
-                                        const pct = m ? Math.round(m.similarity_score > 1 ? m.similarity_score : m.similarity_score * 100) : null;
+                                        // Only an AI-suggested pair has a score; a staff-identified (manual) pair shows none
+                                        const pct = m && !isManualMatchRecord(m) ? Math.round(m.similarity_score > 1 ? m.similarity_score : m.similarity_score * 100) : null;
                                         return (
                                             <div className="p-3 rounded-2xl bg-amber-50 border border-amber-300 animate-in fade-in duration-300">
                                                 <div className="flex items-start gap-2.5">
@@ -1890,7 +1904,7 @@ const SubdViewReport = () => {
                                                         ) || Boolean(report.facility_id) || Boolean(report.facility);
                                                         const histFacLat = 14.8069;
                                                         const histFacLng = 121.0039;
-                                                        const histFacName = 'Barangay Holding Pen';
+                                                        const histFacName = 'Barangay Holding Facility';
 
                                                         const markersList = isResolvedCase ? [
                                                             {
@@ -1907,7 +1921,7 @@ const SubdViewReport = () => {
                                                                 id: -999,
                                                                 lat: histFacLat,
                                                                 lng: histFacLng,
-                                                                title: `2. Holding Pen: ${histFacName}`,
+                                                                title: `2. Holding facility: ${histFacName}`,
                                                                 category: 'Historical Holding',
                                                                 priority: 'Low',
                                                                 color: 'slate',
@@ -1926,7 +1940,7 @@ const SubdViewReport = () => {
                                                                 lat: isRelocated ? holdingLat : (currentLat ?? SELERA_DEFAULT_CENTER[0]),
                                                                 lng: isRelocated ? holdingLng : (currentLng ?? SELERA_DEFAULT_CENTER[1]),
                                                                 title: isRelocated
-                                                                    ? `Secured: ${report.facility?.name || report.landmark || 'Holding Place'}`
+                                                                    ? `Secured: ${report.facility?.name || report.landmark || (report.custody_status === 'In Subdivision Facility' ? 'Temporary community care' : 'Barangay Holding Facility')}`
                                                                     : (report.status_id === 6
                                                                         ? `Animal Picked Up · ${SIGHTING_TITLE}`
                                                                         : SIGHTING_TITLE),
@@ -1934,8 +1948,8 @@ const SubdViewReport = () => {
                                                                 priority: report.priority_level,
                                                                 rawData: {
                                                                     ...report,
-                                                                    facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Place', latitude: holdingLat, longitude: holdingLng }) : undefined,
-                                                                    facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Place') : undefined
+                                                                    facility: isRelocated ? (report.facility || { name: report.landmark || (report.custody_status === 'In Subdivision Facility' ? 'Temporary community care' : 'Barangay Holding Facility'), latitude: holdingLat, longitude: holdingLng }) : undefined,
+                                                                    facility_name: isRelocated ? (report.facility?.name || report.landmark || (report.custody_status === 'In Subdivision Facility' ? 'Temporary community care' : 'Barangay Holding Facility')) : undefined
                                                                 }
                                                             },
                                                             ...(hasDifferentInitialSpot ? [{
@@ -2169,6 +2183,21 @@ const SubdViewReport = () => {
                                         />
 
                                         <IdentityDisputePanel report={report} onChanged={fetchReportDetails} />
+                                        {/* Phase 6: repeat incidents of an observed pet, and verbal warnings for owners without an account */}
+                                            <RepeatedReportBanner reportId={report.report_id} />
+                                        {/* Phase 6: handling leader verifies a pet identity the owner rejected or didn't answer */}
+                                            <LeaderIdentityConfirm reportId={report.report_id} onVerified={fetchReportDetails} />
+                                        {/* Manual Matching: search other reports and registered pets yourself (works with Gemini OFF) */}
+                                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-orange-200 bg-orange-50/60 px-4 py-3">
+                                                <div className="min-w-0">
+                                                    <p className="text-xs font-black text-orange-900">Find possible matches manually</p>
+                                                    <p className="text-[11px] font-semibold text-orange-800">Search other reports and registered pets, compare side by side, and record your decision.</p>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    <Link to={`/subd/manual-matching?report=${report.report_id}`} className="flex h-9 items-center rounded-xl bg-orange-500 px-3.5 text-xs font-black text-white hover:bg-orange-600">Match with reports</Link>
+                                                    <Link to={`/subd/manual-matching?report=${report.report_id}&kind=pet`} className="flex h-9 items-center rounded-xl border border-orange-200 bg-white px-3.5 text-xs font-bold text-orange-700 hover:bg-orange-50">Check registered pets</Link>
+                                                </div>
+                                            </div>
                                         {/* AI Potential Matches Review Section */}
                                             <AIPotentialMatchesList
                                                 reportId={report.report_id}
@@ -2557,7 +2586,7 @@ const SubdViewReport = () => {
                                                                 </span>
                                                             </div>
                                                             <p className="text-sm font-black text-gray-900 mt-0.5">
-                                                                {report.facility?.name || custodyProgression.currentFacility || report.landmark || 'Holding Place'}
+                                                                {report.facility?.name || custodyProgression.currentFacility || report.landmark || (report.custody_status === 'In Subdivision Facility' ? 'Temporary community care' : 'Barangay Holding Facility')}
                                                             </p>
                                                             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-[10px] font-bold text-gray-600">
                                                                 {(report.facility?.contact_person || report.facility?.caretaker_name) && (
@@ -3294,7 +3323,7 @@ const SubdViewReport = () => {
                                 <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-[10px] text-amber-900 flex flex-col gap-1.5 animate-in fade-in duration-200">
                                     <div className="font-black flex items-center justify-between text-amber-900 uppercase tracking-wider text-[9px]">
                                         <span className="flex items-center gap-1.5"><ClipboardList className="w-3 h-3" /> Prior Citations ({priorWarnings.length})</span>
-                                        <span className="text-amber-700 font-medium">auto-escalated to: <strong className="uppercase">{warningTier}</strong></span>
+                                        <span className="text-amber-700 font-medium">suggested: <strong className="uppercase">{warningTier}</strong></span>
                                     </div>
                                     <div className="max-h-20 overflow-y-auto space-y-1 pr-1 custom-scrollbar text-[10px]">
                                         {priorWarnings.map((w: any, idx: number) => (
@@ -3307,8 +3336,11 @@ const SubdViewReport = () => {
                                 </div>
                             ) : (
                                 <div className="p-2.5 bg-blue-50/70 border border-blue-100 rounded-xl text-[10px] font-bold text-blue-800 flex items-center gap-2">
-                                    <Sparkles className="w-3 h-3" /> First recorded violation for this resident. Defaulted to Notice (Friendly Reminder).
+                                    <Sparkles className="w-3 h-3" /> No earlier warning for this pet or owner.
                                 </div>
+                            )}
+                            {tierReason && (
+                                <p className="text-[10px] font-semibold text-gray-500 ml-1">Suggested {warningTier}: {tierReason} You can change it; a lower tier than one already issued for this incident is refused.</p>
                             )}
 
                             <div className="grid grid-cols-2 gap-3">
@@ -3335,7 +3367,7 @@ const SubdViewReport = () => {
                                     <select
                                         className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-yellow-100 focus:border-yellow-500 outline-none transition-all"
                                         value={warningViolation}
-                                        onChange={(e) => setWarningViolation(e.target.value)}
+                                        onChange={(e) => { setWarningViolation(e.target.value); applyWarningSuggestion(e.target.value, false); }}
                                     >
                                         <option value="Free-Roaming Unleashed">Free-Roaming Unleashed</option>
                                         <option value="Nuisance / Aggressive Behavior">Nuisance / Aggressive Behavior</option>
@@ -3425,7 +3457,7 @@ const SubdViewReport = () => {
                                 </div>
                             );
                         }
-                        return <img src={currentMedia.file_url} className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()} />;
+                        return <img src={currentMedia.file_url} alt="Report photo" className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()} />;
                     })()}
                 </div>
             )}
@@ -3494,7 +3526,7 @@ const SubdViewReport = () => {
                                 ) || Boolean(report.facility_id) || Boolean(report.facility);
                                 const histFacLat = 14.8069;
                                 const histFacLng = 121.0039;
-                                const histFacName = 'Barangay Holding Pen';
+                                const histFacName = 'Barangay Holding Facility';
 
                                 const markersList = isResolvedCase ? [
                                     {
@@ -3511,7 +3543,7 @@ const SubdViewReport = () => {
                                         id: -999,
                                         lat: histFacLat,
                                         lng: histFacLng,
-                                        title: `2. Holding Pen: ${histFacName}`,
+                                        title: `2. Holding facility: ${histFacName}`,
                                         category: 'Historical Holding',
                                         priority: 'Low',
                                         color: 'slate',
@@ -3530,7 +3562,7 @@ const SubdViewReport = () => {
                                         lat: isRelocated ? holdingLat : (currentLat ?? SELERA_DEFAULT_CENTER[0]),
                                         lng: isRelocated ? holdingLng : (currentLng ?? SELERA_DEFAULT_CENTER[1]),
                                         title: isRelocated
-                                            ? `Secured: ${report.facility?.name || report.landmark || 'Holding Place'}`
+                                            ? `Secured: ${report.facility?.name || report.landmark || (report.custody_status === 'In Subdivision Facility' ? 'Temporary community care' : 'Barangay Holding Facility')}`
                                             : (report.status_id === 6
                                                 ? `Animal Picked Up · ${SIGHTING_TITLE}`
                                                 : SIGHTING_TITLE),
@@ -3538,8 +3570,8 @@ const SubdViewReport = () => {
                                         priority: report.priority_level,
                                         rawData: {
                                             ...report,
-                                            facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Place', latitude: holdingLat, longitude: holdingLng }) : undefined,
-                                            facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Place') : undefined
+                                            facility: isRelocated ? (report.facility || { name: report.landmark || (report.custody_status === 'In Subdivision Facility' ? 'Temporary community care' : 'Barangay Holding Facility'), latitude: holdingLat, longitude: holdingLng }) : undefined,
+                                            facility_name: isRelocated ? (report.facility?.name || report.landmark || (report.custody_status === 'In Subdivision Facility' ? 'Temporary community care' : 'Barangay Holding Facility')) : undefined
                                         }
                                     },
                                     ...(hasDifferentInitialSpot ? [{

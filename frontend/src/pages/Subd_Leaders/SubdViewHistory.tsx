@@ -634,7 +634,7 @@ const SubdViewHistory = () => {
                                                 ) || Boolean(report.facility_id) || Boolean(report.facility);
                                                 const histFacLat = 14.8069;
                                                 const histFacLng = 121.0039;
-                                                const histFacName = 'Barangay Holding Pen';
+                                                const histFacName = 'Barangay Holding Facility';
 
                                                 const histMarkers = [
                                                     {
@@ -651,7 +651,7 @@ const SubdViewHistory = () => {
                                                         id: -999,
                                                         lat: histFacLat,
                                                         lng: histFacLng,
-                                                        title: `2. Holding Pen: ${histFacName}`,
+                                                        title: `2. Holding facility: ${histFacName}`,
                                                         category: 'Historical Holding',
                                                         priority: 'Low',
                                                         color: 'slate',
@@ -854,7 +854,7 @@ const SubdViewHistory = () => {
                                 </div>
                             );
                         }
-                        return <img src={currentMedia.file_url} className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()} />;
+                        return <img src={currentMedia.file_url} alt="Report photo" className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()} />;
                     })()}
                 </div>
             )}
@@ -888,7 +888,7 @@ const SubdViewHistory = () => {
                                 ) || Boolean(report.facility_id) || Boolean(report.facility);
                                 const histFacLat = 14.8069;
                                 const histFacLng = 121.0039;
-                                const histFacName = 'Barangay Holding Pen';
+                                const histFacName = 'Barangay Holding Facility';
 
                                 const histMarkers = [
                                     {
@@ -905,7 +905,7 @@ const SubdViewHistory = () => {
                                         id: -999,
                                         lat: histFacLat,
                                         lng: histFacLng,
-                                        title: `2. Holding Pen: ${histFacName}`,
+                                        title: `2. Holding facility: ${histFacName}`,
                                         category: 'Historical Holding',
                                         priority: 'Low',
                                         color: 'slate',

@@ -229,6 +229,7 @@ def _serialize_matches(matches: List[ReportMatch], user: User, db: Session, queu
         if closed:
             continue
         resp = ReportMatchResponse.model_validate(m)
+        resp.matching_mode = "manual" if isinstance(m.ai_evidence, dict) and m.ai_evidence.get("engine") == "manual" else "ai"
         if user.role_id != 1:
             resp.identity_lock_reason = match_identity_lock(db, m)
             if (not resp.identity_lock_reason and user.role_id == 2 and m.matched_report_id
@@ -353,6 +354,10 @@ def link_confirmed_pet_match(match: ReportMatch, db: Session, actor: User) -> bo
 
     # Every other report of the case now shares this confirmed identity (no second confirmation)
     resync_case_pet_identity(db, report, actor)
+
+    # The pet may be under observation in another case: tell its leader about a possible repeat incident (once)
+    from app.utils.owner_followups import alert_repeat_reports_for_pet
+    alert_repeat_reports_for_pet(db, pet.pet_id)
 
     if match.reviewed_by and match.reviewed_by != actor.user_id:
         db.add(Notification(
@@ -1990,6 +1995,27 @@ def _notify_cross_subdivision_pair(db: Session, a: Report, b: Report) -> None:
     db.flush()
 
 
+def reconcile_pair_holding(db: Session, match: ReportMatch) -> None:
+    """Both reports of a confirmed pair were admitted to holding: keep one stay and discharge the other."""
+    if not (match.source_report_id and match.matched_report_id):
+        return
+    src_holding = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == match.source_report_id).first()
+    tgt_holding = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == match.matched_report_id).first()
+
+    if src_holding and tgt_holding and src_holding.holding_id != tgt_holding.holding_id:
+        from app.utils.holding_stay import db_now
+        # If target is already transferred to Barangay or further along, resolve source holding
+        tgt_is_brgy = bool(tgt_holding.report and tgt_holding.report.facility and tgt_holding.report.facility.facility_type == 'barangay_facility')
+        src_is_brgy = bool(src_holding.report and src_holding.report.facility and src_holding.report.facility.facility_type == 'barangay_facility')
+
+        if tgt_is_brgy and not src_is_brgy:
+            src_holding.facility_status = 5  # Transferred to Shelter / Barangay
+            src_holding.discharge_date = db_now(db)
+        else:
+            tgt_holding.facility_status = 5
+            tgt_holding.discharge_date = db_now(db)
+
+
 def _verify_snapshot(db: Session, match: ReportMatch) -> dict:
     """Which record a match decision touches, for the audit log: the report's pet link, its case and the owner's answer."""
     db.flush()
@@ -2111,6 +2137,10 @@ def verify_match(
         if conflict:
             raise HTTPException(status_code=409, detail=conflict)
 
+    # Owner-first pairs (a confirmation request was sent): no final decision before the owner says YES
+    from app.utils.pet_match_confirmation import enforce_owner_first, record_final_decision
+    owner_request = enforce_owner_first(db, match, new_status)
+
     # Apply updates
     match.status = new_status
     match.verification_notes = payload.notes.strip()
@@ -2175,24 +2205,7 @@ def verify_match(
         match.verification_notes = payload.notes.strip()
         match.reviewed_by = current_user.user_id
         match.reviewer_role = actor_role
-        if match.source_report_id and match.matched_report_id:
-            # Deduplicate/reconcile holding records if both reports were admitted
-            src_holding = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == match.source_report_id).first()
-            tgt_holding = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == match.matched_report_id).first()
-
-            if src_holding and tgt_holding and src_holding.holding_id != tgt_holding.holding_id:
-                # If target is already transferred to Barangay or further along, resolve source holding
-                tgt_is_brgy = bool(tgt_holding.report and tgt_holding.report.facility and tgt_holding.report.facility.facility_type == 'barangay_facility')
-                src_is_brgy = bool(src_holding.report and src_holding.report.facility and src_holding.report.facility.facility_type == 'barangay_facility')
-
-                if tgt_is_brgy and not src_is_brgy:
-                    src_holding.facility_status = 5  # Transferred to Shelter / Barangay
-                    from app.utils.holding_stay import db_now
-                    src_holding.discharge_date = db_now(db)
-                else:
-                    tgt_holding.facility_status = 5
-                    from app.utils.holding_stay import db_now
-                    tgt_holding.discharge_date = db_now(db)
+        reconcile_pair_holding(db, match)
 
         # Add to StatusHistory for source report
         hist = StatusHistory(
@@ -2217,6 +2230,8 @@ def verify_match(
                 type="status_update",
                 related_id=match.source_report_id
             ))
+
+    record_final_decision(db, match, new_status, current_user, owner_request)
 
     # Record Audit Log
     log_activity(

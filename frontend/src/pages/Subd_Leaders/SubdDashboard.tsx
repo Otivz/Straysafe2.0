@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
+import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { useNavigate } from 'react-router-dom';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { api } from '../../utils/api';
@@ -137,6 +138,7 @@ const SubdDashboard = () => {
         }
     }, [navigate]);
 
+    const fetchAllRef = useRef<(() => Promise<void>) | null>(null);
     useEffect(() => {
         const rawUser = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
         const user = rawUser ? JSON.parse(rawUser) : null;
@@ -201,8 +203,11 @@ const SubdDashboard = () => {
                 setLoading(false);
             }
         };
+        fetchAllRef.current = fetchAll;
         fetchAll();
     }, []);
+    // Status sync: counts follow status changes made elsewhere (cached data stays on screen while it refreshes)
+    useAutoRefresh(() => fetchAllRef.current?.());
 
     // Closed = the backend's closed statuses (utils/heatmap.ts); Picked Up (6) is still an open case
     const isResolvedOrClosed = (r: Report) => !isActiveReport(r);

@@ -129,7 +129,7 @@ export const createFacilityHoldingIcon = (
     const isCat = (animalType || '').toLowerCase().includes('cat');
     const defaultEmoji = isCat ? '🐱' : '🐶';
     const avatarContent = imageUrl ? `
-        <img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" onerror="this.outerHTML='<span style=\\'font-size:20px;\\'>${defaultEmoji}</span>'" />
+        <img src="${imageUrl}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" onerror="this.outerHTML='<span style=\\'font-size:20px;\\'>${defaultEmoji}</span>'" />
     ` : `<span style="font-size: 20px; line-height: 1;">${defaultEmoji}</span>`;
 
     const cleanFacName = (facilityName && facilityName.trim()) ? facilityName.trim() : 'HOLDING PLACE';

@@ -12,6 +12,7 @@ import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import { type PetRecord } from '../../components/PetRecords/types';
 import PendingOwnershipRequests from '../../components/PendingOwnershipRequests';
+import PetMatchConfirmationRequests from '../../components/PetMatchConfirmationRequests';
 import HeldPetOffer, { type HeldPet } from '../../components/HeldPetOffer';
 import PetRecordRequestsForResident from '../../components/PetRecordRequestsForResident';
 import PetRecoveryModal, { type RecoveryScanData } from '../../components/Modals/PetRecoveryModal';
@@ -259,6 +260,8 @@ const ResidentPet = () => {
 
     // Warning Acknowledgment State
     const [pendingWarning, setPendingWarning] = useState<any>(null);
+    // The owner must tick the acknowledgement checkbox; the server refuses an acknowledgement without it
+    const [ackChecked, setAckChecked] = useState(false);
     const [showWarningModal, setShowWarningModal] = useState(false);
     const [myWarnings, setMyWarnings] = useState<any[]>([]);
 
@@ -285,7 +288,9 @@ const ResidentPet = () => {
     const handleAcknowledgeWarning = async () => {
         if (!pendingWarning) return;
         try {
-            await api.patch(`/warnings/${pendingWarning.warning_id}/acknowledge`);
+            if (!ackChecked) return;
+            await api.patch(`/warnings/${pendingWarning.warning_id}/acknowledge`, { confirmed: true });
+            setAckChecked(false);
             setPendingWarning(null);
             setShowWarningModal(false);
             fetchMyWarnings();
@@ -1039,10 +1044,12 @@ const ResidentPet = () => {
         try {
             const res = await api.get('/reports/');
             const reports: any[] = res.data?.reports || res.data || [];
+            // Only an actual lost-pet report can be resolved as recovered (Phase 7); a roaming-pet complaint about the
+            // same pet stays with the leader, so it's never opened with the recovery form
+            const isLost = (r: { category_id?: number; description?: unknown }) => r.category_id === 6 || (typeof r.description === 'string' && r.description.includes('[LOST PET REPORT]'));
             const open = reports
-                .filter((r) => r.pet_id === petObj.pet_id && ![3, 8, 9, 10, 11, 12, 14, 17, 18].includes(r.status_id ?? r.current_status_id))
-                // their own lost-pet report first, then the newest
-                .sort((a, b) => (Number(b.category_id === 6) - Number(a.category_id === 6)) || ((b.report_id || 0) - (a.report_id || 0)))[0];
+                .filter((r) => r.pet_id === petObj.pet_id && isLost(r) && ![3, 8, 9, 10, 11, 12, 14, 17, 18].includes(r.status_id ?? r.current_status_id))
+                .sort((a, b) => (b.report_id || 0) - (a.report_id || 0))[0];
             if (open) {
                 // In a holding facility: the report page explains the handover instead of offering self-recovery
                 navigate(open.facility_id ? `/resident/reports/${open.report_id}` : `/resident/reports/${open.report_id}?openReunited=true`);
@@ -1104,6 +1111,9 @@ const ResidentPet = () => {
                 {/* Staff recorded this resident as a pet's owner: accept or reject */}
                 <PendingOwnershipRequests onAccepted={fetchPets} />
 
+                {/* Staff found an animal that may be one of their pets: answer YES / NO (staff verify afterwards) */}
+                <PetMatchConfirmationRequests />
+
                 {/* Claims waiting for the subdivision, and requests to combine an older record of one of their pets */}
                 <PetRecordRequestsForResident onChanged={fetchPets} reloadKey={petRequestsKey} />
 
@@ -1157,7 +1167,7 @@ const ResidentPet = () => {
                                 </div>
 
                                 <div className="flex items-start gap-3 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
-                                    <input type="checkbox" id="ack" className="mt-1 w-5 h-5 rounded border-gray-300 text-blue-500 focus:ring-blue-500" required />
+                                    <input type="checkbox" id="ack" checked={ackChecked} onChange={(e) => setAckChecked(e.target.checked)} className="mt-1 w-5 h-5 rounded border-gray-300 text-blue-500 focus:ring-blue-500" />
                                     <label htmlFor="ack" className="text-[11px] font-semibold text-gray-700 leading-relaxed">
                                         I acknowledge receipt of this warning. I understand that repeated violations may result in escalation to the Barangay or HOA management.
                                     </label>
@@ -1165,7 +1175,8 @@ const ResidentPet = () => {
 
                                 <button
                                     onClick={handleAcknowledgeWarning}
-                                    className="w-full py-4 action-primary rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl active:scale-[0.98]"
+                                    disabled={!ackChecked}
+                                    className="w-full py-4 action-primary rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
                                 >
                                     ACKNOWLEDGE NOTICE
                                 </button>

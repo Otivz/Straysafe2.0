@@ -40,3 +40,4 @@ def get_admin_analytics(
     if current_user.role_id != 4:
         raise HTTPException(403, "Administrator access is required for municipal analytics.")
     return analytics_payload(db, filters, filters.subdivision_id, admin=True)
+

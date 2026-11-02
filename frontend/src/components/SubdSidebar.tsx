@@ -34,8 +34,8 @@ const sidebarData: { reportIds: number[] | null; claimIds: number[] | null; fetc
 
 const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
     const [isOpen, setIsOpen] = useState(true);
-    // Kept between pages, so the badges don't flash back to 0 on every page switch
     const [pendingReportsCount, setPendingReportsCount] = useCachedState<number>('subd_sidebar_pendingReportsCount', 0);
+    const [, setActiveObservationsCount] = useCachedState<number>('subd_sidebar_activeObservationsCount', 0);
     const [pendingClaimsCount, setPendingClaimsCount] = useCachedState<number>('subd_sidebar_pendingClaimsCount', 0);
     const [unreadMessagesCount, setUnreadMessagesCount] = useCachedState<number>('subd_sidebar_unreadMessagesCount', 0);
     const location = useLocation();
@@ -75,6 +75,15 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                 setPendingClaimsCount(claimIds.filter((id) => !viewedClaimIds.has(id)).length);
             } catch (e) {
                 console.warn("Could not fetch claims count for sidebar", e);
+            }
+
+            try {
+                const obsRes = await api.get('/owner-followups/active-count');
+                if (obsRes.data && typeof obsRes.data.active_count === 'number') {
+                    setActiveObservationsCount(obsRes.data.active_count);
+                }
+            } catch (e) {
+                // ignore
             }
 
             try {
@@ -185,6 +194,16 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                     )
                 },
                 {
+                    path: '/subd/under-observation',
+                    label: 'Under Observation',
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                    )
+                },
+                {
                     path: '/subd/holding-facility',
                     label: 'Barangay Holding',
                     icon: (
@@ -223,6 +242,15 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                     icon: (
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    )
+                },
+                {
+                    path: '/subd/manual-matching',
+                    label: 'Manual Matching',
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4" />
                         </svg>
                     )
                 }
@@ -313,7 +341,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                         </Link>
                     )}
                     {onMobileClose && (
-                        <button
+                        <button aria-label="Close"
                             onClick={onMobileClose}
                             className="md:hidden p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 shrink-0 cursor-pointer ml-1"
                         >

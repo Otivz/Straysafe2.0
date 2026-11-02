@@ -31,6 +31,22 @@ The status endpoint rejects contradictory resident/facility requests, including 
 
 This phase does not implement the separate three-day owner-follow-up workflow; that is Phase 3 onward in the restoration checklist.
 
+## Subdivision Leader wording
+
+Subdivisions have no holding facility, shelter, pound or kennels. A found animal is either kept by a resident or finder (**Secured by Resident**, shown as temporary community care), or picked up by Barangay responders and brought to the **Barangay Holding Facility**. The Subdivision Leader screens say so:
+
+- **Status modal:** the secured option for a subdivision case reads "Temporary Community Care". The animal "is kept by a resident or finder until Barangay responders pick it up". The fallback note says the subdivision has no holding facility.
+- **Holding page:**
+  - Earlier subdivision pen records are under **Earlier Community Care Records**, worded as records.
+  - The stay-limit alert and transfer prompt name the **Barangay Holding Facility**.
+  - The capacity escalation reason is now "Awaiting Barangay rescue (finder can no longer keep the animal)".
+  - The kennel slot field is a "Care spot / slot".
+- **Settings:** an earlier landmark designation shows as an **Earlier Community Care Spot**, with its type shown as a care spot. The stored values (e.g. `Temporary Holding Pen`) are unchanged.
+- **Pet Claims:** an approved claim is "Ready for Handover to the Owner" / "Awaiting handover", not a pickup or release.
+- **Report view, history map and handover modal:** a physical facility is named as the Barangay Holding Facility.
+
+Stored values and statuses are unchanged: `Secured by Resident`, `In Subdivision Facility`, `In Barangay Facility`, `facility_type`, and the report and claim statuses. Only the displayed words changed.
+
 ## Single-animal records and shared buttons
 
 An ordinary report with one animal hides the Animals in this report panel and split controls while retaining authorized close-up photo replacement. Multi-animal/group reports keep their controls. Accepted trade-off: a report submitted as one animal can no longer be split from that hidden panel if its count was wrong.

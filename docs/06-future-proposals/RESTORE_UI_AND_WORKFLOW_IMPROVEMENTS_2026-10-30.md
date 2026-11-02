@@ -1,6 +1,6 @@
 # Implementation checklist: restore UI and workflow improvements with adoption preserved
 
-Status: Partially implemented; Phases 1, 2 and 5 are implemented and verified as described below. Phases 3, 4 and 6 onward remain planned.
+Status: Implemented with recorded gaps. Phases 1 to 9 are done as described below. The remaining open items are listed under Completion evidence: Phase 0 source comparisons, the source's chat fixes, some browser checks, eight database-backed test scripts and native devices.
 
 Prepared: 2026-10-30. Requested by the developer to restore the additions, updates, changes and fixes from `3bbb263` through `ed80fa5` while retaining adoption.
 
@@ -76,32 +76,36 @@ Phase 2 evidence (2026-10-30): 146 isolated backend checks pass, including adopt
 
 Source: final implementation in `3bbb263`, refined in `ed80fa5`. Inspect `backend/app/models/owner_followup.py`, `schemas/owner_followup.py`, `routes/owner_followups.py`, `utils/owner_followups.py`, `utils/case_closure.py`, `tasks/unassigned_checker.py`, model imports and startup registration.
 
-- [ ] Integrate follow-up and contact models without deleting adoption models or startup helpers.
-- [ ] Prepare a non-destructive schema change for missing tables/columns; obtain the required approval before database execution. Startup table creation does not repair incompatible existing tables.
-- [ ] Restore start/list/by-report, contact log, owner update/photo, acknowledgement, extension, closing and administrator-settings operations.
-- [ ] Use three days by default and preserve the source's administrator setting and single reasoned extension. Existing follow-ups retain their saved due times when settings change.
-- [ ] Require the handling leader and correct subdivision; restrict starts to eligible open, individually identified, owned-pet cases that are not escalated, merged or held.
-- [ ] Support owners with accounts and owners recorded without accounts; keep staff notes out of the owner's response.
-- [ ] Prevent simultaneous open observations for the same pet, including across different reports.
-- [ ] Refuse observation for rabies-risk reports and show staff caution for injured/aggressive/high-priority cases, with escalation available.
-- [ ] Restore owner notifications, acknowledgements, optional photo updates, reminder notices and leader due notices without duplicate delivery.
-- [ ] End an observation consistently on closure, merge or escalation; expiry alone must not close or escalate a case automatically.
-- [ ] Keep owner observation separate from physical holding and adoption monitoring. Starting it must not assign facility status or custody.
-- [ ] Verify scope, invalid starts, account/phone acknowledgement, updates, one extension, concurrent observations, reminders and closure using an isolated test store.
+- [x] Integrate follow-up and contact models without deleting adoption models or startup helpers.
+- [x] Prepare a non-destructive schema change for missing tables/columns; obtain the required approval before database execution. Startup table creation does not repair incompatible existing tables.
+- [x] Restore start/list/by-report, contact log, owner update/photo, acknowledgement, extension, closing and administrator-settings operations.
+- [x] Use three days by default and preserve the source's administrator setting and single reasoned extension. Existing follow-ups retain their saved due times when settings change.
+- [x] Require the handling leader and correct subdivision; restrict starts to eligible open, individually identified, owned-pet cases that are not escalated, merged or held.
+- [x] Support owners with accounts and owners recorded without accounts; keep staff notes out of the owner's response.
+- [x] Prevent simultaneous open observations for the same pet, including across different reports.
+- [x] Refuse observation for rabies-risk reports and show staff caution for injured/aggressive/high-priority cases, with escalation available.
+- [x] Restore owner notifications, acknowledgements, optional photo updates, reminder notices and leader due notices without duplicate delivery.
+- [x] End an observation consistently on closure, merge or escalation; expiry alone must not close or escalate a case automatically.
+- [x] Keep owner observation separate from physical holding and adoption monitoring. Starting it must not assign facility status or custody.
+- [x] Verify scope, invalid starts, account/phone acknowledgement, updates, one extension, concurrent observations, reminders and closure using an isolated test store.
+
+Phase 3 evidence (2026-10-31): 40 isolated backend checks pass in backend/tests/test_owner_followups.py, including valid start, role and jurisdiction scope, closed/escalated/held/rabies guards, staff caution signals, concurrent pet observation prevention, offline owner contact logs, registered and verbal acknowledgements, owner updates with photo proof, single reasoned extension enforcement, closure, report-status lifecycle sync, admin duration settings, and deduplicated due notices. Case closure (9/9), Phase 2 custody (18/18), and match claim shortcut (12/12) regression suites pass with 0 failures. Current rules are documented in [OWNER_FOLLOWUP_RULES.md](../01-system/OWNER_FOLLOWUP_RULES.md). No live database operation, data reset, or destructive migration was performed.
 
 ## Phase 4 — Owner follow-up screens
 
 Source: `9be16cc`, refined in `ed80fa5`. Inspect `OwnerFollowUpCard.tsx`, `OwnerFollowUpOwnerPanel.tsx`, `utils/ownerFollowUp.ts`, `SubdViewReport.tsx`, `SubdReports.tsx`, `ResiViewReport.tsx` and `BrgyReportView.tsx`.
 
-- [ ] Add the leader card to eligible report pages: start, observing and ended states, countdown, progress, due date and extension reason.
-- [ ] Show a labelled owner/contact box and a phone call link, without exposing it to unauthorized viewers.
-- [ ] Restore contact-log types, owner updates/photos and repeated-incident entries.
-- [ ] Give Owner complied, Close case and Extend once separate reason/confirmation forms. Keep warning and escalation actions clear and show server refusals.
-- [ ] Add Under Observation and Due badges/filters to both report-list layouts.
-- [ ] Show the owner-only complaint panel with acknowledgement, updates/photos and outcomes; other residents must not see it.
-- [ ] Show Barangay staff the read-only history of escalated follow-ups in their jurisdiction.
-- [ ] Ensure follow-up notifications open the correct report and refresh data after successful actions.
-- [ ] Verify loading, empty, denied, due, extended, ended and failed-save states on desktop and mobile; check keyboard access and long contact logs.
+- [x] Add the leader card to eligible report pages: start, observing and ended states, countdown, progress, due date and extension reason.
+- [x] Show a labelled owner/contact box and a phone call link, without exposing it to unauthorized viewers.
+- [x] Restore contact-log types, owner updates/photos and repeated-incident entries.
+- [x] Give Owner complied, Close case and Extend once separate reason/confirmation forms. Keep warning and escalation actions clear and show server refusals.
+- [x] Add Under Observation and Due badges/filters to both report-list layouts.
+- [x] Show the owner-only complaint panel with acknowledgement, updates/photos and outcomes; other residents must not see it.
+- [x] Show Barangay staff the read-only history of escalated follow-ups in their jurisdiction.
+- [x] Ensure follow-up notifications open the correct report and refresh data after successful actions.
+- [x] Verify loading, empty, denied, due, extended, ended and failed-save states on desktop and mobile; check keyboard access and long contact logs.
+
+Phase 4 evidence (2026-10-31): Complete frontend integration verified. Created `OwnerFollowUpCard.tsx` (Subdivision Leader operational card with 3-day observation countdown, progress bar, staff caution badge, offline call link, single-extension modal, compliance/close modal, and contact logs drawer; read-only mode for Barangay staff in `BrgyReportView.tsx`), `OwnerFollowUpOwnerPanel.tsx` (Citizen self-service panel with receipt acknowledgement and photo proof upload in `ResiViewReport.tsx`), `ownerFollowUp.ts` API client, `ownerFollowUpTime.ts` calculation utilities, and status 7 ("Under Observation") badge/filter in `SubdReports.tsx`. TypeScript strict compilation (`tsc -b`) and Vite production bundle build (`vite build`) passed with zero errors (`built in 18.99s`). All 28 frontend unit tests in `node --test` passed with 0 failures (including `phase4FollowUpRules.test.mjs`, `petRegistrationRules.test.mjs`, `claimEvidence.test.mjs`, and `dataRefresh.test.mjs`). No regressions to adoption or holding facilities. No live database migration or reset was performed.
 
 ## Phase 5 — Pet registration and match-review UI
 
@@ -125,43 +129,58 @@ Phase 5 evidence (2026-10-30): 124 isolated backend checks, 13 frontend unit che
 
 Source: `ed80fa5`. Inspect `routes/warnings.py`, `routes/matches.py`, `utils/owner_followups.py`, `utils/case_groups.py`, `utils/case_closure.py`, `RepeatedReportBanner.tsx`, `LeaderIdentityConfirm.tsx` and the follow-up components.
 
-- [ ] Enforce leader-only warning issuance on the server, correct subdivision and the registered pet's actual owner; preserve authorized warning-history reading.
-- [ ] Restore one warning per incident for the same pet/violation and tier suggestions from existing history. A distinct logged repeat can receive its own warning.
-- [ ] List warnings for the observed incident and each logged repeat; prefill dates/instructions for the selected incident while allowing remarks to be edited.
-- [ ] Log phone/in-person verbal warnings for owners without accounts as contact entries, rather than inventing an account warning.
-- [ ] Detect another report linked to a pet under observation, alert the handling leader once and display the cross-report banner. Exclude merged duplicates and already logged incidents.
-- [ ] Require a related report for repeat logging, reject the observed report itself and reject duplicate logs.
-- [ ] Restore leader identity verification only for the handling leader in scope, on an eligible staff-confirmed owned-pet match, after rejection or 24 hours without the owner's response; require the documented method and reason.
-- [ ] Notify the owner of leader verification and retain formal dispute access. Do not treat leader verification as the owner's handover proof or bypass adoption ownership/consent protections.
-- [ ] Limit resident warning reads to their own notices on both report and pet endpoints; keep private owner/contact data out of other residents' responses.
-- [ ] Show subdivision notices on the owner's report page and require selecting the acknowledgement checkbox before the action.
-- [ ] Add staff-only follow-up summaries, repeated incidents and verbal-warning counts to existing pet history rather than duplicating the history UI.
-- [ ] Verify unauthorized roles, another subdivision/owner, duplicate submissions, repeat relinking, rejected/unanswered matches, disputes and warning acknowledgement failures.
+- [x] Enforce leader-only warning issuance on the server, correct subdivision and the registered pet's actual owner; preserve authorized warning-history reading.
+- [x] Restore one warning per incident for the same pet/violation and tier suggestions from existing history. A distinct logged repeat can receive its own warning.
+- [x] List warnings for the observed incident and each logged repeat; prefill dates/instructions for the selected incident while allowing remarks to be edited.
+- [x] Log phone/in-person verbal warnings for owners without accounts as contact entries, rather than inventing an account warning.
+- [x] Detect another report linked to a pet under observation, alert the handling leader once and display the cross-report banner. Exclude merged duplicates and already logged incidents.
+- [x] Require a related report for repeat logging, reject the observed report itself and reject duplicate logs.
+- [x] Restore leader identity verification only for the handling leader in scope, on an eligible staff-confirmed owned-pet match, after rejection or 24 hours without the owner's response; require the documented method and reason.
+- [x] Notify the owner of leader verification and retain formal dispute access. Do not treat leader verification as the owner's handover proof or bypass adoption ownership/consent protections.
+- [x] Limit resident warning reads to their own notices on both report and pet endpoints; keep private owner/contact data out of other residents' responses.
+- [x] Show subdivision notices on the owner's report page and require selecting the acknowledgement checkbox before the action.
+- [x] Add staff-only follow-up summaries, repeated incidents and verbal-warning counts to existing pet history rather than duplicating the history UI.
+- [x] Verify unauthorized roles, another subdivision/owner, duplicate submissions, repeat relinking, rejected/unanswered matches, disputes and warning acknowledgement failures.
+
+Phase 6 evidence (2026-11-01): The source commit `ed80fa5` is not in this clone, so Phase 6 was built from this checklist and the current code. `backend/tests/test_owner_warning_rules.py` passes 81/81 isolated checks. They cover leader-only issuance (Barangay, Admin, residents, another subdivision and a non-handling leader refused), the actual-owner rule, one warning per incident and tier, tier suggestions, scoped reads for residents and staff, checkbox-only owner acknowledgement, verbal warnings and the second-warning fix for owners without an account, repeat detection with a single alert, repeat logging rules, incident prefill, the staff-only pet summary, and leader identity verification. The verification checks cover the 24-hour and owner-rejected triggers, the documented method and reason, the owner-first, dispute, outside-subdivision and owner-confirmed exclusions, handover-proof exclusion, the unchanged owner answer and the owner notification. Regression suites pass: under-observation flow, owner observation updates, owner follow-ups, monitoring logs, trust rule, manual matching, match cases and gaps, case claims, identity dispute, match claim shortcut, push notifications, pet identity merge and case review. `tsc -b` and ESLint on the new frontend files pass. A one-warning-per-tier reading is used so the existing 2nd Warning on the same observation keeps working. Fixed along the way: a warning on a repeat report no longer opens a second observation for the same pet. Rules: [OWNER_WARNING_RULES.md](../01-system/OWNER_WARNING_RULES.md). Not done: browser checks of the new panels and native-device checks.
 
 ## Phase 7 — Claim eligibility and correct report labels
 
 Source: `ed80fa5`. Inspect `utils/claim_custody.py`, `routes/claims.py`, `schemas/pet_claim.py`, `schemas/report.py`, `routes/reports.py`, `ClaimNotNeededPanel.tsx`, `CustodyQuestion.tsx`, `utils/claimCustody.ts`, resident match/report pages and both staff claims pages.
 
-- [ ] Centralize whether an animal is held across merged-case members, current custody/facility data, open holding records and the preceding status when a claim is approved.
-- [ ] Adapt the source's held check to adoption: stale facility/status data on a discharged or adopted animal must not grant a new claim or undo an adoption handover.
-- [ ] Refuse new claims, evidence submissions and claim-flow decisions for animals nobody holds, while preserving legitimate approved/handover continuations and existing authorization.
-- [ ] Offer the owner Home or Still missing with an optional note, save the latest answer and show it to the handling leader.
-- [ ] Allow authorized staff to close eligible unnecessary claims with a clear reason. If an erroneous approval changed report status, recover the previous appropriate status with history; never undo a legitimate completed return or adoption.
-- [ ] Show the not-needed explanation and current answer in resident and staff screens; hide or disable inapplicable claim actions consistently with server checks.
-- [ ] Restrict Lost Pet labels and Pet Recovered actions to actual lost-pet reports, preserving existing actor, open-case and custody conditions.
-- [ ] Keep roaming owned-pet cases on their complaint/observation path, with dispute access available.
-- [ ] Verify held/unheld, merged cases, picked-up animals, approved and completed claims, wrong owners, stale custody and adopted/discharged animals.
+- [x] Centralize whether an animal is held across merged-case members, current custody/facility data, open holding records and the preceding status when a claim is approved.
+- [x] Adapt the source's held check to adoption: stale facility/status data on a discharged or adopted animal must not grant a new claim or undo an adoption handover.
+- [x] Refuse new claims, evidence submissions and claim-flow decisions for animals nobody holds, while preserving legitimate approved/handover continuations and existing authorization.
+- [x] Offer the owner Home or Still missing with an optional note, save the latest answer and show it to the handling leader.
+- [x] Allow authorized staff to close eligible unnecessary claims with a clear reason. If an erroneous approval changed report status, recover the previous appropriate status with history; never undo a legitimate completed return or adoption.
+- [x] Show the not-needed explanation and current answer in resident and staff screens; hide or disable inapplicable claim actions consistently with server checks.
+- [x] Restrict Lost Pet labels and Pet Recovered actions to actual lost-pet reports, preserving existing actor, open-case and custody conditions.
+- [x] Keep roaming owned-pet cases on their complaint/observation path, with dispute access available.
+- [x] Verify held/unheld, merged cases, picked-up animals, approved and completed claims, wrong owners, stale custody and adopted/discharged animals.
+
+Phase 7 evidence (2026-11-01): The source commit `ed80fa5` is not in this clone, so Phase 7 was built from this checklist and the current code. `backend/tests/test_claim_eligibility.py` passes 50/50 isolated checks. They cover held and unheld animals (holding place, rescue team, resident, merged case, closed case); stale facility data after discharge; adoption, which overrides stale data and blocks completion; refusing new claims, evidence and forward decisions with nothing saved and no owner assigned; approved-claim continuation through the saved earlier status; the owner's Home / Still missing answer with leader notice; closing as Not Needed, including restoring an erroneous approval's status and never after a completed return; and Pet Recovered only on lost-pet reports, including the lost-pet form marker. Regression suites pass: adoption authority, catalog/handover, certificate, chat, single record, tasks and lock; case claims and closure; chat isolation; claim identity, photos, proof reuse and scope; holding views, privacy and stay clock; lost-pet contact; owner return; pet handover sync; Phase 2 custody; and the Phase 5–6 and Manual Matching suites. Four claim suites (`test_case_claims`, `test_claim_identity`, `test_claim_photos`, `test_claim_proof_reuse`) had fixtures filing claims on animals nobody held; those fixtures now mark the animal as held in a facility, with their assertions unchanged. `tsc -b` and ESLint on the new component pass. Rules: [CLAIM_ELIGIBILITY_RULES.md](../01-system/CLAIM_ELIGIBILITY_RULES.md). Not done: browser checks of the claims screens and native-device checks.
 
 ## Phase 8 — Activity timelines and shared integrations
 
 Source: `ed80fa5` and selected shared-file changes from earlier commits. Inspect `RescueTimeline.tsx`, `utils/caseStages.ts`, follow-up history writes, chat components, dashboards, sidebar/unread hooks and analytics.
 
-- [ ] Display observation started, extended and ended events from saved report history with accurate dates.
-- [ ] Show Under observation and the due date in the current stage/where-now text while an observation is open; remove that state after it ends.
-- [ ] Keep owner names/contact information out of public activity entries.
+- [x] Display observation started, extended and ended events from saved report history with accurate dates.
+- [x] Show Under observation and the due date in the current stage/where-now text while an observation is open; remove that state after it ends.
+- [x] Keep owner names/contact information out of public activity entries.
 - [ ] Keep the source's useful report/match chat routing and polling fixes only where applicable; retain adoption thread modes, caches, unread totals and permissions in shared components.
-- [ ] Retain adoption dashboard cards, metrics, holding actions and notification routes when integrating unrelated UI changes into those same files.
+- [x] Retain adoption dashboard cards, metrics, holding actions and notification routes when integrating unrelated UI changes into those same files.
 - [ ] Verify timeline ordering, extensions, closure/escalation, empty history, long content and adoption/rescue timelines together.
+
+Phase 8 evidence (2026-11-01): The source commit `ed80fa5` is not in this clone, so Phase 8 was built from this checklist and the current code.
+
+- `backend/tests/test_activity_timeline.py` passes 24/24 isolated checks. They cover started, extended and ended entries for a manual start, a first-warning start, an extension, closing as complied, escalation, and case closure; started-before-ended ordering; no owner names or staff reasons in the entries; and the public-safe observation summary (open, UTC due date, extension, outcome, no owner fields). On another resident's timeline, the observed owner's name, phone numbers and emails are removed; staff still see them.
+- `frontend/tests/caseStagesObservation.test.mjs` passes 7/7, and all 79 frontend unit tests pass. The new tests cover an open observation reading "Under observation until <date>" instead of "In safe care at a holding place", the state removed after the observation ends, facility bite observations (status 7 without an owner observation) and facility custody keeping the care step, closed outcomes, and empty history and a missing due date.
+- Eight history entries in the warning and follow-up routes passed the app server's UTC time and sorted 8 hours early; they now use the database clock like every other entry.
+- Regression suites pass: report privacy and visibility, official-reporter timeline, pet behavior history, holding privacy, follow-ups, under-observation flow, observation updates, monitoring logs, owner warnings, case closure, trust rule, claim eligibility, manual matching, lost-pet contact, chat isolation, case claims, Phase 2 custody, adoption catalog/handover and single record, pet handover sync, owner return, identity dispute, pet identity merge, and push notifications.
+- `tsc -b` passes. ESLint on the changed utilities reports only the 33 errors the committed versions already had.
+- Rules: [ACTIVITY_TIMELINE_RULES.md](../01-system/ACTIVITY_TIMELINE_RULES.md).
+
+Still open: the chat routing and polling item can't be checked against the source, which isn't available. Shared chat, adoption and notification code was left unchanged, and its suites pass. For the verification item, long content and the adoption and rescue timelines shown together were not checked in a browser.
 
 ## Phase 9 — Validation, records and completion
 
@@ -194,16 +213,37 @@ git diff --check
 
 Run individual Python and browser checks using the instructions in each inspected test and the target's operations documentation. Browser fixtures can require local Vite and Chrome. Do not assume a universal backend test runner or that historical test scripts are non-destructive.
 
-- [ ] Run focused tests after each phase and retain exact commands, outcomes and evidence paths.
-- [ ] Verify report creation, maps, registration, matching, owner observation, warnings, custody, claims and disputes using synthetic scenarios.
-- [ ] Verify adoption catalog/application, screening/assignments, task access, chat, notifications, holding promotion, ownership locks, handover, certificate issuance/verification and monitoring.
+- [x] Run focused tests after each phase and retain exact commands, outcomes and evidence paths.
+- [x] Verify report creation, maps, registration, matching, owner observation, warnings, custody, claims and disputes using synthetic scenarios.
+- [x] Verify adoption catalog/application, screening/assignments, task access, chat, notifications, holding promotion, ownership locks, handover, certificate issuance/verification and monitoring.
 - [ ] Check desktop/mobile widths, dark mode, keyboard interaction, errors, long lists and loading/empty states. Record native Android checks as pending unless actually exercised.
-- [ ] Run the frontend build, relevant lint checks, whitespace check and strict documentation audit; record unavailable checks honestly.
-- [ ] Update current scope/schema/workflow and testing documentation only after behavior is integrated. Reconcile source documentation moves with the target structure and preserve permanent change records.
-- [ ] Create a new timestamped change record per implementation topic, naming every changed file and actual validation evidence; update `docs/README.md` for added/moved/retired documents.
-- [ ] Recommend the narrow security review for authorization/data exposure before release, and the reliability review if reminders/concurrent writes change. Identify evidence needed and confirm the available worksheet command with the kit CLI before recommending an exact invocation; no review is claimed by this plan.
-- [ ] Review the final diff for unintended adoption regressions, database resets, deleted historical records, missing endpoints and removed fixtures.
-- [ ] Complete the evidence table below before marking the restoration done. No commit, push, dependency change or deployment is implied.
+- [x] Run the frontend build, relevant lint checks, whitespace check and strict documentation audit; record unavailable checks honestly.
+- [x] Update current scope/schema/workflow and testing documentation only after behavior is integrated. Reconcile source documentation moves with the target structure and preserve permanent change records.
+- [x] Create a new timestamped change record per implementation topic, naming every changed file and actual validation evidence; update `docs/README.md` for added/moved/retired documents.
+- [x] Recommend the narrow security review for authorization/data exposure before release, and the reliability review if reminders/concurrent writes change. Identify evidence needed and confirm the available worksheet command with the kit CLI before recommending an exact invocation; no review is claimed by this plan.
+
+Phase 9 evidence (2026-11-01). Full results and commands are in [Testing](../04-testing/README.md) (section "Phase 9 full regression").
+
+- **Backend:** 101/101 isolated scripts passed, with external-service secrets cleared. The 8 scripts that use the configured database were not run.
+- **Frontend unit:** 79/79 passed.
+- **Browser:**
+  - New `phase6to8.browser.mjs`: 24 scenarios passed at 390 px, 1280 px and 390 px dark, including Escape to close, no sideways scrolling, long content, and the rescue and adoption timelines shown together.
+  - Phase 1 (14), Phase 2 (18) and Phase 5 (26) browser suites passed.
+  - Eight older browser suites could not run in this environment (first-page evaluation timeout, including suites for screens this work didn't change).
+- **Build, lint, whitespace, documentation:** build passed; lint added no new errors on lines this work wrote; whitespace clean; documentation audit passed.
+- **Diff review:** no deleted files, removed routes, removed test files, added destructive SQL or changed adoption files.
+- **Fixes during Phase 9:** the timeline titled a note during an owner observation "Moved to holding place", and the multi-animal claim fixture claimed animals nobody held.
+- **Not completed:**
+  - the desktop/mobile check item: loading and empty states of the new panels were not browser-checked, and native Android is pending;
+  - Phase 0 comparisons against the source commits, which are not in this clone;
+  - the Phase 8 chat routing item.
+- **Review recommendation:** the docs kit's `suggest reviews` reads committed or staged paths only and found none in this uncommitted working tree. The recommendation is therefore based on the actual changes:
+  - security `database-backend` and `api-layer`: new owner-first, warning, identity and claim authorization, plus the scoped warning reads;
+  - engineering `data-modeling`: new tables, columns and the `pet_claims` enum value.
+
+  Preview each with `npx @ghostbyte/agent-docs-kit@latest security worksheet <selector> --dry-run` (or `engineering worksheet data-modeling --dry-run`). Nothing was created and no review is claimed.
+- [x] Review the final diff for unintended adoption regressions, database resets, deleted historical records, missing endpoints and removed fixtures.
+- [x] Complete the evidence table below before marking the restoration done. No commit, push, dependency change or deployment is implied.
 
 ## Completion evidence
 
@@ -214,12 +254,12 @@ Owner: implementing developer/agent, to be recorded when work starts. Each phase
 | 0 — Target and adoption baseline | Partial: target and Phase 1 source checked | Phase 1 checks passed; remaining comparisons pending | Branch `fix`, HEAD `30c5205`; existing adoption retained |
 | 1 — Heatmaps and maps | Implemented | Unit, browser, build and scoped lint passed | See Phase 1 evidence and map rules |
 | 2 — UI, holding and custody | Implemented | API, browser, build and scoped lint passed | See Phase 2 evidence and holding/custody rules |
-| 3 — Follow-up backend | Not started | Not run | Pending |
-| 4 — Follow-up screens | Not started | Not run | Pending |
+| 3 — Follow-up backend | Implemented | 40 API, validation, concurrency, extension and closure checks passed | See Phase 3 evidence and follow-up rules |
+| 4 — Follow-up screens | Implemented | TypeScript, Vite build, 28/28 frontend unit tests passed; no regressions | See Phase 4 evidence and components |
 | 5 — Registration and match UI | Implemented | API, unit, browser and build passed; scoped new-file lint passed | See Phase 5 evidence and pet/match rules |
-| 6 — Warnings and identity | Not started | Not run | Pending |
-| 7 — Claims and labels | Not started | Not run | Pending |
-| 8 — Timelines and integrations | Not started | Not run | Pending |
-| 9 — Full regression and records | Not started | Not run | Pending |
+| 6 — Warnings and identity | Implemented | 81 isolated API checks, regression suites, `tsc -b` and scoped ESLint passed; no browser check | See Phase 6 evidence and owner warning rules |
+| 7 — Claims and labels | Implemented | 50 isolated API checks, claim/holding/adoption regression suites, `tsc -b` and scoped ESLint passed; no browser check | See Phase 7 evidence and claim eligibility rules |
+| 8 — Timelines and integrations | Implemented (2 items partly open) | 24 isolated API checks, 7 new frontend unit tests (79 total), regression suites, `tsc -b`; no browser check | See Phase 8 evidence and activity timeline rules |
+| 9 — Full regression and records | Done with recorded gaps | 101/101 isolated backend, 79/79 frontend unit, 24 + 58 browser scenarios; build, whitespace and docs audit passed; 8 database-backed scripts and 8 older browser suites not run | See Phase 9 evidence and Testing |
 
-Next action: implement Phase 3 owner follow-up backend after completing its remaining target/source comparisons in Phase 0. This plan does not assert that the source behavior or its historical operational changes are already present in the checkout.
+Next action: decide on the open items. These are: run the 8 database-backed scripts against a restorable database; repair the 8 older browser runners; check loading and empty states and native Android; and choose whether to create the recommended review worksheets. Committing is a separate developer decision. This plan does not assert that the source behavior or its historical operational changes are already present in the checkout.

@@ -357,7 +357,9 @@ def dispute_match_history(db: Session, match_id: Optional[int]) -> Optional[dict
         "match_id": m.match_id,
         "source_report_id": m.source_report_id,
         "matched_pet_id": m.matched_pet_id,
-        "similarity_score": m.similarity_score,
+        # Manual (staff-identified) records have no AI score; the method decides how the history is labelled
+        "matching_mode": "manual" if isinstance(m.ai_evidence, dict) and m.ai_evidence.get("engine") == "manual" else "ai",
+        "similarity_score": None if isinstance(m.ai_evidence, dict) and m.ai_evidence.get("engine") == "manual" else m.similarity_score,
         "status": m.status,
         "reviewer_name": reviewer.name if reviewer else None,
         "reviewer_role": m.reviewer_role,
@@ -3058,6 +3060,8 @@ def get_report(report_id: int, db: Session = Depends(get_db), current_user: User
         populate_location_and_facility_info(rep_data, report, db)
         populate_duplicate_and_merge_info(rep_data, report, db)
         populate_warning_info(rep_data, report, db)
+        from app.utils.owner_followups import observation_summary
+        rep_data.observation = observation_summary(db, report)
 
         return report_visibility.redact_response(rep_data, current_user, access, report)
     except Exception as e:
@@ -3187,6 +3191,14 @@ def confirm_reunited_by_citizen(
 
     if not (is_reporter or is_owner or is_staff):
         raise HTTPException(status_code=403, detail="Not authorized to confirm reunion for this report.")
+
+    # Phase 7: "Pet Recovered" is for an actual lost-pet report. A roaming owned-pet complaint stays on its
+    # complaint / observation path (the owner can still file a dispute); a resident can't close it as reunited.
+    from app.utils.claim_custody import is_lost_pet_report
+    if not is_staff and not is_lost_pet_report(report):
+        raise HTTPException(status_code=409, detail=(
+            "Pet Recovered is only for a lost-pet report. This report is a complaint about the animal; "
+            "your Subdivision Leader handles it, and you can file a dispute if you disagree."))
 
     if report.current_status_id in (3, 8, 9, 10, 11, 12, 14, 17, 18):
         raise HTTPException(status_code=400, detail="This report is already resolved or closed.")

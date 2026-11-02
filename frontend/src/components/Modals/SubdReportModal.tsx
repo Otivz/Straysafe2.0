@@ -726,7 +726,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                         <span className="hidden sm:inline-block px-3 py-1 rounded-full bg-role-muted text-role text-xs font-black uppercase tracking-widest">
                             Step {currentStep}/7
                         </span>
-                        <button
+                        <button aria-label="Close"
                             type="button"
                             onClick={onClose}
                             className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-all cursor-pointer"

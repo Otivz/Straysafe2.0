@@ -155,7 +155,7 @@ const PetRecoveryModal: React.FC<PetRecoveryModalProps> = ({
                             </h2>
                         </div>
                     </div>
-                    <button
+                    <button aria-label="Close"
                         type="button"
                         onClick={handleModalClose}
                         className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 flex items-center justify-center transition-colors cursor-pointer"

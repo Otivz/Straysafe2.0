@@ -695,7 +695,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                             {editPetData ? '✏️ Edit Pet Record' : (initialReportData ? '🐾 Register Pet in System' : 'Register New Pet')}
                         </h2>
                     </div>
-                    <button 
+                    <button aria-label="Close" 
                         onClick={handleClose} 
                         className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-[#1a1208] hover:bg-gray-100 transition-all cursor-pointer shrink-0"
                     >

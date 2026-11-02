@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import api from '../../utils/api';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate } from 'react-router-dom';
@@ -101,6 +102,8 @@ const SubdHistoryReport = () => {
     useEffect(() => {
         fetchReports();
     }, []);
+    // Status sync: resolved / changed reports move to their new state without a manual reload
+    useAutoRefresh(() => fetchReports());
 
     // Only include history (closed/impounded/resolved) reports
     const historyReports = reports.filter(rep => HISTORY_STATUSES.includes(rep.status_id));

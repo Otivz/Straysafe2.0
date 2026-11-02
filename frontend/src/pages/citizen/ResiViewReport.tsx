@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { SIGHTING_TITLE, sightingLandmark, reverseGeocodeStreet } from '../../utils/sighting';
 import { getOriginalSighting } from '../../utils/originalSighting';
 import { useNavigate, useParams, useSearchParams, useLocation, Link } from 'react-router-dom';
@@ -21,6 +22,8 @@ import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import RescueTimeline from '../../components/RescueTimeline';
 import AnimalRecordsPanel from '../../components/AnimalRecordsPanel';
+import OwnerFollowUpOwnerPanel from '../../components/OwnerFollowUpOwnerPanel';
+import ReportWarningNotices from '../../components/ReportWarningNotices';
 import { buildCaseTimeline } from '../../utils/caseTimeline';
 
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
@@ -510,6 +513,16 @@ const ResiViewReport = () => {
         fetchReportDetails();
     }, [id]);
 
+    // Status sync: another user (e.g. the subdivision resolving an observation) can change this report's status.
+    // A light check keeps it current; the full reload (with its spinner) only runs when the status really changed.
+    const shownStatusRef = useRef<number | null | undefined>(undefined);
+    useEffect(() => { shownStatusRef.current = report?.status_id; }, [report?.status_id]);
+    useAutoRefresh(async () => {
+        if (!id || shownStatusRef.current === undefined) return;
+        const res = await api.get(`/reports/${id}`);
+        if (res.data && res.data.status_id !== shownStatusRef.current) await fetchReportDetails();
+    }, !!id, 30000);
+
     useEffect(() => {
         if ((searchParams.get('openChat') === 'true' || (location.state as any)?.openChat) && isReporter) {
             setIsChatOpen(true);
@@ -851,13 +864,13 @@ const ResiViewReport = () => {
                         </div>
                         <div>
                             <h1 className="text-xs sm:text-2xl md:text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tight leading-tight">
-                                {(report.category_id === 6 || report.pet_id || (report.description && report.description.includes('[LOST PET REPORT]'))) ? 'Lost Pet Recovery Case' : 'Rescue Case Intelligence'}
+                                {isLostPetReport ? 'Lost Pet Recovery Case' : 'Rescue Case Intelligence'}
                             </h1>
                             <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1.5 flex-wrap">
                                 <span className="text-[7.5px] sm:text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">#STR-{(report.report_id || 0).toString().padStart(4, '0')}</span>
                                 <div className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-700" />
                                 <span className="text-[7.5px] sm:text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest">
-                                    {(report.category_id === 6 || report.pet_id || (report.description && report.description.includes('[LOST PET REPORT]'))) ? 'Lost Pet' : (categoryMap[report.category_id] || 'Incident Report')}
+                                    {isLostPetReport ? 'Lost Pet' : (categoryMap[report.category_id] || 'Incident Report')}
                                 </span>
                             </div>
                         </div>
@@ -893,8 +906,9 @@ const ResiViewReport = () => {
                         )}
 
                         {/* Pet Found / Reunited Button */}
-                        {/* Only the pet's owner, or the reporter of a Lost Pet report (their own pet); not someone who reported a stray */}
-                        {currentUser && (isMyPetOnReport || (isReporter && isLostPetReport)) && ![3, 8, 9, 10, 11, 12, 14, 17, 18].includes(report.status_id) && !report.facility_id && (
+                        {/* Only on an actual lost-pet report (Phase 7), for the pet's owner or the reporter of that lost-pet report.
+                            A roaming owned-pet complaint stays with the leader (observation path); the owner can dispute it. */}
+                        {currentUser && isLostPetReport && (isMyPetOnReport || isReporter) && ![3, 8, 9, 10, 11, 12, 14, 17, 18].includes(report.status_id) && !report.facility_id && (
                             <button
                                 type="button"
                                 onClick={() => setIsReunitedModalOpen(true)}
@@ -1328,6 +1342,16 @@ const ResiViewReport = () => {
                                             </div>
                                         )}
 
+                                        {/* Owner Follow-up Observation Panel (Phase 4) */}
+                                        <OwnerFollowUpOwnerPanel
+                                            reportId={report.report_id}
+                                            currentUserId={currentUserId || undefined}
+                                            onStatusUpdated={() => fetchReportDetails()}
+                                        />
+
+                                        {/* Subdivision notices for the owner (only their own; acknowledgement needs the checkbox) */}
+                                        <ReportWarningNotices reportId={report.report_id} />
+
                                         {/* Lost Pet Owner Contact & Digital QR Tag Card */}
                                         {(report.pet_id || report.owner_phone || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
                                             <div className="p-3.5 sm:p-5 rounded-xl sm:rounded-3xl bg-gradient-to-br from-amber-50/90 to-orange-50/70 dark:from-amber-950/40 dark:to-orange-950/20 border-2 border-amber-200/80 dark:border-amber-800/60 shadow-sm space-y-3">
@@ -1335,7 +1359,7 @@ const ResiViewReport = () => {
                                                     <div className="flex items-center gap-2">
                                                         <span className="px-2 py-0.5 bg-amber-500 text-white rounded text-[8px] sm:text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
                                                             <PawPrint className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                                                            <span>Registered Lost Pet</span>
+                                                            <span>{isLostPetReport ? 'Registered Lost Pet' : 'Registered Pet'}</span>
                                                         </span>
                                                         {petName(report) && (
                                                             <span className="text-[11px] sm:text-xs font-black text-amber-950 dark:text-amber-200 uppercase">
@@ -2545,7 +2569,8 @@ const ResiViewReport = () => {
             )}
 
             {/* Confirm Pet Reunited Modal */}
-            {isReunitedModalOpen && report && (
+            {/* Pet Recovered is only for a lost-pet report (the server refuses it otherwise too) */}
+            {isReunitedModalOpen && report && isLostPetReport && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
                     <div className="bg-white dark:bg-[#151C2C] rounded-none sm:rounded-[2.5rem] shadow-2xl w-full h-full sm:h-auto max-w-xl overflow-hidden animate-in zoom-in-95 duration-300 border-none sm:border border-emerald-100 dark:border-gray-800 flex flex-col">
                         <div className="px-8 py-6 border-b border-gray-150 dark:border-gray-800 flex justify-between items-center bg-emerald-50/70 dark:bg-emerald-950/40">

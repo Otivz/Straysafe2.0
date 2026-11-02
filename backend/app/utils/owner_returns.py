@@ -94,6 +94,10 @@ def owner_already_on_record(report: Report, owner_user_id: Optional[int], db: Se
     from app.utils.case_groups import pet_link_trusted
     if not pet_link_trusted(report):
         return False
+    # A leader's identity verification (owner rejected / didn't answer) is never the owner's ownership proof
+    from app.utils.leader_identity import is_leader_verified_only
+    if is_leader_verified_only(db, report):
+        return False
     pet = db.query(Pet).filter(Pet.pet_id == report.pet_id).first()
     return bool(pet and pet.owner_id == owner_user_id)
 
@@ -236,6 +240,9 @@ def validate_owner_return(info: Optional[OwnerReturnInfo], actor: User, db: Sess
 def record_owner_return(db: Session, report: Report, snap: dict, actor: User,
                         pet_id: Optional[int] = None, holding_id: Optional[int] = None) -> ReportReturn:
     """Insert (or replace) the report's return record. Caller commits."""
+    # Claiming charges must be paid or waived before any owner handover (docs/01-system/CLAIM_FEE_ASSESSMENT_RULES.md)
+    from app.utils.claim_fees import require_case_charges_settled
+    require_case_charges_settled(db, report)
     rec = db.query(ReportReturn).filter(ReportReturn.report_id == report.report_id).first()
     if rec is None:
         rec = ReportReturn(report_id=report.report_id)
@@ -257,7 +264,7 @@ def record_owner_return(db: Session, report: Report, snap: dict, actor: User,
     rec.ownership_proof_urls = snap.get("ownership_proof_urls")
     rec.notes = snap.get("notes")
     rec.returned_by = actor.user_id
-    _discharge_holding_animal(db, report, snap, actor)
+    finalize_owner_handover(db, report, actor, owner_return_summary(snap), holding_id=rec.holding_id)
     _update_pet_record(db, rec.pet_id, snap, actor, report.report_id)
     _sync_pet_claims_on_return(db, report, snap, actor, rec)
     if snap["owner_user_id"] and snap["owner_user_id"] != actor.user_id:
@@ -275,9 +282,26 @@ def record_owner_return(db: Session, report: Report, snap: dict, actor: User,
 _HOLDING_CLOSED = {3, 4, 5, 7, 8}
 
 
-def _discharge_holding_animal(db: Session, report: Report, snap: dict, actor: User) -> None:
-    """An animal handed back to its owner is no longer in the holding facility."""
-    for animal in db.query(HoldingAnimal).filter(HoldingAnimal.report_id == report.report_id).all():
+def finalize_owner_handover(db: Session, report: Report, actor: User, notes: str,
+                            holding_id: Optional[int] = None) -> None:
+    """
+    The animal is back with its owner (no commit): every holding record of the case (and the given one) is discharged
+    as Claimed by Owner, and the animal is taken out of adoption: catalog listing removed, open applications closed
+    (docs/01-system/ADOPTION_ELIGIBILITY_RULES.md).
+    """
+    _discharge_holding_animal(db, report, notes, actor, holding_id)
+    from app.utils.adoption_eligibility import retire_from_adoption
+    retire_from_adoption(db, report, actor, [holding_id] if holding_id else [])
+
+
+def _discharge_holding_animal(db: Session, report: Report, notes: str, actor: User, holding_id: Optional[int] = None) -> None:
+    """An animal handed back to its owner is no longer in the holding facility (whichever report of the case holds it)."""
+    from app.utils.case_groups import case_members, case_root
+    ids = [m.report_id for m in case_members(db, case_root(db, report))] or [report.report_id]
+    animals = db.query(HoldingAnimal).filter(HoldingAnimal.report_id.in_(ids)).all()
+    if holding_id and holding_id not in {a.holding_id for a in animals}:
+        animals += db.query(HoldingAnimal).filter(HoldingAnimal.holding_id == holding_id).all()
+    for animal in animals:
         if animal.facility_status in _HOLDING_CLOSED:
             continue
         animal.facility_status = 3
@@ -288,7 +312,7 @@ def _discharge_holding_animal(db: Session, report: Report, snap: dict, actor: Us
             holding_id=animal.holding_id,
             event_type="outcome",
             title="Case Resolved — Claimed by Owner",
-            notes=owner_return_summary(snap),
+            notes=notes,
             logged_by=actor.user_id,
         ))
 

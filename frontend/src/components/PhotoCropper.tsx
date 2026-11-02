@@ -105,7 +105,7 @@ export default function PhotoCropper({ src, onCropped, onClose, title = 'Crop th
                 onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between">
                     <p className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-2"><Crop className="w-4 h-4 text-role" /> {title}</p>
-                    <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 cursor-pointer"><X className="w-4 h-4" /></button>
+                    <button aria-label="Close" type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 cursor-pointer"><X className="w-4 h-4" /></button>
                 </div>
                 <p className="text-[11px] font-semibold text-gray-500">
                     Drag on the photo to draw a box around <strong>one</strong> animal. Drag inside the box to move it, or drag a

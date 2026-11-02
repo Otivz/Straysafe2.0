@@ -50,6 +50,7 @@ python -m venv .venv
 pip install -r backend/requirements.txt
 
 # 4. Go into the backend folder
+
 cd backend
 
 # 5. Start the backend server
