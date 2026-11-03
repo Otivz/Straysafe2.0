@@ -14,14 +14,17 @@ export default function ResiLostPets() {
     const navigate = useNavigate();
     const [menuOpen, setMenuOpen] = useState(false);
     const [alerts] = useState<LostPetAlert[] | null>(null);
+    // The Lost Pet Report behind the alert, only for someone who may open it (the owner, the leader). Neighbors who got
+    // the alert can't see a private report, so their Back goes where they came from instead of to a "not found" page.
     const [reportId, setReportId] = useState<number | null>(null);
+    const ownReport = (a: Pick<LostPetAlert, 'report_id' | 'is_owner' | 'can_manage'>) => (a.is_owner || a.can_manage ? a.report_id : null);
     const [error] = useState('');
 
     useEffect(() => {
         if (!alertId) return;
         let active = true;
         api.get<LostPetAlert>(`/lost-pet-alerts/${alertId}`)
-            .then(r => { if (active && r.data?.report_id) setReportId(r.data.report_id); })
+            .then(r => { if (active && r.data?.report_id) setReportId(ownReport(r.data)); })
             .catch(() => undefined);
         return () => { active = false; };
     }, [alertId]);
@@ -60,7 +63,7 @@ export default function ResiLostPets() {
                             <LostPetAlertView
                                 alertId={Number(alertId)}
                                 reportPath={id => `/resident/reports/${id}`}
-                                onAlertLoaded={a => setReportId(a.report_id)}
+                                onAlertLoaded={a => setReportId(ownReport(a))}
                             />
                         </ErrorBoundary>
                     </>

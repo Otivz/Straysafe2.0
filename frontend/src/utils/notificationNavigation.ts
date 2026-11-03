@@ -71,23 +71,26 @@ export async function resolveNotificationDestination(
         msgStr.includes('open the alert and tap report a sighting');
 
     if (isLostPet) {
-        let reportId = extractedReportId;
-        if (!reportId && notif.related_id) {
+        // The alert decides (its own access rules): the pet's owner and the leader open the Lost Pet Report; a neighbor
+        // who got the alert can't see that private report, so they open the alert (tracking map, Report a Sighting).
+        // related_id is the alert's id: it is never used as a report number.
+        const alertId = notif.related_id ? Number(notif.related_id) : null;
+        if (alertId) {
             if (apiClient) {
                 try {
-                    const res = await apiClient.get(`/lost-pet-alerts/${notif.related_id}`);
-                    if (res?.data?.report_id) {
-                        reportId = Number(res.data.report_id);
+                    const res = await apiClient.get(`/lost-pet-alerts/${alertId}`);
+                    const alert = res?.data;
+                    if (alert?.report_id && (alert.is_owner || alert.can_manage)) {
+                        return { action: 'navigate', path: `/resident/reports/${Number(alert.report_id)}` };
                     }
                 } catch {
-                    reportId = Number(notif.related_id);
+                    // fall through to the alert page, which shows its own message if it can't be opened
                 }
-            } else {
-                reportId = Number(notif.related_id);
             }
+            return { action: 'navigate', path: `/resident/lost-pets/${alertId}` };
         }
-        if (reportId) {
-            return { action: 'navigate', path: `/resident/reports/${reportId}` };
+        if (extractedReportId) {
+            return { action: 'navigate', path: `/resident/reports/${extractedReportId}` };
         }
     }
 
