@@ -15,7 +15,7 @@ test('Report status update redirects to exact report', async () => {
     assert.equal(res.path, '/resident/reports/11');
 });
 
-test('Lost pet alert resolves alert_id to exact lost pet report_id', async () => {
+test('Lost pet alert: the pet owner opens the exact lost pet report', async () => {
     const notif = {
         notification_id: 232,
         type: 'lost_pet_alert',
@@ -26,7 +26,7 @@ test('Lost pet alert resolves alert_id to exact lost pet report_id', async () =>
     const mockApiClient = {
         get: async (url) => {
             if (url === '/lost-pet-alerts/1') {
-                return { data: { alert_id: 1, report_id: 13 } };
+                return { data: { alert_id: 1, report_id: 13, is_owner: true, can_manage: false } };
             }
             throw new Error('Not found');
         }
@@ -36,7 +36,7 @@ test('Lost pet alert resolves alert_id to exact lost pet report_id', async () =>
     assert.equal(res.path, '/resident/reports/13');
 });
 
-test('Lost pet sighting resolves alert_id to exact report_id', async () => {
+test('Lost pet sighting: the pet owner opens the exact report', async () => {
     const notif = {
         notification_id: 239,
         type: 'lost_pet_sighting',
@@ -47,7 +47,7 @@ test('Lost pet sighting resolves alert_id to exact report_id', async () => {
     const mockApiClient = {
         get: async (url) => {
             if (url === '/lost-pet-alerts/1') {
-                return { data: { alert_id: 1, report_id: 13 } };
+                return { data: { alert_id: 1, report_id: 13, is_owner: true, can_manage: false } };
             }
             throw new Error('Not found');
         }
@@ -121,4 +121,28 @@ test('General notification with no report opens modal details', async () => {
     const res = await resolveNotificationDestination(notif);
     assert.equal(res.action, 'modal');
     assert.equal(res.notification.notification_id, 50);
+});
+
+test('Lost pet alert: a neighbor opens the alert, not the private report', async () => {
+    const notif = { notification_id: 77, type: 'lost_pet_alert', related_id: 2,
+        title: 'Missing pet: Freddy - have you seen it?', message: 'Freddy was last seen near the clubhouse' };
+    const mockApiClient = {
+        get: async (url) => {
+            if (url === '/lost-pet-alerts/2') return { data: { alert_id: 2, report_id: 5, is_owner: false, can_manage: false } };
+            throw new Error('Not found');
+        }
+    };
+    const res = await resolveNotificationDestination(notif, mockApiClient);
+    assert.equal(res.action, 'navigate');
+    assert.equal(res.path, '/resident/lost-pets/2');
+});
+
+test('Lost pet alert: if the alert cannot be loaded, open the alert page (never treat the alert id as a report id)', async () => {
+    const notif = { notification_id: 78, type: 'lost_pet_alert', related_id: 2,
+        title: 'Missing pet: Freddy - have you seen it?', message: 'Freddy was last seen near the clubhouse' };
+    const failing = { get: async () => { throw new Error('Network down'); } };
+    const res = await resolveNotificationDestination(notif, failing);
+    assert.equal(res.path, '/resident/lost-pets/2');
+    const noClient = await resolveNotificationDestination(notif);
+    assert.equal(noClient.path, '/resident/lost-pets/2');
 });
