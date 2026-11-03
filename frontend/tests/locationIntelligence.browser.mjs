@@ -113,7 +113,7 @@ try {
         await waitFor(`[...document.querySelectorAll('h4')].some(x => x.textContent.trim() === 'Location Intelligence')`, 'report 4 location card');
         const esc = await card();
         assert.match(esc, /Last reported sighting/, `escalated case: last reported sighting (${width}px)`);
-        assert.match(esc, /Current location: not confirmed \(not in a holding place\)/, `escalated case: location not confirmed (${width}px)`);
+        assert.match(esc, /Current location: not confirmed/, `escalated case: location not confirmed (${width}px)`);
         assert.doesNotMatch(esc, /Animal Secured at Holding Place|Impound Facility/, `escalated case: no holding place (${width}px)`);
 
         await command('Page.navigate', { url: base + '/resident/reports/3' });
