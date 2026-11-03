@@ -12,6 +12,7 @@ import { reportDescriptionSummary } from '../../utils/reportDescription';
 import { petName } from '../../utils/petName';
 import { whenVisible } from '../../utils/visibleInterval';
 import NotificationPanel from '../Notifications/NotificationPanel';
+import { resolveNotificationDestination } from '../../utils/notificationNavigation';
 
 interface ResiNavbarProps {
     onMenuToggle?: (isOpen: boolean) => void;
@@ -227,93 +228,15 @@ const ResiNavbar = ({
             }
         }
 
-        const typeStr = (notif.type || '').toLowerCase();
-        const titleStr = (notif.title || '').toLowerCase();
-        const msgStr = (notif.message || '').toLowerCase();
-
-        // Observation notices (started, reminders, updates received, extended) -> Observation Updates
-        if (typeStr.startsWith('followup')) {
-            navigate('/resident/observations');
-            return;
-        }
-
-        // Staff recorded this resident as a pet's owner -> accept / reject on My Pets
-        if (typeStr === 'pet_owner_confirmation') {
-            navigate('/resident/pets');
-            return;
-        }
-
-        // Staff ask "Is this your pet?" for a reported animal -> answer on My Pets (related_id = request id)
-        if (typeStr === 'pet_match_confirmation') {
-            navigate(notif.related_id ? `/resident/pets?confirm=${notif.related_id}` : '/resident/pets');
-            return;
-        }
-
-        // An animal someone applied for is available again: open that animal's adoption page (related_id = holding id)
-        if (typeStr === 'adoption_available_again' && notif.related_id) {
-            navigate(`/adopt/apply/${notif.related_id}`);
-            return;
-        }
-
-        // Adoption notifications (incl. chat) open the adopter's application, not a report
-        if (typeStr.startsWith('adoption') && notif.related_id) {
-            navigate(`/adopt/applications?adoption=${notif.related_id}${typeStr === 'adoption_chat' ? '&chat=1' : ''}`);
-            return;
-        }
-
-        // Status update on a report -> ALWAYS navigate to report details, never match review
-        if (typeStr === 'status_update' && notif.related_id) {
-            navigate(`/resident/reports/${notif.related_id}`);
-            return;
-        }
-
-        const isMatchInquiry = typeStr === 'match_message' || 
-                               titleStr.includes('match inquiry') || 
-                               (titleStr.includes('💬') && (titleStr.includes('look-alike') || msgStr.includes('look-alike')));
-
-        const isMatch = typeStr === 'potential_match' || 
-                        typeStr === 'match_review' ||
-                        titleStr.includes('look-alike pet sighting') ||
-                        titleStr.includes('please confirm: is this') ||
-                        msgStr.includes('look-alike match for your registered pet');
-
-        if ((isMatchInquiry || isMatch) && notif.related_id) {
-            // Only chat-message notifications open the chat; match alerts land on the review page
-            navigate(
-                isMatchInquiry
-                    ? `/resident/reports/${notif.related_id}/match-review?openChat=true`
-                    : `/resident/reports/${notif.related_id}/match-review`,
-                { state: { openChat: isMatchInquiry, highlightMatch: true } }
-            );
-            return;
-        }
-
-        const isMessageOrComment =
-            typeStr === 'message' ||
-            typeStr.includes('message') ||
-            titleStr.includes('message') ||
-            typeStr.includes('comment') ||
-            titleStr.includes('comment') ||
-            typeStr.includes('chat') ||
-            titleStr.includes('chat') ||
-            titleStr.includes('💬');
-
-        if (isMessageOrComment && notif.related_id) {
-            navigate(`/resident/reports/${notif.related_id}?openChat=true`, { state: { openChat: true } });
-            return;
-        }
-
-        if ((typeStr === 'reunion_photo_requested' || titleStr.includes('reunion photo')) && notif.related_id) {
-            navigate(`/resident/reports/${notif.related_id}?openReunited=true`, { state: { openReunited: true } });
-            return;
-        }
-
-        if (notif.related_id) {
-            if (typeStr === 'alert' || typeStr === 'qr_recovery_request' || titleStr.includes('scan') || titleStr.includes('pet found')) {
-                navigate(`/resident/pet/${notif.related_id}/scan-history`);
-            } else {
-                navigate(`/resident/reports/${notif.related_id}`);
-            }
+        const dest = await resolveNotificationDestination(notif, api);
+        if (dest.action === 'navigate' && dest.path) {
+            navigate(dest.path, dest.state ? { state: dest.state } : undefined);
+        } else if (dest.action === 'chat' && dest.report) {
+            navigate(`/resident/reports/${dest.report.report_id}?openChat=true`, { state: { openChat: true } });
+        } else if (dest.action === 'warning') {
+            navigate('/resident-home');
+        } else {
+            navigate('/resident/settings?tab=notifications');
         }
 
     };
@@ -729,6 +652,7 @@ const ResiNavbar = ({
                             </div>
                             <span className="font-black text-xs uppercase tracking-[0.15em] transition-colors">Observation Updates</span>
                         </Link>
+
 
                         <Link
                             to="/adopt/applications"

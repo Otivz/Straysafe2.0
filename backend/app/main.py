@@ -38,6 +38,7 @@ from app.routes import manual_matching as manual_matching_routes  # also registe
 from app.routes import pet_match_confirmations as pet_match_confirmation_routes  # owner-first pet matching (owner side)
 from app.routes import leader_identity as leader_identity_routes  # Phase 6 leader identity verification
 from app.routes import claim_assessments as claim_assessment_routes  # pet claiming fees (also registers its tables)
+from app.routes import lost_pet_alerts as lost_pet_alert_routes  # neighbor-to-neighbor lost pet sightings
 from app.models.pet_qr import PetQRCode, PetQRScan
 from app.models.audit_log import AuditLog  # noqa: F401 — ensures table is in Base.metadata
 from app.models.pet_claim import PetClaim  # noqa: F401 — ensures table is in Base.metadata
@@ -2006,6 +2007,7 @@ app.include_router(manual_matching_routes.router)
 app.include_router(pet_match_confirmation_routes.router)
 app.include_router(leader_identity_routes.router)
 app.include_router(claim_assessment_routes.router)
+app.include_router(lost_pet_alert_routes.router)
 app.include_router(landmarks.router)
 app.include_router(adoptions.router)
 app.include_router(admin.router)
