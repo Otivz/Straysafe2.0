@@ -112,6 +112,28 @@ try {
         assert.equal(await evaluate('document.documentElement.scrollWidth > window.innerWidth + 2'), false, 'no horizontal overflow');
         scenarios++;
 
+        // Expand the existing map on phone and desktop; all pins and popup details remain available.
+        const previousOverflow = await evaluate('document.body.style.overflow');
+        await click('document.querySelector("[aria-label=\'Expand tracking map\']")');
+        await waitFor('!!document.querySelector("dialog[open] [data-testid=lost-pet-map] .leaflet-marker-icon")', 'expanded map ready');
+        assert.equal(await evaluate('document.querySelector("dialog").getBoundingClientRect().width >= innerWidth - 2'), true, 'expanded map fills viewport width');
+        assert.equal(await evaluate('document.querySelector("dialog .leaflet-container").getBoundingClientRect().height > innerHeight * 0.8'), true, 'expanded map fills viewport height');
+        assert.equal(await evaluate('document.querySelectorAll("dialog .leaflet-marker-icon").length'), 3, 'all pins in expanded map');
+        assert.equal(await evaluate('document.body.style.overflow'), 'hidden', 'background scrolling locked');
+        await click('document.querySelector("dialog [data-sighting-pin=\'1\']").closest(".leaflet-marker-icon")');
+        await waitFor('!!document.querySelector("dialog .leaflet-popup [data-testid=pin-latitude]")', 'expanded sighting popup');
+        assert((await evaluate('document.querySelector("dialog .leaflet-popup").textContent')).includes('Lot 15'), 'expanded popup keeps sighting location');
+        await click('document.querySelector("[aria-label=\'Close expanded map\']")');
+        await waitFor('!document.querySelector("dialog") && document.querySelectorAll("[data-testid=lost-pet-map] .leaflet-marker-icon").length === 3', 'inline map restored');
+        assert.equal(await evaluate('document.body.style.overflow'), previousOverflow, 'background scrolling restored');
+        assert.equal(await evaluate('document.activeElement.getAttribute("aria-label")'), 'Expand tracking map', 'focus returns to expand control');
+        await click('document.querySelector("[aria-label=\'Expand tracking map\']")');
+        await waitFor('!!document.querySelector("dialog[open]")', 'map reopened');
+        await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape' });
+        await command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape' });
+        await waitFor('!document.querySelector("dialog")', 'Escape closes expanded map');
+        scenarios++;
+
         // Spotted Here: pin on the map, consent before device location, accuracy confirmation, multipart submit
         await click(button('📍 Report a Sighting'));
         await waitFor('!!document.querySelector("[data-testid=spotted-here-form]")', 'form open');

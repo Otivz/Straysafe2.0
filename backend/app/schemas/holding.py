@@ -52,6 +52,8 @@ class HoldingAnimalUpdate(BaseModel):
     update_notes:    Optional[str] = None   # optional notes for the timeline entry
     media_ids:       Optional[List[int]] = None
     owner_return:    Optional[OwnerReturnInfo] = None   # required when facility_status becomes 3 (Claimed by Owner)
+    # Head Officer / Administrator only: why the animal is listed for adoption, adopted or impounded before the stay limit
+    early_reason:    Optional[str] = None
 
 
 class HoldingAnimalResponse(BaseModel):

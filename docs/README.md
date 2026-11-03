@@ -38,6 +38,9 @@ Status values: **Current** (matches the code when last checked), **Reference** (
 
 | Document | Status | Notes |
 |---|---|---|
+| [Barangay Operations visible actions change record](05-operations/agents/feature-updates/2026-11-03_0526_barangay-operations-visible-actions.md) | Current | Viewport-bounded desktop operations panel with independently scrolling details and visible action footer; synthetic desktop/phone preview |
+| [Expand lost-pet tracking map change record](05-operations/agents/feature-updates/2026-11-03_0456_expand-lost-pet-tracking-map.md) | Current | Full-viewport tracking map, preserved position/zoom, modal keyboard and scroll behavior, 12 mocked browser scenarios |
+| [Remove sighting hover banner change record](05-operations/agents/feature-updates/2026-11-03_0444_remove-sighting-hover-banner.md) | Current | Numbered neighbor-sighting pins omit the generic hover banner; map numbers, colors, and latest rings preserved |
 | [Settings landmark cards change record](05-operations/agents/feature-updates/2026-11-03_0200_settings-landmark-cards.md) | Current | Readable names and category badges, natural card heights, wrapping actions, desktop and phone mock-data preview |
 | [Minimal history layout change record](05-operations/agents/feature-updates/2026-11-03_0145_minimal-history-layout.md) | Current | Shared Summary / Report details / Activity layout for Subdivision and Barangay history, cleaner shared summaries including Admin, keyboard and responsive checks, PDF validation, broader fixture timeout |
 | [01-system/overview.md](01-system/overview.md) | Current | System boundary, roles, services, known gaps |

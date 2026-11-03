@@ -5,6 +5,7 @@ import { SIGHTING_TITLE } from '../../utils/sighting';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../utils/api';
 import { cloudinaryResized } from '../../utils/cloudinaryImage';
+import { useStayLimit } from '../../utils/useStayLimit';
 import { getCachedData, setCachedData } from '../../utils/cache';
 import { DEFAULT_AVATAR, getProfilePicture, DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import BrgySidebar from '../../components/BrgySidebar';
@@ -20,6 +21,7 @@ import { isActiveReport, isLostPetReport } from '../../utils/heatmap';
 const BrgyDashboard = () => {
     const navigate = useNavigate();
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+    const { days: stayLimitDays } = useStayLimit();  // the Barangay's holding stay limit (server setting)
     const [requests, setRequests] = useState<any[]>(() => getCachedData<any[]>('brgy_dashboard_requests') || []);
     const [personnel, setPersonnel] = useState<any[]>(() => getCachedData<any[]>('brgy_dashboard_personnel') || []);
     const [reports, setReports] = useState<any[]>(() => getCachedData<any[]>('brgy_dashboard_reports') || []);
@@ -817,9 +819,7 @@ const BrgyDashboard = () => {
                             ) : (
                                 <div className="flex flex-col gap-2">
                                     {activeHoldingAnimals.map((animal: any) => {
-                                        const savedStay = typeof window !== 'undefined' ? localStorage.getItem('holding_impound_stay_duration') : null;
-                                        const parsedStay = savedStay !== null ? parseInt(savedStay, 10) : NaN;
-                                        const HOLDING_DAYS_LIMIT = (!isNaN(parsedStay) && parsedStay > 0) ? parsedStay : 7;
+                                        const HOLDING_DAYS_LIMIT = stayLimitDays;  // the Barangay's stored stay limit
                                         const normalizeDate = (d: any): number => {
                                             if (!d) return Date.now();
                                             if (typeof d === 'number') return d;
@@ -1496,9 +1496,7 @@ const BrgyDashboard = () => {
                                         </div>
                                     ) : (
                                         activeHoldingAnimals.map((animal: any) => {
-                                            const savedStay = typeof window !== 'undefined' ? localStorage.getItem('holding_impound_stay_duration') : null;
-                                            const parsedStay = savedStay !== null ? parseInt(savedStay, 10) : NaN;
-                                            const HOLDING_DAYS_LIMIT = (!isNaN(parsedStay) && parsedStay > 0) ? parsedStay : 7;
+                                            const HOLDING_DAYS_LIMIT = stayLimitDays;  // the Barangay's stored stay limit
 
                                             const normalizeDate = (d: any): number => {
                                                 if (!d) return Date.now();

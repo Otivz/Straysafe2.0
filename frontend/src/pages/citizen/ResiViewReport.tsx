@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import LostPetAlertSummary from '../../components/LostPets/LostPetAlertSummary';
+import LatestSightingBlock from '../../components/LostPets/LatestSightingBlock';
+import { useReportSightings } from '../../components/LostPets/useReportSightings';
+import { mostRecentSighting, sightingNumber } from '../../utils/lostPets';
+import { reportSightingMarkers } from '../../components/LostPets/sightingMarkers';
 import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { SIGHTING_TITLE, sightingLandmark, reverseGeocodeStreet } from '../../utils/sighting';
 import { getOriginalSighting } from '../../utils/originalSighting';
@@ -242,6 +246,10 @@ const ResiViewReport = () => {
         timelineScrollRef.current?.scrollTo({ top: 0 });
     };
     useEffect(() => { setMapFocus(null); }, [id]);
+    // Neighbor sightings of a lost pet (Neighborhood Alert) shown next to the original report location
+    const reportSightings = useReportSightings(report?.report_id, isLostPetReport);
+    const recentSighting = mostRecentSighting(reportSightings.sightings);
+    const reportSightingPins = reportSightingMarkers(reportSightings.sightings, reportSightings.alert?.latest_sighting?.sighting_id);
 
     const toggleNativeFullscreen = () => {
         if (!document.fullscreenElement) {
@@ -1692,6 +1700,7 @@ const ResiViewReport = () => {
                                 ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(report.custody_status || '');
                             const isSecuredInHolding = !isResolvedCase && isHeldInFacility(report);
                             const underOwnerObservation = !isResolvedCase && !isSecuredInHolding && !!report.observation?.open;
+                            const showSighting = !isResolvedCase && !isSecuredInHolding && !!recentSighting && !!reportSightings.alert;
 
                             return (
                                 <>
@@ -1734,7 +1743,7 @@ const ResiViewReport = () => {
                                         </div>
                                     </div>
 
-                                    <div className={`grid grid-cols-1 ${isSecuredInHolding ? 'md:grid-cols-2' : ''} gap-4 mb-6`}>
+                                    <div className={`grid grid-cols-1 ${isSecuredInHolding || showSighting ? 'md:grid-cols-2' : ''} gap-4 mb-6`}>
                                         <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
                                             <div className="w-10 h-10 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
                                                 {isSecuredInHolding ? <PawPrint className="w-5 h-5" /> : <MapPin className="w-5 h-5" />}
@@ -1825,6 +1834,16 @@ const ResiViewReport = () => {
                                                 ) : null}
                                             </div>
                                         </div>
+
+                                        {showSighting && recentSighting && reportSightings.alert && (
+                                            <LatestSightingBlock sighting={recentSighting} number={sightingNumber(reportSightings.sightings, recentSighting.sighting_id)}
+                                                count={reportSightings.alert.sighting_count}
+                                                alertHref={`/resident/lost-pets/${reportSightings.alert.alert_id}`}
+                                                onShowOnMap={() => {
+                                                    setMapFocus([Number(recentSighting.latitude), Number(recentSighting.longitude)]);
+                                                    mapSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                }} />
+                                        )}
 
                                         {isSecuredInHolding && (
                                             <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
@@ -2044,6 +2063,7 @@ const ResiViewReport = () => {
                                             facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Place') : undefined
                                         }
                                     },
+                                    ...(isRelocated ? [] : reportSightingPins),
                                     ...(hasDifferentInitialSpot ? [{
                                         id: -999,
                                         lat: initLat!,
@@ -2279,7 +2299,8 @@ const ResiViewReport = () => {
                                                 facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Place') : undefined
                                             }
                                         },
-                                        ...(hasDifferentInitialSpot ? [{
+                                        ...(isRelocated ? [] : reportSightingPins),
+                                    ...(hasDifferentInitialSpot ? [{
                                             id: -999,
                                             lat: initLat!,
                                             lng: initLng!,

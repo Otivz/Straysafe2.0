@@ -30,7 +30,21 @@ const reportsById = {
         latitude: FACILITY.latitude, longitude: FACILITY.longitude, landmark: FACILITY.name },
     // Escalated, not picked up: last reported sighting, location not confirmed
     4: { ...baseReport, report_id: 4, status_id: 4, current_status_id: 4, custody_status: 'Sighting', facility_id: null, facility: null },
+    // A Lost Pet Report whose Neighborhood Alert has neighbor sightings
+    5: { ...baseReport, report_id: 5, category_id: 6, status_id: 2, current_status_id: 2, custody_status: 'Sighting', facility_id: null, facility: null,
+        description: '[LOST PET REPORT] Baron went missing.' },
 };
+// Sightings of report 5: verified older one, unverified newer one, and a newest one the leader dismissed
+const sighting = (id, lat, lng, label, seen, status) => ({ sighting_id: id, latitude: lat, longitude: lng, location_label: label, location_source: 'map_pin',
+    seen_at: seen, submitted_at: seen, description: null, photo_url: null, status, reported_by: 'A neighbor', is_mine: false });
+const SIGHTINGS = [
+    sighting(11, 14.8021, 121.0041, 'Near Mabini Street, Phase 2', '2026-11-03T08:00:00', 'verified'),
+    sighting(12, 14.8030, 121.0052, 'Near the Clubhouse, Phase 3', '2026-11-03T09:30:00', 'unverified'),
+    sighting(13, 14.8044, 121.0061, 'Wrong dog near the gate', '2026-11-03T10:15:00', 'dismissed'),
+];
+const ALERT = { alert_id: 7, report_id: 5, status: 'active', sighting_count: 3, latest_sighting: SIGHTINGS[2],
+    last_seen: { at: '2026-11-03T07:00:00', location: 'Phase 1 Gate', latitude: 14.80148264, longitude: 121.00332141 },
+    pet: { name: 'Baron' }, accepting_sightings: true, is_owner: true, can_manage: false };
 
 let socket;
 let command;
@@ -59,6 +73,9 @@ try {
         const m = path.match(/^\/reports\/(\d+)$/);
         if (m && reportsById[m[1]]) return [200, reportsById[m[1]]];
         if (path.startsWith('/holding/by-report')) return [404, { detail: 'Not found' }];
+        if (path === '/lost-pet-alerts/reports/5') return [200, { alert: ALERT }];
+        if (path === '/lost-pet-alerts/7') return [200, { ...ALERT, sightings: SIGHTINGS }];
+        if (path.startsWith('/lost-pet-alerts/reports/')) return [200, { alert: null }];
         return [200, []];
     };
     const intercept = async ({ requestId, request }) => {
@@ -123,7 +140,45 @@ try {
         assert.match(heldText, /Animal Secured at Holding Place|Secured/, `recorded intake: secured badge (${width}px)`);
         assert.match(heldText, /Original sighting location\s*Phase 1 Gate/, `recorded intake: original sighting kept (${width}px)`);
         assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true, `no sideways scroll at ${width}px`);
-        console.log(`PASS ${width}px: observation case with its owner, escalated case not confirmed, recorded intake at the holding place`);
+
+        // Lost Pet Report with neighbor sightings: the most recent (not dismissed) sighting beside the original location
+        await command('Page.navigate', { url: base + '/resident/reports/5' });
+        await waitFor(`!!document.querySelector('[data-latest-sighting]')`, 'report 5 latest sighting block');
+        const lost = await card();
+        assert.match(lost, /Last reported sighting\s*Phase 1 Gate/, `lost pet: original location kept (${width}px)`);
+        const block = await evaluate(`document.querySelector('[data-latest-sighting]').textContent.replace(/\\s+/g, ' ')`);
+        assert.match(block, /Sighting 2 · most recent neighbor sighting\s*Near the Clubhouse, Phase 3/, `lost pet: most recent sighting by seen time, with its map number (${width}px)`);
+        assert.equal(await evaluate(`document.querySelector('[data-latest-sighting] [data-sighting-number]').textContent.trim()`), '2', `lost pet: numbered badge (${width}px)`);
+        assert.doesNotMatch(block, /Wrong dog near the gate/, `lost pet: dismissed sighting ignored (${width}px)`);
+        assert.match(block, /reported by A neighbor/, `lost pet: neighbor's name hidden (${width}px)`);
+        assert.match(block, /Not verified/, `lost pet: verification status (${width}px)`);
+        assert.match(block, /3 sightings reported/, `lost pet: count as on the tracking map (${width}px)`);
+        assert.match(block, /not a confirmed location/, `lost pet: not presented as confirmed (${width}px)`);
+        assert.equal(await evaluate(`document.querySelector('[data-latest-sighting] a').getAttribute('href')`), '/resident/lost-pets/7', `lost pet: tracking map link (${width}px)`);
+        // The report map's sighting pins: numbered and colored exactly like the tracking map
+        const pinStyle = `[...document.querySelectorAll('.leaflet-container')[0].querySelectorAll('[data-sighting-pin]')].map(p => [p.textContent.trim(), p.style.background, p.style.border])`;
+        await waitFor(`document.querySelectorAll('.leaflet-container')[0]?.querySelectorAll('[data-sighting-pin]').length === 3`, 'report map sighting pins');
+        const reportPins = await evaluate(pinStyle);
+        assert.deepEqual(reportPins.map(x => x[0]), ['1', '2', '3'], `lost pet: pins numbered 1-3 by time seen (${width}px)`);
+        assert.ok(/5, 150, 105|059669/.test(reportPins[0][1]) && /245, 158, 11|f59e0b/.test(reportPins[1][1]) && /156, 163, 175|9ca3af/.test(reportPins[2][1]),
+            `lost pet: verified green, not verified amber, dismissed gray (${width}px): ${JSON.stringify(reportPins)}`);
+        assert.ok(/3px solid/.test(reportPins[2][2]) && !/3px solid/.test(reportPins[0][2]), `lost pet: ring on the latest submitted, as on the tracking map (${width}px)`);
+        await evaluate(`[...document.querySelectorAll('[data-latest-sighting] button')].find(b => b.textContent.includes('Show on map')).click()`);
+        await delay(300);
+        assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true, `no sideways scroll with sightings at ${width}px`);
+        if (process.env.SCREENSHOT_DIR) {
+            await evaluate(`[...document.querySelectorAll('h4')].find(x => x.textContent.trim() === 'Location Intelligence').scrollIntoView({ block: 'start' })`);
+            await delay(800);
+            const shot = await command('Page.captureScreenshot', { format: 'png' });
+            const { writeFile } = await import('node:fs/promises');
+            await writeFile(join(process.env.SCREENSHOT_DIR, `lost-pet-sightings-${width}.png`), Buffer.from(shot.data, 'base64'));
+        }
+        // The tracking map shows the very same numbers, colors and ring
+        await command('Page.navigate', { url: base + '/resident/lost-pets/7' });
+        await waitFor(`!!document.querySelector('[data-testid=lost-pet-map]') && document.querySelectorAll('[data-testid=lost-pet-map] [data-sighting-pin]').length === 3`, 'tracking map pins');
+        const trackingPins = await evaluate(`[...document.querySelectorAll('[data-testid=lost-pet-map] [data-sighting-pin]')].map(p => [p.textContent.trim(), p.style.background, p.style.border])`);
+        assert.deepEqual(trackingPins, reportPins, `lost pet: report map pins identical to the tracking map (${width}px)`);
+        console.log(`PASS ${width}px: observation case with its owner, escalated case not confirmed, recorded intake at the holding place, lost pet's sighting pins identical to the tracking map`);
     }
     assert.equal(browserErrors.length, 0, browserErrors.join('\n'));
     console.log('PASS no uncaught browser errors; all API calls mocked');

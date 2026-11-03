@@ -53,6 +53,27 @@ An ordinary report with one animal hides the Animals in this report panel and sp
 
 The status modal uses the shared orange primary Button for registration and confirmation actions. Other roles' status meanings, disabled states and intentional photo overlays retain their purpose.
 
+## Holding stay limit (added 2026-11-03)
+
+- **One value for the whole Barangay, stored on the server** (`system_settings`, key `holding_stay_limit_days`). The default is 7 days until it is set; it can be 0 to 90, and 0 means no waiting.
+- **Only the Head Officer (Barangay staff with the Head Officer flag) or an Administrator can change it.** They do it on Barangay Settings → Holding Place & Quarantine, which calls `PUT /holding/stay-limit`. Everyone else sees it read-only (`GET /holding/stay-limit`).
+- Every change is audited (`UPDATE_HOLDING_STAY_LIMIT`, with old and new values). It applies to every animal from then on, including those already held.
+- **Days held** count from the animal's arrival at its current facility (`facility_stay_start`; a move restarts the count).
+- **The server enforces the limit** (`require_stay_limit` in `backend/app/utils/holding_stay.py`) on three actions:
+  - listing for adoption (`POST /adoptions/promote/{id}`);
+  - setting a holding record to For Adoption, Adopted or Impounded directly (`PATCH /holding/{id}`, statuses 6, 7 and 8).
+  - A number sent by the browser (`min_stay_days`, `impound_days`) is ignored.
+  - An animal already listed for adoption passed the check when it was listed, so moving it on to Adopted or Impounded isn't blocked again.
+- **Before the limit:**
+  - regular staff are refused (409) with "N of M days held … available on <date>";
+  - the Head Officer or an Administrator may act early only with a written reason (`early_reason`, at least 5 characters, otherwise 400);
+  - the early action is audited (`EARLY_STAY_LIMIT_OVERRIDE`: who, animal, days held, limit, reason), and the reason is added to the animal's timeline note.
+- The overdue and needs-impoundment counts (`GET /holding/metrics`) and the overdue reminder task use the stored limit.
+- **Pages** read it with `useStayLimit` (`frontend/src/utils/useStayLimit.ts`):
+  - the Holding Facility page shows the limit read-only, a "N of M days held · available on <date>" lock note for regular staff, and a required reason box for early impound and early promotion by the Head Officer or an Administrator;
+  - the dashboard and sidebar use the same value.
+- Tests: `backend/tests/test_holding_stay_limit.py` and `frontend/tests/holdingStayLimit.browser.mjs`.
+
 ## Verification and review limits
 
 Isolated checks cover leader scope/filter bypasses, detail access, read-only writes, earlier pens, resident custody, designation boundaries and retained Barangay adoption promotion. Existing holding privacy, stay-clock, report-edit authorization and adoption catalog/handover checks also pass. Browser fixtures exercise mobile/desktop views, settings, single/multiple-animal panels, custody submission and adoption controls without backend requests. See [Testing](../04-testing/README.md) for commands and results.

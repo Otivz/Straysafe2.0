@@ -59,6 +59,11 @@ applicant = mk_user("Applicant Two", 1, subdivision_id=1, barangay_id=1)
 head = mk_user("Head Officer", 3, barangay_id=1, is_head_officer=True)
 head2 = mk_user("Second Head", 3, barangay_id=1, is_head_officer=True)
 db.commit()
+# This suite is about owner-return eligibility, not the holding stay limit (tests/test_holding_stay_limit.py):
+# the Barangay's limit is set to 0 days so freshly admitted animals can be listed
+from app.utils.holding_stay import set_stay_limit_days  # noqa: E402
+set_stay_limit_days(db, 0, head.user_id)
+db.commit()
 H = lambda u: {"Authorization": "Bearer " + create_access_token({"sub": str(u.user_id), "user_id": u.user_id, "role_id": u.role_id})}  # noqa: E731
 HO, HA, HH = H(owner), H(applicant), H(head)
 results = []

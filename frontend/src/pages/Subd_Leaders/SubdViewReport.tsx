@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import LostPetAlertSummary from '../../components/LostPets/LostPetAlertSummary';
+import { useReportSightings } from '../../components/LostPets/useReportSightings';
+import { reportSightingMarkers } from '../../components/LostPets/sightingMarkers';
 import { isManualMatchRecord } from '../../utils/manualMatchFields';
 import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { SIGHTING_TITLE } from '../../utils/sighting';
@@ -227,6 +229,10 @@ const SubdViewReport = () => {
     const [isMapExpanded, setIsMapExpanded] = useState(false);
     const [showDuplicateWhy, setShowDuplicateWhy] = useState(false);
     const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
+    // Neighbor sightings of a lost pet (Neighborhood Alert): pins on the report maps, beside the original location
+    const reportSightings = useReportSightings(report?.report_id,
+        !!report && (report.category_id === 6 || String(report.description || '').includes('[LOST PET REPORT]')));
+    const reportSightingPins = reportSightingMarkers(reportSightings.sightings, reportSightings.alert?.latest_sighting?.sighting_id);
     const expandedMapContainerRef = useRef<HTMLDivElement>(null);
 
     const toggleNativeFullscreen = () => {
@@ -1953,6 +1959,7 @@ const SubdViewReport = () => {
                                                                     facility_name: isRelocated ? (report.facility?.name || report.landmark || (report.custody_status === 'In Subdivision Facility' ? 'Temporary community care' : 'Barangay Holding Facility')) : undefined
                                                                 }
                                                             },
+                                                            ...(isRelocated ? [] : reportSightingPins),
                                                             ...(hasDifferentInitialSpot ? [{
                                                                 id: -999,
                                                                 lat: initLat!,
@@ -3581,7 +3588,8 @@ const SubdViewReport = () => {
                                             facility_name: isRelocated ? (report.facility?.name || report.landmark || (report.custody_status === 'In Subdivision Facility' ? 'Temporary community care' : 'Barangay Holding Facility')) : undefined
                                         }
                                     },
-                                    ...(hasDifferentInitialSpot ? [{
+                                    ...(isRelocated ? [] : reportSightingPins),
+                                                            ...(hasDifferentInitialSpot ? [{
                                         id: -999,
                                         lat: initLat!,
                                         lng: initLng!,

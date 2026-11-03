@@ -85,11 +85,17 @@ Phone numbers, email addresses and home addresses are never part of an alert or 
 - **Residents:** there is no standalone list; `/resident/lost-pets` redirects to the resident home, and alerts are opened from the report page or a notification. Each alert (`/resident/lost-pets/:id`) shows:
   - the alert card;
   - **Report a Sighting** (the Spotted Here form with its own pin map);
-  - the **Lost Pet Tracking Map**: a red marker for the last known location and numbered sighting markers (amber, green when verified, blue ring on the latest). Pins are never joined into a route; clicking one opens its details.
+  - the **Lost Pet Tracking Map**: a red marker for the last known location and numbered sighting markers (amber, green when verified, blue ring on the latest). Pins are never joined into a route; clicking one opens its details. **Expand map** opens a full-viewport dialog with the same position, zoom, markers, and popup details. Close or Escape returns to the inline map and restores keyboard focus; the page behind the dialog cannot scroll.
   - the **sighting timeline**: last known location first, then sightings by reported time, with the latest submission highlighted.
 - **Subdivision Leaders:** `/subd/lost-pet-alerts` redirects to the Subdivision dashboard; each alert (`/subd/lost-pet-alerts/:id`, opened from the report page, the dashboard section or a notification) shows the same view plus its management actions.
 - **Subdivision dashboard:** a compact Lost Pet Alerts section with the same stats, active alerts and latest sighting locations.
 - **Report pages** (resident and Subdivision): a Neighborhood Alert card with the status, sighting count, latest sighting and a link to the map, plus the request button.
+- **Report Location Intelligence and report maps** (added 2026-11-03):
+  - The original report location stays as it was ("Last reported sighting").
+  - The resident's report page adds a **Most recent neighbor sighting** block beside it while the case is open and the animal isn't in a holding place. It shows the place, the reported time, who reported it (per the access rules above), the verification status, the sighting count, **Show on map** and **Open tracking map**. It is labelled as a neighbor's report, not a confirmed location.
+  - "Most recent" means the latest *reported* time, leaving out dismissed sightings. The tracking map's blue ring marks the latest *submitted* sighting; the two are usually the same. The block shows the sighting's map number ("Sighting 2") and the total reported, as on the tracking map.
+  - The resident and Subdivision report maps show the **same pins as the tracking map**: the same numbers (by reported time), the same colors (amber not verified, green verified, gray dismissed) and the same blue ring on the latest submitted. Pins are never joined into a route.
+  - Both maps take their numbering from `orderedSightings` (`frontend/src/utils/lostPets.ts`) and their icons from `frontend/src/components/LostPets/sightingMarkers.ts`. The data comes from the same alert endpoints and access rules (`useReportSightings`, `mostRecentSighting`, `LatestSightingBlock`). The report's own coordinates are never changed by a sighting.
 
 ### Sighting pin location
 
