@@ -32,8 +32,9 @@ import {
     Megaphone, MessageCircle, AlertTriangle, Camera, Video, X, Bandage, Dog, 
     Bot, Check, Map as MapIcon, Pin, Home, Rocket, Users, Ban, 
     ClipboardList, Star, Info, LifeBuoy, ArrowLeft, ArrowRight, Upload,
-    Maximize2, Minimize2, ExternalLink
+    Maximize2, Minimize2, ExternalLink, Bell
 } from 'lucide-react';
+import { resolveNotificationDestination } from '../../utils/notificationNavigation';
 import StraySafeLoading, { AnimalLoadingOverlay } from '../../components/StraySafeLoading';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import { petName } from '../../utils/petName';
@@ -393,6 +394,7 @@ const ResiHomePage = () => {
     // The owner must tick the acknowledgement checkbox; the server refuses an acknowledgement without it
     const [ackChecked, setAckChecked] = useState(false);
     const [showWarningModal, setShowWarningModal] = useState(false);
+    const [selectedNotificationModal, setSelectedNotificationModal] = useState<any | null>(null);
 
     const fetchMyWarnings = async () => {
         try {
@@ -1117,116 +1119,23 @@ const ResiHomePage = () => {
         }
     };
 
-    const handleNotificationClick = (notif: any) => {
+    const handleNotificationClick = async (notif: any) => {
+        if (!notif) return;
         if (!notif.is_read) {
             handleMarkNotificationRead(notif.notification_id);
         }
 
-        const typeStr = (notif.type || '').toLowerCase();
-        const titleStr = (notif.title || '').toLowerCase();
-        const msgStr = (notif.message || '').toLowerCase();
-
-        // Observation notices (started, reminders, updates received, extended) -> Observation Updates
-        if (typeStr.startsWith('followup')) {
-            navigate('/resident/observations');
-            return;
-        }
-
-        // An animal someone applied for is available again: open that animal's adoption page (related_id = holding id)
-        if (typeStr === 'adoption_available_again' && notif.related_id) {
-            navigate(`/adopt/apply/${notif.related_id}`);
-            return;
-        }
-
-        // Adoption notifications (incl. chat) open the adopter's application, not a report
-        if (typeStr.startsWith('adoption') && notif.related_id) {
-            navigate(`/adopt/applications?adoption=${notif.related_id}${typeStr === 'adoption_chat' ? '&chat=1' : ''}`);
-            return;
-        }
-
-        let targetReportId = notif.related_id;
-        if (!targetReportId) {
-            const idMatch = (notif.title || '').match(/Report\s*#(\d+)/i) || (notif.message || '').match(/Report\s*#(\d+)/i);
-            if (idMatch) targetReportId = Number(idMatch[1]);
-        }
-
-        // Status update on a report -> ALWAYS navigate to report details, never match review
-        if (typeStr === 'status_update' && targetReportId) {
-            navigate(`/resident/reports/${targetReportId}`);
-            return;
-        }
-
-        const isMatchInquiry = typeStr === 'match_message' ||
-            titleStr.includes('match inquiry') ||
-            (titleStr.includes('💬') && (titleStr.includes('look-alike') || msgStr.includes('look-alike')));
-
-        const isMatch = typeStr === 'potential_match' ||
-            typeStr === 'match_review' ||
-            titleStr.includes('look-alike pet sighting') ||
-            titleStr.includes('please confirm: is this') ||
-            msgStr.includes('look-alike match for your registered pet');
-
-        const isMessageOrComment =
-            typeStr === 'message' ||
-            typeStr.includes('message') ||
-            titleStr.includes('message') ||
-            typeStr.includes('comment') ||
-            titleStr.includes('comment') ||
-            typeStr.includes('chat') ||
-            titleStr.includes('chat') ||
-            titleStr.includes('💬');
-
-        if ((isMatchInquiry || isMatch) && targetReportId) {
-            // Only chat-message notifications open the chat; match alerts land on the review page
-            navigate(
-                isMatchInquiry
-                    ? `/resident/reports/${targetReportId}/match-review?openChat=true`
-                    : `/resident/reports/${targetReportId}/match-review`,
-                { state: { openChat: isMatchInquiry, highlightMatch: true } }
-            );
-            return;
-        }
-
-        if (isMessageOrComment && targetReportId) {
-            const targetReport = reports.find((r: any) => r.report_id === Number(targetReportId));
-            if (targetReport) {
-                setSelectedChatReport(targetReport);
-                setIsChatOpen(true);
-            } else {
-                api.get(`/reports/${targetReportId}`)
-                    .then(res => {
-                        if (res.data) {
-                            setSelectedChatReport(res.data);
-                            setIsChatOpen(true);
-                        } else {
-                            navigate(`/resident/reports/${targetReportId}?openChat=true`, { state: { openChat: true } });
-                        }
-                    })
-                    .catch(() => {
-                        navigate(`/resident/reports/${targetReportId}?openChat=true`, { state: { openChat: true } });
-                    });
-            }
-            return;
-        }
-
-        if (typeStr === 'warning' || titleStr.includes('citation')) {
+        const dest = await resolveNotificationDestination(notif, api, reports);
+        if (dest.action === 'navigate' && dest.path) {
+            navigate(dest.path, dest.state ? { state: dest.state } : undefined);
+        } else if (dest.action === 'chat') {
+            setSelectedChatReport(dest.report);
+            setIsChatOpen(true);
+        } else if (dest.action === 'warning') {
             setShowWarningModal(true);
-            return;
+        } else if (dest.action === 'modal') {
+            setSelectedNotificationModal(dest.notification || notif);
         }
-
-        if ((typeStr === 'reunion_photo_requested' || titleStr.includes('reunion photo')) && notif.related_id) {
-            navigate(`/resident/reports/${notif.related_id}?openReunited=true`, { state: { openReunited: true } });
-            return;
-        }
-
-        if (notif.related_id) {
-            if (typeStr === 'alert' || typeStr === 'qr_recovery_request' || titleStr.includes('scan') || titleStr.includes('pet found')) {
-                navigate(`/resident/pet/${notif.related_id}/scan-history`);
-            } else {
-                navigate(`/resident/reports/${notif.related_id}`);
-            }
-        }
-
     };
 
     useEffect(() => {
@@ -1739,6 +1648,63 @@ const ResiHomePage = () => {
                                 >
                                     ACKNOWLEDGE NOTICE
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* General Notification Details Modal */}
+                {selectedNotificationModal && (
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                        <div className="bg-white dark:bg-[#1A2338] rounded-[2.5rem] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-100 dark:border-gray-800">
+                            <div className="p-8 pb-6 flex flex-col items-center border-b border-gray-50 dark:border-gray-800 bg-gradient-to-b from-orange-50/50 to-white dark:from-orange-950/20 dark:to-[#1A2338]">
+                                <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/40 text-[#F97316] rounded-full flex items-center justify-center mb-4 shadow-sm border-4 border-white dark:border-gray-800">
+                                    <Bell className="w-8 h-8" />
+                                </div>
+                                <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight text-center">
+                                    {(selectedNotificationModal.title || 'Notification Details').replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]+\s*/u, '')}
+                                </h3>
+                                <p className="text-[10px] font-black text-[#F97316] uppercase tracking-widest mt-1 bg-orange-100/80 dark:bg-orange-900/50 px-3 py-1 rounded-full">
+                                    {selectedNotificationModal.type || 'General Notice'}
+                                </p>
+                            </div>
+                            <div className="p-8 space-y-6">
+                                <div className="bg-gray-50 dark:bg-[#151C2C] p-5 rounded-2xl border border-gray-100 dark:border-gray-800">
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between items-center border-b border-gray-150 dark:border-gray-700/60 pb-3">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Received</span>
+                                            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                                                {formatTimestamp(selectedNotificationModal.created_at)}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Message</span>
+                                            <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 leading-relaxed bg-white dark:bg-[#1E2738] p-4 rounded-xl border border-gray-150 dark:border-gray-700/60 whitespace-pre-wrap">
+                                                {selectedNotificationModal.message}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSelectedNotificationModal(null);
+                                            navigate('/resident/settings?tab=notifications');
+                                        }}
+                                        className="flex-1 py-3 px-4 rounded-2xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                                    >
+                                        Notification Center
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedNotificationModal(null)}
+                                        className="flex-1 py-3 px-4 rounded-2xl bg-[#F97316] hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider transition-colors cursor-pointer shadow-md shadow-orange-500/20"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -76,6 +76,32 @@ def close_open_followups(session: Session, report_id: int, report_status_id: int
     return closed
 
 
+def close_lost_pet_alerts(session: Session, report_id: int, report_status_id: int) -> int:
+    """
+    Closing a Lost Pet Report closes its Neighborhood Alert (docs/01-system/LOST_PET_SIGHTING_PING.md): no more
+    sightings are accepted. Claimed / released / resolved counts as reunited. Sightings and history are kept.
+    Escalation to the Barangay (13) is not a closure: the alert stays as it is.
+    """
+    try:
+        from app.models.lost_pet_alert import LostPetAlert
+    except ImportError:
+        return 0
+    closed = 0
+    with session.no_autoflush:
+        for a in session.query(LostPetAlert).filter(LostPetAlert.report_id == report_id,
+                                                    LostPetAlert.status.in_(("requested", "active"))).all():
+            if a.status not in ("requested", "active"):
+                continue
+            reunited = report_status_id in (9, 10, 11)
+            a.status = "closed"
+            a.close_outcome = "reunited" if reunited else "report_closed"
+            a.close_reason = a.close_reason or ("Resolved - Pet Reunited." if reunited
+                                                else f"The Lost Pet Report was closed (status {report_status_id}).")
+            a.closed_at = a.closed_at or _now()
+            closed += 1
+    return closed
+
+
 @event.listens_for(Session, "before_flush")
 def _sync_rescues_with_closed_reports(session: Session, flush_context, instances):
     from app.models.report import Report
@@ -90,4 +116,5 @@ def _sync_rescues_with_closed_reports(session: Session, flush_context, instances
         if (new_status in CLOSED_REPORT_STATUS_IDS or new_status == 13) and obj.report_id is not None:
             if new_status in CLOSED_REPORT_STATUS_IDS:
                 close_open_rescues(session, obj.report_id, new_status)
+                close_lost_pet_alerts(session, obj.report_id, new_status)
             close_open_followups(session, obj.report_id, new_status)

@@ -243,6 +243,12 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
             return;
         }
 
+        // Neighborhood alert request / new sighting -> that alert (related_id = alert id)
+        if (typeStr === 'lost_pet_alert' || typeStr === 'lost_pet_sighting' || typeStr === 'lost_pet_alert_request') {
+            navigate(notif.related_id ? `/subd/lost-pet-alerts/${notif.related_id}` : '/subd/dashboard');
+            return;
+        }
+
         // Owner answered a pet match confirmation request -> that report's registered-pet candidates (related_id = report id)
         if (typeStr === 'pet_match_confirmation_result') {
             navigate(notif.related_id ? `/subd/manual-matching?report=${notif.related_id}&kind=pet` : '/subd/manual-matching');

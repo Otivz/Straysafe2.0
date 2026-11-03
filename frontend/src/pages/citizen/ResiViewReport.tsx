@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import LostPetAlertSummary from '../../components/LostPets/LostPetAlertSummary';
 import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { SIGHTING_TITLE, sightingLandmark, reverseGeocodeStreet } from '../../utils/sighting';
 import { getOriginalSighting } from '../../utils/originalSighting';
@@ -592,11 +593,7 @@ const ResiViewReport = () => {
     }, [report]);
 
     const handleBack = () => {
-        if (window.history.length > 1) {
-            navigate(-1);
-        } else {
-            navigate('/resident-home');
-        }
+        navigate('/resident-home');
     };
 
     const handleOpenDisputeModal = async () => {
@@ -949,6 +946,13 @@ const ResiViewReport = () => {
                         </div>
                     </div>
                 )}
+
+                {/* Neighbor-to-Neighbor Lost Pet Sighting Ping: the alert, latest sighting, tracking map link */}
+                <div className="mt-3 sm:mt-6">
+                    <LostPetAlertSummary reportId={report.report_id} isLostPetReport={isLostPetReport}
+                        reportOpen={![3, 8, 9, 10, 11, 12, 14, 17, 18].includes(report.status_id)}
+                        alertPath={id => `/resident/lost-pets/${id}`} />
+                </div>
 
                 {/* Main Details Grid: Combined Media & Information Card on left, Rescue Timeline Card on right */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 sm:gap-8 items-stretch mt-3 sm:mt-8">

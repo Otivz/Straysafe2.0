@@ -13,6 +13,7 @@ from app.models.report import (
 )
 from app.models.pet_claim import PetClaim
 from app.models.claim_assessment import ClaimFeeSchedule, ClaimAssessment, ClaimAssessmentChange  # noqa: F401
+from app.models.lost_pet_alert import LostPetAlert, LostPetSighting  # noqa: F401
 from app.models.report_dispute import ReportDispute
 from app.models.report_match import ReportMatch
 from app.models.manual_match import ManualMatchDecision  # noqa: F401

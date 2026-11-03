@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
+import LostPetDashboardSection from '../../components/LostPets/LostPetDashboardSection';
 import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { useNavigate } from 'react-router-dom';
 import { Maximize2, Minimize2 } from 'lucide-react';
@@ -1322,6 +1323,9 @@ const SubdDashboard = () => {
                             </div>
                         </div>
                     </div>
+
+                    {/* Lost pet alerts and sightings (Neighbor-to-Neighbor Lost Pet Sighting Ping) */}
+                    <LostPetDashboardSection />
 
                     {/* 4. Secondary Row: Active Hazard Notices (Left) & Recent Pet Claims (Right) */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-5 items-start">

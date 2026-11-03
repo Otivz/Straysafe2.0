@@ -312,9 +312,17 @@ const ClaimAssessmentPanel = ({ claimId, claimStatus, viewer, onSettledChange }:
                         <p className="text-[10px] font-bold text-amber-700">{assessment.fine_note} — no fine charged</p>
                     </div>
                 )}
-                <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 pt-2 border-t border-gray-100 mt-1">Service fees</p>
-                <Row label="Impounding fee" value={assessment.impounding_fee ? peso(assessment.impounding_fee) : 'Not charged'} sub={assessment.impounding_fee ? assessment.impounding_fee_basis : null} />
-                <Row label={`Boarding fee${assessment.boarding_days ? ` (${assessment.boarding_days} day${assessment.boarding_days === 1 ? '' : 's'})` : ''}`} value={assessment.boarding_fee ? peso(assessment.boarding_fee) : 'Not charged'} sub={assessment.boarding_fee ? assessment.boarding_fee_basis : null} />
+                {((Boolean(assessment.impounding_fee) && Number(assessment.impounding_fee) > 0) || (Boolean(assessment.boarding_fee) && Number(assessment.boarding_fee) > 0)) && (
+                    <>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 pt-2 border-t border-gray-100 mt-1">Service fees</p>
+                        {Boolean(assessment.impounding_fee) && Number(assessment.impounding_fee) > 0 && (
+                            <Row label="Impounding fee" value={peso(assessment.impounding_fee)} sub={assessment.impounding_fee_basis} />
+                        )}
+                        {Boolean(assessment.boarding_fee) && Number(assessment.boarding_fee) > 0 && (
+                            <Row label={`Boarding fee${assessment.boarding_days ? ` (${assessment.boarding_days} day${assessment.boarding_days === 1 ? '' : 's'})` : ''}`} value={peso(assessment.boarding_fee)} sub={assessment.boarding_fee_basis} />
+                        )}
+                    </>
+                )}
                 <div className="border-t border-gray-200 mt-1 pt-1">
                     <Row label="Total amount due" value={peso(assessment.total_due)} strong />
                 </div>
@@ -523,8 +531,8 @@ const ClaimAssessmentPanel = ({ claimId, claimStatus, viewer, onSettledChange }:
                         ) : (
                             <Row label={fineOpt?.label || 'Fine'} value={fineOpt?.configured ? peso(fineVal) : 'Not charged'} />
                         )}
-                        <Row label="Impounding fee" value={impVal ? peso(impVal) : 'Not charged'} />
-                        <Row label={`Boarding fee${boardDays ? ` (${boardDays} day${boardDays === 1 ? '' : 's'})` : ''}`} value={boardVal ? peso(boardVal) : 'Not charged'} />
+                        {impVal ? <Row label="Impounding fee" value={peso(impVal)} /> : null}
+                        {boardVal ? <Row label={`Boarding fee${boardDays ? ` (${boardDays} day${boardDays === 1 ? '' : 's'})` : ''}`} value={peso(boardVal)} /> : null}
                         <div className="border-t border-gray-200 mt-1 pt-1"><Row label="Total amount due" value={peso(total)} strong /></div>
                     </div>
                     {editing && <p className="text-[10px] text-gray-600">Reason: {reason.trim()}</p>}
