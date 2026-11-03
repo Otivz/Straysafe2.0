@@ -1138,7 +1138,10 @@ const SubdSettings: React.FC = () => {
 
                                         {/* Registered Landmarks List */}
                                         <div className="space-y-3 pt-2">
-                                            <h4 className="text-xs font-black text-gray-900 uppercase tracking-wider">Registered Subdivision Landmarks ({landmarks.length})</h4>
+                                            <div className="flex items-center gap-2">
+                                                <h4 className="text-sm font-semibold text-gray-900">Registered landmarks</h4>
+                                                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">{landmarks.length}</span>
+                                            </div>
                                             {loadingLandmarks ? (
                                                 <p className="text-xs text-gray-400 font-bold animate-pulse">Loading registered landmarks...</p>
                                             ) : landmarks.length === 0 ? (
@@ -1146,36 +1149,33 @@ const SubdSettings: React.FC = () => {
                                                     <p className="text-gray-400 text-xs font-semibold">No landmarks registered in this subdivision yet. Use the form above to add one.</p>
                                                 </div>
                                             ) : (
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-4">
                                                     {landmarks.map((item) => {
                                                         const cat = getLandmarkCategory(item.category, item.is_holding_facility);
                                                         return (
                                                             <div
                                                                 key={item.landmark_id}
-                                                                className={`p-4 rounded-2xl border transition-all ${
+                                                                className={`min-w-0 p-5 rounded-2xl border ${
                                                                     item.is_holding_facility
-                                                                        ? 'bg-gradient-to-br from-emerald-50/70 to-teal-50/40 border-emerald-200 shadow-xs'
-                                                                        : 'bg-white border-gray-200 shadow-xs'
+                                                                        ? 'bg-emerald-50/40 border-emerald-200'
+                                                                        : 'bg-white border-gray-200'
                                                                 }`}
                                                             >
-                                                                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2.5">
-                                                                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                                                                        <span className="text-xl shrink-0 mt-0.5">{cat.emoji}</span>
-                                                                        <div className="min-w-0 flex-1">
-                                                                            <h5 className="text-xs font-bold text-gray-900 leading-snug break-words">{item.name}</h5>
-                                                                            {item.description && (
-                                                                                <p className="text-[11px] text-gray-500 font-normal mt-1 leading-relaxed break-words">{item.description}</p>
-                                                                            )}
-                                                                        </div>
+                                                                <div className="flex items-start gap-3 min-w-0">
+                                                                    <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-50 text-xl">{cat.emoji}</span>
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <h5 className="text-sm font-semibold text-gray-900 leading-relaxed break-words">{item.name}</h5>
+                                                                        <span className={`mt-2 inline-flex max-w-full rounded-lg px-2 py-1 text-xs font-medium leading-relaxed whitespace-normal break-words ${
+                                                                            item.is_holding_facility
+                                                                                ? 'bg-emerald-100 text-emerald-800'
+                                                                                : `${cat.badgeBg} ${cat.badgeText}`
+                                                                        }`}>
+                                                                            {item.is_holding_facility ? 'Earlier Care Spot' : cat.label}
+                                                                        </span>
+                                                                        {item.description && (
+                                                                            <p className="text-sm text-gray-500 mt-3 leading-relaxed break-words">{item.description}</p>
+                                                                        )}
                                                                     </div>
-                                                                    <span className={`self-start sm:self-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] sm:text-[10px] font-bold uppercase tracking-wider shrink-0 max-w-full truncate ${
-                                                                        item.is_holding_facility
-                                                                            ? 'bg-emerald-600 text-white shadow-xs'
-                                                                            : `${cat.badgeBg} ${cat.badgeText}`
-                                                                    }`}>
-                                                                        <span>{cat.emoji}</span>
-                                                                        <span className="truncate">{item.is_holding_facility ? 'Earlier Care Spot' : cat.label}</span>
-                                                                    </span>
                                                                 </div>
 
                                                                 {item.is_holding_facility && (
@@ -1187,20 +1187,22 @@ const SubdSettings: React.FC = () => {
                                                                     </div>
                                                                 )}
 
-                                                                <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between text-[10px] text-gray-400 font-medium">
-                                                                    <span>Lat: {item.latitude.toFixed(5)}, Lng: {item.longitude.toFixed(5)}</span>
-                                                                    <div className="flex items-center gap-2">
+                                                                <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-xs text-gray-500">
+                                                                    <span className="min-w-0 break-words tabular-nums">Lat: {item.latitude.toFixed(5)}, Lng: {item.longitude.toFixed(5)}</span>
+                                                                    <div className="flex items-center gap-1">
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => handleEditLandmark(item)}
-                                                                            className="text-role-hover hover:text-role-strong font-bold hover:underline cursor-pointer"
+                                                                            aria-label={`Edit ${item.name}`}
+                                                                            className="min-h-9 rounded-lg px-3 text-role-hover hover:bg-role-soft font-medium focus-visible:outline-2 focus-visible:outline-role cursor-pointer"
                                                                         >
                                                                             Edit
                                                                         </button>
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => handleDeleteLandmark(item.landmark_id)}
-                                                                            className="text-rose-600 hover:text-rose-800 font-bold hover:underline cursor-pointer"
+                                                                            aria-label={`Delete ${item.name}`}
+                                                                            className="min-h-9 rounded-lg px-3 text-rose-600 hover:bg-rose-50 font-medium focus-visible:outline-2 focus-visible:outline-rose-600 cursor-pointer"
                                                                         >
                                                                             Delete
                                                                         </button>

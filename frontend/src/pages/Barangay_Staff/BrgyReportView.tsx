@@ -25,7 +25,7 @@ import { nominatimReverse } from '../../utils/geocode';
 import { cloudinaryResized } from '../../utils/cloudinaryImage';
 import { getCachedData } from '../../utils/cache';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
-import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
+import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle, isHoldingHistoryEntry } from '../../utils/reportStatus';
 import NoticeModal from '../../components/Modals/NoticeModal';
 import ActivityPhotos from '../../components/ActivityPhotos';
 import ReportDescription from '../../components/ReportDescription';
@@ -1643,7 +1643,7 @@ const BrgyReportView = () => {
                                                     const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && (Math.abs(initLat - sightingLat) > 0.0001 || Math.abs(initLng - sightingLng) > 0.0001);
 
                                                     const hadHoldingHistory = report.history?.some((h: any) => 
-                                                        [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
+                                                        isHoldingHistoryEntry(h) || 
                                                         (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                                         (h.action && h.action.toLowerCase().includes('holding'))
                                                     ) || Boolean(report.facility_id) || Boolean(report.facility);
@@ -3498,7 +3498,7 @@ const BrgyReportView = () => {
                                 const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && (Math.abs(initLat - sightingLat) > 0.0001 || Math.abs(initLng - sightingLng) > 0.0001);
 
                                 const hadHoldingHistory = report.history?.some((h: any) => 
-                                    [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
+                                    isHoldingHistoryEntry(h) || 
                                     (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                     (h.action && h.action.toLowerCase().includes('holding'))
                                 ) || Boolean(report.facility_id) || Boolean(report.facility);

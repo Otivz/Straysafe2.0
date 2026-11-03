@@ -87,7 +87,7 @@ try {
 
         // Report 1: resolved; verification from the first Verified history entry because the fields are empty (F17)
         const r1 = await caseText('report1');
-        assert.match(r1, /Case Summary CLOSED/);
+        assert.match(r1, /Case Summary Closed/);
         assert.match(await section('report1', 'outcome'), /Final outcome Status Incident Resolved Closed on Nov 2, 2026.*Recorded by Leader Santos Remarks The owner complied\./);
         const v1 = await section('report1', 'verification');
         assert.match(v1, /Verified by Leader Santos Verified on Nov 2, 2026, 7:11 PM/);
@@ -103,7 +103,7 @@ try {
         assert.match(v2, /Verified by Leader Reyes .* Notes Two dogs near the gate, one limping\./);
         assert.doesNotMatch(v2, /Taken from the case history/);
         assert.match(await section('verified', 'outcome'), /Current status Status Escalated to Barangay Since Nov 1, 2026/);
-        assert.match(await caseText('verified'), /Case Summary OPEN/);
+        assert.match(await caseText('verified'), /Case Summary Open/);
         const a2 = await section('verified', 'animal');
         assert.match(a2, /Count 2 animals Condition Injured Breed Aspin · Labrador Mix AI Color Black · Dark Brown AI Size Large/);
         const p2 = await section('verified', 'priority');

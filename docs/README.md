@@ -38,6 +38,8 @@ Status values: **Current** (matches the code when last checked), **Reference** (
 
 | Document | Status | Notes |
 |---|---|---|
+| [Settings landmark cards change record](05-operations/agents/feature-updates/2026-11-03_0200_settings-landmark-cards.md) | Current | Readable names and category badges, natural card heights, wrapping actions, desktop and phone mock-data preview |
+| [Minimal history layout change record](05-operations/agents/feature-updates/2026-11-03_0145_minimal-history-layout.md) | Current | Shared Summary / Report details / Activity layout for Subdivision and Barangay history, cleaner shared summaries including Admin, keyboard and responsive checks, PDF validation, broader fixture timeout |
 | [01-system/overview.md](01-system/overview.md) | Current | System boundary, roles, services, known gaps |
 | [01-system/HEATMAP_RULES.md](01-system/HEATMAP_RULES.md) | Current | Incident counting, original sighting heat, active pins, hotspot thresholds, public directions and Phase 1 validation |
 | [01-system/OWNER_FOLLOWUP_RULES.md](01-system/OWNER_FOLLOWUP_RULES.md) | Current | Phase 3 owner follow-up observation rules, 3-day window, single reasoned extension, rabies guards, privacy, concurrency, append-only monitoring logs, and owner observation updates |

@@ -447,6 +447,10 @@ def populate_verification_and_disputes(
         print(f"Failed to populate verification/disputes for report {rep.report_id}: {err}")
 
 
+# Custody values meaning the animal is in a holding place (only true with a facility or an open holding record)
+IN_FACILITY_CUSTODY = ("Secured in Facility", "In Barangay Facility", "In Subdivision Facility")
+
+
 def populate_location_and_facility_info(
     rep_data: ReportResponse,
     rep: Report,
@@ -488,14 +492,20 @@ def populate_location_and_facility_info(
         )
         is_report_resolved = rep.current_status_id in (9, 10, 11, 12, 14, 17, 18)
 
-        is_in_custody = (rep.current_status_id in (7, 8)) and not is_report_resolved and not is_holding_resolved
-        if holding_rec and not is_holding_resolved and not is_report_resolved and rep.current_status_id not in (1, 2, 3, 4, 5, 6, 13, 14, 17, 18):
+        # An animal is in a holding place only with recorded evidence: an open holding record or a recorded facility.
+        # A status alone never places it there: 7 is also the owner observation (the animal stays with its owner).
+        open_holding = holding_rec is not None and not is_holding_resolved
+        is_in_custody = (rep.current_status_id in (7, 8)) and not is_report_resolved and (open_holding or rep.facility_id is not None)
+        if open_holding and not is_report_resolved and rep.current_status_id not in (1, 2, 3, 4, 5, 6, 13, 14, 17, 18):
             is_in_custody = True
 
         if is_in_custody:
             if not rep_data.custody_status or rep_data.custody_status == "Sighting":
                 rep_data.custody_status = "Secured in Facility"
         elif is_report_resolved or is_holding_resolved or not is_in_custody:
+            # A stored in-facility custody without a holding record or facility is stale: the animal is not held
+            if not is_report_resolved and rep_data.custody_status in IN_FACILITY_CUSTODY:
+                rep_data.custody_status = "Sighting"
             # If resolved / discharged, ensure coordinates and landmark reflect original incident sighting
             rep_data.facility_id = None
             rep_data.facility = None
@@ -517,8 +527,8 @@ def populate_location_and_facility_info(
                 fac = landmarks_map.get(rep.facility_id)
             else:
                 fac = db.query(Landmark).filter(Landmark.landmark_id == rep.facility_id).first()
-        elif is_in_custody:
-            # Fallback to subdivision/barangay holding facility landmark
+        elif is_in_custody and open_holding:
+            # Held (open holding record) but the place wasn't recorded: the subdivision's or barangay's holding place
             if rep.subdivision_id:
                 if holding_facs_by_subd is not None:
                     fac = holding_facs_by_subd.get(rep.subdivision_id)
@@ -3879,13 +3889,14 @@ def update_report_status(
     if resident_holds_animal:
         active_holding = db.query(HoldingAnimal).filter(
             HoldingAnimal.report_id == report_id, HoldingAnimal.discharge_date.is_(None)).first()
-        if (report.facility_id or report.current_status_id in (7, 8) or active_holding
+        if (report.facility_id or active_holding
                 or status_update.facility_id or status_update.status_id in (7, 8)):
             raise HTTPException(status_code=400, detail="Secured by Resident cannot be combined with holding-place custody. Keep an open case status while the animal remains with the resident.")
     if current_user.role_id == 2 and (status_update.facility_id or status_update.status_id in (7, 8)):
         if status_update.facility_id and status_update.facility_id != report.facility_id:
             raise HTTPException(status_code=403, detail="Subdivision Leaders cannot relocate animals to a new holding place. Coordinate with the Barangay.")
-        already_held = report.facility_id or report.current_status_id in (7, 8) or db.query(HoldingAnimal).filter(
+        # Held means a recorded facility or an open holding record; status 7 alone is the owner observation
+        already_held = report.facility_id or db.query(HoldingAnimal).filter(
             HoldingAnimal.report_id == report_id, HoldingAnimal.discharge_date.is_(None)).first()
         if not already_held:
             raise HTTPException(status_code=403, detail="Subdivision Leaders cannot place a new animal in a holding place. Coordinate with the Barangay.")

@@ -175,7 +175,11 @@ def issue_warning(
         ).count()
         is_first_warning = (warning_in.warning_level in ("1st Warning", "Notice")) or (prior_warnings_count == 0)
 
-        warning_ts = new_warning.created_at or datetime.now(timezone.utc)
+        # The warning's time is on the database clock (local); follow-up due dates are kept in UTC like _now() (F18)
+        from app.utils.holding_stay import db_now
+        from app.utils.owner_followups import db_local_to_utc
+        warning_ts = new_warning.created_at or db_now(db)
+        warning_ts_utc = db_local_to_utc(db, warning_ts)
 
         # One open observation per pet (Phase 3): a warning on a logged repeat stays under the observation already open
         pet_for_obs = rep.pet_id or warning_in.pet_id
@@ -184,7 +188,8 @@ def issue_warning(
         ).first() if pet_for_obs else None
 
         if not existing_followup and is_first_warning and open_for_pet is None:
-            followup_due = warning_ts + timedelta(days=3)
+            followup_due = warning_ts_utc + timedelta(days=3)
+            followup_due_local = warning_ts + timedelta(days=3)  # for the message, on the clock the owner reads
             auto_followup = OwnerFollowUp(
                 report_id=rep.report_id,
                 pet_id=rep.pet_id or warning_in.pet_id,
@@ -213,7 +218,7 @@ def issue_warning(
                 title="🐾 3-Day Observation Period Started",
                 message=(
                     f"Because a First Warning was issued for Report #{rep.report_id}, your animal is now under a 3-day observation "
-                    f"until {followup_due.strftime('%b %d, %Y %I:%M %p')}. Please address the reported violation and submit "
+                    f"until {followup_due_local.strftime('%b %d, %Y %I:%M %p')}. Please address the reported violation and submit "
                     "observation updates with photo evidence from your account (Observation Updates)."
                 ),
                 notification_type="followup_started",
@@ -221,7 +226,7 @@ def issue_warning(
         elif existing_followup and is_first_warning and existing_followup.status != "observing":
             existing_followup.status = "observing"
             existing_followup.created_at = warning_ts
-            existing_followup.due_at = warning_ts + timedelta(days=existing_followup.duration_days or 3)
+            existing_followup.due_at = warning_ts_utc + timedelta(days=existing_followup.duration_days or 3)
             rep.current_status_id = 7
             from app.utils.owner_followups import record_observation_event
             record_observation_event(db, existing_followup, "started", current_user.user_id)
