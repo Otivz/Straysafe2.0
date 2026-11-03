@@ -18,6 +18,8 @@ import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import { api } from '../../utils/api';
 import { nominatimReverse } from '../../utils/geocode';
+import { useDispatchBroadcaster, useWatchDispatchLocation } from '../../utils/liveNavigation';
+import { reverseGeocodeStreet } from '../../utils/sighting';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import { RefreshCw } from 'lucide-react';
 
@@ -46,7 +48,13 @@ interface RescueRequest {
         latitude: number;
         longitude: number;
         landmark: string;
+        initial_latitude?: number | null;
+        initial_longitude?: number | null;
         initial_landmark?: string | null;
+        pickup_latitude?: number | null;
+        pickup_longitude?: number | null;
+        pickup_landmark?: string | null;
+        pickup_at?: string | null;
         facility_id?: number | null;
         custody_status?: string | null;
         facility?: {
@@ -169,6 +177,19 @@ const BrgyRescueRequests = () => {
     // Chat Drawer state
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [selectedChatReport, setSelectedChatReport] = useState<any>(null);
+
+    // Live Dispatch & Pickup Location state
+    const [isBroadcasting, setIsBroadcasting] = useState(false);
+    const [pickupLat, setPickupLat] = useState<number | null>(null);
+    const [pickupLng, setPickupLng] = useState<number | null>(null);
+    const [pickupLandmark, setPickupLandmark] = useState('');
+    const [isDetectingPickupGps, setIsDetectingPickupGps] = useState(false);
+
+    // Live Dispatch Broadcaster & Watcher Hooks
+    const viewingReportId = viewingRequest?.report_id || viewingRequest?.report?.report_id || null;
+    const isReportDispatched = viewingRequest?.report?.status_id === 5;
+    useDispatchBroadcaster(viewingReportId, isBroadcasting && Boolean(isReportDispatched));
+    const { liveLocation: activeDispatchLoc } = useWatchDispatchLocation(viewingReportId, Boolean(isReportDispatched));
 
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -417,6 +438,13 @@ const BrgyRescueRequests = () => {
             } else if (statusToUpdate.statusId === 6) {
                 rescuePayload.custody_status = 'Animal Picked Up';
                 rescuePayload.facility_id = null;
+                if (pickupLat != null && pickupLng != null) {
+                    rescuePayload.latitude = pickupLat;
+                    rescuePayload.longitude = pickupLng;
+                    if (pickupLandmark.trim()) {
+                        rescuePayload.landmark = pickupLandmark.trim();
+                    }
+                }
             }
 
             const rescueResponse = await api.patch(`/rescue-requests/${statusToUpdate.requestId}`, rescuePayload);
@@ -534,6 +562,13 @@ const BrgyRescueRequests = () => {
             const currentFacId = reqToUse?.report?.facility_id;
             const match = facilities.find(f => f.landmark_id === currentFacId);
             setSelectedFacilityId(match ? match.landmark_id : (facilities[0]?.landmark_id || null));
+        }
+
+        if (statusId === 6) {
+            const rep = reqToUse?.report;
+            setPickupLat(rep?.pickup_latitude != null ? parseFloat(rep.pickup_latitude.toString()) : (rep?.latitude != null ? parseFloat(rep.latitude.toString()) : null));
+            setPickupLng(rep?.pickup_longitude != null ? parseFloat(rep.pickup_longitude.toString()) : (rep?.longitude != null ? parseFloat(rep.longitude.toString()) : null));
+            setPickupLandmark(rep?.pickup_landmark || rep?.landmark || '');
         }
     };
 
@@ -1511,6 +1546,40 @@ const BrgyRescueRequests = () => {
                                                 <p className="text-[9px] text-gray-400 uppercase tracking-widest font-medium mt-0.5">Pinpoint Accuracy Verified</p>
                                             </div>
                                         </div>
+                                        {/* Live Dispatch Tracker Banner for Status 5 */}
+                                        {viewingRequest.report?.status_id === 5 && (
+                                            <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 mb-1 rounded-2xl bg-blue-50/90 border border-blue-200 shadow-xs">
+                                                <div className="flex items-center gap-2.5">
+                                                    <span className={`w-3 h-3 rounded-full shrink-0 ${activeDispatchLoc?.is_active ? 'bg-emerald-500 animate-ping' : 'bg-blue-400'}`} />
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="text-xs font-black text-blue-950 uppercase tracking-wide">Live Dispatch Tracker</p>
+                                                            {activeDispatchLoc?.is_active && (
+                                                                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                                                    Live GPS Broadcast Active
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-[11px] font-semibold text-blue-700">
+                                                            {activeDispatchLoc?.is_active
+                                                                ? `Team ${activeDispatchLoc.responder_name || 'assigned'} is en route. Live position is visible to Barangay, Subdivision, and Resident.`
+                                                                : 'Assigned responders can broadcast their moving GPS location in real time.'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {(isHeadOfficer || isUserAssignedToRescue(viewingRequest)) && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsBroadcasting(!isBroadcasting)}
+                                                        className={`px-3.5 py-1.5 rounded-xl text-xs font-black shadow-xs transition-all flex items-center gap-1.5 shrink-0 ${
+                                                            isBroadcasting ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-blue-600 text-white hover:bg-blue-700'
+                                                        }`}
+                                                    >
+                                                        <span>{isBroadcasting ? '⏹️ Stop Live GPS' : '📡 Start Live GPS Broadcast'}</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
                                         <div className="w-full h-[300px] rounded-[2rem] overflow-hidden border border-gray-100 relative">
                                             {(() => {
                                                 const rep = viewingRequest.report as any;
@@ -1523,6 +1592,8 @@ const BrgyRescueRequests = () => {
                                                 const isOptionBSecured = rep?.custody_status === 'Secured' || rep?.custody_status === 'In Custody';
                                                 const repInitLat = rep?.initial_latitude != null ? parseFloat(rep.initial_latitude.toString()) : null;
                                                 const repInitLng = rep?.initial_longitude != null ? parseFloat(rep.initial_longitude.toString()) : null;
+                                                const pickupLatVal = rep?.pickup_latitude != null ? parseFloat(rep.pickup_latitude.toString()) : null;
+                                                const pickupLngVal = rep?.pickup_longitude != null ? parseFloat(rep.pickup_longitude.toString()) : null;
                                                 const hasDifferentInitialSpot = !isOptionBSecured && isFac && repInitLat != null && repInitLng != null && (Math.abs(repInitLat - currentLat) > 0.0001 || Math.abs(repInitLng - currentLng) > 0.0001);
 
                                                 return (
@@ -1540,6 +1611,23 @@ const BrgyRescueRequests = () => {
                                                                 time: 'Now',
                                                                 rawData: rep
                                                             },
+                                                            ...(pickupLatVal != null && pickupLngVal != null ? [{
+                                                                id: -888,
+                                                                lat: pickupLatVal,
+                                                                lng: pickupLngVal,
+                                                                title: rep?.pickup_landmark ? `Picked Up: ${rep.pickup_landmark}` : 'Animal Picked Up Location',
+                                                                category: 'Pickup Location',
+                                                                priority: 'High',
+                                                                rawData: rep
+                                                            }] : []),
+                                                            ...(activeDispatchLoc?.is_active && activeDispatchLoc.latitude != null && activeDispatchLoc.longitude != null ? [{
+                                                                id: -777,
+                                                                lat: activeDispatchLoc.latitude,
+                                                                lng: activeDispatchLoc.longitude,
+                                                                title: activeDispatchLoc.responder_name ? `Team: ${activeDispatchLoc.responder_name}` : 'Dispatch Team (Live)',
+                                                                category: 'Dispatch Team',
+                                                                priority: 'High'
+                                                            }] : []),
                                                             ...(hasDifferentInitialSpot ? [{
                                                                 id: -999,
                                                                 lat: repInitLat!,
@@ -1839,6 +1927,98 @@ const BrgyRescueRequests = () => {
                                     </div>
                                 )}
 
+
+                                {/* Pickup Location Section - Show for "Picked Up" (6) */}
+                                {statusToUpdate.statusId === 6 && (
+                                    <div className="space-y-3 bg-purple-50/70 p-5 rounded-[2rem] border border-purple-200 shadow-sm">
+                                        <div className="flex items-center justify-between gap-2 mb-1">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-xs text-xs font-bold">
+                                                    📍
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest block">Exact Animal Pickup Location</label>
+                                                    <span className="text-[9px] text-purple-700 font-bold uppercase tracking-wider">GPS Capture Point</span>
+                                                </div>
+                                            </div>
+                                            {pickupLat != null && pickupLng != null && (
+                                                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-white text-purple-700 border border-purple-200">
+                                                    GPS Captured
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <p className="text-[11px] text-purple-900 font-medium leading-relaxed">
+                                            Where was the animal secured into the vehicle? These coordinates will appear on the map as the verified pickup pin.
+                                        </p>
+
+                                        <div className="flex flex-wrap gap-2">
+                                            <button
+                                                type="button"
+                                                disabled={isDetectingPickupGps}
+                                                onClick={() => {
+                                                    if (!('geolocation' in navigator)) {
+                                                        alert('Geolocation is not supported by your browser.');
+                                                        return;
+                                                    }
+                                                    setIsDetectingPickupGps(true);
+                                                    navigator.geolocation.getCurrentPosition(
+                                                        async (pos) => {
+                                                            const lat = pos.coords.latitude;
+                                                            const lng = pos.coords.longitude;
+                                                            setPickupLat(lat);
+                                                            setPickupLng(lng);
+                                                            setIsDetectingPickupGps(false);
+                                                            try {
+                                                                const st = await reverseGeocodeStreet(lat, lng);
+                                                                if (st) setPickupLandmark(st);
+                                                            } catch {}
+                                                        },
+                                                        () => {
+                                                            setIsDetectingPickupGps(false);
+                                                            alert('Unable to acquire current GPS location. Please check phone permissions.');
+                                                        },
+                                                        { enableHighAccuracy: true, timeout: 10000 }
+                                                    );
+                                                }}
+                                                className="px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+                                            >
+                                                {isDetectingPickupGps ? '📡 Acquiring Phone GPS...' : '📍 Use My Current Phone Location'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const rep = viewingRequest?.report;
+                                                    const initL = rep?.initial_latitude ?? rep?.latitude;
+                                                    const initG = rep?.initial_longitude ?? rep?.longitude;
+                                                    if (initL != null && initG != null) {
+                                                        setPickupLat(parseFloat(initL.toString()));
+                                                        setPickupLng(parseFloat(initG.toString()));
+                                                        setPickupLandmark(rep?.initial_landmark || rep?.landmark || '');
+                                                    }
+                                                }}
+                                                className="px-3 py-2 rounded-xl bg-white border border-purple-200 text-purple-800 hover:bg-purple-100/50 text-xs font-bold transition-all"
+                                            >
+                                                Same as Sighting Spot
+                                            </button>
+                                        </div>
+
+                                        <div className="space-y-1.5 pt-1">
+                                            <input
+                                                type="text"
+                                                placeholder="Pickup street name or landmark (e.g. Block 12 Corner Elm St)..."
+                                                value={pickupLandmark}
+                                                onChange={(e) => setPickupLandmark(e.target.value)}
+                                                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-800 focus:ring-2 focus:ring-purple-500 outline-none shadow-sm"
+                                            />
+                                            {pickupLat != null && pickupLng != null && (
+                                                <p className="text-[10px] font-mono font-bold text-purple-800 pl-1">
+                                                    Coordinates: {pickupLat.toFixed(6)}, {pickupLng.toFixed(6)}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Status Message / Title</label>

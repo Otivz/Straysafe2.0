@@ -1,8 +1,30 @@
-from pydantic import BaseModel, field_serializer, field_validator
+from pydantic import BaseModel, field_serializer, field_validator, model_validator
 from typing import Optional, Any, List, Literal, Union
 from datetime import datetime
 from app.schemas.landmark import LandmarkResponse
 from app.utils.owner_returns import OwnerReturnInfo
+
+
+class LiveLocationPing(BaseModel):
+    latitude: float
+    longitude: float
+    accuracy: Optional[float] = None
+    heading: Optional[float] = None
+    speed: Optional[float] = None
+
+
+class LiveLocationResponse(BaseModel):
+    report_id: int
+    rescue_id: Optional[int] = None
+    user_id: Optional[int] = None
+    responder_name: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy: Optional[float] = None
+    heading: Optional[float] = None
+    speed: Optional[float] = None
+    updated_at: Optional[datetime] = None
+    is_active: bool = False
 
 
 class ReportBase(BaseModel):
@@ -311,6 +333,73 @@ class ReportResponse(ReportBase):
     comments_open: Optional[bool] = None
     # How much of the report this viewer gets: staff / reporter / owner / case_reporter / public / match_owner
     viewer_access: Optional[str] = None
+
+    # Pickup Location Tracking (Status 6)
+    pickup_latitude: Optional[float] = None
+    pickup_longitude: Optional[float] = None
+    pickup_landmark: Optional[str] = None
+    pickup_at: Optional[datetime] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_pickup_metadata(cls, data: Any) -> Any:
+        history = getattr(data, "history", None)
+        if history is None and isinstance(data, dict):
+            history = data.get("history")
+
+        if history:
+            pickup_entry = None
+            for h in history:
+                st_id = getattr(h, "report_status_id", None) if not isinstance(h, dict) else h.get("report_status_id")
+                if st_id == 6:
+                    pickup_entry = h
+
+            if pickup_entry:
+                def _get(obj, key):
+                    return getattr(obj, key, None) if not isinstance(obj, dict) else obj.get(key)
+
+                lat = _get(pickup_entry, "latitude")
+                lng = _get(pickup_entry, "longitude")
+                lmk = _get(pickup_entry, "landmark")
+                cat = _get(pickup_entry, "created_at")
+
+                if isinstance(data, dict):
+                    if lat is not None and data.get("pickup_latitude") is None:
+                        try:
+                            data["pickup_latitude"] = float(lat)
+                        except (ValueError, TypeError):
+                            pass
+                    if lng is not None and data.get("pickup_longitude") is None:
+                        try:
+                            data["pickup_longitude"] = float(lng)
+                        except (ValueError, TypeError):
+                            pass
+                    if lmk is not None and data.get("pickup_landmark") is None:
+                        data["pickup_landmark"] = str(lmk)
+                    if cat is not None and data.get("pickup_at") is None:
+                        data["pickup_at"] = cat
+                else:
+                    if lat is not None and getattr(data, "pickup_latitude", None) is None:
+                        try:
+                            data.pickup_latitude = float(lat)
+                        except Exception:
+                            pass
+                    if lng is not None and getattr(data, "pickup_longitude", None) is None:
+                        try:
+                            data.pickup_longitude = float(lng)
+                        except Exception:
+                            pass
+                    if lmk is not None and getattr(data, "pickup_landmark", None) is None:
+                        try:
+                            data.pickup_landmark = str(lmk)
+                        except Exception:
+                            pass
+                    if cat is not None and getattr(data, "pickup_at", None) is None:
+                        try:
+                            data.pickup_at = cat
+                        except Exception:
+                            pass
+        return data
 
     @field_validator("merged_reports", mode="before")
     @classmethod

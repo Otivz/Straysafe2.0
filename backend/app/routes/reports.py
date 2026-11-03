@@ -82,9 +82,12 @@ from app.schemas.report import (
     ReportUpdate,
     ReportVerifyRequest,
     StatusHistoryResponse,
+    LiveLocationPing,
+    LiveLocationResponse,
 )
 from app.utils.ai_suggestions import call_gemini_with_fallback, is_gemini_enabled_in_db
 from app.utils.audit import log_activity
+from app.utils.live_dispatch_tracker import dispatch_tracker
 from app.utils import ai_jobs, ai_pipeline
 from app.utils.case_groups import (
     case_members, case_pet_claims, case_root, group_pet_conflict, pet_name, release_inherited_pet, require_case_pet, require_direct_pet_link,
@@ -3974,6 +3977,12 @@ def update_report_status(
         report.custody_status = status_update.custody_status or "Animal Picked Up"
         report.facility_id = None
         relocation_note = None
+        if status_update.latitude is not None and status_update.longitude is not None:
+            report.latitude = Decimal(str(status_update.latitude))
+            report.longitude = Decimal(str(status_update.longitude))
+            if status_update.landmark:
+                report.landmark = status_update.landmark
+        dispatch_tracker.stop_location(report.report_id)
     elif status_update.status_id in (9, 10, 11, 12, 14, 17, 18):
         # Case resolved / animal adopted, impounded, claimed, or dismissed: restore original incident coordinates
         if report.initial_latitude is not None and report.initial_longitude is not None:
@@ -3983,7 +3992,8 @@ def update_report_status(
                 report.landmark = report.initial_landmark
         report.facility_id = None
         relocation_note = None
-    elif status_update.latitude is not None and status_update.longitude is not None:
+        dispatch_tracker.stop_location(report.report_id)
+    elif status_update.latitude is not None and status_update.longitude is not None and status_update.status_id != 6:
         report.latitude = Decimal(str(status_update.latitude))
         report.longitude = Decimal(str(status_update.longitude))
         if status_update.landmark:
@@ -6404,3 +6414,92 @@ def review_report_dispute(
     populate_verification_and_disputes(rep_data, report, db)
     return rep_data
 
+
+
+# ── Live Dispatch Team Location Tracking ─────────────────────────────────────
+
+@router.post("/{report_id}/live-location", response_model=LiveLocationResponse)
+def post_live_location(
+    report_id: int,
+    ping: LiveLocationPing,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if report.current_status_id != 5:
+        raise HTTPException(
+            status_code=400,
+            detail="Live location broadcast is only allowed while the report is in Dispatched status (Status 5)."
+        )
+
+    rescue_obj = db.query(Rescue).filter(Rescue.report_id == report_id).first()
+    if current_user.role_id == 3:
+        is_head = getattr(current_user, 'is_head_officer', False)
+        if not is_head:
+            is_assigned = False
+            if rescue_obj and (rescue_obj.staff_id == current_user.user_id or rescue_obj.leader_id == current_user.user_id):
+                is_assigned = True
+            elif rescue_obj:
+                asgn = db.query(RescueAssignment).filter(
+                    RescueAssignment.rescue_id == rescue_obj.rescue_id,
+                    (RescueAssignment.user_id == current_user.user_id) | (RescueAssignment.staff_id == current_user.user_id),
+                    RescueAssignment.assignment_status == "Assigned"
+                ).first()
+                if asgn:
+                    is_assigned = True
+            if not is_assigned:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Only assigned rescue responders or administrators can broadcast live location."
+                )
+    elif current_user.role_id != 4:
+        raise HTTPException(status_code=403, detail="Staff or Admin role required to broadcast live location.")
+
+    updated_record = dispatch_tracker.update_location(
+        report_id=report_id,
+        user_id=current_user.user_id,
+        responder_name=current_user.name,
+        latitude=ping.latitude,
+        longitude=ping.longitude,
+        accuracy=ping.accuracy,
+        heading=ping.heading,
+        speed=ping.speed,
+        rescue_id=rescue_obj.rescue_id if rescue_obj else None
+    )
+    return LiveLocationResponse(**updated_record)
+
+
+@router.delete("/{report_id}/live-location")
+def stop_live_location(
+    report_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    dispatch_tracker.stop_location(report_id)
+    return {"message": "Live location tracking stopped", "is_active": False}
+
+
+@router.get("/{report_id}/live-location", response_model=LiveLocationResponse)
+def get_live_location(
+    report_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if report.current_status_id != 5:
+        return LiveLocationResponse(report_id=report_id, is_active=False)
+
+    loc = dispatch_tracker.get_location(report_id)
+    if not loc or not loc.get("is_active"):
+        return LiveLocationResponse(report_id=report_id, is_active=False)
+
+    return LiveLocationResponse(**loc)

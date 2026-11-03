@@ -170,6 +170,10 @@ class Report(Base):
     pending_transfer_to_name: Optional[str] = None
     pending_transfer_from_name: Optional[str] = None
     merged_by_name: Optional[str] = None
+    pickup_latitude: Optional[float] = None
+    pickup_longitude: Optional[float] = None
+    pickup_landmark: Optional[str] = None
+    pickup_at: Optional[datetime] = None
 
 
 class LetterStatus(Base):

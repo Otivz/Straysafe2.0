@@ -21,6 +21,7 @@ from app.utils.case_review import require_animal_record
 from app.utils.notification_dispatcher import dispatch_notification, notify_report_status_update
 from app.services import email_templates
 from app.utils import holding_stay as _holding_stay  # noqa: E402,F401  (each holding facility has its own stay clock)
+from app.utils.live_dispatch_tracker import dispatch_tracker
 
 router = APIRouter(
     prefix="/rescue-requests",
@@ -650,7 +651,7 @@ def update_rescue_request(
                                 relocation_note = f"Transferred to {fac.name}{caretaker_str} (Previously held at: {prev_fac_name})"
                             elif report_status_id in (7, 8):
                                 relocation_note = f"Secured in holding place ({fac.name}){caretaker_str}"
-                    elif lat is not None and lng is not None:
+                    elif lat is not None and lng is not None and report_status_id != 6:
                         report_obj.latitude = Decimal(str(lat))
                         report_obj.longitude = Decimal(str(lng))
                         if lmk:
@@ -662,6 +663,12 @@ def update_rescue_request(
                         report_obj.custody_status = custody_status or "Animal Picked Up"
                         report_obj.facility_id = None
                         relocation_note = None
+                        if lat is not None and lng is not None:
+                            report_obj.latitude = Decimal(str(lat))
+                            report_obj.longitude = Decimal(str(lng))
+                            if lmk:
+                                report_obj.landmark = lmk
+                        dispatch_tracker.stop_location(report_obj.report_id)
                     elif report_status_id in (7, 8) and not report_obj.facility_id:
                         # Auto-resolve Barangay Holding Facility location and custody status
                         brgy_fac = db.query(Landmark).filter(

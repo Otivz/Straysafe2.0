@@ -7,6 +7,7 @@ import { reportSightingMarkers } from '../../components/LostPets/sightingMarkers
 import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { SIGHTING_TITLE, sightingLandmark, reverseGeocodeStreet } from '../../utils/sighting';
 import { getOriginalSighting } from '../../utils/originalSighting';
+import { useWatchDispatchLocation } from '../../utils/liveNavigation';
 import { useNavigate, useParams, useSearchParams, useLocation, Link } from 'react-router-dom';
 import api from '../../utils/api';
 import { nominatimReverse } from '../../utils/geocode';
@@ -139,6 +140,7 @@ const ResiViewReport = () => {
     const location = useLocation();
 
     const [report, setReport] = useState<any | null>(null);
+    const { liveLocation: activeDispatchLoc } = useWatchDispatchLocation(report?.report_id || null, report?.status_id === 5);
     const savedOriginalSighting = getOriginalSighting(report);
     const originalLat = savedOriginalSighting.point?.[0] ?? null;
     const originalLng = savedOriginalSighting.point?.[1] ?? null;
@@ -1975,6 +1977,29 @@ const ResiViewReport = () => {
                             </div>
                         )}
 
+                        {/* Live Dispatch Tracker Banner for Status 5 */}
+                        {report?.status_id === 5 && activeDispatchLoc?.is_active && (
+                            <div className="flex items-center justify-between gap-3 p-3.5 mb-3 rounded-2xl bg-blue-500/10 border border-blue-400/30 text-blue-200 shadow-xs animate-in fade-in">
+                                <div className="flex items-center gap-2.5">
+                                    <span className="relative flex h-3 w-3 shrink-0">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                                    </span>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-xs font-black text-white uppercase tracking-wide">Barangay Rescue Team En Route</p>
+                                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">
+                                                Live Tracking Active
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] font-medium text-slate-300 mt-0.5">
+                                            The Barangay rescue team ({activeDispatchLoc.responder_name || 'Assigned Responders'}) is actively on the way. Follow their live vehicle/team location on the map below.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <div 
                             id="report-map-container" 
                             className={`w-full ${
@@ -2064,6 +2089,23 @@ const ResiViewReport = () => {
                                         }
                                     },
                                     ...(isRelocated ? [] : reportSightingPins),
+                                    ...(report?.pickup_latitude != null && report?.pickup_longitude != null ? [{
+                                        id: -888,
+                                        lat: parseFloat(report.pickup_latitude.toString()),
+                                        lng: parseFloat(report.pickup_longitude.toString()),
+                                        title: report.pickup_landmark ? `Picked Up: ${report.pickup_landmark}` : 'Animal Picked Up Location',
+                                        category: 'Pickup Location',
+                                        priority: 'High',
+                                        rawData: report
+                                    }] : []),
+                                    ...(activeDispatchLoc?.is_active && activeDispatchLoc.latitude != null && activeDispatchLoc.longitude != null ? [{
+                                        id: -777,
+                                        lat: activeDispatchLoc.latitude,
+                                        lng: activeDispatchLoc.longitude,
+                                        title: activeDispatchLoc.responder_name ? `Team: ${activeDispatchLoc.responder_name}` : 'Dispatch Team (Live)',
+                                        category: 'Dispatch Team',
+                                        priority: 'High'
+                                    }] : []),
                                     ...(hasDifferentInitialSpot ? [{
                                         id: -999,
                                         lat: initLat!,
@@ -2300,6 +2342,23 @@ const ResiViewReport = () => {
                                             }
                                         },
                                         ...(isRelocated ? [] : reportSightingPins),
+                                    ...(report?.pickup_latitude != null && report?.pickup_longitude != null ? [{
+                                        id: -888,
+                                        lat: parseFloat(report.pickup_latitude.toString()),
+                                        lng: parseFloat(report.pickup_longitude.toString()),
+                                        title: report.pickup_landmark ? `Picked Up: ${report.pickup_landmark}` : 'Animal Picked Up Location',
+                                        category: 'Pickup Location',
+                                        priority: 'High',
+                                        rawData: report
+                                    }] : []),
+                                    ...(activeDispatchLoc?.is_active && activeDispatchLoc.latitude != null && activeDispatchLoc.longitude != null ? [{
+                                        id: -777,
+                                        lat: activeDispatchLoc.latitude,
+                                        lng: activeDispatchLoc.longitude,
+                                        title: activeDispatchLoc.responder_name ? `Team: ${activeDispatchLoc.responder_name}` : 'Dispatch Team (Live)',
+                                        category: 'Dispatch Team',
+                                        priority: 'High'
+                                    }] : []),
                                     ...(hasDifferentInitialSpot ? [{
                                             id: -999,
                                             lat: initLat!,

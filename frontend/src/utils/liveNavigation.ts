@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { api } from './api';
 
 // Live GPS while following directions. The "you" marker follows every GPS fix, but the route is only recalculated
 // after moving RECALC_METERS (or MIN_MOVE_METERS once RECALC_MS has passed), so the free OSRM service isn't flooded
@@ -86,4 +87,125 @@ export function useLiveRoute(routing?: { start: [number, number]; end: [number, 
 
     const arrived = Boolean(live && livePos && routing && metersBetween(livePos, routing.end) <= ARRIVED_METERS);
     return { routeStart, livePos, accuracy, gpsError, arrived, lastFixAt };
+}
+
+export interface LiveDispatchLocation {
+    is_active: boolean;
+    report_id: number;
+    latitude?: number | null;
+    longitude?: number | null;
+    heading?: number | null;
+    accuracy?: number | null;
+    responder_id?: number | null;
+    responder_name?: string | null;
+    updated_at?: number | null;
+}
+
+export function useDispatchBroadcaster(reportId: number | null, enabled: boolean) {
+    const [gpsError, setGpsError] = useState<string | null>(null);
+    const [lastSentPos, setLastSentPos] = useState<[number, number] | null>(null);
+    const lastSentRef = useRef<{ pos: [number, number] | null; time: number }>({ pos: null, time: 0 });
+
+    useEffect(() => {
+        if (!enabled || !reportId) {
+            setLastSentPos(null);
+            return;
+        }
+        if (!('geolocation' in navigator)) {
+            setGpsError('Geolocation is not supported on this device');
+            return;
+        }
+
+        let wakeLock: any = null;
+        if ('wakeLock' in navigator) {
+            (navigator as any).wakeLock.request('screen').then((wl: any) => {
+                wakeLock = wl;
+            }).catch(() => {});
+        }
+
+        const sendPing = (lat: number, lng: number, heading: number | null, accuracy: number | null) => {
+            const now = Date.now();
+            const prev = lastSentRef.current.pos;
+            const elapsed = now - lastSentRef.current.time;
+            const moved = prev ? metersBetween(prev, [lat, lng]) : 9999;
+
+            if (!prev || moved >= 8 || elapsed >= 8000) {
+                lastSentRef.current = { pos: [lat, lng], time: now };
+                setLastSentPos([lat, lng]);
+                api.post(`/reports/${reportId}/live-location`, {
+                    latitude: lat,
+                    longitude: lng,
+                    heading,
+                    accuracy
+                }).catch(() => {});
+            }
+        };
+
+        const watchId = navigator.geolocation.watchPosition(
+            (p) => {
+                setGpsError(null);
+                sendPing(
+                    p.coords.latitude,
+                    p.coords.longitude,
+                    Number.isFinite(p.coords.heading) ? p.coords.heading : null,
+                    Number.isFinite(p.coords.accuracy) ? Math.round(p.coords.accuracy) : null
+                );
+            },
+            (err) => {
+                setGpsError(err.code === err.PERMISSION_DENIED ? 'Location permission denied' : 'Waiting for GPS signal...');
+            },
+            { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 }
+        );
+
+        const heartbeat = window.setInterval(() => {
+            if (lastSentRef.current.pos) {
+                const [lat, lng] = lastSentRef.current.pos;
+                api.post(`/reports/${reportId}/live-location`, {
+                    latitude: lat,
+                    longitude: lng
+                }).catch(() => {});
+            }
+        }, 12000);
+
+        return () => {
+            navigator.geolocation.clearWatch(watchId);
+            window.clearInterval(heartbeat);
+            if (wakeLock && wakeLock.release) {
+                wakeLock.release().catch(() => {});
+            }
+            api.delete(`/reports/${reportId}/live-location`).catch(() => {});
+        };
+    }, [reportId, enabled]);
+
+    return { gpsError, lastSentPos };
+}
+
+export function useWatchDispatchLocation(reportId: number | null, isDispatchedStatus: boolean) {
+    const [liveLocation, setLiveLocation] = useState<LiveDispatchLocation | null>(null);
+
+    useEffect(() => {
+        if (!reportId || !isDispatchedStatus) {
+            setLiveLocation(null);
+            return;
+        }
+        let cancelled = false;
+        const poll = () => {
+            api.get(`/reports/${reportId}/live-location`)
+                .then((res) => {
+                    if (!cancelled) {
+                        setLiveLocation(res.data);
+                    }
+                })
+                .catch(() => {});
+        };
+        poll();
+        const interval = window.setInterval(poll, 5000);
+        return () => {
+            cancelled = true;
+            window.clearInterval(interval);
+        };
+    }, [reportId, isDispatchedStatus]);
+
+    return { liveLocation };
+
 }

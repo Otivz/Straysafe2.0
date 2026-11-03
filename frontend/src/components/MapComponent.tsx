@@ -604,6 +604,106 @@ const createColoredIncidentIcon = (colorName: string = 'red', category: string =
     });
 });
 
+export const createDispatchTeamIcon = (responderName: string = 'Dispatch Team') => cachedIcon(`dispatch-team|${responderName}`, () => L.divIcon({
+    html: `
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;">
+            <div style="
+                background: #2563EB;
+                color: #FFFFFF;
+                font-size: 9px;
+                font-weight: 900;
+                padding: 3px 8px;
+                border-radius: 9999px;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                box-shadow: 0 4px 12px rgba(37,99,235,0.4);
+                border: 2px solid #FFFFFF;
+                white-space: nowrap;
+                margin-bottom: 3px;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            ">
+                <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #34D399; animation: pulse-ring 1.5s infinite;"></span>
+                <span>${responderName}</span>
+            </div>
+            <div style="position: relative; width: 34px; height: 34px;">
+                <div style="
+                    position: absolute;
+                    inset: 0;
+                    border-radius: 50%;
+                    background: #3B82F6;
+                    opacity: 0.35;
+                    animation: pulse-ring 1.5s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+                "></div>
+                <div style="
+                    position: absolute;
+                    inset: 3px;
+                    border-radius: 50%;
+                    background: #1D4ED8;
+                    border: 2.5px solid #FFFFFF;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+                    font-size: 15px;
+                ">
+                    🚓
+                </div>
+            </div>
+        </div>
+    `,
+    className: 'custom-dispatch-team-pin',
+    iconSize: [120, 64],
+    iconAnchor: [60, 52],
+    popupAnchor: [0, -45]
+}));
+
+export const createPickupLocationIcon = (landmark: string = 'Animal Picked Up') => cachedIcon(`pickup-location|${landmark}`, () => L.divIcon({
+    html: `
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;">
+            <div style="
+                background: #7C3AED;
+                color: #FFFFFF;
+                font-size: 9px;
+                font-weight: 900;
+                padding: 2.5px 8px;
+                border-radius: 9999px;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+                box-shadow: 0 4px 12px rgba(124,58,237,0.35);
+                border: 2px solid #FFFFFF;
+                white-space: nowrap;
+                margin-bottom: 2px;
+                display: flex;
+                align-items: center;
+                gap: 3px;
+            ">
+                <span>🐾</span>
+                <span>Picked Up Here</span>
+            </div>
+            <div style="
+                background: #7C3AED;
+                width: 32px;
+                height: 32px;
+                border-radius: 50% 50% 50% 0;
+                transform: rotate(-45deg);
+                border: 2.5px solid #FFFFFF;
+                box-shadow: 0 4px 12px rgba(124,58,237,0.4);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            ">
+                <div style="transform: rotate(45deg); font-size: 14px; color: white;">🎯</div>
+            </div>
+        </div>
+    `,
+    className: 'custom-pickup-location-pin',
+    iconSize: [110, 60],
+    iconAnchor: [55, 52],
+    popupAnchor: [0, -45]
+}));
+
 import HeatmapLayer from './HeatmapLayer';
 import RoutingControl from './RoutingControl';
 import ReturnToSeleraButton from './MapControls/ReturnToSeleraButton';
@@ -1560,6 +1660,8 @@ const MapComponent = ({
                                 marker.category === 'Selected Location' ? createSelectedPinIcon() :
                                     (marker.category === 'Barangay Office' || marker.category === 'HQ') ? createBarangayHQIcon(currentZoom) :
                                         isUserLoc ? createUserLocationIcon() :
+                                            marker.category === 'Dispatch Team' ? createDispatchTeamIcon(marker.title || 'Dispatch Team') :
+                                                marker.category === 'Pickup Location' ? createPickupLocationIcon(marker.title || 'Picked Up Here') :
                                             (marker.category === 'Historical Sighting' || marker.category === 'Archived Location' || marker.category === 'Historical Holding' || marker.category === 'Resolved') ? createHistoricalPinIcon(marker.category === 'Historical Holding' ? 'HISTORICAL HOLDING' : (marker.title?.includes('Found') ? 'FOUND SPOT' : 'HISTORICAL SIGHTING'), animalTypeStr) :
                                                 isHoldingFacility ? createHoldingFacilityPinIcon(facilityNameStr, currentZoom) :
                                                     isInitialSighting ? InitialSightingIcon :

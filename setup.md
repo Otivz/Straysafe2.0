@@ -50,7 +50,6 @@ python -m venv .venv
 pip install -r backend/requirements.txt
 
 # 4. Go into the backend folder
-
 cd backend
 
 # 5. Start the backend server
@@ -119,7 +118,7 @@ Open a **separate terminal** and run from the **project root**:
 
 ```powershell
 # 1. Go into frontend folder
-cd frontend
+ cd frontend
 
 # 2. Install dependencies (first time only)
 npm install
