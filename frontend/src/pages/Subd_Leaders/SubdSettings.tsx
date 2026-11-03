@@ -4,6 +4,7 @@ import PhoneInput from '../../components/PhoneInput';
 import axios from 'axios';
 import api, { signOutAfterPasswordChange } from '../../utils/api';
 import { updateStoredSessionUser } from '../../utils/api';
+import { broadcastFacilitySync, onFacilitySync } from '../../utils/cache';
 import { locationErrorMessage } from '../../utils/geolocationDefaults';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import SubdSidebar from '../../components/SubdSidebar';
@@ -224,6 +225,8 @@ const SubdSettings: React.FC = () => {
     useEffect(() => {
         fetchLandmarks();
         fetchSubdAccounts();
+        const unsub = onFacilitySync(() => { fetchLandmarks(); });
+        return () => unsub();
     }, [user?.subdivision_id]);
 
     const handleSaveLandmark = async (e: React.FormEvent) => {
@@ -271,6 +274,7 @@ const SubdSettings: React.FC = () => {
                 contact_person: '',
                 contact_number: ''
             });
+            broadcastFacilitySync();
             fetchLandmarks();
         } catch (err: any) {
             console.error('Save landmark error:', err);
@@ -285,6 +289,7 @@ const SubdSettings: React.FC = () => {
         try {
             await api.delete(`/landmarks/${id}`);
             showToast('success', 'Landmark removed successfully.');
+            broadcastFacilitySync();
             fetchLandmarks();
         } catch (err: any) {
             console.error('Delete landmark error:', err);

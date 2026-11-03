@@ -47,7 +47,8 @@ import UnmergeReportModal from '../../components/Modals/UnmergeReportModal';
 import AIMatchReviewModal from '../../components/Modals/AIMatchReviewModal';
 import WarningDetailsModal from '../../components/Modals/WarningDetailsModal';
 
-import { SAN_VICENTE_HQ, SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
+import { SELERA_DEFAULT_CENTER, useBarangayHQCoords } from '../../utils/coverageArea';
+import { onFacilitySync } from '../../utils/cache';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
 import { petName } from '../../utils/petName';
 import CasePetBadge from '../../components/CasePetBadge';
@@ -503,7 +504,7 @@ const SubdViewReport = () => {
     const [navSource, setNavSource] = useState<'brgy' | 'current'>('brgy');
     const [selectedQrPreview, setSelectedQrPreview] = useState<{ url: string; petName?: string; hash?: string; ownerName?: string; ownerPhone?: string } | null>(null);
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
-    const BRGY_OFFICE: [number, number] = SAN_VICENTE_HQ; // R243+QH Santa Maria, Bulacan
+    const BRGY_OFFICE: [number, number] = useBarangayHQCoords(currentUser?.barangay_id || 1); // Synchronized Barangay HQ coordinates
 
     useEffect(() => {
         if (!userStr) {
@@ -602,6 +603,10 @@ const SubdViewReport = () => {
 
     useEffect(() => {
         fetchReportDetails();
+    }, [id]);
+    useEffect(() => {
+        const unsub = onFacilitySync(() => { fetchReportDetails(); });
+        return () => unsub();
     }, [id]);
 
     // Status sync: another user (e.g. the subdivision resolving an observation) can change this report's status.
@@ -1918,10 +1923,10 @@ const SubdViewReport = () => {
                                                         const currentLng = initLng;
                                                         const facLat = report.facility?.latitude != null
                                                             ? parseFloat(report.facility.latitude.toString())
-                                                            : (report.facility_id === 2 ? 14.8018 : (report.facility_id === 5 ? 14.8069 : currentLat));
+                                                            : (report.latitude != null ? parseFloat(report.latitude.toString()) : currentLat);
                                                         const facLng = report.facility?.longitude != null
                                                             ? parseFloat(report.facility.longitude.toString())
-                                                            : (report.facility_id === 2 ? 121.0028 : (report.facility_id === 5 ? 121.0039 : currentLng));
+                                                            : (report.longitude != null ? parseFloat(report.longitude.toString()) : currentLng);
 
                                                         const holdingLat = isRelocated && facLat != null ? facLat : (currentLat ?? SELERA_DEFAULT_CENTER[0]);
                                                         const holdingLng = isRelocated && facLng != null ? facLng : (currentLng ?? SELERA_DEFAULT_CENTER[1]);
@@ -1934,8 +1939,8 @@ const SubdViewReport = () => {
                                                             (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                                             (h.action && h.action.toLowerCase().includes('holding'))
                                                         ) || Boolean(report.facility_id) || Boolean(report.facility);
-                                                        const histFacLat = 14.8069;
-                                                        const histFacLng = 121.0039;
+                                                        const histFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : BRGY_OFFICE[0];
+                                                        const histFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : BRGY_OFFICE[1];
                                                         const histFacName = 'Barangay Holding Facility';
 
                                                         const markersList = isResolvedCase ? [
@@ -3564,10 +3569,10 @@ const SubdViewReport = () => {
                                 const currentLng = initLng;
                                 const facLat = report.facility?.latitude != null
                                     ? parseFloat(report.facility.latitude.toString())
-                                    : (report.facility_id === 2 ? 14.8018 : (report.facility_id === 5 ? 14.8069 : currentLat));
+                                    : (report.latitude != null ? parseFloat(report.latitude.toString()) : currentLat);
                                 const facLng = report.facility?.longitude != null
                                     ? parseFloat(report.facility.longitude.toString())
-                                    : (report.facility_id === 2 ? 121.0028 : (report.facility_id === 5 ? 121.0039 : currentLng));
+                                    : (report.longitude != null ? parseFloat(report.longitude.toString()) : currentLng);
 
                                 const holdingLat = isRelocated && facLat != null ? facLat : (currentLat ?? SELERA_DEFAULT_CENTER[0]);
                                 const holdingLng = isRelocated && facLng != null ? facLng : (currentLng ?? SELERA_DEFAULT_CENTER[1]);
@@ -3580,8 +3585,8 @@ const SubdViewReport = () => {
                                     (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                     (h.action && h.action.toLowerCase().includes('holding'))
                                 ) || Boolean(report.facility_id) || Boolean(report.facility);
-                                const histFacLat = 14.8069;
-                                const histFacLng = 121.0039;
+                                const histFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : BRGY_OFFICE[0];
+                                const histFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : BRGY_OFFICE[1];
                                 const histFacName = 'Barangay Holding Facility';
 
                                 const markersList = isResolvedCase ? [

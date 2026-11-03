@@ -19,7 +19,7 @@ import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle, isHeldInFacility } from '../../utils/reportStatus';
 import { getCachedData, invalidateCache } from '../../utils/cache';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
-import { SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS, SAN_VICENTE_HQ, isValidLatLng } from '../../utils/coverageArea';
+import { SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS, isValidLatLng, useBarangayHQCoords } from '../../utils/coverageArea';
 import { MapContainer, TileLayer, Marker, Popup, Polygon } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -342,6 +342,7 @@ export const AdminReportView: React.FC = () => {
     });
     const [holdingRecord, setHoldingRecord] = useState<HoldingAnimalDetails | null>(null);
     const [loading, setLoading] = useState<boolean>(!report);
+    const hqCoords = useBarangayHQCoords(1);
     const [activeMediaIndex, setActiveMediaIndex] = useState<number>(0);
     const [isLightboxOpen, setIsLightboxOpen] = useState<boolean>(false);
     const [resolvedAddress, setResolvedAddress] = useState<string>('');
@@ -1392,7 +1393,7 @@ export const AdminReportView: React.FC = () => {
                                                 pathOptions={SELERA_BOUNDARY_PATH_OPTIONS}
                                             />
                                             {/* San Vicente HQ */}
-                                            <Marker position={SAN_VICENTE_HQ}>
+                                            <Marker key={`hq-${hqCoords[0]}-${hqCoords[1]}`} position={hqCoords}>
                                                 <Popup>{report.barangay_name ? `Barangay ${report.barangay_name} HQ` : 'Barangay HQ'}</Popup>
                                             </Marker>
                                             {/* Incident Location Marker */}

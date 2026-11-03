@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import api, { API_BASE_URL } from '../../utils/api';
+import { onFacilitySync } from '../../utils/cache';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
@@ -433,6 +434,8 @@ const SubdHoldingFacility = () => {
             }
         };
         fetchFacilities();
+        const unsubFac = onFacilitySync(() => { fetchFacilities(); });
+        return () => unsubFac();
     }, [subdivisionId]);
 
     // ── Data Fetching ──────────────────────────────────────────────────────────
@@ -457,7 +460,16 @@ const SubdHoldingFacility = () => {
         }
     }, [subdivisionId, selectedFacilityId]);
 
-    useEffect(() => { fetchAll(); }, [fetchAll]);
+    useEffect(() => {
+        fetchAll();
+        const unsub = onFacilitySync(() => { fetchAll(); });
+        return () => unsub();
+    }, [fetchAll]);
+    useEffect(() => {
+        if (selectedFacilityId !== 'all' && !facilities.some(f => f.landmark_id === selectedFacilityId)) {
+            setSelectedFacilityId('all');
+        }
+    }, [facilities, selectedFacilityId]);
 
     // ── Separate Active vs History Animals ─────────────────────────────────────
     const isCurrentlyInSubd = useCallback((a: HoldingAnimal) => {
@@ -472,7 +484,7 @@ const SubdHoldingFacility = () => {
             if (!a.facility_id) return false;
             return facilities.some(f => f.landmark_id === a.facility_id);
         }
-        return Boolean(a.facility_id);
+        return Boolean(a.facility_id) && facilities.some(f => f.landmark_id === a.facility_id);
     }, [facilities]);
 
     // Animals from this subdivision now held at a Barangay holding place (not discharged, not closed): the leader

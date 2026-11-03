@@ -148,7 +148,16 @@ def _populate_rescue_fields(
             except Exception:
                 landmarks_map = {}
         if rescue.report.facility_id and not rescue.report.facility:
-            rescue.report.facility = landmarks_map.get(rescue.report.facility_id) or db.query(Landmark).filter(Landmark.landmark_id == rescue.report.facility_id).first()
+            rescue.report.facility = landmarks_map.get(rescue.report.facility_id) or db.query(Landmark).filter(Landmark.landmark_id == rescue.report.facility_id, Landmark.status == "Active").first()
+        elif not rescue.report.facility_id and rescue.report.current_status_id in (7, 8) and rescue.report.custody_status == "In Barangay Facility":
+            brgy_fac = next((l for l in (landmarks_map or {}).values() if l.is_holding_facility and l.subdivision_id is None), None)
+            if brgy_fac:
+                rescue.report.facility_id = brgy_fac.landmark_id
+                rescue.report.facility = brgy_fac
+        if rescue.report.facility and rescue.report.current_status_id in (7, 8, 15, 16):
+            rescue.report.latitude = rescue.report.facility.latitude
+            rescue.report.longitude = rescue.report.facility.longitude
+            rescue.report.landmark = rescue.report.facility.name
         if rescue.report.history:
             for hist in rescue.report.history:
                 hist.updater_name = hist.updater.name if hist.updater else "System"

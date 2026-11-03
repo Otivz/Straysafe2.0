@@ -40,6 +40,7 @@ import { reportDescriptionSummary } from '../../utils/reportDescription';
 import { petName } from '../../utils/petName';
 import CaseStageStepper from '../../components/CaseStageStepper';
 import { getCaseStages, getWhereNow, type CaseStep } from '../../utils/caseStages';
+import { useBarangayHQCoords } from '../../utils/coverageArea';
 
 const reportStatusMap = REPORT_STATUS_MAP;
 
@@ -157,6 +158,7 @@ const ResiViewReport = () => {
     const [isNavbarMenuOpen, setIsNavbarMenuOpen] = useState(false);
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
     const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
+    const BRGY_OFFICE: [number, number] = useBarangayHQCoords(1);
     const [selectedQrPreview, setSelectedQrPreview] = useState<{ url: string; petName?: string; hash?: string; ownerName?: string; ownerPhone?: string } | null>(null);
 
     // Geocoding address
@@ -362,7 +364,7 @@ const ResiViewReport = () => {
         if (mode === 'hq') {
             stopLocationTracking();
             setLocationNotice(null);
-            applyRouting(14.8069, 121.0039, 'Barangay San Vicente HQ', false);
+            applyRouting(BRGY_OFFICE[0], BRGY_OFFICE[1], 'Barangay San Vicente HQ', false);
             return;
         }
 
@@ -2029,8 +2031,8 @@ const ResiViewReport = () => {
                                     (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                     (h.action && h.action.toLowerCase().includes('holding'))
                                 ) || Boolean(report.facility_id) || Boolean(report.facility);
-                                const histFacLat = 14.8069;
-                                const histFacLng = 121.0039;
+                                const histFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : BRGY_OFFICE[0];
+                                const histFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : BRGY_OFFICE[1];
                                 const histFacName = 'Barangay Holding Pen';
 
                                 const resiMarkers = isResolvedCase ? [
@@ -2282,8 +2284,8 @@ const ResiViewReport = () => {
                                         (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                         (h.action && h.action.toLowerCase().includes('holding'))
                                     ) || Boolean(report.facility_id) || Boolean(report.facility);
-                                    const histFacLat = 14.8069;
-                                    const histFacLng = 121.0039;
+                                    const histFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : BRGY_OFFICE[0];
+                                    const histFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : BRGY_OFFICE[1];
                                     const histFacName = 'Barangay Holding Pen';
 
                                     const resiMarkers = isResolvedCase ? [

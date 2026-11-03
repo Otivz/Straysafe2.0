@@ -628,8 +628,8 @@ const BrgyViewHistory = () => {
                                                         (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                                         (h.action && h.action.toLowerCase().includes('holding'))
                                                     ) || Boolean(report.facility_id) || Boolean(report.facility);
-                                                    const histFacLat = 14.8069;
-                                                    const histFacLng = 121.0039;
+                                                    const histFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : BRGY_OFFICE[0];
+                                                    const histFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : BRGY_OFFICE[1];
                                                     const histFacName = 'Barangay Holding Pen';
 
                                                     const histMarkers = [
@@ -814,8 +814,8 @@ const BrgyViewHistory = () => {
                                     (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                     (h.action && h.action.toLowerCase().includes('holding'))
                                 ) || Boolean(report.facility_id) || Boolean(report.facility);
-                                const histFacLat = 14.8069;
-                                const histFacLng = 121.0039;
+                                const histFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : BRGY_OFFICE[0];
+                                const histFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : BRGY_OFFICE[1];
                                 const histFacName = 'Barangay Holding Pen';
 
                                 const histMarkers = [

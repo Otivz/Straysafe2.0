@@ -38,6 +38,7 @@ Status values: **Current** (matches the code when last checked), **Reference** (
 
 | Document | Status | Notes |
 |---|---|---|
+| [Global facility and map synchronization change record](05-operations/agents/feature-updates/2026-11-03_1447_global-facility-and-map-sync.md) | Current | Authoritative database sync for landmarks, holding facilities, and Barangay HQ across Admin, Barangay, Subdivision, and Resident dashboards and maps; cross-tab cache invalidation; 20/20 isolated sync checks |
 | [Remove Subdivision Dashboard Lost Pet Alerts change record](05-operations/agents/feature-updates/2026-11-03_1329_remove-subd-dashboard-lost-pet-alerts.md) | Current | Remove redundant LostPetDashboardSection card from SubdDashboard.tsx while preserving full lost-pet workflows in Resident Reports and Report View |
 | [Live dispatch and pickup location change record](05-operations/agents/feature-updates/2026-11-03_1244_live-dispatch-and-pickup-location.md) | Current | Live GPS broadcast and map tracking for Status 5 dispatch teams across Barangay, Subdivision, and Resident views; exact pickup coordinates and dedicated Pickup Location map marker on Status 6; 10/10 isolated backend checks |
 | [Barangay Operations visible actions change record](05-operations/agents/feature-updates/2026-11-03_0526_barangay-operations-visible-actions.md) | Current | Viewport-bounded desktop operations panel with independently scrolling details and visible action footer; synthetic desktop/phone preview |

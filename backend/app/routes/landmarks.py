@@ -22,6 +22,69 @@ router = APIRouter(
     tags=["landmarks"]
 )
 
+RESOLVED_REPORT_STATUS_IDS = (9, 10, 11, 12, 14, 17, 18)
+RESOLVED_HOLDING_STATUS_IDS = (3, 4, 5, 7, 8)
+
+
+def _validate_coordinates(lat: Optional[float], lng: Optional[float]) -> None:
+    if lat is not None:
+        try:
+            f_lat = float(lat)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Invalid latitude value.")
+        if not (-90.0 <= f_lat <= 90.0):
+            raise HTTPException(status_code=400, detail="Latitude must be between -90 and 90 degrees.")
+    if lng is not None:
+        try:
+            f_lng = float(lng)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Invalid longitude value.")
+        if not (-180.0 <= f_lng <= 180.0):
+            raise HTTPException(status_code=400, detail="Longitude must be between -180 and 180 degrees.")
+
+
+def _sync_facility_reports(landmark: Landmark, db: Session) -> None:
+    """Ensure active reports held in this facility (or orphaned Barangay facility reports)
+    reflect the latest facility ID, name, latitude, and longitude."""
+    if not landmark.is_holding_facility or landmark.status != "Active":
+        return
+
+    from app.models.report import Report, HoldingAnimal
+
+    # 1. Update all active reports already referencing this facility_id
+    active_reports = db.query(Report).filter(
+        Report.facility_id == landmark.landmark_id,
+        Report.current_status_id.notin_(RESOLVED_REPORT_STATUS_IDS)
+    ).all()
+    for rep in active_reports:
+        rep.latitude = landmark.latitude
+        rep.longitude = landmark.longitude
+        rep.landmark = landmark.name
+
+    # 2. If this is an active Barangay holding facility (subdivision_id is None),
+    # re-link any active Barangay-custody reports whose facility_id became NULL when an earlier facility row was replaced.
+    if landmark.subdivision_id is None:
+        open_holding_report_ids = [
+            r[0] for r in db.query(HoldingAnimal.report_id).filter(
+                HoldingAnimal.report_id.isnot(None),
+                HoldingAnimal.discharge_date.is_(None),
+                HoldingAnimal.facility_status.notin_(RESOLVED_HOLDING_STATUS_IDS)
+            ).all()
+        ]
+        orphan_candidates = db.query(Report).filter(
+            Report.facility_id.is_(None),
+            Report.current_status_id.in_([7, 8, 15, 16])
+        ).all()
+        for rep in orphan_candidates:
+            if rep.custody_status == "In Barangay Facility" or (
+                rep.report_id in open_holding_report_ids and rep.custody_status != "In Subdivision Facility"
+            ):
+                rep.facility_id = landmark.landmark_id
+                rep.latitude = landmark.latitude
+                rep.longitude = landmark.longitude
+                rep.landmark = landmark.name
+
+
 def enrich_landmark(landmark: Landmark, db: Session) -> dict:
     subd = db.query(Subdivision).filter(Subdivision.subdivision_id == landmark.subdivision_id).first() if landmark.subdivision_id else None
     brgy = db.query(Barangay).filter(Barangay.barangay_id == landmark.barangay_id).first() if landmark.barangay_id else None
@@ -46,6 +109,7 @@ def enrich_landmark(landmark: Landmark, db: Session) -> dict:
         "created_at": landmark.created_at,
         "updated_at": landmark.updated_at
     }
+
 
 @router.get("", response_model=List[LandmarkResponse])
 def get_landmarks(
@@ -72,11 +136,12 @@ def get_landmarks(
     landmarks = query.order_by(Landmark.is_holding_facility.desc(), Landmark.name.asc()).all()
     return [enrich_landmark(l, db) for l in landmarks]
 
+
 @router.get("/jurisdictions")
 def get_jurisdictions(db: Session = Depends(get_db)):
     barangays = db.query(Barangay).all()
     subdivisions = db.query(Subdivision).all()
-    
+
     return {
         "barangays": [
             {
@@ -95,12 +160,17 @@ def get_jurisdictions(db: Session = Depends(get_db)):
         ]
     }
 
+
 @router.get("/{landmark_id}", response_model=LandmarkResponse)
 def get_landmark(landmark_id: int, db: Session = Depends(get_db)):
-    landmark = db.query(Landmark).filter(Landmark.landmark_id == landmark_id).first()
+    landmark = db.query(Landmark).filter(
+        Landmark.landmark_id == landmark_id,
+        Landmark.status == "Active"
+    ).first()
     if not landmark:
         raise HTTPException(status_code=404, detail="Landmark not found")
     return enrich_landmark(landmark, db)
+
 
 @router.post("", response_model=LandmarkResponse, status_code=status.HTTP_201_CREATED)
 def create_landmark(
@@ -123,6 +193,8 @@ def create_landmark(
     if current_user.role_id == 2 and data.is_holding_facility:
         raise HTTPException(status_code=403, detail="New subdivision holding places cannot be designated. Register an ordinary landmark or coordinate with the Barangay.")
 
+    _validate_coordinates(data.latitude, data.longitude)
+
     # If Subd Leader, lock to their subdivision; if Barangay Head, lock to barangay level (subdivision_id = None)
     target_subd_id = current_user.subdivision_id if (is_subd_leader and not is_admin) else (None if is_brgy_head and not is_admin else data.subdivision_id)
     target_brgy_id = current_user.barangay_id if ((is_brgy_head or current_user.role_id == 3) and not is_admin) else (data.barangay_id or 1)
@@ -144,6 +216,8 @@ def create_landmark(
     )
 
     db.add(new_landmark)
+    db.flush()
+    _sync_facility_reports(new_landmark, db)
     db.commit()
     db.refresh(new_landmark)
     invalidate_landmarks_cache()
@@ -159,6 +233,7 @@ def create_landmark(
     )
 
     return enrich_landmark(new_landmark, db)
+
 
 @router.put("/{landmark_id}", response_model=LandmarkResponse)
 def update_landmark(
@@ -190,6 +265,11 @@ def update_landmark(
             raise HTTPException(status_code=403, detail="Subdivision Leaders cannot change a landmark's jurisdiction.")
     if current_user.role_id == 2 and update_dict.get("is_holding_facility") and not landmark.is_holding_facility:
         raise HTTPException(status_code=403, detail="New subdivision holding places cannot be designated. Existing designations may be retained or switched off.")
+
+    _validate_coordinates(update_dict.get("latitude"), update_dict.get("longitude"))
+
+    was_holding_facility = bool(landmark.is_holding_facility)
+
     if "latitude" in update_dict and update_dict["latitude"] is not None:
         landmark.latitude = Decimal(str(update_dict["latitude"]))
     if "longitude" in update_dict and update_dict["longitude"] is not None:
@@ -199,20 +279,21 @@ def update_landmark(
         if field not in ["latitude", "longitude"]:
             setattr(landmark, field, val)
 
-    if landmark.is_holding_facility:
+    if landmark.is_holding_facility and landmark.status == "Active":
+        _sync_facility_reports(landmark, db)
+    elif was_holding_facility and (not landmark.is_holding_facility or landmark.status != "Active"):
+        # If holding designation was switched off or deactivated, clear active report references to it
         from app.models.report import Report
-        sync_values = {}
-        if "latitude" in update_dict and update_dict["latitude"] is not None:
-            sync_values[Report.latitude] = landmark.latitude
-        if "longitude" in update_dict and update_dict["longitude"] is not None:
-            sync_values[Report.longitude] = landmark.longitude
-        if "name" in update_dict and update_dict["name"] is not None:
-            sync_values[Report.landmark] = landmark.name
-        
-        if sync_values:
-            db.query(Report).filter(Report.facility_id == landmark.landmark_id).update(
-                sync_values, synchronize_session=False
-            )
+        affected_reports = db.query(Report).filter(Report.facility_id == landmark.landmark_id).all()
+        for rep in affected_reports:
+            rep.facility_id = None
+            if rep.initial_latitude is not None and rep.initial_longitude is not None:
+                rep.latitude = rep.initial_latitude
+                rep.longitude = rep.initial_longitude
+            if rep.initial_landmark:
+                rep.landmark = rep.initial_landmark
+            if rep.custody_status == "In Subdivision Facility":
+                rep.custody_status = "Sighting"
 
     db.commit()
     db.refresh(landmark)
@@ -224,11 +305,12 @@ def update_landmark(
         action="UPDATE_LANDMARK",
         target_table="landmarks",
         target_id=landmark.landmark_id,
-        description=f"Updated landmark '{landmark.name}'",
+        description=f"Updated landmark '{landmark.name}' (Lat: {landmark.latitude}, Lng: {landmark.longitude})",
         request=req
     )
 
     return enrich_landmark(landmark, db)
+
 
 @router.delete("/{landmark_id}", status_code=status.HTTP_200_OK)
 def delete_landmark(
@@ -251,6 +333,55 @@ def delete_landmark(
             detail="Access denied: Only the Barangay Head Officer, local Subdivision Leader, or Admin can delete landmarks."
         )
 
+    landmark_name = landmark.name
+    was_holding = bool(landmark.is_holding_facility)
+    was_subd_id = landmark.subdivision_id
+    was_brgy_id = landmark.barangay_id
+
+    # Cleanly detach any reports or status history referencing this landmark so no stale facility coordinates remain
+    from app.models.report import Report, StatusHistory
+
+    alt_fac = None
+    if was_holding:
+        if was_subd_id is None:
+            alt_fac = db.query(Landmark).filter(
+                Landmark.landmark_id != landmark_id,
+                Landmark.barangay_id == was_brgy_id,
+                Landmark.subdivision_id.is_(None),
+                Landmark.is_holding_facility == True,
+                Landmark.status == "Active"
+            ).first()
+        else:
+            alt_fac = db.query(Landmark).filter(
+                Landmark.landmark_id != landmark_id,
+                Landmark.subdivision_id == was_subd_id,
+                Landmark.is_holding_facility == True,
+                Landmark.status == "Active"
+            ).first()
+
+    referencing_reports = db.query(Report).filter(Report.facility_id == landmark_id).all()
+    for rep in referencing_reports:
+        is_resolved = rep.current_status_id in RESOLVED_REPORT_STATUS_IDS
+        if alt_fac and not is_resolved and rep.current_status_id in (7, 8, 15, 16):
+            rep.facility_id = alt_fac.landmark_id
+            rep.latitude = alt_fac.latitude
+            rep.longitude = alt_fac.longitude
+            rep.landmark = alt_fac.name
+        else:
+            rep.facility_id = None
+            if rep.initial_latitude is not None and rep.initial_longitude is not None:
+                rep.latitude = rep.initial_latitude
+                rep.longitude = rep.initial_longitude
+            if rep.initial_landmark:
+                rep.landmark = rep.initial_landmark
+            if was_subd_id is not None and rep.custody_status == "In Subdivision Facility":
+                rep.custody_status = "Sighting"
+
+    # Preserve historical StatusHistory records while detaching foreign key before deleting landmark
+    db.query(StatusHistory).filter(StatusHistory.facility_id == landmark_id).update(
+        {StatusHistory.facility_id: None}, synchronize_session=False
+    )
+
     db.delete(landmark)
     db.commit()
     invalidate_landmarks_cache()
@@ -261,11 +392,12 @@ def delete_landmark(
         action="DELETE_LANDMARK",
         target_table="landmarks",
         target_id=landmark_id,
-        description=f"Deleted landmark '{landmark.name}'",
+        description=f"Deleted landmark '{landmark_name}'",
         request=req
     )
 
-    return {"message": "Landmark deleted successfully"}
+    return {"message": "Landmark deleted successfully", "deleted_landmark_id": landmark_id}
+
 
 # ─── BARANGAY HEADQUARTERS LOCATION (ADMIN-ONLY EDIT) ──────────────────────────
 
@@ -284,6 +416,7 @@ def get_barangay_hq(barangay_id: int, db: Session = Depends(get_db)):
         "hq_lat": float(brgy.hq_lat) if brgy.hq_lat is not None else None,
         "hq_lng": float(brgy.hq_lng) if brgy.hq_lng is not None else None,
     }
+
 
 @router.put("/barangay/{barangay_id}/hq", response_model=BarangayHQResponse)
 def update_barangay_hq(
@@ -305,6 +438,8 @@ def update_barangay_hq(
         raise HTTPException(status_code=404, detail="Barangay not found")
 
     update_dict = data.model_dump(exclude_unset=True)
+    _validate_coordinates(update_dict.get("hq_lat"), update_dict.get("hq_lng"))
+
     if "hq_lat" in update_dict and update_dict["hq_lat"] is not None:
         brgy.hq_lat = Decimal(str(update_dict["hq_lat"]))
     if "hq_lng" in update_dict and update_dict["hq_lng"] is not None:
@@ -316,6 +451,7 @@ def update_barangay_hq(
 
     db.commit()
     db.refresh(brgy)
+    invalidate_landmarks_cache()
 
     log_activity(
         db=db,

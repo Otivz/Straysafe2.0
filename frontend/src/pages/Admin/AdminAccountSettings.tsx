@@ -11,7 +11,7 @@ import { passwordError } from '../../utils/passwordPolicy';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents, Polygon, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { fetchCoverageArea, COVERAGE_CACHE_KEY, type CoverageAreaInfo, SELERA_DEFAULT_CENTER, SELERA_DEFAULT_POLYGON, SELERA_BOUNDARY_PATH_OPTIONS, getPolygonLatLngs, SAN_VICENTE_HQ } from '../../utils/coverageArea';
+import { fetchCoverageArea, COVERAGE_CACHE_KEY, type CoverageAreaInfo, SELERA_DEFAULT_CENTER, SELERA_DEFAULT_POLYGON, SELERA_BOUNDARY_PATH_OPTIONS, getPolygonLatLngs, SAN_VICENTE_HQ, syncSanVicenteHQ } from '../../utils/coverageArea';
 
 // Fix Leaflet default icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -35,7 +35,7 @@ const hqMarkerIcon = new L.DivIcon({
     iconAnchor: [18, 36],
 });
 
-import { setCachedData } from '../../utils/cache';
+import { setCachedData, broadcastFacilitySync, onFacilitySync } from '../../utils/cache';
 import { LANDMARK_CATEGORIES, getLandmarkCategory, createLandmarkPinIcon } from '../../utils/landmarkIcons';
 
 import MapAutoResize from '../../components/MapControls/MapAutoResize';
@@ -216,6 +216,7 @@ const AdminAccountSettings = () => {
         try {
             const res = await api.get('/landmarks/barangay/1/hq');
             if (res.data) {
+                syncSanVicenteHQ(res.data.hq_lat, res.data.hq_lng);
                 setBarangayHQ({
                     barangay_id: res.data.barangay_id,
                     barangay_name: res.data.barangay_name,
@@ -309,6 +310,11 @@ const AdminAccountSettings = () => {
         fetchAccounts();
         fetchCoverage();
         fetchAiSettings();
+        const unsub = onFacilitySync(() => {
+            fetchBarangayHQ();
+            fetchLandmarks();
+        });
+        return () => unsub();
     }, []);
 
     // Save Coverage Radius Settings
@@ -418,6 +424,8 @@ const AdminAccountSettings = () => {
 
             await api.put(`/landmarks/barangay/${barangayHQ.barangay_id}/hq`, payload);
             showToast('success', `Barangay ${barangayHQ.barangay_name} Headquarters location updated successfully!`);
+            syncSanVicenteHQ(payload.hq_lat, payload.hq_lng);
+            broadcastFacilitySync();
             fetchBarangayHQ();
         } catch (err: any) {
             console.error('Error updating Barangay HQ:', err);
@@ -476,6 +484,7 @@ const AdminAccountSettings = () => {
                 contact_person: '',
                 contact_number: ''
             });
+            broadcastFacilitySync();
             fetchLandmarks();
         } catch (err: any) {
             console.error('Error saving landmark:', err);
@@ -490,6 +499,7 @@ const AdminAccountSettings = () => {
         try {
             await api.delete(`/landmarks/${id}`);
             showToast('success', 'Landmark deleted successfully.');
+            broadcastFacilitySync();
             fetchLandmarks();
         } catch (err: any) {
             console.error('Delete landmark error:', err);

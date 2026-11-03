@@ -23,7 +23,7 @@ import { reverseGeocodeStreet } from '../../utils/sighting';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import { RefreshCw } from 'lucide-react';
 
-import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
+import { useBarangayHQCoords } from '../../utils/coverageArea';
 import ReportDescription from '../../components/ReportDescription';
 import { parseReportDescription, reportDescriptionSummary } from '../../utils/reportDescription';
 import { cloudinaryResized } from '../../utils/cloudinaryImage';
@@ -149,7 +149,7 @@ const BrgyRescueRequests = () => {
     const [isNavigating, setIsNavigating] = useState(false);
     const [navSource, setNavSource] = useState<'brgy' | 'current'>('brgy');
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
-    const BRGY_OFFICE: [number, number] = SAN_VICENTE_HQ; // R243+QH Santa Maria, Bulacan
+    const BRGY_OFFICE: [number, number] = useBarangayHQCoords(1); // Synchronized Barangay HQ coordinates
     const [statusToUpdate, setStatusToUpdate] = useState<{ requestId: number, reportId: number, statusId: number } | null>(null);
     const [statusMediaFiles, setStatusMediaFiles] = useState<File[]>([]);
     const [isUpdating, setIsUpdating] = useState(false);

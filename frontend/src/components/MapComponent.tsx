@@ -5,11 +5,11 @@ import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import axios from 'axios';
 import { api } from '../utils/api';
-import { getCachedData, setCachedData } from '../utils/cache';
+import { getCachedData, setCachedData, onFacilitySync } from '../utils/cache';
 import { cachedIcon } from '../utils/iconCache';
 import { DEFAULT_PET_AVATAR } from '../utils/avatar';
 import { createBarangayHQIcon, createHoldingFacilityPinIcon, createLandmarkPinIcon, getLandmarkCategory, getLandmarkZoomMetrics } from '../utils/landmarkIcons';
-import { SELERA_BOUNDARY_PATH_OPTIONS, SAN_VICENTE_HQ, SELERA_DEFAULT_CENTER, isValidLatLng, fetchCoverageArea, getPolygonLatLngs, COVERAGE_CACHE_KEY, type CoverageAreaInfo } from '../utils/coverageArea';
+import { SELERA_BOUNDARY_PATH_OPTIONS, SAN_VICENTE_HQ, SELERA_DEFAULT_CENTER, isValidLatLng, fetchCoverageArea, getPolygonLatLngs, COVERAGE_CACHE_KEY, syncSanVicenteHQ, type CoverageAreaInfo } from '../utils/coverageArea';
 
 
 const createUserLocationIcon = () => cachedIcon('user-location', () => L.divIcon({
@@ -1252,26 +1252,29 @@ const MapComponent = ({
             const cachedLmk = getCachedData<any[]>('straysafe_landmarks');
             const cachedHq = getCachedData<any>('straysafe_brgy_hq');
 
-            if (!cachedLmk) {
+            if (cachedLmk && isMounted) setDbLandmarks(cachedLmk);
+            if (true) {
                 try {
                     const lmkRes = await api.get('/landmarks');
                     if (isMounted && Array.isArray(lmkRes.data)) {
                         setDbLandmarks(lmkRes.data);
-                        setCachedData('straysafe_landmarks', lmkRes.data, 30 * 60 * 1000);
+                        setCachedData('straysafe_landmarks', lmkRes.data, 60 * 1000);
                     }
                 } catch (err) {
                     console.warn("Could not load dynamic landmarks:", err);
                 }
             } else if (isMounted) {
-                setDbLandmarks(cachedLmk);
+                if (cachedLmk) setDbLandmarks(cachedLmk || []);
             }
 
-            if (!cachedHq) {
+            if (cachedHq && isMounted) setBarangayHQ(cachedHq);
+            if (true) {
                 try {
                     const hqRes = await api.get('/landmarks/barangay/1/hq');
                     if (isMounted && hqRes.data && hqRes.data.hq_lat && hqRes.data.hq_lng) {
                         setBarangayHQ(hqRes.data);
-                        setCachedData('straysafe_brgy_hq', hqRes.data, 30 * 60 * 1000);
+                        syncSanVicenteHQ(hqRes.data.hq_lat, hqRes.data.hq_lng);
+                        setCachedData('straysafe_brgy_hq', hqRes.data, 60 * 1000);
                     } else if (isMounted) {
                         const fallbackHq = {
                             barangay_name: 'San Vicente',
@@ -1280,7 +1283,7 @@ const MapComponent = ({
                             hq_lng: SAN_VICENTE_HQ[1],
                         };
                         setBarangayHQ(fallbackHq);
-                        setCachedData('straysafe_brgy_hq', fallbackHq, 30 * 60 * 1000);
+                        // Do not persist fallback HQ coordinates into cache
                     }
                 } catch (err) {
                     if (isMounted) {
@@ -1299,6 +1302,37 @@ const MapComponent = ({
         };
 
         fetchFeatures();
+    }, []);
+    useEffect(() => {
+        const fetchFeaturesSync = async () => {
+            try {
+                const [lmkRes, hqRes] = await Promise.allSettled([
+                    api.get('/landmarks'),
+                    api.get('/landmarks/barangay/1/hq'),
+                ]);
+                if (lmkRes.status === 'fulfilled' && Array.isArray(lmkRes.value.data)) {
+                    setDbLandmarks(lmkRes.value.data);
+                    setCachedData('straysafe_landmarks', lmkRes.value.data, 60 * 1000);
+                }
+                if (hqRes.status === 'fulfilled' && hqRes.value.data?.hq_lat && hqRes.value.data?.hq_lng) {
+                    setBarangayHQ(hqRes.value.data);
+                    syncSanVicenteHQ(hqRes.value.data.hq_lat, hqRes.value.data.hq_lng);
+                    setCachedData('straysafe_brgy_hq', hqRes.value.data, 60 * 1000);
+                }
+            } catch {
+                // Ignore background refresh error
+            }
+        };
+        const unsubFacSync = onFacilitySync(() => { fetchFeaturesSync(); });
+        const onMapWinFocus = () => { fetchFeaturesSync(); };
+        window.addEventListener('focus', onMapWinFocus);
+        return () => {
+            unsubFacSync();
+            window.removeEventListener('focus', onMapWinFocus);
+        };
+    }, []);
+    useEffect(() => {
+        let isMounted = true; void isMounted;
         return () => {
             isMounted = false;
         };
@@ -1475,6 +1509,7 @@ const MapComponent = ({
                 {/* ── Official Barangay Headquarters Marker (Admin Configured) ── */}
                 {showHQ && barangayHQ && barangayHQ.hq_lat && barangayHQ.hq_lng && (
                     <Marker
+                        key={`brgy-hq-${barangayHQ.hq_lat}-${barangayHQ.hq_lng}`}
                         position={[parseFloat(barangayHQ.hq_lat), parseFloat(barangayHQ.hq_lng)]}
                         icon={createBarangayHQIcon(currentZoom)}
                     >
@@ -1540,7 +1575,7 @@ const MapComponent = ({
 
                         return (
                             <Marker
-                                key={`db-lm-${lm.landmark_id}`}
+                                key={`db-lm-${lm.landmark_id}-${lmLat.toFixed(6)}-${lmLng.toFixed(6)}-${lm.name || ''}`}
                                 position={[lmLat, lmLng]}
                                 icon={iconToUse}
                                 eventHandlers={stableHandlers(`lm-${lm.landmark_id}`, () => ({
@@ -1554,6 +1589,33 @@ const MapComponent = ({
                             >
                                 <Tooltip direction="top" offset={[0, -Math.round(getLandmarkZoomMetrics(currentZoom).size / 2) - 4]} className="custom-hover-tooltip">
                                     <span>{isHolding ? '🐾' : '📍'} {lm.name}</span>
+                                </Tooltip>
+                                {showPopups && (
+                                    <Popup className="custom-popup">
+                                        <div className="p-3 w-[220px] text-gray-800 flex flex-col gap-1.5">
+                                            <div className="flex items-center gap-2 pb-1.5 border-b border-emerald-100">
+                                                <span className={`w-8 h-8 rounded-xl ${isHolding ? 'bg-emerald-600' : 'bg-orange-500'} text-white flex items-center justify-center text-base shadow-xs`}>
+                                                    {isHolding ? '🐾' : '📍'}
+                                                </span>
+                                                <div>
+                                                    <p className="text-[11px] font-black text-gray-900 uppercase tracking-tight">{lm.name}</p>
+                                                    <p className="text-[8px] font-bold text-emerald-600 uppercase tracking-wider">{isHolding ? (lm.facility_type || 'Holding Place') : (lm.category || 'Landmark')}</p>
+                                                </div>
+                                            </div>
+                                            <div className="text-[10px] space-y-1 text-gray-600">
+                                                {lm.description && <p>{lm.description}</p>}
+                                                {isHolding && lm.capacity && <p><span className="font-bold text-gray-800">Capacity:</span> {lm.capacity} animals</p>}
+                                                {lm.contact_person && <p><span className="font-bold text-gray-800">Contact:</span> {lm.contact_person}</p>}
+                                                {lm.contact_number && <p><span className="font-bold text-gray-800">Phone:</span> {lm.contact_number}</p>}
+                                            </div>
+                                            <div className="mt-1 pt-1.5 border-t border-gray-100 flex items-center justify-between text-[8px] text-gray-400 font-bold uppercase">
+                                                <span>{lm.subdivision_name || (lm.barangay_name ? `Barangay ${lm.barangay_name}` : 'Jurisdiction')}</span>
+                                                <span className="text-emerald-600">{lm.status || 'Active'}</span>
+                                            </div>
+                                        </div>
+                                    </Popup>
+                                )}
+                                <Tooltip className="hidden">
                                 </Tooltip>
                             </Marker>
                         );

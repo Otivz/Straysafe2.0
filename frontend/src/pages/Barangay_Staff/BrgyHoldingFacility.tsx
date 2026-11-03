@@ -19,6 +19,7 @@ import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import { useCachedState, usePersistentState, hasCachedData } from '../../utils/useCachedState';
+import { onFacilitySync } from '../../utils/cache';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -542,6 +543,8 @@ const BrgyHoldingFacility = () => {
             }
         };
         fetchFacilityMetadata();
+        const unsubFac = onFacilitySync(() => { fetchFacilityMetadata(); });
+        return () => unsubFac();
     }, [isAdmin, isSubdLeader, defaultSubdId, defaultBrgyId]);
 
     // ── Filtered Facilities based on Admin Jurisdiction Selection ──────────────
@@ -606,6 +609,15 @@ const BrgyHoldingFacility = () => {
 
     useEffect(() => { fetchAll(); }, [fetchAll]);
     useAutoRefresh(fetchAll);
+    useEffect(() => {
+        const unsub = onFacilitySync(() => { fetchAll(); });
+        return () => unsub();
+    }, [fetchAll]);
+    useEffect(() => {
+        if (selectedFacilityId !== 'all' && facilities.length > 0 && !facilities.some(f => f.landmark_id === selectedFacilityId)) {
+            setSelectedFacilityId('all');
+        }
+    }, [facilities, selectedFacilityId, setSelectedFacilityId]);
 
     // ── Active facility object ─────────────────────────────────────────────────
     const activeFacility = selectedFacilityId !== 'all'

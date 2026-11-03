@@ -24,7 +24,7 @@ import SuccessModal from '../../components/Modals/SuccessModal';
 import { api } from '../../utils/api';
 import { nominatimReverse } from '../../utils/geocode';
 import { cloudinaryResized } from '../../utils/cloudinaryImage';
-import { getCachedData } from '../../utils/cache';
+import { getCachedData, onFacilitySync } from '../../utils/cache';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle, isHoldingHistoryEntry } from '../../utils/reportStatus';
 import NoticeModal from '../../components/Modals/NoticeModal';
@@ -34,7 +34,7 @@ import AddPetModal from '../../components/PetRecords/AddPetModal';
 import RescueTimeline from '../../components/RescueTimeline';
 import { buildCaseTimeline, useCaseHolding } from '../../utils/caseTimeline';
 
-import { SAN_VICENTE_HQ, isValidLatLng } from '../../utils/coverageArea';
+import { SAN_VICENTE_HQ, isValidLatLng, useBarangayHQCoords } from '../../utils/coverageArea';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
 import CasePetBadge from '../../components/CasePetBadge';
 import ReportVisibilityPanel from '../../components/ReportVisibilityPanel';
@@ -357,6 +357,7 @@ const BrgyReportView = () => {
     const isReportDispatched = report?.status_id === 5;
     useDispatchBroadcaster(report?.report_id || null, isBroadcasting && Boolean(isReportDispatched));
     const { liveLocation: activeDispatchLoc } = useWatchDispatchLocation(report?.report_id || null, Boolean(isReportDispatched));
+    useBarangayHQCoords(1);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [targetStatusId, setTargetStatusId] = useState<number>(5);
     const [statusRemarks, setStatusRemarks] = useState('');
@@ -564,6 +565,11 @@ const BrgyReportView = () => {
         fetchReportDetails();
         fetchPersonnel();
         fetchFacilities();
+        const unsub = onFacilitySync(() => {
+            fetchReportDetails();
+            fetchFacilities();
+        });
+        return () => unsub();
     }, [id]);
 
     // Approve / reject use an in-page dialog (not the browser's native popup at the top of the screen)
@@ -1710,8 +1716,8 @@ const BrgyReportView = () => {
                                                         (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                                         (h.action && h.action.toLowerCase().includes('holding'))
                                                     ) || Boolean(report.facility_id) || Boolean(report.facility);
-                                                    const histFacLat = 14.8069;
-                                                    const histFacLng = 121.0039;
+                                                    const histFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : BRGY_OFFICE_COORDS[0];
+                                                    const histFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : BRGY_OFFICE_COORDS[1];
                                                     const histFacName = 'Barangay Holding Pen';
 
                                                     const brgyMarkers = isResolvedCase ? [
@@ -3672,8 +3678,8 @@ const BrgyReportView = () => {
                                     (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                     (h.action && h.action.toLowerCase().includes('holding'))
                                 ) || Boolean(report.facility_id) || Boolean(report.facility);
-                                const histFacLat = 14.8069;
-                                const histFacLng = 121.0039;
+                                const histFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : BRGY_OFFICE_COORDS[0];
+                                const histFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : BRGY_OFFICE_COORDS[1];
                                 const histFacName = 'Barangay Holding Pen';
 
                                 const brgyMarkers = isResolvedCase ? [
