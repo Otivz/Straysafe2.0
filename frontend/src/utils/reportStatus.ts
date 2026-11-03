@@ -82,3 +82,32 @@ export const getReportStatusBadgeStyle = (statusId: number | null | undefined): 
         return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
     }
 };
+
+/** Custody values that mean the animal is in a holding place. The server only sends them with a recorded facility or an
+ *  open holding record. */
+export const IN_FACILITY_CUSTODY = ['Secured in Facility', 'In Barangay Facility', 'In Subdivision Facility'];
+
+/**
+ * The animal is in a holding place now. Only recorded evidence counts (a facility, or an in-facility custody from the
+ * server): status 7 alone is also the owner observation, where the animal stays with its owner, and status 6 (Picked Up)
+ * is still on the way.
+ */
+export const isHeldInFacility = (report: {
+    status_id?: number | null; current_status_id?: number | null; custody_status?: string | null;
+    facility_id?: number | null; facility?: unknown;
+} | null | undefined): boolean => {
+    if (!report) return false;
+    const statusId = Number(report.current_status_id ?? report.status_id);
+    if (statusId === 6 || isReportClosed(statusId)) return false;
+    return !!report.facility_id || !!report.facility || IN_FACILITY_CUSTODY.includes(report.custody_status || '');
+};
+
+/** A history entry that placed the animal in a holding place: Impounded, or Under Observation with a facility recorded
+ *  (status 7 without a facility is the owner observation). */
+export const isHoldingHistoryEntry = (h: {
+    report_status_id?: number | null; status_id?: number | null; facility_id?: number | null; facility_name?: string | null;
+} | null | undefined): boolean => {
+    if (!h) return false;
+    const statusId = Number(h.report_status_id ?? h.status_id);
+    return statusId === 8 || (statusId === 7 && (!!h.facility_id || !!h.facility_name));
+};

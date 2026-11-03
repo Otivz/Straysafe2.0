@@ -9,12 +9,13 @@ import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import MapComponent from '../../components/MapComponent';
 import RescueTimeline from '../../components/RescueTimeline';
-import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
+import { REPORT_STATUS_MAP, isHoldingHistoryEntry } from '../../utils/reportStatus';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 
 import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
 import ReportDescription from '../../components/ReportDescription';
 import CaseSummaryPanel from '../../components/History/CaseSummaryPanel';
+import HistoryReportLayout from '../../components/History/HistoryReportLayout';
 interface Report {
     report_id: number;
     category_id: number;
@@ -112,10 +113,10 @@ const SubdViewHistory = () => {
     const [holdingAnimal, setHoldingAnimal] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
     const [isMapExpanded, setIsMapExpanded] = useState(false);
-    
+
     // Image gallery state
     const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
-    
+
 
     // Reverse geocoding address state
     const [viewReportAddress, setViewReportAddress] = useState('');
@@ -205,7 +206,7 @@ const SubdViewHistory = () => {
 
                 if (log.event_type === 'intake' || log.event_type === 'transfer') {
                     const existingHistIndex = h.findIndex((rh: any) => {
-                        const isFac = rh.report_status_id === 7 || rh.report_status_id === 8 ||
+                        const isFac = isHoldingHistoryEntry(rh) ||
                             (rh.remarks && (rh.remarks.toLowerCase().includes('holding') || rh.remarks.toLowerCase().includes('facility') || rh.remarks.toLowerCase().includes('relocat') || rh.remarks.toLowerCase().includes('transfer')));
                         if (!isFac) return false;
                         const timeDiff = Math.abs(new Date(rh.created_at || rh.timestamp || 0).getTime() - new Date(log.logged_at).getTime());
@@ -249,8 +250,8 @@ const SubdViewHistory = () => {
         }
 
         // Ensure handover/reunion photo is present in the claimed event
-        const handoverPhoto = report?.owner_return?.handover_photo_url || 
-                              report?.returns?.[0]?.handover_photo_url || 
+        const handoverPhoto = report?.owner_return?.handover_photo_url ||
+                              report?.returns?.[0]?.handover_photo_url ||
                               report?.handover_photo_url ||
                               (report?.media || []).find((m: any) => m.status_id === 9 && m.file_url)?.file_url;
 
@@ -261,9 +262,9 @@ const SubdViewHistory = () => {
                 if (rem.includes('claimed the report') || rem.includes('report claimed') || rem.includes('officer claimed')) {
                     return false;
                 }
-                return rem.includes('returned to owner') || 
-                       rem.includes('reunited') || 
-                       rem.includes('pet received') || 
+                return rem.includes('returned to owner') ||
+                       rem.includes('reunited') ||
+                       rem.includes('pet received') ||
                        rem.includes('claimed by owner') ||
                        rem.includes('safely claimed') ||
                        rem.includes('safely recovered');
@@ -349,7 +350,7 @@ const SubdViewHistory = () => {
                     }
                     const city = addr.city || addr.town || addr.municipality || '';
                     if (city) parts.push(city);
-                    
+
                     const addressStr = parts.join(', ') || response.data.display_name;
                     setViewReportAddress(addressStr);
                 } else {
@@ -401,19 +402,19 @@ const SubdViewHistory = () => {
         <div className="flex h-screen bg-[#F8FAFC]">
             <SubdSidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
 
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
                 <SubdNavbar
                     onMenuToggle={() => setMobileMenuOpen(true)}
                     leftContent={
                         <div className="flex items-center gap-4">
-                            <Link to="/subd/history" className="w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all shrink-0">
+                            <Link to="/subd/history" aria-label="Back to history" className="w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all shrink-0">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                                 </svg>
                             </Link>
                             <div className="flex flex-col">
-                                <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">History Report Archive</h1>
-                                <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">Viewing Details of Archived Report #{id}</p>
+                                <h1 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight leading-tight">History report</h1>
+                                <p className="text-xs text-gray-500 mt-1 leading-tight">Archived report #{id}</p>
                             </div>
                         </div>
                     }
@@ -424,10 +425,10 @@ const SubdViewHistory = () => {
                         {loading ? (
                             <div className="py-32 flex flex-col items-center justify-center gap-4">
                                 <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Loading archived report...</p>
+                                <p className="text-sm text-gray-500">Loading archived report...</p>
                             </div>
                         ) : !report ? (
-                            <div className="bg-white rounded-[2.5rem] border border-gray-100 p-20 text-center shadow-sm">
+                            <div className="bg-white rounded-2xl border border-gray-200 px-6 py-16 text-center">
                                 <span className="text-5xl block mb-4">⚠️</span>
                                 <h3 className="text-gray-900 font-black uppercase text-sm tracking-wider">Report Not Found</h3>
                                 <p className="text-gray-400 text-xs mt-1.5 leading-relaxed">The archived report ID you are trying to view does not exist or was deleted.</p>
@@ -436,345 +437,281 @@ const SubdViewHistory = () => {
                                 </Link>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                <div className="lg:col-span-3 min-w-0">
-                                    <CaseSummaryPanel report={report} reportHref={(reportId) => `/subd/history/${reportId}`} printable />
-                                </div>
+                            <HistoryReportLayout
+                                key={report.report_id}
+                                reportId={report.report_id}
+                                category={categoryMap[report.category_id] || 'Other'}
+                                landmark={report.landmark}
+                                summary={<CaseSummaryPanel report={report} reportHref={(reportId) => `/subd/history/${reportId}`} printable />}
+                                details={
+                                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+                                        {/* General details Card */}
+                                        <div className="bg-white p-5 sm:p-7 rounded-2xl border border-gray-200 space-y-6 min-w-0">
+                                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-50 pb-6">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-200 shadow-xs shrink-0 bg-gray-100 flex items-center justify-center">
+                                                        {report.reporter_photo ? (
+                                                            <img loading="lazy" decoding="async" src={getProfilePicture(report.reporter_photo)} alt={report.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                        ) : (
+                                                            <div className="w-full h-full flex items-center justify-center text-lg text-gray-500 font-bold bg-role-soft text-role">
+                                                                {(report.reporter_name || 'U').charAt(0).toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-sm font-bold text-gray-900">{report.reporter_name || `User ${report.user_id}`}</h4>
+                                                        <p className="text-xs text-gray-500">Reported <RelativeTimestamp date={report.created_at} /></p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <span className={`px-4 py-1.5 rounded-full text-xs font-bold border ${getStatusColor(statusMap[report.status_id] || 'Pending')}`}>
+                                                        {statusMap[report.status_id] || 'Pending'}
+                                                    </span>
+                                                </div>
+                                            </div>
 
-                                {/* LEFT COLUMN: Report Details, Map, Letter */}
-                                <div className="lg:col-span-2 space-y-8">
-                                    {/* General details Card */}
-                                    <div className="bg-white p-8 sm:p-10 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-6">
-                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-50 pb-6">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-200 shadow-xs shrink-0 bg-gray-100 flex items-center justify-center">
-                                                    {report.reporter_photo ? (
-                                                        <img loading="lazy" decoding="async" src={getProfilePicture(report.reporter_photo)} alt={report.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center text-lg text-gray-500 font-bold bg-role-soft text-role">
-                                                            {(report.reporter_name || 'U').charAt(0).toUpperCase()}
-                                                        </div>
-                                                    )}
+                                            {/* Details Grid */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 border-b border-gray-100 pb-6">
+                                                <div>
+                                                    <span className="block text-xs font-medium text-gray-500 mb-1">Category</span>
+                                                    <span className="text-sm font-semibold text-gray-900">{categoryMap[report.category_id] || 'Other'}</span>
                                                 </div>
                                                 <div>
-                                                    <h4 className="text-sm font-bold text-gray-900">{report.reporter_name || `User ${report.user_id}`}</h4>
-                                                    <p className="text-xs text-gray-500">Reported <RelativeTimestamp date={report.created_at} /></p>
+                                                    <span className="block text-xs font-medium text-gray-500 mb-1">Landmark</span>
+                                                    <span className="text-sm font-semibold text-gray-900">{report.landmark || 'N/A'}</span>
+                                                </div>
+                                                <div className="sm:col-span-2">
+                                                    <span className="block text-xs font-medium text-gray-500 mb-1">Street / Location</span>
+                                                    <span className="text-sm font-semibold text-purple-600">
+                                                        {isViewReportAddressLoading ? (
+                                                            <span className="flex items-center gap-1.5">
+                                                                <svg className="animate-spin h-3.5 w-3.5 text-purple-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                                </svg>
+                                                                Resolving street address...
+                                                            </span>
+                                                        ) : (
+                                                            viewReportAddress || `${parseFloat(report.latitude.toString()).toFixed(6)}, ${parseFloat(report.longitude.toString()).toFixed(6)}`
+                                                        )}
+                                                    </span>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-3">
-                                                <span className={`px-4 py-1.5 rounded-full text-xs font-bold border ${getStatusColor(statusMap[report.status_id] || 'Pending')}`}>
-                                                    {statusMap[report.status_id] || 'Pending'}
-                                                </span>
-                                            </div>
-                                        </div>
 
-                                        {/* Details Grid */}
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                                            {/* Description */}
                                             <div>
-                                                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Category</span>
-                                                <span className="text-sm font-semibold text-gray-900">{categoryMap[report.category_id] || 'Other'}</span>
+                                                <h5 className="text-sm font-semibold text-gray-900 mb-2.5">Case Description</h5>
+                                                <div className="text-sm leading-relaxed text-gray-700">
+                                                    <ReportDescription description={report.description} emptyText="No description provided." />
+                                                </div>
                                             </div>
-                                            <div>
-                                                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Landmark</span>
-                                                <span className="text-sm font-semibold text-gray-900">{report.landmark || 'N/A'}</span>
-                                            </div>
-                                            <div className="col-span-2 sm:col-span-3">
-                                                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Street / Location</span>
-                                                <span className="text-sm font-semibold text-purple-600">
-                                                    {isViewReportAddressLoading ? (
-                                                        <span className="flex items-center gap-1.5">
-                                                            <svg className="animate-spin h-3.5 w-3.5 text-purple-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                            </svg>
-                                                            Resolving street address...
-                                                        </span>
-                                                    ) : (
-                                                        viewReportAddress || `${parseFloat(report.latitude.toString()).toFixed(6)}, ${parseFloat(report.longitude.toString()).toFixed(6)}`
-                                                    )}
-                                                </span>
-                                            </div>
-                                        </div>
 
-                                        {/* Description */}
-                                        <div>
-                                            <h5 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2.5">Case Description</h5>
-                                            <div className="bg-gray-50/50 p-5 rounded-2xl border border-gray-100 shadow-inner">
-                                                <ReportDescription description={report.description} emptyText="No description provided." />
-                                            </div>
-                                        </div>
-
-                                        {/* General Media Gallery */}
-                                        {report.media && report.media.filter(m => {
-                                            const url = m.file_url.toLowerCase();
-                                            return m.media_type !== 'Document' &&
-                                                !url.endsWith('.pdf') &&
-                                                !url.endsWith('.doc') &&
-                                                !url.endsWith('.docx') &&
-                                                !url.endsWith('.txt');
-                                        }).length > 0 && (
-                                            <div>
-                                                <h5 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Report Evidence Gallery</h5>
-                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                                    {report.media.filter(m => {
-                                                        const url = m.file_url.toLowerCase();
-                                                        return m.media_type !== 'Document' &&
-                                                            !url.endsWith('.pdf') &&
-                                                            !url.endsWith('.doc') &&
-                                                            !url.endsWith('.docx') &&
-                                                            !url.endsWith('.txt');
-                                                    }).map((m: any, idx: number) => {
-                                                        const isVideo = m.media_type === 'Video' || m.file_url.toLowerCase().match(/\.(mp4|mov|avi|webm)$/i);
-                                                        return (
-                                                            <div
-                                                                key={m.media_id}
-                                                                onClick={() => {
-                                                                    const filtered = report.media!.filter(mediaFile => {
-                                                                        const url = mediaFile.file_url.toLowerCase();
-                                                                        return mediaFile.media_type !== 'Document' &&
-                                                                            !url.endsWith('.pdf') &&
-                                                                            !url.endsWith('.doc') &&
-                                                                            !url.endsWith('.docx') &&
-                                                                            !url.endsWith('.txt');
-                                                                    });
-                                                                    setActiveGallery({ media: filtered, index: idx });
-                                                                }}
-                                                                className="aspect-square group relative rounded-2xl overflow-hidden bg-gray-100 border border-gray-100 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md active:scale-95 flex items-center justify-center"
-                                                            >
-                                                                {isVideo ? (
-                                                                    <div className="relative w-full h-full bg-black flex items-center justify-center">
-                                                                        <video src={m.file_url} className="w-full h-full object-cover" />
-                                                                        <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors flex items-center justify-center">
-                                                                            <div className="w-10 h-10 rounded-full bg-white/30 backdrop-blur-md flex items-center justify-center text-white ring-4 ring-white/20">
-                                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 fill-current" viewBox="0 0 20 20">
-                                                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-                                                                                </svg>
+                                            {/* General Media Gallery */}
+                                            {report.media && report.media.filter(m => {
+                                                const url = m.file_url.toLowerCase();
+                                                return m.media_type !== 'Document' &&
+                                                    !url.endsWith('.pdf') &&
+                                                    !url.endsWith('.doc') &&
+                                                    !url.endsWith('.docx') &&
+                                                    !url.endsWith('.txt');
+                                            }).length > 0 && (
+                                                <div>
+                                                    <h5 className="text-sm font-semibold text-gray-900 mb-3">Report Evidence Gallery</h5>
+                                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                                        {report.media.filter(m => {
+                                                            const url = m.file_url.toLowerCase();
+                                                            return m.media_type !== 'Document' &&
+                                                                !url.endsWith('.pdf') &&
+                                                                !url.endsWith('.doc') &&
+                                                                !url.endsWith('.docx') &&
+                                                                !url.endsWith('.txt');
+                                                        }).map((m: any, idx: number) => {
+                                                            const isVideo = m.media_type === 'Video' || m.file_url.toLowerCase().match(/\.(mp4|mov|avi|webm)$/i);
+                                                            return (
+                                                                <button
+                                                                    type="button"
+                                                                    aria-label={`View report ${isVideo ? 'video' : 'photo'} ${idx + 1}`}
+                                                                    key={m.media_id}
+                                                                    onClick={() => {
+                                                                        const filtered = report.media!.filter(mediaFile => {
+                                                                            const url = mediaFile.file_url.toLowerCase();
+                                                                            return mediaFile.media_type !== 'Document' &&
+                                                                                !url.endsWith('.pdf') &&
+                                                                                !url.endsWith('.doc') &&
+                                                                                !url.endsWith('.docx') &&
+                                                                                !url.endsWith('.txt');
+                                                                        });
+                                                                        setActiveGallery({ media: filtered, index: idx });
+                                                                    }}
+                                                                    className="aspect-square group relative rounded-xl overflow-hidden bg-gray-100 border border-gray-200 cursor-pointer transition-colors hover:border-gray-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-role flex items-center justify-center"
+                                                                >
+                                                                    {isVideo ? (
+                                                                        <div className="relative w-full h-full bg-black flex items-center justify-center">
+                                                                            <video src={m.file_url} className="w-full h-full object-cover" />
+                                                                            <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors flex items-center justify-center">
+                                                                                <div className="w-10 h-10 rounded-full bg-white/30 backdrop-blur-md flex items-center justify-center text-white ring-4 ring-white/20">
+                                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 fill-current" viewBox="0 0 20 20">
+                                                                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                                                                                    </svg>
+                                                                                </div>
                                                                             </div>
                                                                         </div>
+                                                                    ) : (
+                                                                        <img src={m.file_url} alt="Archived report evidence" className="w-full h-full object-cover" />
+                                                                    )}
+                                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
+                                                                        <span className="text-[9px] font-bold text-white uppercase tracking-widest flex items-center gap-1.5">
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                            </svg>
+                                                                            Expand
+                                                                        </span>
                                                                     </div>
-                                                                ) : (
-                                                                    <img src={m.file_url} alt="Archived report evidence" className="w-full h-full object-cover" />
-                                                                )}
-                                                                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
-                                                                    <span className="text-[9px] font-bold text-white uppercase tracking-widest flex items-center gap-1.5">
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                                        </svg>
-                                                                        Expand
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Map Card */}
+                                        <div className="bg-white p-5 sm:p-7 rounded-2xl border border-gray-200 space-y-4 min-w-0">
+                                            <div className="flex justify-between items-center">
+                                                <h5 className="text-sm font-semibold text-gray-900">Incident Location Map</h5>
+                                                <button
+                                                    onClick={() => setIsMapExpanded(true)}
+                                                    className="px-3.5 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl text-[10px] font-bold border border-gray-200 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h3a1 1 0 010 2H5v2a1 1 0 01-2 0V4zm14 0a1 1 0 00-1-1h-3a1 1 0 110 2h2v2a1 1 0 112 0V4zM3 16a1 1 0 001 1h3a1 1 0 100-2H5v-2a1 1 0 10-2 0v3zm14 0a1 1 0 01-1 1h-3a1 1 0 100-2h2v-2a1 1 0 102 0v3z" />
+                                                    </svg>
+                                                    Expand Map
+                                                </button>
+                                            </div>
+                                            <div className="w-full h-64 rounded-2xl overflow-hidden border border-gray-100 shadow-sm bg-gray-50">
+                                                {(() => {
+                                                    const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : (report.latitude ? parseFloat(report.latitude.toString()) : 14.8018);
+                                                    const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : (report.longitude ? parseFloat(report.longitude.toString()) : 121.0028);
+                                                    const hadHoldingHistory = report.history?.some((h: any) =>
+                                                        isHoldingHistoryEntry(h) ||
+                                                        (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
+                                                        (h.action && h.action.toLowerCase().includes('holding'))
+                                                    ) || Boolean(report.facility_id) || Boolean(report.facility);
+                                                    const histFacLat = 14.8069;
+                                                    const histFacLng = 121.0039;
+                                                    const histFacName = 'Barangay Holding Facility';
+
+                                                    const histMarkers = [
+                                                        {
+                                                            id: report.report_id,
+                                                            lat: initLat,
+                                                            lng: initLng,
+                                                            title: `1. ${SIGHTING_TITLE}`,
+                                                            category: 'Historical Sighting',
+                                                            priority: report.priority_level || 'Medium',
+                                                            color: 'slate',
+                                                            rawData: { ...report, landmark: report.initial_landmark || report.landmark, is_resolved: true }
+                                                        },
+                                                        ...(hadHoldingHistory ? [{
+                                                            id: -999,
+                                                            lat: histFacLat,
+                                                            lng: histFacLng,
+                                                            title: `2. Holding facility: ${histFacName}`,
+                                                            category: 'Historical Holding',
+                                                            priority: 'Low',
+                                                            color: 'slate',
+                                                            rawData: { ...report, landmark: histFacName, is_resolved: true }
+                                                        }] : []),
+                                                        {
+                                                            id: -1,
+                                                            lat: BRGY_OFFICE[0],
+                                                            lng: BRGY_OFFICE[1],
+                                                            title: "Barangay Hall HQ",
+                                                            category: "Barangay Office"
+                                                        }
+                                                    ];
+
+                                                    return (
+                                                        <MapComponent
+                                                            center={[initLat, initLng]}
+                                                            zoom={17}
+                                                            showHeatmap={false}
+                                                            hideViewDetailsButton={true}
+                                                            markers={histMarkers}
+                                                        />
+                                                    );
+                                                })()}
+                                            </div>
+                                        </div>
+
+                                        {/* Official Letter Section */}
+                                        {report.status_id >= 4 && report.endorsement_letter && (
+                                            <div className="bg-white p-5 sm:p-7 rounded-2xl border border-gray-200 space-y-4 min-w-0">
+                                                <h5 className="text-sm font-semibold text-gray-900">Official Subdivision Letter</h5>
+                                                <div className="border-t border-gray-100 pt-5 flex flex-wrap items-center justify-between gap-4">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-gray-500 shrink-0">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                            </svg>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-medium text-gray-900">Endorsement Letter</p>
+                                                            <p className="text-xs text-gray-500 mt-1">Sent to Barangay for Rescue Endorsement</p>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => {
+                                                            if (report.endorsement_letter) {
+                                                                setActiveGallery({
+                                                                    media: [{
+                                                                        media_type: 'Document',
+                                                                        file_url: report.endorsement_letter.file_url || '',
+                                                                        is_evidence: true
+                                                                    }],
+                                                                    index: 0
+                                                                });
+                                                            }
+                                                        }}
+                                                        className="px-6 py-2.5 bg-white border border-purple-200 text-purple-600 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-purple-600 hover:text-white transition-all shadow-sm"
+                                                    >
+                                                        View Letter
+                                                    </button>
                                                 </div>
                                             </div>
                                         )}
                                     </div>
-
-                                    {/* Map Card */}
-                                    <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4">
-                                        <div className="flex justify-between items-center">
-                                            <h5 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Incident Location Map</h5>
-                                            <button
-                                                onClick={() => setIsMapExpanded(true)}
-                                                className="px-3.5 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl text-[10px] font-bold border border-gray-200 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h3a1 1 0 010 2H5v2a1 1 0 01-2 0V4zm14 0a1 1 0 00-1-1h-3a1 1 0 110 2h2v2a1 1 0 112 0V4zM3 16a1 1 0 001 1h3a1 1 0 100-2H5v-2a1 1 0 10-2 0v3zm14 0a1 1 0 01-1 1h-3a1 1 0 100-2h2v-2a1 1 0 102 0v3z" />
-                                                </svg>
-                                                Expand Map
-                                            </button>
-                                        </div>
-                                        <div className="w-full h-64 rounded-2xl overflow-hidden border border-gray-100 shadow-sm bg-gray-50">
-                                            {(() => {
-                                                const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : (report.latitude ? parseFloat(report.latitude.toString()) : 14.8018);
-                                                const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : (report.longitude ? parseFloat(report.longitude.toString()) : 121.0028);
-                                                const hadHoldingHistory = report.history?.some((h: any) => 
-                                                    [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
-                                                    (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
-                                                    (h.action && h.action.toLowerCase().includes('holding'))
-                                                ) || Boolean(report.facility_id) || Boolean(report.facility);
-                                                const histFacLat = 14.8069;
-                                                const histFacLng = 121.0039;
-                                                const histFacName = 'Barangay Holding Facility';
-
-                                                const histMarkers = [
-                                                    {
-                                                        id: report.report_id,
-                                                        lat: initLat,
-                                                        lng: initLng,
-                                                        title: `1. ${SIGHTING_TITLE}`,
-                                                        category: 'Historical Sighting',
-                                                        priority: report.priority_level || 'Medium',
-                                                        color: 'slate',
-                                                        rawData: { ...report, landmark: report.initial_landmark || report.landmark, is_resolved: true }
-                                                    },
-                                                    ...(hadHoldingHistory ? [{
-                                                        id: -999,
-                                                        lat: histFacLat,
-                                                        lng: histFacLng,
-                                                        title: `2. Holding facility: ${histFacName}`,
-                                                        category: 'Historical Holding',
-                                                        priority: 'Low',
-                                                        color: 'slate',
-                                                        rawData: { ...report, landmark: histFacName, is_resolved: true }
-                                                    }] : []),
-                                                    {
-                                                        id: -1,
-                                                        lat: BRGY_OFFICE[0],
-                                                        lng: BRGY_OFFICE[1],
-                                                        title: "Barangay Hall HQ",
-                                                        category: "Barangay Office"
-                                                    }
-                                                ];
-
-                                                return (
-                                                    <MapComponent
-                                                        center={[initLat, initLng]}
-                                                        zoom={17}
-                                                        showHeatmap={false}
-                                                        hideViewDetailsButton={true}
-                                                        markers={histMarkers}
-                                                    />
-                                                );
-                                            })()}
-                                        </div>
-                                    </div>
-
-                                    {/* Official Letter Section */}
-                                    {report.status_id >= 4 && report.endorsement_letter && (
-                                        <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4">
-                                            <h5 className="text-[11px] font-black text-gray-900 uppercase tracking-widest">Official Subdivision Letter</h5>
-                                            <div className="bg-purple-50/40 border border-purple-100 rounded-3xl p-6 flex items-center justify-between">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 rounded-2xl bg-purple-600 flex items-center justify-center text-white shadow-lg">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                                        </svg>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-xs font-black text-gray-900 uppercase tracking-widest">Endorsement Letter</p>
-                                                        <p className="text-[10px] font-bold text-gray-400 mt-0.5">Sent to Barangay for Rescue Endorsement</p>
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    onClick={() => {
-                                                        if (report.endorsement_letter) {
-                                                            setActiveGallery({
-                                                                media: [{
-                                                                    media_type: 'Document',
-                                                                    file_url: report.endorsement_letter.file_url || '',
-                                                                    is_evidence: true
-                                                                }],
-                                                                index: 0
-                                                            });
-                                                        }
-                                                    }}
-                                                    className="px-6 py-2.5 bg-white border border-purple-200 text-purple-600 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-purple-600 hover:text-white transition-all shadow-sm"
-                                                >
-                                                    View Letter
-                                                </button>
+                                }
+                                activity={
+                                    <section className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-7 space-y-6">
+                                        <header className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 pb-5">
+                                            <div>
+                                                <h3 className="text-base font-semibold text-gray-900">Activity timeline</h3>
+                                                <p className="mt-1 text-sm text-gray-500">Recorded updates and actions for this report.</p>
                                             </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* RIGHT COLUMN: Mission Tracker Card */}
-                                <div className="lg:col-span-1 space-y-8">
-                                    <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-6">
-                                        <header className="border-b border-gray-50 pb-4">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[10px] font-black bg-purple-50 text-purple-600 px-2.5 py-1 rounded-md uppercase tracking-widest">
-                                                    Mission Tracker
-                                                </span>
-                                                <span className="text-xs font-mono text-gray-400 font-bold">
-                                                    Report #{report.report_id}
-                                                </span>
-                                            </div>
-                                            <h2 className="text-xl font-black text-gray-900 mt-1.5 tracking-tight leading-none">
-                                                {missionId}
-                                            </h2>
                                         </header>
-
-                                        {/* Info Details */}
-                                        <div className="space-y-4 text-xs font-semibold text-gray-600">
-                                            <div className="bg-gray-50/50 border border-gray-100 p-4 rounded-xl">
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Mission Title</p>
-                                                <p className="text-sm font-bold text-gray-800 leading-tight">{missionTitle}</p>
+                                        {rescue && (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-b border-gray-100 pb-6 text-sm">
+                                                <div className="sm:col-span-2"><p className="text-gray-500">Rescue request: {missionId}</p><p className="mt-1 font-medium text-gray-900">{missionTitle}</p></div>
+                                                <div><p className="text-gray-500">Escalated on</p><p className="mt-1 text-gray-900">{escalatedDateFormatted}</p></div>
+                                                <div><p className="text-gray-500">Assigned rescue team</p><p className="mt-1 text-gray-900">{rescue.assigned_staff_name || 'Not assigned'}</p></div>
                                             </div>
-                                            <div className="bg-gray-50/50 border border-gray-100 p-4 rounded-xl">
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Report Location</p>
-                                                <p className="text-sm font-bold text-gray-800 leading-tight">{report.landmark || 'Subdivision Boundary'}</p>
-                                            </div>
-                                            <div className="bg-gray-50/50 border border-gray-100 p-4 rounded-xl">
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Reporter Name</p>
-                                                <p className="text-sm font-bold text-gray-800 leading-tight">{report.reporter_name || `User ${report.user_id}`}</p>
-                                            </div>
-                                            <div className="bg-gray-50/50 border border-gray-100 p-4 rounded-xl">
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Escalated Date & Time</p>
-                                                <p className="text-sm font-bold text-gray-800 leading-tight">{escalatedDateFormatted}</p>
-                                            </div>
-                                            <div className="bg-gray-50/50 border border-gray-100 p-4 rounded-xl">
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Current Status</p>
-                                                <span className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border mt-1 ${getStatusColor(statusMap[report.status_id])}`}>
-                                                    {statusMap[report.status_id] || 'Resolved'}
-                                                </span>
-                                            </div>
-                                            <div className="bg-gray-50/50 border border-gray-100 p-4 rounded-xl">
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Assigned Rescue Team</p>
-                                                <p className={`text-sm font-black mt-1 ${rescue?.assigned_staff_name ? 'text-purple-600' : 'text-gray-400'}`}>
-                                                    {rescue?.assigned_staff_name || 'N/A'}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        <div className="border-t border-gray-50 my-6"></div>
-
-                                        {/* Timeline */}
-                                        <div className="space-y-6">
-                                            <div className="flex items-center justify-between gap-4 border-b border-gray-50 pb-4">
-                                                <div>
-                                                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">
-                                                        Mission & Activity Timeline
-                                                    </h3>
-                                                    <p className="text-[10px] font-bold text-gray-500 mt-0.5">
-                                                        Official Audit Trail & Officer Activity Log
-                                                    </p>
-                                                </div>
-                                                <div className="flex items-center gap-1.5 shrink-0">
-                                                    {(() => {
-                                                        const validHistory = (report.history || []).filter((h: any) => h.report_status_id !== 1);
-                                                        const holdingCount = (holdingAnimal && holdingAnimal.timeline) ? holdingAnimal.timeline.length : 0;
-                                                        const totalEvents = validHistory.length + holdingCount + 1;
-                                                        return (
-                                                            <span className="text-[10px] font-black text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full border border-gray-200">
-                                                                {totalEvents} {totalEvents === 1 ? 'Event' : 'Events'}
-                                                            </span>
-                                                        );
-                                                    })()}
-                                                    <div className="flex items-center gap-1 px-2 py-0.5 bg-green-50 rounded-full border border-green-100">
-                                                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                                                        <span className="text-[8px] font-black text-green-600 uppercase tracking-widest">Live</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="pl-1">
-                                                <RescueTimeline
-                                                    history={mergedHistory}
-                                                    currentStatusId={report.status_id}
-                                                    assignedLeaderName={report.assigned_leader_name || undefined}
-                                                    reporterName={report.reporter_name}
-                                                    reportCreatedAt={report.created_at}
-                                                    animalType={report.animal_type}
-                                                    landmark={report.landmark}
-                                                    endorsementLetter={report.endorsement_letter}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                                        )}
+                                        <RescueTimeline
+                                            history={mergedHistory}
+                                            currentStatusId={report.status_id}
+                                            assignedLeaderName={report.assigned_leader_name || undefined}
+                                            reporterName={report.reporter_name}
+                                            reportCreatedAt={report.created_at}
+                                            animalType={report.animal_type}
+                                            landmark={report.landmark}
+                                            endorsementLetter={report.endorsement_letter}
+                                        />
+                                    </section>
+                                }
+                            />
                         )}
                     </div>
                 </main>
@@ -783,7 +720,7 @@ const SubdViewHistory = () => {
 
             {/* Media Gallery Overlay */}
             {activeGallery && (
-                <div 
+                <div
                     onClick={() => setActiveGallery(null)}
                     className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center p-4"
                 >
@@ -844,8 +781,8 @@ const SubdViewHistory = () => {
                             {(() => {
                                 const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : (report.latitude ? parseFloat(report.latitude.toString()) : 14.8018);
                                 const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : (report.longitude ? parseFloat(report.longitude.toString()) : 121.0028);
-                                const hadHoldingHistory = report.history?.some((h: any) => 
-                                    [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
+                                const hadHoldingHistory = report.history?.some((h: any) =>
+                                    isHoldingHistoryEntry(h) ||
                                     (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                     (h.action && h.action.toLowerCase().includes('holding'))
                                 ) || Boolean(report.facility_id) || Boolean(report.facility);

@@ -36,7 +36,10 @@ class AdoptionReviewRequest(BaseModel):
 class PromoteToAdoptionRequest(BaseModel):
     adoption_catalog_notes: Optional[str] = None
     notes: Optional[str] = None
+    # Ignored: the Barangay's stay limit is stored on the server (kept so older pages don't break)
     min_stay_days: Optional[int] = None
+    # Head Officer / Administrator only: why the animal is listed before the stay limit (audited)
+    early_reason: Optional[str] = None
 
 
 class LateClaimInfoResponse(BaseModel):

@@ -155,6 +155,29 @@ Optional, for a live check before the defense: create a few demo cases through t
 - Found and fixed while testing: the pet thumbnail is lazy-loaded, and a lazy image in the hidden print frame never loads, so the print would have waited forever on any case with a pet photo. The printout now loads its images immediately. The app's page background (a layered `!important` rule) also tinted the printout gray; the printout now sets that color to white.
 - Tests: `backend/tests/test_report_print_log.py` (18 checks) and the print part of `frontend/tests/historyCaseSummary.browser.mjs` (leader, staff with the log failing, admin; real PDF rendered and checked).
 
+#### Phase 6 revision (2026-11-03): what the printout leaves out, and a formal layout
+
+Decided by the developer ("yes to all", 2026-11-03). The on-screen panel is unchanged; this applies to the printout only.
+
+| Detail | In the printout |
+|---|---|
+| Comments | Left out |
+| Disputes | Number, date filed, status and date resolved only; no names, reasons or review notes |
+| Observation extension reason | Left out ("Extended: Yes, by N days" stays) |
+| Visibility section | Left out |
+| AI photo check and AI priority reason | Left out (AI tags on animal details and the AI-suggested priority stay, marked as reference) |
+| Incident photos | Left out (they can show people, house numbers or plates) |
+| Owner name, "Returned to" name | Kept |
+| Pet's registered photo | Kept |
+| Officials' remarks and notes | Kept |
+
+- The printout no longer copies the on-screen cards. `frontend/src/utils/casePrint.ts` builds a document from the report:
+  - a title block (report no., category, date reported, status, location);
+  - numbered sections with plain ruled tables, and warnings and disputes as small tables;
+  - a line naming what is not included, "Prepared by" and "Noted by" signature lines, and the privacy note;
+  - page header and footer as before.
+- Tests: the print part of `historyCaseSummary.browser.mjs` adds a long case with an extension reason and a dispute's private details, and checks that every left-out item is absent and every kept item present, for all three roles.
+
 ### Phase 7: Verify and record
 - [ ] `npm --prefix frontend run build` passes
 - [x] Each Phase 0 test report shows the expected details on all three pages, at 1280 px and 390 px (mocked report 1 in `historyCaseSummary.browser.mjs`)

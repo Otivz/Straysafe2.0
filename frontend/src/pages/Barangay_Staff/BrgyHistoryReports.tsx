@@ -7,7 +7,7 @@ import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import DataTable from '../../components/DataTable';
-import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
+import { REPORT_STATUS_MAP, isHeldInFacility } from '../../utils/reportStatus';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import { api } from '../../utils/api';
@@ -161,7 +161,8 @@ const BrgyHistoryReports = () => {
 
     const totalHistory = historyReports.length;
     const resolvedCount = historyReports.filter(r => r.status_id === 11 || r.status_id === 9 || r.status_id === 10).length;
-    const impoundedCount = historyReports.filter(r => r.status_id === 8 || r.status_id === 7).length;
+    // Status 7 counts as held only with a facility (without one it is the owner observation)
+    const impoundedCount = historyReports.filter(r => r.status_id === 8 || (r.status_id === 7 && isHeldInFacility(r))).length;
     const deceasedCount = historyReports.filter(r => r.status_id === 12).length;
     const dismissedCount = historyReports.filter(r => r.status_id === 14 || r.status_id === 17).length;
     const rejectedCount = historyReports.filter(r => r.status_id === 3).length;

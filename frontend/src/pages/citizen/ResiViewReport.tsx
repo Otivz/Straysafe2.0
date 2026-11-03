@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import LostPetAlertSummary from '../../components/LostPets/LostPetAlertSummary';
+import LatestSightingBlock from '../../components/LostPets/LatestSightingBlock';
+import { useReportSightings } from '../../components/LostPets/useReportSightings';
+import { mostRecentSighting, sightingNumber } from '../../utils/lostPets';
+import { reportSightingMarkers } from '../../components/LostPets/sightingMarkers';
 import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { SIGHTING_TITLE, sightingLandmark, reverseGeocodeStreet } from '../../utils/sighting';
 import { getOriginalSighting } from '../../utils/originalSighting';
@@ -29,7 +33,7 @@ import { buildCaseTimeline } from '../../utils/caseTimeline';
 
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import { useReportChatCount } from '../../utils/chatUtils';
-import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
+import { REPORT_STATUS_MAP, isHeldInFacility, isHoldingHistoryEntry } from '../../utils/reportStatus';
 import { getProfilePicture, DEFAULT_AVATAR, DEFAULT_PET_AVATAR } from '../../utils/avatar';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
 import { petName } from '../../utils/petName';
@@ -242,6 +246,10 @@ const ResiViewReport = () => {
         timelineScrollRef.current?.scrollTo({ top: 0 });
     };
     useEffect(() => { setMapFocus(null); }, [id]);
+    // Neighbor sightings of a lost pet (Neighborhood Alert) shown next to the original report location
+    const reportSightings = useReportSightings(report?.report_id, isLostPetReport);
+    const recentSighting = mostRecentSighting(reportSightings.sightings);
+    const reportSightingPins = reportSightingMarkers(reportSightings.sightings, reportSightings.alert?.latest_sighting?.sighting_id);
 
     const toggleNativeFullscreen = () => {
         if (!document.fullscreenElement) {
@@ -1690,7 +1698,9 @@ const ResiViewReport = () => {
                         {(() => {
                             const isResolvedCase = [9, 10, 11, 12, 14, 17, 18].includes(report.status_id) || 
                                 ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(report.custody_status || '');
-                            const isSecuredInHolding = !isResolvedCase && report.status_id !== 6 && ([7, 8].includes(report.status_id) || ['Secured in Facility', 'In Barangay Facility', 'In Subdivision Facility'].includes(report.custody_status || ''));
+                            const isSecuredInHolding = !isResolvedCase && isHeldInFacility(report);
+                            const underOwnerObservation = !isResolvedCase && !isSecuredInHolding && !!report.observation?.open;
+                            const showSighting = !isResolvedCase && !isSecuredInHolding && !!recentSighting && !!reportSightings.alert;
 
                             return (
                                 <>
@@ -1733,14 +1743,14 @@ const ResiViewReport = () => {
                                         </div>
                                     </div>
 
-                                    <div className={`grid grid-cols-1 ${isSecuredInHolding ? 'md:grid-cols-2' : ''} gap-4 mb-6`}>
+                                    <div className={`grid grid-cols-1 ${isSecuredInHolding || showSighting ? 'md:grid-cols-2' : ''} gap-4 mb-6`}>
                                         <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
                                             <div className="w-10 h-10 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
                                                 {isSecuredInHolding ? <PawPrint className="w-5 h-5" /> : <MapPin className="w-5 h-5" />}
                                             </div>
                                             <div className="overflow-hidden">
                                                 <p className="text-[9px] font-black text-white/50 uppercase tracking-widest">
-                                                    {isResolvedCase ? 'Original sighting location (resolved)' : isSecuredInHolding ? 'Current location' : 'Reported sighting location'}
+                                                    {isResolvedCase ? 'Original sighting location (resolved)' : isSecuredInHolding ? 'Current location' : 'Last reported sighting'}
                                                 </p>
                                                 <p className="text-sm font-black tracking-tight text-white truncate">
                                                     {isSecuredInHolding ? (report.facility?.name || report.landmark || 'Holding Place') : (isResolvedCase ? originalSighting.label || 'Original sighting location unavailable' : sightingLandmark(report) || SIGHTING_TITLE)}
@@ -1748,6 +1758,13 @@ const ResiViewReport = () => {
                                                 <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-0.5">
                                                     {isResolvedCase ? 'Preserved incident location • Pet no longer loose on active map' : (isGeocoding ? 'Resolving street...' : resolvedAddress || 'Santa Maria, Bulacan • Selera Homes')}
                                                 </p>
+                                                {!isResolvedCase && !isSecuredInHolding && (
+                                                    <p data-current-location className="text-[10px] text-amber-200 font-semibold mt-1">
+                                                        {underOwnerObservation
+                                                            ? 'Current location: with its owner during the observation period (not in a holding place)'
+                                                            : 'Current location: not confirmed'}
+                                                    </p>
+                                                )}
                                                 {isSecuredInHolding && report.facility?.caretaker_name && (
                                                     <p className="text-[10px] text-amber-300 font-semibold mt-1">
                                                         Caretaker: <span className="font-extrabold">{report.facility.caretaker_name}</span>
@@ -1817,6 +1834,16 @@ const ResiViewReport = () => {
                                                 ) : null}
                                             </div>
                                         </div>
+
+                                        {showSighting && recentSighting && reportSightings.alert && (
+                                            <LatestSightingBlock sighting={recentSighting} number={sightingNumber(reportSightings.sightings, recentSighting.sighting_id)}
+                                                count={reportSightings.alert.sighting_count}
+                                                alertHref={`/resident/lost-pets/${reportSightings.alert.alert_id}`}
+                                                onShowOnMap={() => {
+                                                    setMapFocus([Number(recentSighting.latitude), Number(recentSighting.longitude)]);
+                                                    mapSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                }} />
+                                        )}
 
                                         {isSecuredInHolding && (
                                             <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
@@ -1961,7 +1988,7 @@ const ResiViewReport = () => {
                             {(() => {
                                 const isResolvedCase = [9, 10, 11, 12, 14, 17, 18].includes(report.status_id) || 
                                     ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(report.custody_status || '');
-                                const isRelocated = !isResolvedCase && report.status_id !== 6 && ([7, 8].includes(report.status_id) || ['Secured in Facility', 'In Barangay Facility', 'In Subdivision Facility'].includes(report.custody_status || ''));
+                                const isRelocated = !isResolvedCase && isHeldInFacility(report);
                                 const activeFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : null;
                                 const activeFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : null;
 
@@ -1973,7 +2000,7 @@ const ResiViewReport = () => {
                                 const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && originalSighting.point !== null && (Math.abs(initLat - currentLat) > 0.0001 || Math.abs(initLng - currentLng) > 0.0001);
 
                                 const hadHoldingHistory = report.history?.some((h: any) => 
-                                    [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
+                                    isHoldingHistoryEntry(h) || 
                                     (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                     (h.action && h.action.toLowerCase().includes('holding'))
                                 ) || Boolean(report.facility_id) || Boolean(report.facility);
@@ -2036,6 +2063,7 @@ const ResiViewReport = () => {
                                             facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Place') : undefined
                                         }
                                     },
+                                    ...(isRelocated ? [] : reportSightingPins),
                                     ...(hasDifferentInitialSpot ? [{
                                         id: -999,
                                         lat: initLat!,
@@ -2196,7 +2224,7 @@ const ResiViewReport = () => {
                                 {(() => {
                                     const isResolvedCase = [9, 10, 11, 12, 14, 17, 18].includes(report.status_id) || 
                                         ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(report.custody_status || '');
-                                    const isRelocated = !isResolvedCase && report.status_id !== 6 && ([7, 8].includes(report.status_id) || ['Secured in Facility', 'In Barangay Facility', 'In Subdivision Facility'].includes(report.custody_status || ''));
+                                    const isRelocated = !isResolvedCase && isHeldInFacility(report);
                                     const activeFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : null;
                                     const activeFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : null;
 
@@ -2208,7 +2236,7 @@ const ResiViewReport = () => {
                                     const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && originalSighting.point !== null && (Math.abs(initLat - currentLat) > 0.0001 || Math.abs(initLng - currentLng) > 0.0001);
 
                                     const hadHoldingHistory = report.history?.some((h: any) => 
-                                        [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
+                                        isHoldingHistoryEntry(h) || 
                                         (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                         (h.action && h.action.toLowerCase().includes('holding'))
                                     ) || Boolean(report.facility_id) || Boolean(report.facility);
@@ -2271,7 +2299,8 @@ const ResiViewReport = () => {
                                                 facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Place') : undefined
                                             }
                                         },
-                                        ...(hasDifferentInitialSpot ? [{
+                                        ...(isRelocated ? [] : reportSightingPins),
+                                    ...(hasDifferentInitialSpot ? [{
                                             id: -999,
                                             lat: initLat!,
                                             lng: initLng!,

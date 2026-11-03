@@ -699,7 +699,9 @@ interface MapComponentProps {
         color?: string,
         rawData?: any,
         draggable?: boolean,
-        onDragEnd?: (lat: number, lng: number) => void
+        onDragEnd?: (lat: number, lng: number) => void,
+        /** A ready-made icon (e.g. the numbered lost-pet sighting pins); otherwise chosen from category and color */
+        icon?: L.Icon | L.DivIcon
     }[];
     onMapClick?: (lat: number, lng: number) => void;
     onLocationChange?: (lat: number, lng: number) => void;
@@ -1554,6 +1556,7 @@ const MapComponent = ({
                             position={[markerLat, markerLng]}
                             draggable={Boolean(marker.draggable)}
                             icon={
+                                marker.icon ? marker.icon :
                                 marker.category === 'Selected Location' ? createSelectedPinIcon() :
                                     (marker.category === 'Barangay Office' || marker.category === 'HQ') ? createBarangayHQIcon(currentZoom) :
                                         isUserLoc ? createUserLocationIcon() :
@@ -1702,8 +1705,8 @@ const MapComponent = ({
                                         }} />
                                     </div>
                                 </Tooltip>
-                            ) : marker.title && marker.rawData?.report_id == null ? (
-                                // Report pins have no hover label: tapping opens their card. Other pins (HQ, your location) keep it.
+                            ) : marker.title && marker.rawData?.report_id == null && marker.category !== 'Neighbor Sighting' ? (
+                                // Numbered sightings identify themselves, as on the tracking map. Keep labels for HQ and location pins.
                                 <Tooltip
                                     direction="top"
                                     offset={[0, isUserLoc ? -12 : -32]}

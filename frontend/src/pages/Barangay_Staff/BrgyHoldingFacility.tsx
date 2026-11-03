@@ -10,8 +10,9 @@ import {
     X, Calendar, Timer, Camera, FileText, Pencil, Sparkles, Paperclip, PlayCircle,
     RotateCcw, AlertOctagon, SlidersHorizontal, ChevronDown
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api, { API_BASE_URL } from '../../utils/api';
+import { useStayLimit, stayLock } from '../../utils/useStayLimit';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
@@ -402,29 +403,11 @@ const BrgyHoldingFacility = () => {
     const [isPromoting, setIsPromoting] = useState(false);
     const [promoteError, setPromoteError] = useState<string | null>(null);
     const [promoteSuccess, setPromoteSuccess] = useState<string | null>(null);
+    const [earlyPromoteReason, setEarlyPromoteReason] = useState('');
 
-    // Number spinner for stay duration before impoundment (Default 0 days for testing)
-    const [impoundStayDuration, setImpoundStayDuration] = useState<number>(() => {
-        const saved = localStorage.getItem('holding_impound_stay_duration');
-        if (saved !== null) {
-            const parsed = parseInt(saved, 10);
-            if (!isNaN(parsed) && parsed >= 0 && parsed <= 90) return parsed;
-        }
-        const brgySettings = localStorage.getItem('straysafe_brgy_settings');
-        if (brgySettings) {
-            try {
-                const parsedObj = JSON.parse(brgySettings);
-                if (typeof parsedObj?.adoptionGraceDays === 'number' && parsedObj.adoptionGraceDays >= 0) return parsedObj.adoptionGraceDays;
-            } catch { }
-        }
-        return 0;
-    });
-
-    const handleDurationChange = (newVal: number) => {
-        const clamped = Math.max(0, Math.min(90, isNaN(newVal) ? 0 : newVal));
-        setImpoundStayDuration(clamped);
-        localStorage.setItem('holding_impound_stay_duration', String(clamped));
-    };
+    // The Barangay's stay limit, stored on the server; changed on Barangay Settings by the Head Officer / an Administrator
+    const stayLimit = useStayLimit();
+    const impoundStayDuration = stayLimit.days;
 
     // Periodic refresh for live stay durations (ticks every 10s for real-time live clock updates)
     const [, setStayTick] = useState(0);
@@ -445,22 +428,23 @@ const BrgyHoldingFacility = () => {
     const [quickImpoundAnimal, setQuickImpoundAnimal] = useState<HoldingAnimal | null>(null);
     const [isQuickImpounding, setIsQuickImpounding] = useState(false);
     const [impoundNotes, setImpoundNotes] = useState('');
-    const [earlyImpoundAcknowledged, setEarlyImpoundAcknowledged] = useState(false);
+    const [earlyImpoundReason, setEarlyImpoundReason] = useState('');
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
     const openImpoundModal = (animal: HoldingAnimal) => {
         setQuickImpoundAnimal(animal);
         setImpoundNotes('');
-        setEarlyImpoundAcknowledged(false);
+        setEarlyImpoundReason('');
     };
 
     const handleConfirmImpound = async (animal: HoldingAnimal) => {
         setIsQuickImpounding(true);
         try {
-            const stayDays = daysSince(stayStart(animal));
-            const isEarly = stayDays < impoundStayDuration;
+            const lock = stayLock(stayStart(animal), impoundStayDuration);
+            const stayDays = lock.daysHeld;
+            const isEarly = !lock.reached;
             const defaultNote = isEarly
-                ? `Animal officially impounded prior to stay limit (${stayDays} of ${impoundStayDuration} days elapsed; authorized by Head Officer) at ${animal.facility_name || 'holding place'}.`
+                ? `Animal officially impounded before the stay limit (${stayDays} of ${impoundStayDuration} days held) at ${animal.facility_name || 'holding place'}.`
                 : `Animal officially impounded after reaching ${impoundStayDuration}-day holding stay limit at ${animal.facility_name || 'holding place'}.`;
             const finalNote = impoundNotes.trim() ? `${defaultNote} Notes: ${impoundNotes.trim()}` : defaultNote;
 
@@ -468,10 +452,11 @@ const BrgyHoldingFacility = () => {
                 facility_status: 8, // Impounded
                 updated_by: currentUser?.user_id,
                 update_notes: finalNote,
+                ...(isEarly ? { early_reason: earlyImpoundReason.trim() } : {}),
             });
             setQuickImpoundAnimal(null);
             setImpoundNotes('');
-            setEarlyImpoundAcknowledged(false);
+            setEarlyImpoundReason('');
             await fetchAll();
             if (selected?.holding_id === animal.holding_id) {
                 setSelected(null);
@@ -604,7 +589,6 @@ const BrgyHoldingFacility = () => {
                 }
                 if (selectedFacilityId !== 'all') params.facility_id = selectedFacilityId;
             }
-            params.impound_days = impoundStayDuration;
 
             const [animalsRes, metricsRes] = await Promise.all([
                 api.get('/holding/', { params }),
@@ -766,13 +750,14 @@ const BrgyHoldingFacility = () => {
                 {
                     adoption_catalog_notes: promoteNotes,
                     notes: promoteNotes,
-                    min_stay_days: impoundStayDuration,
+                    ...(!stayLock(stayStart(selected), impoundStayDuration).reached ? { early_reason: earlyPromoteReason.trim() } : {}),
                 }
             );
             setPromoteSuccess('Animal successfully promoted to public Adoption Catalog!');
             await fetchAll();
             const res = await api.get(`/holding/${selected.holding_id}`);
             setSelected(res.data);
+            setEarlyPromoteReason('');
             setTimeout(() => {
                 setPromoteModalOpen(false);
                 setPromoteSuccess(null);
@@ -1163,38 +1148,15 @@ const BrgyHoldingFacility = () => {
                                         </select>
                                     </label>
 
-                                    <div>
-                                        <span className="block text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1">Stay limit (days)</span>
-                                        <div className="flex items-center h-10 bg-white rounded-xl border border-role-border overflow-hidden w-full">
-                                            <button
-                                                type="button"
-                                                onClick={() => handleDurationChange(impoundStayDuration - 1)}
-                                                disabled={impoundStayDuration <= 0}
-                                                className="w-11 h-full flex items-center justify-center text-role-strong hover:bg-role-muted disabled:opacity-30 font-black text-lg transition-colors cursor-pointer"
-                                                title="Decrease stay limit"
-                                                aria-label="Decrease stay limit"
-                                            >
-                                                −
-                                            </button>
-                                            <input
-                                                type="number"
-                                                min={0}
-                                                max={90}
-                                                value={impoundStayDuration}
-                                                onChange={(e) => handleDurationChange(Number(e.target.value))}
-                                                className="flex-1 min-w-0 text-center font-black text-sm text-role-strong focus:outline-none bg-transparent"
-                                                aria-label="Stay limit in days"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => handleDurationChange(impoundStayDuration + 1)}
-                                                disabled={impoundStayDuration >= 90}
-                                                className="w-11 h-full flex items-center justify-center text-role-strong hover:bg-role-muted disabled:opacity-30 font-black text-lg transition-colors cursor-pointer"
-                                                title="Increase stay limit"
-                                                aria-label="Increase stay limit"
-                                            >
-                                                +
-                                            </button>
+                                    <div data-stay-limit>
+                                        <span className="block text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1">Stay limit (Barangay setting)</span>
+                                        <div className="flex items-center justify-between gap-2 h-10 px-3 bg-gray-50 rounded-xl border border-gray-200 w-full">
+                                            <span className="font-black text-sm text-role-strong">{impoundStayDuration} day{impoundStayDuration === 1 ? '' : 's'}</span>
+                                            {stayLimit.canEdit ? (
+                                                <Link to="/brgy/settings" className="text-[11px] font-bold text-role-hover underline underline-offset-2">Change in Settings</Link>
+                                            ) : (
+                                                <span className="text-[10px] font-semibold text-gray-400">Set by the Head Officer</span>
+                                            )}
                                         </div>
                                     </div>
 
@@ -1723,7 +1685,7 @@ const BrgyHoldingFacility = () => {
                                                     </button>
                                                 ) : (
                                                     <p className="text-[11px] font-bold text-gray-500 bg-white px-3 py-2 rounded-xl border border-gray-200 text-center">
-                                                        Available at {impoundStayDuration} days or with Head Officer approval
+                                                        {(() => { const l = stayLock(stayStart(selected), impoundStayDuration); return `${l.daysHeld} of ${impoundStayDuration} days held${l.availableOn ? ` · available on ${l.availableOn}` : ''}`; })()}
                                                     </p>
                                                 )}
                                             </div>
@@ -2116,18 +2078,34 @@ const BrgyHoldingFacility = () => {
                             Promoting <strong className="text-gray-900">{selected.animal_name || `Animal #${selected.holding_id}`}</strong> will set its status to <strong className="text-role-strong font-bold">For Adoption</strong> and publish its profile to the citizen <strong>Adopt a Pet</strong> catalog.
                         </p>
 
-                        {daysSince(stayStart(selected)) < impoundStayDuration && (
-                            <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs flex items-start gap-2.5 animate-in fade-in">
-                                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                                <div>
-                                    <p className="font-black text-amber-950 uppercase tracking-tight text-[11px]">Early Promotion Authorization</p>
-                                    <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                                        The configured <strong>{impoundStayDuration}-day stay limit</strong> has not elapsed yet ({selected.brgy_duration_display || `${daysSince(stayStart(selected))} days`} in custody).
-                                        As a Head Officer, publishing now will bypass the holding stay limit and make this animal publicly available for adoption immediately.
-                                    </p>
+                        {!stayLock(stayStart(selected), impoundStayDuration).reached && (isHeadOfficer ? (
+                            <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs space-y-2 animate-in fade-in">
+                                <div className="flex items-start gap-2.5">
+                                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="font-black text-amber-950 uppercase tracking-tight text-[11px]">Early Promotion</p>
+                                        <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                                            {stayLock(stayStart(selected), impoundStayDuration).daysHeld} of {impoundStayDuration} days held. As the Head Officer or an Administrator you may list it now, with a reason.
+                                        </p>
+                                    </div>
                                 </div>
+                                <label className="block text-[11px] font-bold text-amber-950">
+                                    Reason for listing before the stay limit (required, recorded in the audit log)
+                                    <textarea
+                                        data-early-reason
+                                        rows={2}
+                                        value={earlyPromoteReason}
+                                        onChange={e => setEarlyPromoteReason(e.target.value)}
+                                        placeholder="e.g. The animal needs a home before the typhoon."
+                                        className="mt-1 w-full px-3 py-2 border border-amber-300 rounded-xl text-xs font-medium text-gray-800 bg-white focus:ring-2 focus:ring-amber-300 outline-none resize-none"
+                                    />
+                                </label>
                             </div>
-                        )}
+                        ) : (
+                            <p data-stay-lock className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-[11px] font-black text-rose-900">
+                                {stayLock(stayStart(selected), impoundStayDuration).daysHeld} of {impoundStayDuration} days held{stayLock(stayStart(selected), impoundStayDuration).availableOn ? ` · available on ${stayLock(stayStart(selected), impoundStayDuration).availableOn}` : ''}. Only the Head Officer or an Administrator can list it earlier.
+                            </p>
+                        ))}
 
                         {promoteError && (
                             <div className="p-3 bg-red-50 text-red-700 text-xs font-bold rounded-xl border border-red-200 flex items-center gap-1.5">
@@ -2164,7 +2142,7 @@ const BrgyHoldingFacility = () => {
                             </button>
                             <button
                                 type="button"
-                                disabled={isPromoting}
+                                disabled={isPromoting || (!stayLock(stayStart(selected), impoundStayDuration).reached && (!isHeadOfficer || earlyPromoteReason.trim().length < 5))}
                                 onClick={handlePromoteToAdoption}
                                 className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-emerald-200 transition-all"
                             >
@@ -2297,9 +2275,10 @@ const BrgyHoldingFacility = () => {
 
             {/* ─── Quick Impound Confirmation Modal ─────────────────────────────── */}
             {quickImpoundAnimal && (() => {
-                const stayDays = daysSince(stayStart(quickImpoundAnimal));
-                const isUnderStayLimit = stayDays < impoundStayDuration;
-                const canProceed = !isUnderStayLimit || (isHeadOfficer && earlyImpoundAcknowledged);
+                const impoundLock = stayLock(stayStart(quickImpoundAnimal), impoundStayDuration);
+                const stayDays = impoundLock.daysHeld;
+                const isUnderStayLimit = !impoundLock.reached;
+                const canProceed = !isUnderStayLimit || (isHeadOfficer && earlyImpoundReason.trim().length >= 5);
                 const animalPhoto = getCardPhoto(quickImpoundAnimal);
 
                 return (
@@ -2375,14 +2354,16 @@ const BrgyHoldingFacility = () => {
                                             This animal has only stayed for <strong>{formatStayDuration(quickImpoundAnimal.intake_date, quickImpoundAnimal.discharge_date, false, quickImpoundAnimal.total_duration_display)}</strong> ({stayDays} of the {impoundStayDuration}-day mandatory stay limit).
                                             As a Head Officer / Admin, you have authority to approve early impoundment.
                                         </p>
-                                        <label className="flex items-start gap-2 pt-1.5 border-t border-amber-200/80 cursor-pointer text-[11px] text-amber-950 font-bold">
-                                            <input
-                                                type="checkbox"
-                                                checked={earlyImpoundAcknowledged}
-                                                onChange={e => setEarlyImpoundAcknowledged(e.target.checked)}
-                                                className="mt-0.5 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                                        <label className="block pt-1.5 border-t border-amber-200/80 text-[11px] text-amber-950 font-bold">
+                                            Reason for impounding before the {impoundStayDuration}-day stay limit (required, recorded in the audit log)
+                                            <textarea
+                                                data-early-reason
+                                                rows={2}
+                                                value={earlyImpoundReason}
+                                                onChange={e => setEarlyImpoundReason(e.target.value)}
+                                                placeholder="e.g. The owner surrendered the dog in writing."
+                                                className="mt-1 w-full px-3 py-2 border border-amber-300 rounded-xl text-xs font-medium text-gray-800 bg-white focus:ring-2 focus:ring-amber-300 outline-none resize-none"
                                             />
-                                            <span>I authorize early official impoundment before the {impoundStayDuration}-day stay limit expires.</span>
                                         </label>
                                     </div>
                                 ) : (
@@ -2394,8 +2375,11 @@ const BrgyHoldingFacility = () => {
                                         <p className="text-[11px] text-rose-800 leading-relaxed">
                                             This animal has stayed for <strong>{formatStayDuration(quickImpoundAnimal.intake_date, quickImpoundAnimal.discharge_date, false, quickImpoundAnimal.total_duration_display)}</strong>. Under facility policy, rescued animals must remain in temporary holding for at least <strong>{impoundStayDuration} days</strong> before official impoundment.
                                         </p>
+                                        <p data-stay-lock className="text-[11px] text-rose-900 font-black">
+                                            {stayDays} of {impoundStayDuration} days held{impoundLock.availableOn ? ` · available on ${impoundLock.availableOn}` : ''}
+                                        </p>
                                         <p className="text-[10px] text-rose-700 font-bold">
-                                            Only a designated Head Officer can authorize premature impoundment.
+                                            Only the Head Officer or an Administrator can impound earlier, with a reason.
                                         </p>
                                     </div>
                                 )

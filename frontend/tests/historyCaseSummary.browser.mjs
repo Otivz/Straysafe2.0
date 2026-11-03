@@ -1,6 +1,6 @@
 // Run with Vite on port 5173: node frontend/tests/historyCaseSummary.browser.mjs
-// The real Subdivision and Barangay history pages show the Case Summary panel at the top, and their details grid no
-// longer repeats what the panel shows. Uses an isolated Chrome profile and a mocked API (report 1 as recorded in
+// The real Subdivision and Barangay history pages keep summary, details and activity in accessible tabs.
+// Uses an isolated Chrome profile and a mocked API (report 1 as recorded in
 // Phase 0 of docs/03-development/audits/HISTORY_REPORT_DETAILS_AUDIT_2026-11-02.md); no live data is read or changed.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -48,6 +48,10 @@ const longReport = {
     comments: Array.from({ length: 36 }, (_, i) => ({ comment_id: 100 + i, report_id: 2, user_id: 2, user_name: i % 2 ? 'Leader Santos' : 'Resident One',
         created_at: `2026-11-02T19:${String(20 + Math.floor(i / 2)).padStart(2, '0')}:00`,
         comment: `Update ${i + 1}: the dog was seen near the gate again and the owner was reminded to keep it inside the yard.` })),
+    observation: { open: false, status: 'complied', started_at: '2026-11-02T11:16:56+00:00', due_at: '2026-11-07T11:16:56+00:00', extended: true,
+        extension_days: 2, extension_reason: 'Owner is in the hospital this week.', ended_at: '2026-11-02T11:22:00+00:00', outcome: 'the owner complied', closed_by_name: 'Leader Santos' },
+    disputes: [{ dispute_id: 7, report_id: 2, resident_user_id: 9, resident_name: 'Pedro Dela Paz', dispute_reason: 'My neighbour lies about my dog.',
+        status: 'Rejected', created_at: '2026-11-02T19:40:00', resolved_at: '2026-11-02T19:50:00', reviewer_name: 'Staff Cruz', reviewer_notes: 'Vaccination card does not match.' }],
 };
 // 1x1 PNG served for every image request
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
@@ -169,8 +173,18 @@ try {
             const mergedHref = await evaluate(`document.querySelector('[data-summary-section=linked] a')?.getAttribute('href')`);
             assert.equal(mergedHref, `${path.replace(/\/1$/, '')}/3`, `${path}: merged report links to this role's history page`);
 
-            const page = await evaluate(`document.querySelector('main').innerText`);
             const isAdmin = path.startsWith('/admin');
+            if (!isAdmin) {
+                assert.equal(await evaluate(`document.querySelector('[role=tab][aria-selected=true]').textContent.trim()`), 'Summary', `${path}: summary opens first`);
+                // Arrow keys activate each view and move focus; inactive content stays out of the reading order.
+                await evaluate(`document.querySelector('[role=tab][aria-selected=true]').focus()`);
+                await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight' });
+                await command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowRight', code: 'ArrowRight' });
+                await waitFor(`document.querySelector('[role=tab][aria-selected=true]')?.textContent.trim() === 'Report details'`, 'details tab');
+                assert.equal(await evaluate(`document.activeElement.getAttribute('aria-selected')`), 'true', `${path}: keyboard focus follows the selected tab`);
+                assert.equal(await evaluate(`document.querySelectorAll('[role=tabpanel]:not([hidden])').length`), 1, `${path}: one visible panel`);
+            }
+            const page = await evaluate(`document.querySelector('main').innerText`);
             if (isAdmin) {
                 // Phase 5: the admin cards the panel replaces are gone (two showed invented text); admin tools stay
                 for (const gone of ['Subdivision Field Verification Dossier', 'Protocol Compliant', 'Physical inspection confirmed presence',
@@ -185,19 +199,34 @@ try {
                     assert.equal(page.toLowerCase().includes(gone.toLowerCase()), false, `${path}: "${gone}" removed from the details grid`);
                 assert.match(page, /Category\s+Roaming Animal/i, `${path}: category kept`);
                 assert.match(page, /Landmark\s+Phase 1 Gate/i, `${path}: landmark kept`);
+                assert.match(page, /A dog is scattering trash\./, `${path}: description kept`);
+                assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true, `${path}: details fit at ${width}px`);
+                if (process.env.SCREENSHOT_DIR) {
+                    await evaluate(`document.querySelector('main').scrollTop = 0`);
+                    const { writeFile } = await import('node:fs/promises');
+                    await writeFile(join(process.env.SCREENSHOT_DIR, `${path.split('/')[1]}-${width}-details.png`), Buffer.from((await command('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+                }
+                await evaluate(`[...document.querySelectorAll('[role=tab]')].find(t => t.textContent.trim() === 'Activity').click()`);
+                await waitFor(`document.querySelector('main').innerText.includes('Activity timeline')`, 'activity tab');
+                assert.match(await evaluate(`document.querySelector('[role=tabpanel]:not([hidden])').innerText`), /Incident Resolved/i, `${path}: existing timeline kept`);
+                assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true, `${path}: activity fits at ${width}px`);
+                // A programmatic click doesn't focus its target, so explicitly focus before checking Home.
+                await evaluate(`document.querySelector('[role=tab][aria-selected=true]').focus()`);
+                await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Home', code: 'Home' });
+                await command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Home', code: 'Home' });
+                await waitFor(`!!document.querySelector('[data-case-summary]')`, 'summary restored');
             }
 
-            // The panel comes before the page's own cards (the reporter card on history pages, the photos on the admin page)
-            const nextCard = isAdmin ? 'Sighting Evidence' : 'Resident One';
-            const panelFirst = await evaluate(`(() => {
+            // Admin keeps its existing management tools below the shared summary.
+            const panelFirst = !isAdmin || await evaluate(`(() => {
                 const panel = document.querySelector('[data-case-summary]').getBoundingClientRect().top;
-                const next = [...document.querySelectorAll('main h3, main h4')].find(h => h.textContent.includes(${JSON.stringify(nextCard)}));
+                const next = [...document.querySelectorAll('main h3, main h4')].find(h => h.textContent.includes('Sighting Evidence'));
                 return !!next && panel < next.getBoundingClientRect().top;
             })()`);
             assert.equal(panelFirst, true, `${path}: panel above the page's own cards at ${width}px`);
             assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true, `${path}: no sideways scroll at ${width}px`);
             if (process.env.SCREENSHOT_DIR) {
-                await evaluate(`document.querySelector('[data-case-summary]').scrollIntoView({ block: 'start' })`);
+                await evaluate(`document.querySelector('main').scrollTop = 0`);
                 await delay(300);
                 const shot = await command('Page.captureScreenshot', { format: 'png' });
                 const { writeFile } = await import('node:fs/promises');
@@ -215,9 +244,9 @@ try {
     // counts the print() calls, then renders the copy to a real PDF with Chrome's print engine.
     await command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
     const printCases = [
-        { role: 2, path: '/subd/history/2', fails: false, photos: 4, name: 'Leader Santos (Subdivision Leader)' },
-        { role: 3, path: '/brgy/history/1', fails: true, photos: 0, name: 'Test Staff (Barangay Staff)' },
-        { role: 4, path: '/admin/incidents/2', fails: false, photos: 4, name: 'Admin Reyes (Administrator)' },
+        { role: 2, path: '/subd/history/2', fails: false, name: 'Leader Santos, Subdivision Leader' },
+        { role: 3, path: '/brgy/history/1', fails: true, name: 'Test Staff, Barangay Staff' },
+        { role: 4, path: '/admin/incidents/2', fails: false, name: 'Admin Reyes, Administrator' },
     ];
     for (const pc of printCases) {
         roleId = pc.role;
@@ -238,36 +267,55 @@ try {
         const html = await evaluate('window.__print.html');
         assert.equal(printLogCalls.length, callsBefore + 1, `${pc.path}: one print-log request`);
         const reportNo = pc.path.split('/').pop();
-        assert.ok(html.includes(`Case Record · Report #${reportNo}`), `${pc.path}: printout header`);
-        assert.ok(html.includes(`Printed Nov 2, 2026, ${pc.fails ? '' : '8:05 PM '}`) && html.includes(`by ${pc.name}`),
+        const body = html.replace(/<style[\s\S]*?<\/style>/g, '');
+        // A formal document: title, record details, numbered sections, signature lines, page header and footer
+        assert.ok(body.includes('Animal Incident Case Record') && body.includes(`#${reportNo}`), `${pc.path}: title and report number`);
+        for (const label of ['Report No.', 'Category', 'Date reported', 'Location', 'Roaming Animal', 'Phase 1 Gate'])
+            assert.ok(body.includes(label), `${pc.path}: record details show "${label}"`);
+        assert.match(body, /1\.<\/span> Case Outcome/, `${pc.path}: numbered sections`);
+        assert.ok(body.includes('Prepared by') && body.includes('Noted by'), `${pc.path}: signature lines`);
+        assert.ok(html.includes(`Printed by ${pc.name} · ${pc.fails ? '' : 'Nov 2, 2026, 8:05 PM'}`) && body.includes(pc.name),
             `${pc.path}: printed by ${pc.name}${pc.fails ? ' (browser fallback when the log fails)' : ''}`);
         assert.match(html, /size: letter portrait/, `${pc.path}: US Letter`);
         assert.match(html, /counter\(pages\)/, `${pc.path}: page numbers`);
-        assert.match(html, /Incident Resolved/, `${pc.path}: case record content`);
-        assert.equal((html.match(/data-print-case/g) || []).length, 0, `${pc.path}: no print button in the printout`);
-        assert.equal(/HISTORY REPORTS|Logout|Direct Override|leaflet-container/i.test(html.replace(/<style[\s\S]*?<\/style>/g, '')), false,
-            `${pc.path}: no sidebar, admin buttons or map in the printout`);
-        assert.equal(/0917/.test(html), false, `${pc.path}: no phone numbers`);
-        assert.equal((html.match(/alt="Report photo \d"/g) || []).length, pc.photos, `${pc.path}: ${pc.photos} report photos`);
-        assert.equal(html.includes('evidence.jpg'), false, `${pc.path}: later evidence attachments not printed`);
-        assert.match(html, /Data Privacy Act of 2012/, `${pc.path}: privacy note`);
+        // Kept: outcome, verification, animal, priority, observation dates, warnings, pet and owner (with photo)
+        for (const kept of ['Incident Resolved', 'The owner complied.', 'Leader Santos', 'Checked on site.', 'Tan and White', 'Medium Priority',
+            'Owner complied', 'Free-Roaming Unleashed', 'Baron', 'Emmanuel Vito Cruz', 'pet-photo', 'Data Privacy Act of 2012', 'Not included in this printout'])
+            assert.ok(body.includes(kept), `${pc.path}: keeps "${kept}"`);
+        // Left out (developer, 2026-11-03)
+        const left = [
+            ['comments', /Update 1:|Owner was informed in person/],
+            ['visibility', /Residents see it|Only the reporter and the officials/],
+            ['AI photo check', /Likelihood AI-made|Photo appears authentic|Likely Authentic/],
+            ['AI priority reason', /causing a nuisance by scattering trash/],
+            ['incident photos', /reports\/photo\d|evidence\.jpg/],
+            ['extension reason', /in the hospital/],
+            ['dispute names, reasons and review notes', /Pedro Dela Paz|neighbour lies|Vaccination card does not match/],
+            ['print button, sidebar, admin buttons, map', /data-print-case|HISTORY REPORTS|Logout|Direct Override|leaflet-container/i],
+            ['phone numbers', /0917/],
+        ];
+        for (const [what, pattern] of left) assert.equal(pattern.test(body), false, `${pc.path}: ${what} left out`);
+        if (reportNo === '2') {
+            assert.match(body, /Disputes \(1\)[\s\S]*Rejected/, `${pc.path}: dispute count and status kept`);
+            assert.match(body, /Extended<\/th><td>Yes, by 2 days/, `${pc.path}: extension length kept`);
+        }
 
         // Render the printout as Chrome would print it
         previewHtml = html;
         await command('Page.navigate', { url: base + '/__print_preview__' });
-        await waitFor(`document.readyState === 'complete' && !!document.querySelector('[data-case-summary]')`, 'print preview');
+        await waitFor(`document.readyState === 'complete' && !!document.querySelector('.case-record')`, 'print preview');
         await delay(300);
         const pdf = Buffer.from((await command('Page.printToPDF', { preferCSSPageSize: true, printBackground: true })).data, 'base64');
         const text = pdf.toString('latin1');
         const pages = (text.match(/\/Type\s*\/Page(?!s)/g) || []).length;
         assert.match(text, /\/MediaBox\s*\[\s*0\s+0\s+612\s+792\s*\]/, `${pc.path}: PDF pages are 8.5 x 11 in (612 x 792 pt)`);
-        const expectPages = pc.path.endsWith('/2') ? [2, 6] : [1, 3];
+        const expectPages = [1, 3];
         assert.ok(pages >= expectPages[0] && pages <= expectPages[1], `${pc.path}: ${pages} PDF pages (expected ${expectPages.join('-')})`);
         if (process.env.SCREENSHOT_DIR) {
             const { writeFile } = await import('node:fs/promises');
             await writeFile(join(process.env.SCREENSHOT_DIR, `print-${pc.path.split('/')[1]}-${reportNo}.pdf`), pdf);
         }
-        console.log(`PASS print ${pc.path}: logged ${pc.fails ? '(log failed, printed anyway)' : 'once'}, printed by ${pc.name}, Letter, ${pages} page(s), ${pc.photos} photos`);
+        console.log(`PASS print ${pc.path}: logged ${pc.fails ? '(log failed, printed anyway)' : 'once'}, printed by ${pc.name}, Letter, ${pages} page(s), excluded details absent`);
         await command('Page.removeScriptToEvaluateOnNewDocument', { identifier });
     }
 

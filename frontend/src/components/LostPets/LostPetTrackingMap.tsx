@@ -1,21 +1,15 @@
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Maximize2, X } from 'lucide-react';
 import { MapContainer, Marker, Popup, TileLayer, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import MapAutoResize from '../MapControls/MapAutoResize';
 import { SELERA_DEFAULT_CENTER, isValidLatLng } from '../../utils/coverageArea';
-import { fmtDateTime, SIGHTING_STATUS_LABEL, type LostPetAlert, type Sighting } from '../../utils/lostPets';
+import { fmtDateTime, orderedSightings, SIGHTING_STATUS_LABEL, type LostPetAlert, type Sighting } from '../../utils/lostPets';
 import PinLocationInfo from './PinLocationInfo';
+import { lastSeenIcon, sightingIcon } from './sightingMarkers';
 
-// The original last-known location (red) and each resident sighting (numbered, amber; green once verified).
-// Pins are separate reports: they are never joined into a route.
-const lastSeenIcon = L.divIcon({
-    className: '', iconSize: [34, 34], iconAnchor: [17, 34],
-    html: '<div style="width:34px;height:34px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#dc2626;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center"><span style="transform:rotate(45deg);font-size:15px">🐾</span></div>',
-});
-const sightingIcon = (n: number, status: Sighting['status'], latest: boolean) => L.divIcon({
-    className: '', iconSize: [28, 28], iconAnchor: [14, 14],
-    html: `<div style="width:28px;height:28px;border-radius:9999px;background:${status === 'verified' ? '#059669' : status === 'dismissed' ? '#9ca3af' : '#f59e0b'};color:#fff;font:800 12px sans-serif;display:flex;align-items:center;justify-content:center;border:${latest ? '3px solid #1d4ed8' : '2px solid #fff'};box-shadow:0 1px 4px rgba(0,0,0,.35)">${n}</div>`,
-});
 const pickIcon = L.divIcon({
     className: '', iconSize: [26, 26], iconAnchor: [13, 13],
     html: '<div style="width:26px;height:26px;border-radius:9999px;background:#2563eb;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>',
@@ -25,6 +19,18 @@ const Picker = ({ onPick }: { onPick: (lat: number, lng: number) => void }) => {
     useMapEvents({ click: e => onPick(e.latlng.lat, e.latlng.lng) });
     return null;
 };
+
+type MapView = { center: [number, number]; zoom: number };
+
+function RememberView({ onChange }: { onChange: (view: MapView) => void }) {
+    const map = useMapEvents({
+        moveend: () => {
+            const center = map.getCenter();
+            onChange({ center: [center.lat, center.lng], zoom: map.getZoom() });
+        },
+    });
+    return null;
+}
 
 export default function LostPetTrackingMap({ alert, sightings, latestId, pick, onPick, height = 320, onSelect, placeNames = {} }: {
     placeNames?: Record<number, string>;
@@ -36,18 +42,38 @@ export default function LostPetTrackingMap({ alert, sightings, latestId, pick, o
     height?: number;
     onSelect?: (s: Sighting) => void;
 }) {
+    const [expanded, setExpanded] = useState(false);
+    const [view, setView] = useState<MapView | null>(null);
+    const rememberView = useCallback((next: MapView) => setView(next), []);
+    const dialogRef = useRef<HTMLDialogElement>(null);
+    const expandButtonRef = useRef<HTMLButtonElement>(null);
+    const headingId = useId();
+
+    useEffect(() => {
+        if (!expanded || !dialogRef.current) return;
+        const dialog = dialogRef.current;
+        const expandButton = expandButtonRef.current;
+        const previousOverflow = document.body.style.overflow;
+        dialog.showModal();
+        document.body.style.overflow = 'hidden';
+        return () => {
+            dialog.close();
+            document.body.style.overflow = previousOverflow;
+            expandButton?.focus();
+        };
+    }, [expanded]);
+
     const ls = alert?.last_seen;
     const hasLastSeen = isValidLatLng(ls?.latitude, ls?.longitude);
     const center: [number, number] = pick ? [pick.lat, pick.lng] : (hasLastSeen && ls?.latitude != null && ls?.longitude != null) ? [Number(ls.latitude), Number(ls.longitude)] : SELERA_DEFAULT_CENTER;
     // numbered in reported-time order (the same order as the timeline)
-    const ordered = (sightings || [])
-        .filter(s => isValidLatLng(s?.latitude, s?.longitude))
-        .sort((a, b) => new Date(a.seen_at).getTime() - new Date(b.seen_at).getTime() || a.sighting_id - b.sighting_id);
-    return (
-        <div className="relative z-0 overflow-hidden rounded-2xl border border-gray-200" style={{ height }} data-testid="lost-pet-map"
+    const ordered = orderedSightings(sightings);
+    const map = (
+        <div className="relative h-full w-full overflow-hidden" data-testid="lost-pet-map"
             aria-label={onPick ? 'Map: tap to place the sighting pin' : `Map of ${sightings.length} reported sightings`}>
-            <MapContainer center={center} zoom={17} scrollWheelZoom={false} style={{ height: '100%', width: '100%' }}>
+            <MapContainer center={view?.center || center} zoom={view?.zoom ?? 17} scrollWheelZoom={expanded} style={{ height: '100%', width: '100%' }}>
                 <MapAutoResize />
+                <RememberView onChange={rememberView} />
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
                 {hasLastSeen && (
                     <Marker position={[Number(ls.latitude), Number(ls.longitude)]} icon={lastSeenIcon}>
@@ -82,5 +108,40 @@ export default function LostPetTrackingMap({ alert, sightings, latestId, pick, o
                 <span>🔴 Last known</span><span>🟠 Sighting</span><span>🟢 Verified</span>
             </div>
         </div>
+    );
+
+    return (
+        <>
+            <div className="relative z-0 overflow-hidden rounded-2xl border border-gray-200" style={{ height }}>
+                {!expanded && map}
+                <button ref={expandButtonRef} type="button" onClick={() => setExpanded(true)}
+                    aria-label="Expand tracking map" aria-haspopup="dialog" aria-expanded={expanded}
+                    className="absolute right-3 top-3 z-[500] inline-flex min-h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 cursor-pointer">
+                    <Maximize2 className="h-4 w-4" aria-hidden="true" />
+                    Expand map
+                </button>
+            </div>
+            {expanded && createPortal(
+                <dialog ref={dialogRef} aria-labelledby={headingId}
+                    onCancel={event => { event.preventDefault(); setExpanded(false); }}
+                    onKeyDown={event => {
+                        if (event.key === 'Escape') {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setExpanded(false);
+                        }
+                    }}
+                    className="fixed inset-0 m-0 h-[100dvh] max-h-none w-screen max-w-none flex-col border-0 bg-white p-0 open:flex backdrop:bg-black/40">
+                    <header className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-200 px-4 py-3 sm:px-6">
+                        <h2 id={headingId} className="text-base font-semibold text-gray-900">Lost Pet Tracking Map</h2>
+                        <button type="button" autoFocus onClick={() => setExpanded(false)} aria-label="Close expanded map"
+                            className="inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm font-medium text-gray-600 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-orange-600 cursor-pointer">
+                            <X className="h-4 w-4" aria-hidden="true" /> Close
+                        </button>
+                    </header>
+                    <div className="min-h-0 flex-1">{map}</div>
+                </dialog>, document.body,
+            )}
+        </>
     );
 }

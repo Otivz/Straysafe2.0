@@ -16,7 +16,7 @@ import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
-import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
+import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle, isHeldInFacility } from '../../utils/reportStatus';
 import { getCachedData, invalidateCache } from '../../utils/cache';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import { SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS, SAN_VICENTE_HQ, isValidLatLng } from '../../utils/coverageArea';
@@ -596,7 +596,9 @@ export const AdminReportView: React.FC = () => {
     // Active stage index in progress tracker
     const activeStageIndex = (() => {
         if ([11, 9, 10].includes(report.status_id)) return 5;
-        if ([7, 8].includes(report.status_id)) return 4;
+        // Observation in a holding place; status 7 without one is the owner observation (the animal stays with its owner)
+        if ([7, 8].includes(report.status_id) && isHeldInFacility(report)) return 4;
+        if (report.status_id === 7) return 1;
         if (report.status_id === 6) return 3;
         if ([5, 13].includes(report.status_id)) return 2;
         if ([2, 4].includes(report.status_id)) return 1;
@@ -611,7 +613,7 @@ export const AdminReportView: React.FC = () => {
         const isBiteCat = report.category_id === 2 || report.category_id === 3;
         const hasBiteRemark = (report.description || '').toLowerCase().includes('bite') || 
                               (report.behavior_tags ? String(report.behavior_tags).toLowerCase().includes('bite') : false);
-        return isBiteCat || hasBiteRemark || report.status_id === 7;
+        return isBiteCat || hasBiteRemark || (report.status_id === 7 && isHeldInFacility(report));
     })();
 
     const rabiesQuarantineData = (() => {

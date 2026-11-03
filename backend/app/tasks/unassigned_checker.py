@@ -122,12 +122,12 @@ def check_and_notify_unassigned_reports(threshold_minutes: int = 30) -> int:
     return processed_count
 
 
-def check_and_notify_overdue_holding_animals(default_stay_days: int = 3) -> int:
+def check_and_notify_overdue_holding_animals(default_stay_days: Optional[int] = None) -> int:
     """
     Checks for active holding animals that:
     1. Are not resolved/discharged (facility_status not in 3, 4, 5, 7, 8)
     2. Have an intake_date
-    3. Have exceeded the stay duration limit (default 3 days)
+    3. Have exceeded the stay duration limit (the Barangay's stored stay limit unless one is given)
     4. Have not been notified yet (overdue_notified is False or None)
 
     Sends a holding_overdue_alert notification to relevant staff,
@@ -136,8 +136,10 @@ def check_and_notify_overdue_holding_animals(default_stay_days: int = 3) -> int:
     db: Session = SessionLocal()
     processed_count = 0
     try:
-        from app.utils.holding_stay import db_now
+        from app.utils.holding_stay import db_now, get_stay_limit_days
         now = db_now(db)   # same clock as the stored intake dates
+        if default_stay_days is None:
+            default_stay_days = get_stay_limit_days(db)
         # Statuses meaning discharged/closed: 3=Claimed, 4=Deceased, 5=Transferred, 7=Adopted, 8=Impounded
         terminal_statuses = [3, 4, 5, 7, 8]
 
@@ -352,7 +354,7 @@ async def start_unassigned_reports_watcher(interval_seconds: int = 60, threshold
     while True:
         try:
             await asyncio.to_thread(check_and_notify_unassigned_reports, threshold_minutes)
-            await asyncio.to_thread(check_and_notify_overdue_holding_animals, 3)
+            await asyncio.to_thread(check_and_notify_overdue_holding_animals)
             await asyncio.to_thread(check_and_notify_monitoring_schedules)
             await asyncio.to_thread(check_and_notify_owner_followups)
             # Roughly every 10 minutes (and on the first pass): animals returned to their owner leave adoption

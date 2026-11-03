@@ -87,8 +87,9 @@ export interface CaseSummaryReport {
     ai_photo_likelihood?: number | null;
     ai_photo_recommendation?: string | null;
     ai_photo_details?: string | null;
-    // For the printout (Phase 6)
-    media?: { file_url?: string | null; media_type?: string | null; history_id?: number | null; holding_log_id?: number | null; is_evidence?: boolean | null }[] | null;
+    // For the printout's record details (Phase 6)
+    category_id?: number | null;
+    landmark?: string | null;
     barangay_name?: string | null;
 }
 

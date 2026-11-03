@@ -25,7 +25,7 @@ import { nominatimReverse } from '../../utils/geocode';
 import { cloudinaryResized } from '../../utils/cloudinaryImage';
 import { getCachedData } from '../../utils/cache';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
-import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
+import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle, isHoldingHistoryEntry } from '../../utils/reportStatus';
 import NoticeModal from '../../components/Modals/NoticeModal';
 import ActivityPhotos from '../../components/ActivityPhotos';
 import ReportDescription from '../../components/ReportDescription';
@@ -1643,7 +1643,7 @@ const BrgyReportView = () => {
                                                     const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && (Math.abs(initLat - sightingLat) > 0.0001 || Math.abs(initLng - sightingLng) > 0.0001);
 
                                                     const hadHoldingHistory = report.history?.some((h: any) => 
-                                                        [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
+                                                        isHoldingHistoryEntry(h) || 
                                                         (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                                         (h.action && h.action.toLowerCase().includes('holding'))
                                                     ) || Boolean(report.facility_id) || Boolean(report.facility);
@@ -2226,77 +2226,80 @@ const BrgyReportView = () => {
                                     {/* RIGHT COLUMN: operations panel, kept in view while reading the record */}
                                     <div className="space-y-6 lg:self-stretch">
                                         {/* Operations Quick Actions Control Panel */}
-                                        <div id="sec-actions" className="scroll-mt-24 lg:sticky lg:top-24 bg-white rounded-[2.5rem] border border-gray-100 p-6 sm:p-8 shadow-sm space-y-6">
-                                            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+                                        <div id="sec-actions" className="scroll-mt-24 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-8rem)] flex flex-col overflow-hidden bg-white rounded-[2.5rem] border border-gray-100 shadow-sm">
+                                            <div className="shrink-0 flex items-center justify-between px-6 py-5 sm:px-8 border-b border-gray-100">
                                                 <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Barangay Operations</h3>
                                                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
                                             </div>
 
-                                            {awaitingApproval && (
-                                                <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-2.5" data-testid="awaiting-approval-banner">
-                                                    <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                                                    <div className="text-xs text-amber-900">
-                                                        <p className="font-black">Awaiting your approval</p>
-                                                        <p className="mt-0.5">This case was escalated by the Subdivision. Approve or reject it below. Assigning a team, dispatching and status updates unlock once it is approved.</p>
+                                            <div className="space-y-6 px-6 py-5 sm:px-8 lg:min-h-0 lg:overflow-y-auto custom-scrollbar">
+                                                {awaitingApproval && (
+                                                    <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-2.5" data-testid="awaiting-approval-banner">
+                                                        <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                                                        <div className="text-xs text-amber-900">
+                                                            <p className="font-black">Awaiting your approval</p>
+                                                            <p className="mt-0.5">This case was escalated by the Subdivision. Approve or reject it below. Assigning a team, dispatching and status updates unlock once it is approved.</p>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            )}
+                                                )}
 
-                                            {/* Multi-animal reports: the group's animal records; staff can replace an animal's photo with a close-up */}
-                                            <AnimalRecordsPanel reportId={report.report_id} basePath="/brgy/reports" animalCount={report.animal_count}
-                                                onChanged={() => fetchReportDetails()} />
+                                                {/* Multi-animal reports: the group's animal records; staff can replace an animal's photo with a close-up */}
+                                                <AnimalRecordsPanel reportId={report.report_id} basePath="/brgy/reports" animalCount={report.animal_count}
+                                                    onChanged={() => fetchReportDetails()} />
 
-                                            {/* Who can see this report: decided by the Subdivision Leader (read-only for the Barangay) */}
-                                            <ReportVisibilityPanel report={report} canEdit={false} />
+                                                {/* Who can see this report: decided by the Subdivision Leader (read-only for the Barangay) */}
+                                                <ReportVisibilityPanel report={report} canEdit={false} />
 
-                                            {/* Owner Follow-up Observation (read-only for Barangay staff) */}
-                                            <OwnerFollowUpCard
-                                                reportId={report.report_id}
-                                                subdivisionId={(report as any).subdivision_id}
-                                                assignedLeaderId={(report as any).assigned_leader_id}
-                                                currentUserId={currentUserId}
-                                                petId={report.pet_id}
-                                                petName={(report as any).pet_name}
-                                                isPossibleOwned={(report as any).is_possible_owned}
-                                                initialOwnerName={(report as any).owner_name}
-                                                initialOwnerPhone={(report as any).owner_phone}
-                                                initialOwnerAddress={(report as any).owner_address}
-                                                reportStatusId={report.status_id}
-                                                onFollowUpChanged={() => fetchReportDetails()}
-                                            />
+                                                {/* Owner Follow-up Observation (read-only for Barangay staff) */}
+                                                <OwnerFollowUpCard
+                                                    reportId={report.report_id}
+                                                    subdivisionId={(report as any).subdivision_id}
+                                                    assignedLeaderId={(report as any).assigned_leader_id}
+                                                    currentUserId={currentUserId}
+                                                    petId={report.pet_id}
+                                                    petName={(report as any).pet_name}
+                                                    isPossibleOwned={(report as any).is_possible_owned}
+                                                    initialOwnerName={(report as any).owner_name}
+                                                    initialOwnerPhone={(report as any).owner_phone}
+                                                    initialOwnerAddress={(report as any).owner_address}
+                                                    reportStatusId={report.status_id}
+                                                    onFollowUpChanged={() => fetchReportDetails()}
+                                                />
 
-                                            {/* Animal record (pet record / community animal) */}
-                                            {![3, 14, 18].includes(report.status_id) && !report.duplicate_of_report_id && (
-                                                (report.pet_id || (report as any).case_pet_id) ? (
-                                                    <div className="space-y-2">
-                                                        <CasePetBadge report={report} />
-                                                        <InheritedIdentityNotice report={report} onDone={fetchReportDetails} />
-                                                    </div>
-                                                ) : (report as any).split_children_count ? (
-                                                    /* Multi-animal group: one record per animal, added from each animal record */
-                                                    <p className="text-[11px] font-semibold text-role bg-role-soft border border-role-border rounded-2xl px-3 py-2.5 flex items-start gap-2">
-                                                        <PawPrint className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                                                        <span>This report covers {(report as any).split_children_count} animals. Add the record from each animal's own record in the group above, so each one gets its own.</span>
-                                                    </p>
-                                                ) : !canReview ? (
-                                                    <p className="text-[11px] font-semibold text-gray-600 bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2.5">
-                                                        👁 {reviewNote || 'The Subdivision Leader adds the animal record for this report.'}
-                                                    </p>
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => (awaitingApproval ? setApproveFirstNotice(true) : setIsAddPetModalOpen(true))}
-                                                        className="w-full py-3 border border-role-border bg-gradient-to-r from-role-soft to-amber-50 hover:from-role-muted hover:to-amber-100 text-role-hover rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition-all"
-                                                        title="Register this animal in Pet Records (owner optional)"
-                                                    >
-                                                        <PawPrint className="w-3.5 h-3.5" />
-                                                        <span>Add Record for this Animal</span>
-                                                    </button>
-                                                )
-                                            )}
+                                                {/* Animal record (pet record / community animal) */}
+                                                {![3, 14, 18].includes(report.status_id) && !report.duplicate_of_report_id && (
+                                                    (report.pet_id || (report as any).case_pet_id) ? (
+                                                        <div className="space-y-2">
+                                                            <CasePetBadge report={report} />
+                                                            <InheritedIdentityNotice report={report} onDone={fetchReportDetails} />
+                                                        </div>
+                                                    ) : (report as any).split_children_count ? (
+                                                        /* Multi-animal group: one record per animal, added from each animal record */
+                                                        <p className="text-[11px] font-semibold text-role bg-role-soft border border-role-border rounded-2xl px-3 py-2.5 flex items-start gap-2">
+                                                            <PawPrint className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                                                            <span>This report covers {(report as any).split_children_count} animals. Add the record from each animal's own record in the group above, so each one gets its own.</span>
+                                                        </p>
+                                                    ) : !canReview ? (
+                                                        <p className="text-[11px] font-semibold text-gray-600 bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2.5">
+                                                            👁 {reviewNote || 'The Subdivision Leader adds the animal record for this report.'}
+                                                        </p>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => (awaitingApproval ? setApproveFirstNotice(true) : setIsAddPetModalOpen(true))}
+                                                            className="w-full py-3 border border-role-border bg-gradient-to-r from-role-soft to-amber-50 hover:from-role-muted hover:to-amber-100 text-role-hover rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition-all"
+                                                            title="Register this animal in Pet Records (owner optional)"
+                                                        >
+                                                            <PawPrint className="w-3.5 h-3.5" />
+                                                            <span>Add Record for this Animal</span>
+                                                        </button>
+                                                    )
+                                                )}
 
-                                            {/* Contextual Action Buttons based on status */}
-                                            <div className="space-y-3">
+                                            </div>
+
+                                            {/* Actions stay visible while the panel details scroll on desktop. */}
+                                            <div className="shrink-0 space-y-3 border-t border-gray-100 bg-white p-6 sm:px-8">
                                                 {canUpdateStatus && (
                                                     <>
                                                         {report.status_id === 4 && (
@@ -3498,7 +3501,7 @@ const BrgyReportView = () => {
                                 const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && (Math.abs(initLat - sightingLat) > 0.0001 || Math.abs(initLng - sightingLng) > 0.0001);
 
                                 const hadHoldingHistory = report.history?.some((h: any) => 
-                                    [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
+                                    isHoldingHistoryEntry(h) || 
                                     (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                     (h.action && h.action.toLowerCase().includes('holding'))
                                 ) || Boolean(report.facility_id) || Boolean(report.facility);

@@ -9,7 +9,7 @@ import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import Button from '../../components/Button';
 import MapComponent from '../../components/MapComponent';
 import { SELERA_DEFAULT_CENTER, SAN_VICENTE_HQ } from '../../utils/coverageArea';
-import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
+import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle, isHoldingHistoryEntry } from '../../utils/reportStatus';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { getCachedData, setCachedData, invalidateCache } from '../../utils/cache';
 import { 
@@ -1474,7 +1474,7 @@ const AdminReport = () => {
                                                         const initLat = rawInitLat != null ? parseFloat(String(rawInitLat)) : (viewReport.latitude != null ? parseFloat(String(viewReport.latitude)) : SELERA_DEFAULT_CENTER[0]);
                                                         const initLng = rawInitLng != null ? parseFloat(String(rawInitLng)) : (viewReport.longitude != null ? parseFloat(String(viewReport.longitude)) : SELERA_DEFAULT_CENTER[1]);
                                                         const hadHoldingHistory = viewReport.history?.some((h: any) => 
-                                                            [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
+                                                            isHoldingHistoryEntry(h) || 
                                                             (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                                             (h.action && h.action.toLowerCase().includes('holding'))
                                                         ) || Boolean(viewReport.facility_id) || Boolean(viewReport.facility);

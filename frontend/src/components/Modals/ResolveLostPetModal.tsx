@@ -104,8 +104,7 @@ const isSecuredAnimal = (rep: any): boolean => {
     if (!rep) return false;
     if ([9, 10, 11, 12, 3, 14, 18].includes(rep.status_id)) return false;
     return Boolean(
-        rep.status_id === 7 || // Under Observation
-        rep.status_id === 8 || // Impounded
+        rep.status_id === 8 || // Impounded (status 7 alone is the owner observation: held only with a facility, below)
         rep.facility_id != null ||
         rep.facility != null ||
         rep.custody_status === 'In Subdivision Facility' ||
@@ -325,7 +324,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
 
     const isInFacility = Boolean(targetReport
         && ![3, 9, 10, 11, 12, 14, 17, 18].includes(Number(targetReport.status_id))
-        && ([7, 8].includes(Number(targetReport.status_id)) || targetReport.facility_id != null
+        && (Number(targetReport.status_id) === 8 || targetReport.facility_id != null
             || /facility|impound|holding/i.test(String(targetReport.custody_status || ''))));
 
     const selectedFacility = facilities.find(f => f.landmark_id === selectedFacilityId) || (facilities.length > 0 ? facilities[0] : null);

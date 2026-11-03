@@ -2,7 +2,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, joinedload
 from app.utils.auth import get_current_staff_or_admin, get_current_user
@@ -27,6 +28,10 @@ from app.schemas.holding import (
 )
 from app.utils import report_visibility
 from app.utils.holding_stay import db_now, facility_stay_start  # noqa: E402  (registers the stay-clock listener)
+from app.utils.holding_stay import (  # noqa: E402
+    DEFAULT_STAY_LIMIT_DAYS, MAX_STAY_LIMIT_DAYS, STAY_LIMITED_STATUSES, can_override_stay_limit, get_stay_limit_days,
+    require_stay_limit, set_stay_limit_days, stay_limit_setting,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -436,7 +441,8 @@ def get_metrics(
 
     query = _scope_for_actor(query, db, current_user, subdivision_id, barangay_id, facility_id, barangay_only)
 
-    effective_impound_days = impound_days if (impound_days is not None and impound_days >= 0) else IMPOUND_DAYS
+    # The Barangay's stored stay limit; the impound_days parameter is ignored (kept so older pages don't break)
+    effective_impound_days = get_stay_limit_days(db)
 
     animals = query.all()
     now = db_now(db)   # same clock as the stored intake dates
@@ -614,6 +620,46 @@ def get_holding_for_report(report_id: int, db: Session = Depends(get_db),
 
 
 # ── GET /holding/{holding_id} ─────────────────────────────────────────────────
+STAY_ACTION_LABELS = {6: "Listing for adoption", 7: "Marking as adopted", 8: "Impounding"}
+
+
+class StayLimitUpdate(BaseModel):
+    days: int = Field(..., ge=0, le=MAX_STAY_LIMIT_DAYS)
+
+
+@router.get("/stay-limit")
+def get_stay_limit(db: Session = Depends(get_db), current_user: User = Depends(get_current_staff_or_admin)):
+    """The Barangay's holding stay limit (one value), who last set it, and whether this user may change it."""
+    setting = stay_limit_setting(db)
+    updater = db.get(User, setting.updated_by) if setting is not None and setting.updated_by else None
+    return {
+        "days": get_stay_limit_days(db),
+        "default_days": DEFAULT_STAY_LIMIT_DAYS,
+        "max_days": MAX_STAY_LIMIT_DAYS,
+        "is_default": setting is None,
+        "updated_at": setting.updated_at.isoformat() if setting is not None and setting.updated_at else None,
+        "updated_by_name": updater.name if updater else None,
+        "can_edit": can_override_stay_limit(current_user),
+    }
+
+
+@router.put("/stay-limit")
+def update_stay_limit(body: StayLimitUpdate, request: Request, db: Session = Depends(get_db),
+                      current_user: User = Depends(get_current_staff_or_admin)):
+    """Set the Barangay's holding stay limit. Head Officer or Administrator only; audited. Applies to every animal from
+    now on, including those already held."""
+    if not can_override_stay_limit(current_user):
+        raise HTTPException(status_code=403, detail="Only the Head Officer or an Administrator can change the holding stay limit.")
+    old = get_stay_limit_days(db)
+    set_stay_limit_days(db, body.days, current_user.user_id)
+    log_activity(db=db, action="UPDATE_HOLDING_STAY_LIMIT", target_table="system_settings",
+                 description=f"Holding stay limit changed from {old} to {body.days} days by {current_user.name}.",
+                 user_id=current_user.user_id, old_values={"days": old}, new_values={"days": body.days},
+                 request=request, commit=False)
+    db.commit()
+    return get_stay_limit(db, current_user)
+
+
 @router.get("/{holding_id}", response_model=HoldingAnimalResponse)
 def get_animal(holding_id: int, db: Session = Depends(get_db),
                current_user: User = Depends(get_current_staff_or_admin)):
@@ -713,6 +759,7 @@ def update_animal(
         update_notes = update_data.pop("update_notes", None)
         media_ids    = update_data.pop("media_ids", None)
         update_data.pop("owner_return", None)
+        early_reason = update_data.pop("early_reason", None)
 
         # Claimed by Owner needs to know who the animal went back to (account or manual details)
         owner_return_snap = None
@@ -736,6 +783,14 @@ def update_animal(
                 status_code=400,
                 detail="Impounded animals cannot be listed for adoption or adopted."
             )
+
+        # The Barangay's stay limit: before it, only the Head Officer / an Administrator, with a reason (audited).
+        # An animal already listed for adoption (6) passed this check when it was listed.
+        target_status = update_data.get("facility_status")
+        if target_status in STAY_LIMITED_STATUSES and target_status != old_status and old_status != 6:
+            early_note = require_stay_limit(db, animal, current_user, STAY_ACTION_LABELS[target_status], early_reason)
+            if early_note:
+                update_notes = f"{update_notes} | {early_note}" if update_notes else early_note
 
         for key, value in update_data.items():
             if hasattr(animal, key):

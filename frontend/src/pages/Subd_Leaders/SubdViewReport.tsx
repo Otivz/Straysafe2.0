@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import LostPetAlertSummary from '../../components/LostPets/LostPetAlertSummary';
+import { useReportSightings } from '../../components/LostPets/useReportSightings';
+import { reportSightingMarkers } from '../../components/LostPets/sightingMarkers';
 import { isManualMatchRecord } from '../../utils/manualMatchFields';
 import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { SIGHTING_TITLE } from '../../utils/sighting';
@@ -38,7 +40,7 @@ import TransferReportModal from '../../components/Modals/TransferReportModal';
 import RejectTransferModal from '../../components/Modals/RejectTransferModal';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from '../../components/PetRecords/types';
-import { getReportStatusLabel, getReportStatusBadgeStyle, REPORT_STATUS_MAP } from '../../utils/reportStatus';
+import { getReportStatusLabel, getReportStatusBadgeStyle, REPORT_STATUS_MAP, isHoldingHistoryEntry, isHeldInFacility } from '../../utils/reportStatus';
 import MergeReportModal from '../../components/Modals/MergeReportModal';
 import UnmergeReportModal from '../../components/Modals/UnmergeReportModal';
 import AIMatchReviewModal from '../../components/Modals/AIMatchReviewModal';
@@ -227,6 +229,10 @@ const SubdViewReport = () => {
     const [isMapExpanded, setIsMapExpanded] = useState(false);
     const [showDuplicateWhy, setShowDuplicateWhy] = useState(false);
     const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
+    // Neighbor sightings of a lost pet (Neighborhood Alert): pins on the report maps, beside the original location
+    const reportSightings = useReportSightings(report?.report_id,
+        !!report && (report.category_id === 6 || String(report.description || '').includes('[LOST PET REPORT]')));
+    const reportSightingPins = reportSightingMarkers(reportSightings.sightings, reportSightings.alert?.latest_sighting?.sighting_id);
     const expandedMapContainerRef = useRef<HTMLDivElement>(null);
 
     const toggleNativeFullscreen = () => {
@@ -1880,7 +1886,7 @@ const SubdViewReport = () => {
                                                     {(() => {
                                                         const isResolvedCase = [9, 10, 11, 12, 14, 17, 18].includes(report.status_id) ||
                                                             ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(report.custody_status || '');
-                                                        const isRelocated = !isResolvedCase && report.status_id !== 6 && ([7, 8].includes(report.status_id) || ['Secured in Facility', 'In Barangay Facility', 'In Subdivision Facility'].includes(report.custody_status || ''));
+                                                        const isRelocated = !isResolvedCase && isHeldInFacility(report);
                                                         const initLat = report.initial_latitude != null ? parseFloat(report.initial_latitude.toString()) : (report.latitude != null ? parseFloat(report.latitude.toString()) : null);
                                                         const initLng = report.initial_longitude != null ? parseFloat(report.initial_longitude.toString()) : (report.longitude != null ? parseFloat(report.longitude.toString()) : null);
                                                         const currentLat = initLat;
@@ -1899,7 +1905,7 @@ const SubdViewReport = () => {
                                                         const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && holdingLat != null && holdingLng != null && (Math.abs(initLat - holdingLat) > 0.0001 || Math.abs(initLng - holdingLng) > 0.0001);
 
                                                         const hadHoldingHistory = report.history?.some((h: any) =>
-                                                            [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) ||
+                                                            isHoldingHistoryEntry(h) ||
                                                             (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                                             (h.action && h.action.toLowerCase().includes('holding'))
                                                         ) || Boolean(report.facility_id) || Boolean(report.facility);
@@ -1953,6 +1959,7 @@ const SubdViewReport = () => {
                                                                     facility_name: isRelocated ? (report.facility?.name || report.landmark || (report.custody_status === 'In Subdivision Facility' ? 'Temporary community care' : 'Barangay Holding Facility')) : undefined
                                                                 }
                                                             },
+                                                            ...(isRelocated ? [] : reportSightingPins),
                                                             ...(hasDifferentInitialSpot ? [{
                                                                 id: -999,
                                                                 lat: initLat!,
@@ -3508,7 +3515,7 @@ const SubdViewReport = () => {
                             {(() => {
                                 const isResolvedCase = [9, 10, 11, 12, 14, 17, 18].includes(report.status_id) ||
                                     ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(report.custody_status || '');
-                                const isRelocated = !isResolvedCase && report.status_id !== 6 && ([7, 8].includes(report.status_id) || ['Secured in Facility', 'In Barangay Facility', 'In Subdivision Facility'].includes(report.custody_status || ''));
+                                const isRelocated = !isResolvedCase && isHeldInFacility(report);
                                 const initLat = report.initial_latitude != null ? parseFloat(report.initial_latitude.toString()) : (report.latitude != null ? parseFloat(report.latitude.toString()) : null);
                                 const initLng = report.initial_longitude != null ? parseFloat(report.initial_longitude.toString()) : (report.longitude != null ? parseFloat(report.longitude.toString()) : null);
                                 const currentLat = initLat;
@@ -3527,7 +3534,7 @@ const SubdViewReport = () => {
                                 const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && holdingLat != null && holdingLng != null && (Math.abs(initLat - holdingLat) > 0.0001 || Math.abs(initLng - holdingLng) > 0.0001);
 
                                 const hadHoldingHistory = report.history?.some((h: any) =>
-                                    [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) ||
+                                    isHoldingHistoryEntry(h) ||
                                     (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                     (h.action && h.action.toLowerCase().includes('holding'))
                                 ) || Boolean(report.facility_id) || Boolean(report.facility);
@@ -3581,7 +3588,8 @@ const SubdViewReport = () => {
                                             facility_name: isRelocated ? (report.facility?.name || report.landmark || (report.custody_status === 'In Subdivision Facility' ? 'Temporary community care' : 'Barangay Holding Facility')) : undefined
                                         }
                                     },
-                                    ...(hasDifferentInitialSpot ? [{
+                                    ...(isRelocated ? [] : reportSightingPins),
+                                                            ...(hasDifferentInitialSpot ? [{
                                         id: -999,
                                         lat: initLat!,
                                         lng: initLng!,

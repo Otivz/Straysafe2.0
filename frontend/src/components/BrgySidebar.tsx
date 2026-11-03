@@ -82,9 +82,8 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
             }
 
             try {
-                const savedStay = localStorage.getItem('holding_impound_stay_duration');
-                const stayDays = savedStay ? parseInt(savedStay, 10) : 3;
-                const holdingRes = await api.get(`/holding/metrics?impound_days=${stayDays}`);
+                // Counted with the Barangay's stay limit stored on the server
+                const holdingRes = await api.get('/holding/metrics');
                 if (holdingRes.data && typeof holdingRes.data.needs_impoundment === 'number') {
                     setOverdueHoldingCount(holdingRes.data.needs_impoundment);
                 }

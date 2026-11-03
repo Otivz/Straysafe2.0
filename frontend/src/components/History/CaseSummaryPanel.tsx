@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { getReportStatusBadgeStyle } from '../../utils/reportStatus';
 import { cloudinaryResized } from '../../utils/cloudinaryImage';
@@ -32,11 +32,11 @@ function Rows({ rows }: { rows: Row[] }) {
     const shown = rows.filter(([, value]) => value !== null && value !== undefined && value !== '');
     if (shown.length === 0) return null;
     return (
-        <dl className="space-y-2">
+        <dl className="space-y-2.5">
             {shown.map(([label, value]) => (
-                <div key={label} className="grid grid-cols-[7.5rem_1fr] gap-2 text-xs">
-                    <dt className="font-bold text-gray-500">{label}</dt>
-                    <dd className="font-semibold text-gray-900 break-words min-w-0">{value}</dd>
+                <div key={label} className="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)] gap-3 text-sm leading-relaxed">
+                    <dt className="text-gray-500">{label}</dt>
+                    <dd className="text-gray-900 break-words min-w-0">{value}</dd>
                 </div>
             ))}
         </dl>
@@ -48,8 +48,8 @@ const hasValue = (rows: Row[]) => rows.some(([, value]) => value !== null && val
 function Section({ title, rows = [], note, testId, children }: { title: string; rows?: Row[]; note?: ReactNode; testId: string; children?: ReactNode }) {
     if (!hasValue(rows) && !note && !children) return null;
     return (
-        <section data-summary-section={testId} className="min-w-0 rounded-xl border border-gray-100 bg-gray-50/60 p-4">
-            <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{title}</h4>
+        <section data-summary-section={testId} className="min-w-0 border-t border-gray-100 py-5">
+            <h4 className="text-sm font-semibold text-gray-900 mb-4">{title}</h4>
             <Rows rows={rows} />
             {children}
             {note && <p className="mt-3 text-[11px] font-medium text-gray-500">{note}</p>}
@@ -61,18 +61,17 @@ interface CaseSummaryPanelProps {
     report: CaseSummaryReport;
     /** Where another report of the case opens (merged or split reports); plain text when not given. */
     reportHref?: (reportId: number) => string;
-    /** Show "Print / Save as PDF" (officials' pages). The printout is this panel plus up to four report photos. */
+    /** Show "Print / Save as PDF" (officials' pages): a formal case record built from this report (utils/casePrint.ts). */
     printable?: boolean;
 }
 
 export default function CaseSummaryPanel({ report, reportHref, printable }: CaseSummaryPanelProps) {
-    const panelRef = useRef<HTMLDivElement>(null);
     const [printing, setPrinting] = useState(false);
     const print = async () => {
-        if (!panelRef.current || !report.report_id || printing) return;
+        if (!report.report_id || printing) return;
         setPrinting(true);
         try {
-            await printCaseRecord({ reportId: report.report_id, panel: panelRef.current, media: report.media, barangayName: report.barangay_name });
+            await printCaseRecord({ report });
         } finally {
             setPrinting(false);
         }
@@ -105,22 +104,22 @@ export default function CaseSummaryPanel({ report, reportHref, printable }: Case
     };
 
     return (
-        <div ref={panelRef} data-case-summary className="@container bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-                <h3 className="text-sm font-black text-gray-900">Case Summary</h3>
-                <div className="flex items-center gap-2">
+        <div data-case-summary className="@container bg-white rounded-2xl border border-gray-200 p-5 sm:p-7">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+                <h3 className="text-base font-semibold text-gray-900">Case Summary</h3>
+                <div className="flex flex-wrap items-center gap-2">
                     {printable && report.report_id && (
                         <button type="button" data-no-print data-print-case onClick={print} disabled={printing}
-                            className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-[11px] font-bold text-gray-700 disabled:opacity-60 disabled:cursor-wait cursor-pointer">
+                            className="min-h-10 px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 focus-visible:outline-2 focus-visible:outline-role disabled:opacity-60 disabled:cursor-wait cursor-pointer">
                             {printing ? 'Preparing…' : 'Print / Save as PDF'}
                         </button>
                     )}
-                    <span className={`px-2.5 py-1 rounded-full border text-[10px] font-black uppercase tracking-wider ${getReportStatusBadgeStyle(outcome.statusId)}`}>
+                    <span className={`px-2.5 py-1 rounded-full border text-xs font-medium ${getReportStatusBadgeStyle(outcome.statusId)}`}>
                         {outcome.closed ? 'Closed' : 'Open'}
                     </span>
                 </div>
             </div>
-            <div className="grid grid-cols-1 @min-[640px]:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 @min-[640px]:grid-cols-2 gap-x-10">
                 <Section testId="outcome" title={outcome.closed ? 'Final outcome' : 'Current status'} rows={[
                     ['Status', outcome.label],
                     [outcome.closed ? 'Closed on' : 'Since', formatCaseDate(outcome.reachedAt)],

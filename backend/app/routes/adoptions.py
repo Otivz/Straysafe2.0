@@ -1496,20 +1496,10 @@ def promote_to_adoption(
         raise HTTPException(status_code=400, detail=OWNED_PET_DETAIL)
 
     now = db_now(db)   # same clock as the stored intake / arrival dates
-    stay_limit = float(req.min_stay_days) if req.min_stay_days is not None and req.min_stay_days >= 0 else 0.0
-    days_held = 0.0
-    from app.utils.holding_stay import facility_stay_start
-    intake_dt = facility_stay_start(animal)   # the stay at the current facility (restarts after a move)
-    if intake_dt:
-        intake_dt = intake_dt.replace(tzinfo=None)
-        days_held = max(0.0, (now - intake_dt).total_seconds() / 86400)
-
-    is_privileged = current_user.role_id == 4 or getattr(current_user, "is_head_officer", False)
-    if days_held < stay_limit and not is_privileged:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Holding stay limit has not elapsed yet ({round(days_held, 1)} of {int(stay_limit)} days held). Regular staff can promote once the stay limit is reached, or a Head Officer can authorize early promotion.",
-        )
+    # The Barangay's stored stay limit (not the browser's); before it, only the Head Officer / an Administrator,
+    # with a reason that is audited
+    from app.utils.holding_stay import require_stay_limit
+    early_note = require_stay_limit(db, animal, current_user, "Listing for adoption", req.early_reason, http_req)
 
     catalog_notes = req.adoption_catalog_notes or req.notes
     animal.facility_status = 6  # For Adoption
@@ -1518,16 +1508,12 @@ def promote_to_adoption(
     animal.promoted_by = current_user.user_id
 
     # Add timeline entry
-    default_notes = (
-        f"Early promotion authorized by Head Officer {current_user.name} ({round(days_held, 1)} days held of {int(stay_limit)}-day stay limit)."
-        if (days_held < stay_limit)
-        else f"Animal promoted to public adoption catalog after {int(stay_limit)}-day stay limit reached."
-    )
+    default_notes = early_note or "Animal promoted to the public adoption catalog after the holding stay limit was reached."
     timeline_entry = HoldingTimeline(
         holding_id=animal.holding_id,
         event_type="status_change",
         title="Promoted to Adoption Catalog",
-        notes=catalog_notes or default_notes,
+        notes=f"{catalog_notes} | {early_note}" if (catalog_notes and early_note) else (catalog_notes or default_notes),
         logged_by=current_user.user_id,
     )
     db.add(timeline_entry)

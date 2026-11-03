@@ -6,6 +6,7 @@ import axios from 'axios';
 import api, { signOutAfterPasswordChange } from '../../utils/api';
 import { updateStoredSessionUser } from '../../utils/api';
 import { locationErrorMessage } from '../../utils/geolocationDefaults';
+import { DEFAULT_STAY_LIMIT_DAYS, useStayLimit } from '../../utils/useStayLimit';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
@@ -130,18 +131,17 @@ const BrgySettings: React.FC = () => {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [isChangingPassword, setIsChangingPassword] = useState(false);
 
+    // The Barangay's holding stay limit: stored on the server, editable by the Head Officer / an Administrator only
+    const stayLimit = useStayLimit();
+    const [stayDraft, setStayDraft] = useState<number | null>(null);
+    const stayValue = stayDraft ?? stayLimit.days;
+    const clampStay = (v: number) => Math.min(stayLimit.info?.max_days ?? 90, Math.max(0, v));
+
     // Preferences state
     const [prefs, setPrefs] = useState<BrgySettingsPreferences>(() => {
         try {
             const saved = localStorage.getItem('straysafe_brgy_settings');
             const base = saved ? { ...DEFAULT_BRGY_PREFERENCES, ...JSON.parse(saved) } : { ...DEFAULT_BRGY_PREFERENCES };
-            const savedStay = localStorage.getItem('holding_impound_stay_duration');
-            if (savedStay) {
-                const parsedStay = parseInt(savedStay, 10);
-                if (!isNaN(parsedStay) && parsedStay >= 0) {
-                    base.adoptionGraceDays = parsedStay;
-                }
-            }
             return base;
         } catch {
             return DEFAULT_BRGY_PREFERENCES;
@@ -409,13 +409,17 @@ const BrgySettings: React.FC = () => {
     const handleSavePreferences = () => {
         try {
             localStorage.setItem('straysafe_brgy_settings', JSON.stringify(prefs));
-            localStorage.setItem('holding_impound_stay_duration', prefs.adoptionGraceDays.toString());
             window.dispatchEvent(new Event('storage'));
             api.put('/notifications/preferences', {
                 email_reports: prefs.emailAlertsEnabled,
                 email_rescues: prefs.emailAlertsEnabled,
                 email_reminders: prefs.emailAlertsEnabled
             }).catch(e => console.error('Error syncing preferences to backend:', e));
+            if (stayLimit.canEdit && stayDraft !== null && stayDraft !== stayLimit.days) {
+                stayLimit.save(stayDraft)
+                    .then(saved => { setStayDraft(null); showToast('success', `Holding stay limit set to ${saved.days} days for the whole Barangay.`); })
+                    .catch(e => showToast('error', e?.response?.data?.detail || 'The holding stay limit could not be saved.'));
+            }
             showToast('success', 'Barangay operational preferences saved!');
         } catch (e) {
             showToast('error', 'Failed to save preferences to browser storage.');
@@ -1295,11 +1299,17 @@ const BrgySettings: React.FC = () => {
                                                     <div className="flex items-center gap-2">
                                                         <p className="text-xs font-bold text-gray-900 uppercase tracking-wider">Holding Stay & Impoundment Duration</p>
                                                         <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-role-muted text-role-strong border border-role-border">
-                                                            Default: 0 Days (Testing)
+                                                            Default: {DEFAULT_STAY_LIMIT_DAYS} days
                                                         </span>
                                                     </div>
                                                     <p className="text-xs text-gray-500 font-medium mt-0.5">
                                                         Number of days an animal remains in the holding place before scheduled impoundment or transfer to adoption.
+                                                    </p>
+                                                    <p data-stay-limit-note className="text-[11px] text-gray-500 font-semibold mt-1">
+                                                        One value for the whole Barangay, enforced by the server. {stayLimit.canEdit
+                                                            ? 'You can change it as the Head Officer or an Administrator; it applies to animals already held too.'
+                                                            : 'Only the Head Officer or an Administrator can change it.'}
+                                                        {stayLimit.info?.updated_by_name ? ` Last set by ${stayLimit.info.updated_by_name}.` : ''}
                                                     </p>
                                                 </div>
                                                 <div className="flex flex-wrap items-center gap-3">
@@ -1309,14 +1319,15 @@ const BrgySettings: React.FC = () => {
                                                             <button
                                                                 key={days}
                                                                 type="button"
-                                                                onClick={() => setPrefs(prev => ({ ...prev, adoptionGraceDays: days }))}
+                                                                onClick={() => setStayDraft(days)}
+                                                                disabled={!stayLimit.canEdit}
                                                                 className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
-                                                                    prefs.adoptionGraceDays === days
+                                                                    stayValue === days
                                                                         ? 'bg-role text-white shadow-xs'
                                                                         : 'text-gray-600 hover:bg-gray-100'
                                                                 }`}
                                                             >
-                                                                {days}d {days === 0 ? '★' : ''}
+                                                                {days}d {days === DEFAULT_STAY_LIMIT_DAYS ? '★' : ''}
                                                             </button>
                                                         ))}
                                                     </div>
@@ -1325,8 +1336,8 @@ const BrgySettings: React.FC = () => {
                                                     <div className="flex items-center space-x-1 bg-white border border-gray-200 rounded-xl px-2 py-1 shadow-xs">
                                                         <button
                                                             type="button"
-                                                            onClick={() => setPrefs(prev => ({ ...prev, adoptionGraceDays: Math.max(0, prev.adoptionGraceDays - 1) }))}
-                                                            disabled={prefs.adoptionGraceDays <= 0}
+                                                            onClick={() => setStayDraft(clampStay(stayValue - 1))}
+                                                            disabled={!stayLimit.canEdit || stayValue <= 0}
                                                             className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-gray-100 text-gray-700 font-bold flex items-center justify-center transition-colors text-sm"
                                                             title="Decrease stay duration"
                                                         >
@@ -1337,11 +1348,12 @@ const BrgySettings: React.FC = () => {
                                                                 type="number"
                                                                 min={0}
                                                                 max={90}
-                                                                value={prefs.adoptionGraceDays}
+                                                                value={stayValue}
+                                                                disabled={!stayLimit.canEdit}
                                                                 onChange={(e) => {
                                                                     const val = parseInt(e.target.value, 10);
                                                                     if (!isNaN(val)) {
-                                                                        setPrefs(prev => ({ ...prev, adoptionGraceDays: Math.min(90, Math.max(0, val)) }));
+                                                                        setStayDraft(clampStay(val));
                                                                     }
                                                                 }}
                                                                 className="w-10 text-center text-sm font-black text-gray-900 focus:outline-hidden"
@@ -1350,7 +1362,8 @@ const BrgySettings: React.FC = () => {
                                                         </div>
                                                         <button
                                                             type="button"
-                                                            onClick={() => setPrefs(prev => ({ ...prev, adoptionGraceDays: Math.min(90, prev.adoptionGraceDays + 1) }))}
+                                                            onClick={() => setStayDraft(clampStay(stayValue + 1))}
+                                                            disabled={!stayLimit.canEdit || stayValue >= (stayLimit.info?.max_days ?? 90)}
                                                             className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold flex items-center justify-center transition-colors text-sm"
                                                             title="Increase stay duration"
                                                         >

@@ -99,3 +99,36 @@ export const CLOSE_OUTCOME_LABEL: Record<string, string> = {
     reunited: 'Resolved – Pet Reunited', not_found: 'Closed – pet not found', declined: 'Not broadcast',
     report_closed: 'Closed with the report', other: 'Closed',
 };
+
+/** Where the pet was most recently seen: the sighting with the latest reported time. Dismissed ones are left out.
+ *  (The tracking map rings the latest *submitted* sighting; for location, the reported time is what counts.) */
+export function mostRecentSighting(sightings: Sighting[] = []): Sighting | null {
+    const kept = (sightings || []).filter(s => s.status !== 'dismissed');
+    if (!kept.length) return null;
+    return [...kept].sort((a, b) => time(b.seen_at) - time(a.seen_at) || time(b.submitted_at) - time(a.submitted_at) || b.sighting_id - a.sighting_id)[0];
+}
+
+/** A sighting's place: its name, else its coordinates. */
+export const sightingPlace = (s: Pick<Sighting, 'location_label' | 'latitude' | 'longitude'>): string =>
+    (s.location_label || '').trim() || `${Number(s.latitude).toFixed(6)}, ${Number(s.longitude).toFixed(6)}`;
+
+// Same rule as isValidLatLng (utils/coverageArea), kept here so this file stays free of the API client (unit tests)
+const validPosition = (lat: unknown, lng: unknown): boolean => {
+    if (lat === null || lat === undefined || lat === '' || lng === null || lng === undefined || lng === '') return false;
+    const a = Number(lat);
+    const b = Number(lng);
+    return Number.isFinite(a) && Number.isFinite(b) && !(a === 0 && b === 0) && Math.abs(a) <= 90 && Math.abs(b) <= 180;
+};
+
+/** Sightings in the tracking map's order and numbering: by reported time (then id), only those with a valid position. */
+export function orderedSightings(sightings: Sighting[] = []): Sighting[] {
+    return (sightings || [])
+        .filter(s => validPosition(s?.latitude, s?.longitude))
+        .sort((a, b) => time(a.seen_at) - time(b.seen_at) || a.sighting_id - b.sighting_id);
+}
+
+/** A sighting's number on the maps (1 = earliest seen), or null. */
+export const sightingNumber = (sightings: Sighting[], sightingId: number): number | null => {
+    const i = orderedSightings(sightings).findIndex(s => s.sighting_id === sightingId);
+    return i >= 0 ? i + 1 : null;
+};
