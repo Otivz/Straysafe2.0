@@ -14,6 +14,7 @@ import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import SuccessModal from '../../components/Modals/SuccessModal';
 import Select from '../../components/Dropdown';
 import MapComponent from '../../components/MapComponent';
+import { checkLocalGpsFix } from '../../utils/liveNavigation';
 import DataTable from '../../components/DataTable';
 import AISuggestionPanel from '../../components/AISuggestionPanel';
 
@@ -394,12 +395,19 @@ const SubdReports = () => {
             if ("geolocation" in navigator) {
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
+                        const check = checkLocalGpsFix(position.coords);
+                        if (!check.reliable) {
+                            setUserLocation(null);
+                            setNavSource('brgy');
+                            return;
+                        }
                         setUserLocation([position.coords.latitude, position.coords.longitude]);
                     },
                     (error) => {
                         console.error("Error getting location:", error);
                         setNavSource('brgy');
-                    }
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                 );
             }
         }
@@ -1688,6 +1696,14 @@ const SubdReports = () => {
                                                                     if ("geolocation" in navigator) {
                                                                         navigator.geolocation.getCurrentPosition(
                                                                             (position) => {
+                                                                                const check = checkLocalGpsFix(position.coords);
+                                                                                if (!check.reliable) {
+                                                                                    setUserLocation(null);
+                                                                                    setNavSource('brgy');
+                                                                                    setIsNavigating(true);
+                                                                                    alert(`${check.message}\n\nShowing directions from Barangay Hall HQ instead.`);
+                                                                                    return;
+                                                                                }
                                                                                 setUserLocation([position.coords.latitude, position.coords.longitude]);
                                                                                 setIsNavigating(true);
                                                                             },
@@ -1764,6 +1780,14 @@ const SubdReports = () => {
                                                                 if ("geolocation" in navigator) {
                                                                     navigator.geolocation.getCurrentPosition(
                                                                         (pos) => {
+                                                                            const check = checkLocalGpsFix(pos.coords);
+                                                                            if (!check.reliable) {
+                                                                                setUserLocation(null);
+                                                                                setNavSource('brgy');
+                                                                                setIsNavigating(true);
+                                                                                alert(`${check.message}\n\nShowing directions from Barangay Hall HQ instead.`);
+                                                                                return;
+                                                                            }
                                                                             setUserLocation([pos.coords.latitude, pos.coords.longitude]);
                                                                             setIsNavigating(true);
                                                                         },

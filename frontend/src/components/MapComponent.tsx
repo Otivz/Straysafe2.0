@@ -1,6 +1,7 @@
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, Polyline, useMapEvents, Tooltip, CircleMarker, Circle } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, Polyline, useMapEvents, Tooltip, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
+import ReactDOM from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import axios from 'axios';
@@ -12,21 +13,41 @@ import { createBarangayHQIcon, createHoldingFacilityPinIcon, createLandmarkPinIc
 import { SELERA_BOUNDARY_PATH_OPTIONS, SAN_VICENTE_HQ, SELERA_DEFAULT_CENTER, isValidLatLng, fetchCoverageArea, getPolygonLatLngs, COVERAGE_CACHE_KEY, syncSanVicenteHQ, type CoverageAreaInfo } from '../utils/coverageArea';
 
 
-const createUserLocationIcon = () => cachedIcon('user-location', () => L.divIcon({
+const createUserLocationIcon = (label: string = 'YOUR LOCATION') => cachedIcon(`user-location|${label}`, () => L.divIcon({
     html: `
-        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 24px; height: 24px;">
-            <div style="position: relative; width: 24px; height: 24px;">
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; pointer-events: auto;">
+            <div style="
+                background: #2563EB;
+                color: #FFFFFF;
+                font-size: 9px;
+                font-weight: 900;
+                padding: 2.5px 8px;
+                border-radius: 9999px;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                box-shadow: 0 4px 12px rgba(37,99,235,0.45);
+                border: 2px solid #FFFFFF;
+                white-space: nowrap;
+                margin-bottom: 3px;
+                display: flex;
+                align-items: center;
+                gap: 3px;
+            ">
+                <span>📍</span>
+                <span>${label}</span>
+            </div>
+            <div style="position: relative; width: 26px; height: 26px;">
                 <div style="
                     position: absolute;
                     top: 50%;
                     left: 50%;
                     transform: translate(-50%, -50%);
-                    width: 14px;
-                    height: 14px;
-                    background: #3B82F6;
+                    width: 16px;
+                    height: 16px;
+                    background: #2563EB;
                     border-radius: 50%;
-                    border: 2px solid white;
-                    box-shadow: 0 0 10px rgba(59,130,246,0.8);
+                    border: 2.5px solid white;
+                    box-shadow: 0 0 12px rgba(37,99,235,0.9);
                     z-index: 2;
                 "></div>
                 <div style="
@@ -37,15 +58,16 @@ const createUserLocationIcon = () => cachedIcon('user-location', () => L.divIcon
                     height: 100%;
                     background: #3B82F6;
                     border-radius: 50%;
-                    opacity: 0.4;
+                    opacity: 0.45;
                     animation: pulse-ring 1.5s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
                 "></div>
             </div>
         </div>
     `,
     className: 'user-location-marker',
-    iconSize: [24, 24],
-    iconAnchor: [12, 12]
+    iconSize: [128, 54],
+    iconAnchor: [64, 41],
+    popupAnchor: [0, -40]
 }));
 
 const IncidentIcon = L.divIcon({
@@ -886,12 +908,13 @@ const KeepPinClear = ({ lat, lng, card }: { lat: number; lng: number; card: { x0
     return null;
 };
 
-const ChangeView = ({ center, zoom }: { center: [number, number], zoom: number }) => {
+const ChangeView = ({ center, zoom, disabled = false }: { center: [number, number], zoom: number, disabled?: boolean }) => {
     const map = useMap();
     const prevCenterRef = useRef<[number, number]>(center);
     const prevZoomRef = useRef<number>(zoom);
 
     useEffect(() => {
+        if (disabled) return;
         const centerChanged = center[0] !== prevCenterRef.current[0] || center[1] !== prevCenterRef.current[1];
         const zoomChanged = zoom !== prevZoomRef.current;
 
@@ -900,8 +923,147 @@ const ChangeView = ({ center, zoom }: { center: [number, number], zoom: number }
             prevCenterRef.current = center;
             prevZoomRef.current = zoom;
         }
-    }, [center, zoom, map]);
+    }, [center, zoom, disabled, map]);
     return null;
+};
+
+// Keeps both your starting/live pinpoint and the report/dispatch pin framed in view, and provides one-tap jump buttons
+const PinpointViewportControls = ({
+    routing,
+    livePos,
+    userPinPos,
+    dispatchPos,
+    incidentPos,
+}: {
+    routing?: { start: [number, number]; end: [number, number]; waypointNames?: [string, string]; live?: boolean };
+    livePos?: [number, number] | null;
+    userPinPos?: [number, number] | null;
+    dispatchPos?: [number, number] | null;
+    incidentPos?: [number, number] | null;
+}) => {
+    const map = useMap();
+    const [portalTarget, setPortalTarget] = useState<HTMLDivElement | null>(null);
+    const fittedRouteKeyRef = useRef<string | null>(null);
+    const hadDispatchRef = useRef<boolean>(false);
+
+    useEffect(() => {
+        const mapContainer = map.getContainer();
+        const parent = mapContainer.parentElement;
+        if (!parent) return;
+        if (getComputedStyle(parent).position === 'static') {
+            parent.style.position = 'relative';
+        }
+        const div = document.createElement('div');
+        div.style.cssText = 'position:absolute;top:84px;left:10px;z-index:1000;display:flex;flex-direction:column;gap:6px;pointer-events:auto;';
+        L.DomEvent.disableClickPropagation(div);
+        parent.appendChild(div);
+        setPortalTarget(div);
+        return () => {
+            if (parent.contains(div)) parent.removeChild(div);
+            setPortalTarget(null);
+        };
+    }, [map]);
+
+    // Frame both start and destination immediately when a route opens or a manual start pin moves
+    useEffect(() => {
+        if (!routing || !isValidLatLng(routing.start[0], routing.start[1]) || !isValidLatLng(routing.end[0], routing.end[1])) {
+            fittedRouteKeyRef.current = null;
+            return;
+        }
+        const activeStart: [number, number] = routing.live && livePos ? livePos : routing.start;
+        const routeKey = routing.live
+            ? `live|${routing.end[0].toFixed(5)},${routing.end[1].toFixed(5)}`
+            : `${activeStart[0].toFixed(5)},${activeStart[1].toFixed(5)}->${routing.end[0].toFixed(5)},${routing.end[1].toFixed(5)}`;
+        if (fittedRouteKeyRef.current === routeKey) return;
+        fittedRouteKeyRef.current = routeKey;
+        const bounds = L.latLngBounds([activeStart, routing.end]);
+        if (bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [56, 56], maxZoom: 17 });
+        }
+    }, [routing, routing?.start?.[0], routing?.start?.[1], routing?.end?.[0], routing?.end?.[1], routing?.live, livePos?.[0], livePos?.[1], map]);
+
+    // Frame live Dispatch Team + incident once when a live responder broadcast first appears
+    useEffect(() => {
+        const hasDispatch = Boolean(dispatchPos && isValidLatLng(dispatchPos[0], dispatchPos[1]));
+        if (hasDispatch && !hadDispatchRef.current && dispatchPos) {
+            hadDispatchRef.current = true;
+            if (!routing && incidentPos && isValidLatLng(incidentPos[0], incidentPos[1])) {
+                const bounds = L.latLngBounds([dispatchPos, incidentPos]);
+                if (bounds.isValid()) {
+                    map.fitBounds(bounds, { padding: [56, 56], maxZoom: 17 });
+                }
+            } else if (!routing) {
+                map.flyTo(dispatchPos, Math.max(map.getZoom(), 16), { duration: 0.6 });
+            }
+        } else if (!hasDispatch) {
+            hadDispatchRef.current = false;
+        }
+    }, [dispatchPos?.[0], dispatchPos?.[1], incidentPos?.[0], incidentPos?.[1], Boolean(routing), map]);
+
+    const activeMyPin: [number, number] | null =
+        (routing?.live && livePos) ? livePos
+            : (userPinPos && isValidLatLng(userPinPos[0], userPinPos[1])) ? userPinPos
+                : (routing && isValidLatLng(routing.start[0], routing.start[1])) ? routing.start
+                    : null;
+
+    const isHqStart = Boolean(
+        routing && !routing.live && !userPinPos && /barangay|brgy|hall|hq/i.test(routing.waypointNames?.[0] || '')
+    );
+
+    if (!portalTarget || (!activeMyPin && !dispatchPos && !routing)) return null;
+
+    return ReactDOM.createPortal(
+        <>
+            {activeMyPin && (
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        map.flyTo(activeMyPin, Math.max(map.getZoom(), 17), { duration: 0.6 });
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/95 hover:bg-blue-50 text-blue-700 font-black text-[10px] uppercase tracking-wider rounded-xl shadow-md border border-blue-200 cursor-pointer transition-colors"
+                    title={isHqStart ? 'Center on Barangay HQ starting point' : 'Zoom to my pinpoint location'}
+                >
+                    <span>{isHqStart ? '🏛️' : '📍'}</span>
+                    <span>{isHqStart ? 'Start Pin' : 'My Pin'}</span>
+                </button>
+            )}
+            {routing && isValidLatLng(routing.start[0], routing.start[1]) && isValidLatLng(routing.end[0], routing.end[1]) && (
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const s = routing.live && livePos ? livePos : routing.start;
+                        const bounds = L.latLngBounds([s, routing.end]);
+                        if (bounds.isValid()) map.fitBounds(bounds, { padding: [56, 56], maxZoom: 17 });
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/95 hover:bg-orange-50 text-orange-700 font-black text-[10px] uppercase tracking-wider rounded-xl shadow-md border border-orange-200 cursor-pointer transition-colors"
+                    title="Fit full route on screen"
+                >
+                    <span>🗺️</span>
+                    <span>Fit Route</span>
+                </button>
+            )}
+            {dispatchPos && isValidLatLng(dispatchPos[0], dispatchPos[1]) && (
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        map.flyTo(dispatchPos, Math.max(map.getZoom(), 17), { duration: 0.6 });
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-[10px] uppercase tracking-wider rounded-xl shadow-md border border-white/80 cursor-pointer transition-colors"
+                    title="Zoom to live Barangay Dispatch Team location"
+                >
+                    <span>🚓</span>
+                    <span>Live Team</span>
+                </button>
+            )}
+        </>,
+        portalTarget
+    );
 };
 
 // Internal component to handle container resize & initial map layout invalidation
@@ -1211,6 +1373,73 @@ const MapComponent = ({
         [rawCenter?.[0], rawCenter?.[1]]
     );
 
+    const userMarkerEntry = useMemo(
+        () => rawMarkers.find((m) => isValidLatLng(m.lat, m.lng) && (m.category === 'User Location' || m.id === -2 || /^(your|my) (current |live )?location/i.test(m.title || ''))),
+        [rawMarkers]
+    );
+    const dispatchMarkerEntry = useMemo(
+        () => markers.find((m) => m.category === 'Dispatch Team'),
+        [markers]
+    );
+    const incidentTargetPos = useMemo<[number, number]>(() => {
+        const AUX_CATEGORIES = new Set([
+            'Dispatch Team',
+            'User Location',
+            'Selected Location',
+            'Barangay Office',
+            'HQ',
+            'Pickup Location',
+            'Neighbor Sighting',
+            'Historical Holding',
+        ]);
+        const candidates = markers.filter(
+            (m) =>
+                isValidLatLng(m.lat, m.lng) &&
+                !AUX_CATEGORIES.has(m.category || '') &&
+                m.id !== -1 &&
+                m.id !== -2 &&
+                m.id !== -777 &&
+                m.id !== -888 &&
+                m.id !== -889
+        );
+        if (candidates.length === 0) return center;
+
+        const dispatchReportId =
+            dispatchMarkerEntry?.rawData?.report_id ??
+            (typeof (dispatchMarkerEntry as any)?.report_id === 'number' ? (dispatchMarkerEntry as any).report_id : null);
+        if (dispatchReportId != null) {
+            const byId = candidates.find((m) => m.id === dispatchReportId || m.rawData?.report_id === dispatchReportId);
+            if (byId) return [byId.lat, byId.lng];
+        }
+
+        if (dispatchMarkerEntry) {
+            const dispatchedPin = candidates.find(
+                (m) => Number(m.rawData?.status_id ?? m.rawData?.current_status_id) === 5
+            );
+            if (dispatchedPin) return [dispatchedPin.lat, dispatchedPin.lng];
+        }
+
+        if (candidates.length === 1) {
+            return [candidates[0].lat, candidates[0].lng];
+        }
+
+        if (dispatchMarkerEntry) {
+            return [candidates[0].lat, candidates[0].lng];
+        }
+
+        return center;
+    }, [markers, dispatchMarkerEntry, center]);
+    const hasStartMarkerInList = useMemo(() => {
+        if (!routing || !isValidLatLng(routing.start[0], routing.start[1])) return false;
+        const onMarkers = markers.some((m) => Math.abs(m.lat - routing.start[0]) < 0.0002 && Math.abs(m.lng - routing.start[1]) < 0.0002);
+        const onHq = Boolean(
+            hqDrawnByMap && barangayHQ?.hq_lat && barangayHQ?.hq_lng &&
+            Math.abs(parseFloat(barangayHQ.hq_lat) - routing.start[0]) < 0.0003 &&
+            Math.abs(parseFloat(barangayHQ.hq_lng) - routing.start[1]) < 0.0003
+        );
+        return onMarkers || onHq;
+    }, [routing, markers, hqDrawnByMap, barangayHQ]);
+
     useEffect(() => {
         if (typeof zoom === 'number' && zoom !== currentZoom) {
             setCurrentZoom(zoom);
@@ -1311,13 +1540,23 @@ const MapComponent = ({
                     api.get('/landmarks/barangay/1/hq'),
                 ]);
                 if (lmkRes.status === 'fulfilled' && Array.isArray(lmkRes.value.data)) {
-                    setDbLandmarks(lmkRes.value.data);
-                    setCachedData('straysafe_landmarks', lmkRes.value.data, 60 * 1000);
+                    const nextLandmarks = lmkRes.value.data;
+                    setDbLandmarks((prev) => {
+                        const prevSig = prev.map((x: any) => `${x.landmark_id}:${x.latitude}:${x.longitude}:${x.name}:${x.is_holding_facility}`).join('|');
+                        const nextSig = nextLandmarks.map((x: any) => `${x.landmark_id}:${x.latitude}:${x.longitude}:${x.name}:${x.is_holding_facility}`).join('|');
+                        return prevSig === nextSig ? prev : nextLandmarks;
+                    });
+                    setCachedData('straysafe_landmarks', nextLandmarks, 60 * 1000);
                 }
                 if (hqRes.status === 'fulfilled' && hqRes.value.data?.hq_lat && hqRes.value.data?.hq_lng) {
-                    setBarangayHQ(hqRes.value.data);
-                    syncSanVicenteHQ(hqRes.value.data.hq_lat, hqRes.value.data.hq_lng);
-                    setCachedData('straysafe_brgy_hq', hqRes.value.data, 60 * 1000);
+                    const nextHq = hqRes.value.data;
+                    setBarangayHQ((prev: any) =>
+                        prev && Number(prev.hq_lat) === Number(nextHq.hq_lat) && Number(prev.hq_lng) === Number(nextHq.hq_lng) && prev.barangay_name === nextHq.barangay_name
+                            ? prev
+                            : nextHq
+                    );
+                    syncSanVicenteHQ(nextHq.hq_lat, nextHq.hq_lng);
+                    setCachedData('straysafe_brgy_hq', nextHq, 60 * 1000);
                 }
             } catch {
                 // Ignore background refresh error
@@ -1326,9 +1565,15 @@ const MapComponent = ({
         const unsubFacSync = onFacilitySync(() => { fetchFeaturesSync(); });
         const onMapWinFocus = () => { fetchFeaturesSync(); };
         window.addEventListener('focus', onMapWinFocus);
+        const syncInterval = window.setInterval(() => {
+            if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+                fetchFeaturesSync();
+            }
+        }, 8000);
         return () => {
             unsubFacSync();
             window.removeEventListener('focus', onMapWinFocus);
+            window.clearInterval(syncInterval);
         };
     }, []);
     useEffect(() => {
@@ -1361,7 +1606,7 @@ const MapComponent = ({
         const select = () => {
             const m = current();
             if (!m) return;
-            if (m.category !== 'User Location' && m.category !== 'Selected Location') {
+            if (m.category !== 'User Location' && m.category !== 'Selected Location' && m.category !== 'Dispatch Team') {
                 setSelectedReportMarker(m);
             }
             if (latest.current.onMarkerClick) latest.current.onMarkerClick(m);
@@ -1390,7 +1635,7 @@ const MapComponent = ({
     }));
     // The report card for the tapped pin (not shown for the user's own location or a picked spot, or during directions)
     const cardShown = Boolean(!routing && selectedReportMarker && selectedReportMarker.category !== 'User Location'
-        && selectedReportMarker.category !== 'Selected Location' && (selectedReportMarker.rawData || selectedReportMarker.id > 0));
+        && selectedReportMarker.category !== 'Selected Location' && selectedReportMarker.category !== 'Dispatch Team' && (selectedReportMarker.rawData || selectedReportMarker.id > 0));
     const info = useMemo(() => (cardShown ? describeReportMarker(selectedReportMarker) : null), [cardShown, selectedReportMarker]);
     // Where the card sits in map pixels (so the selected pin is kept clear of it) and how wide the map is (page
     // overlays such as legends step aside on narrow maps, see index.css)
@@ -1466,7 +1711,14 @@ const MapComponent = ({
             >
                 <MapResizeHandler />
                 <CooperativeGestures onHint={setGestureHint} />
-                <ChangeView center={center} zoom={zoom} />
+                <ChangeView center={center} zoom={zoom} disabled={Boolean(routing)} />
+                <PinpointViewportControls
+                    routing={routing}
+                    livePos={liveRoute.livePos}
+                    userPinPos={userMarkerEntry ? [userMarkerEntry.lat, userMarkerEntry.lng] : null}
+                    dispatchPos={dispatchMarkerEntry ? [dispatchMarkerEntry.lat, dispatchMarkerEntry.lng] : null}
+                    incidentPos={incidentTargetPos}
+                />
                 <MapEventsHandler
                     onLocationChange={onLocationChange}
                     onMapClick={(lat, lng) => {
@@ -1659,6 +1911,7 @@ const MapComponent = ({
                             m !== marker &&
                             m.category !== 'Initial Sighting' &&
                             m.category !== 'Found Location' &&
+                            m.category !== 'Pickup Location' &&
                             Math.abs(m.lat - marker.lat) < 0.0001 &&
                             Math.abs(m.lng - marker.lng) < 0.0001
                         );
@@ -1710,18 +1963,34 @@ const MapComponent = ({
                             markerLat = parseFloat(marker.rawData.facility.latitude.toString());
                             markerLng = parseFloat(marker.rawData.facility.longitude.toString());
                         }
+                    } else if (marker.category === 'Pickup Location') {
+                        const collidesWithOtherPin = markers.some((m) =>
+                            m !== marker &&
+                            m.category !== 'Pickup Location' &&
+                            Math.abs(m.lat - markerLat) < 0.00012 &&
+                            Math.abs(m.lng - markerLng) < 0.00012
+                        );
+                        if (collidesWithOtherPin) {
+                            markerLng = markerLng + 0.00014;
+                        }
                     }
 
                     return (
                         <Marker
-                            key={marker.id}
+                            key={`${marker.id}-${marker.category || markerIndex}`}
                             position={[markerLat, markerLng]}
                             draggable={Boolean(marker.draggable)}
                             icon={
                                 marker.icon ? marker.icon :
                                 marker.category === 'Selected Location' ? createSelectedPinIcon() :
                                     (marker.category === 'Barangay Office' || marker.category === 'HQ') ? createBarangayHQIcon(currentZoom) :
-                                        isUserLoc ? createUserLocationIcon() :
+                                        isUserLoc ? createUserLocationIcon(
+                                            marker.title && /home/i.test(marker.title)
+                                                ? 'MY HOME'
+                                                : marker.title && /custom|starting/i.test(marker.title)
+                                                    ? 'START PIN'
+                                                    : 'YOUR LOCATION'
+                                        ) :
                                             marker.category === 'Dispatch Team' ? createDispatchTeamIcon(marker.title || 'Dispatch Team') :
                                                 marker.category === 'Pickup Location' ? createPickupLocationIcon(marker.title || 'Picked Up Here') :
                                             (marker.category === 'Historical Sighting' || marker.category === 'Archived Location' || marker.category === 'Historical Holding' || marker.category === 'Resolved') ? createHistoricalPinIcon(marker.category === 'Historical Holding' ? 'HISTORICAL HOLDING' : (marker.title?.includes('Found') ? 'FOUND SPOT' : 'HISTORICAL SIGHTING'), animalTypeStr) :
@@ -1887,6 +2156,17 @@ const MapComponent = ({
                     );
                 })}
 
+                {/* Live Barangay Dispatch trajectory line: moves dynamically as the responder pinpoint moves */}
+                {!routing && dispatchMarkerEntry && isValidLatLng(dispatchMarkerEntry.lat, dispatchMarkerEntry.lng) && isValidLatLng(incidentTargetPos[0], incidentTargetPos[1]) && (
+                    <RoadRouteOverlay
+                        start={[dispatchMarkerEntry.lat, dispatchMarkerEntry.lng]}
+                        end={incidentTargetPos}
+                        color="#2563EB"
+                        weight={4}
+                        dashArray="6, 8"
+                    />
+                )}
+
                 {routing && (
                     <RoutingControl
                         key={routing.live
@@ -1901,6 +2181,19 @@ const MapComponent = ({
                     />
                 )}
 
+                {/* Fallback route start pinpoint when the page did not pass an explicit User Location / HQ marker */}
+                {routing && !(routing.live && liveRoute.livePos) && !hasStartMarkerInList && isValidLatLng(routing.start[0], routing.start[1]) && (
+                    <Marker
+                        position={routing.start}
+                        icon={createUserLocationIcon(routing.live ? 'YOUR LOCATION' : 'START PIN')}
+                        zIndexOffset={850}
+                    >
+                        <Tooltip direction="top" offset={[0, -40]}>
+                            {routing.waypointNames?.[0] || 'Your Starting Point'}
+                        </Tooltip>
+                    </Marker>
+                )}
+
                 {/* You, moving: follows every GPS fix (the route itself is recalculated every ~25 m / 15 s) */}
                 {routing?.live && liveRoute.livePos && (
                     <>
@@ -1908,10 +2201,13 @@ const MapComponent = ({
                             <Circle center={liveRoute.livePos} radius={liveRoute.accuracy}
                                 pathOptions={{ color: '#2563eb', weight: 1, fillColor: '#3b82f6', fillOpacity: 0.12 }} />
                         )}
-                        <CircleMarker center={liveRoute.livePos} radius={8}
-                            pathOptions={{ color: '#ffffff', weight: 3, fillColor: '#2563eb', fillOpacity: 1 }}>
-                            <Tooltip direction="top" offset={[0, -8]}>You are here (live)</Tooltip>
-                        </CircleMarker>
+                        <Marker
+                            position={liveRoute.livePos}
+                            icon={createUserLocationIcon('YOU ARE HERE')}
+                            zIndexOffset={900}
+                        >
+                            <Tooltip direction="top" offset={[0, -40]}>You are here (Live GPS)</Tooltip>
+                        </Marker>
                     </>
                 )}
 

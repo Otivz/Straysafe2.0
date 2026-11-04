@@ -5,7 +5,7 @@ import { reportSightingMarkers } from '../../components/LostPets/sightingMarkers
 import { isManualMatchRecord } from '../../utils/manualMatchFields';
 import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { SIGHTING_TITLE } from '../../utils/sighting';
-import { useWatchDispatchLocation } from '../../utils/liveNavigation';
+import { useWatchDispatchLocation, checkLocalGpsFix } from '../../utils/liveNavigation';
 import NoticeModal from '../../components/Modals/NoticeModal';
 import ActivityPhotos from '../../components/ActivityPhotos';
 import ReportDescription from '../../components/ReportDescription';
@@ -542,10 +542,10 @@ const SubdViewReport = () => {
         }
     };
 
-    const fetchReportDetails = async () => {
+    const fetchReportDetails = async (silent: boolean = false) => {
         if (!id) return;
         try {
-            setLoading(true);
+            if (!silent) setLoading(true);
             const response = await api.get(`/reports/${id}`);
             if (response.data) {
                 setReport(response.data);
@@ -605,19 +605,29 @@ const SubdViewReport = () => {
         fetchReportDetails();
     }, [id]);
     useEffect(() => {
-        const unsub = onFacilitySync(() => { fetchReportDetails(); });
-        return () => unsub();
+        const unsub = onFacilitySync(() => { fetchReportDetails(true); });
+        const onWinFocus = () => { fetchReportDetails(true); };
+        window.addEventListener('focus', onWinFocus);
+        return () => {
+            unsub();
+            window.removeEventListener('focus', onWinFocus);
+        };
     }, [id]);
 
-    // Status sync: another user (e.g. the subdivision resolving an observation) can change this report's status.
-    // A light check keeps it current; the full reload (with its spinner) only runs when the status really changed.
-    const shownStatusRef = useRef<number | null | undefined>(undefined);
-    useEffect(() => { shownStatusRef.current = report?.status_id; }, [report?.status_id]);
+    // Status & pinpoint sync: keeps status and Barangay/facility/pickup coordinates current without spinner flicker.
+    const reportSyncSigRef = useRef<string | undefined>(undefined);
+    const makeSubdSyncSig = (r: any) =>
+        r
+            ? `${r.status_id}|${r.latitude}|${r.longitude}|${r.facility_id}|${r.facility?.latitude}|${r.facility?.longitude}|${r.pickup_latitude}|${r.pickup_longitude}|${r.custody_status}`
+            : '';
+    useEffect(() => {
+        reportSyncSigRef.current = report ? makeSubdSyncSig(report) : undefined;
+    }, [report?.status_id, report?.latitude, report?.longitude, report?.facility_id, report?.facility?.latitude, report?.facility?.longitude, report?.pickup_latitude, report?.pickup_longitude, report?.custody_status]);
     useAutoRefresh(async () => {
-        if (!id || shownStatusRef.current === undefined) return;
+        if (!id || reportSyncSigRef.current === undefined) return;
         const res = await api.get(`/reports/${id}`);
-        if (res.data && res.data.status_id !== shownStatusRef.current) await fetchReportDetails();
-    }, !!id, 30000);
+        if (res.data && makeSubdSyncSig(res.data) !== reportSyncSigRef.current) await fetchReportDetails(true);
+    }, !!id, 8000);
 
     useEffect(() => {
         if (searchParams.get('openChat') === 'true' || (location.state as any)?.openChat) {
@@ -675,12 +685,22 @@ const SubdViewReport = () => {
             if ("geolocation" in navigator) {
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
+                        const refPoint: [number, number] | undefined =
+                            report?.latitude && report?.longitude ? [Number(report.latitude), Number(report.longitude)] : undefined;
+                        const check = checkLocalGpsFix(position.coords, refPoint);
+                        if (!check.reliable) {
+                            setUserLocation(null);
+                            setNavSource('brgy');
+                            alert(`${check.message}\n\nShowing directions from Barangay Hall HQ instead.`);
+                            return;
+                        }
                         setUserLocation([position.coords.latitude, position.coords.longitude]);
                     },
                     (error) => {
                         console.error("Error getting location:", error);
                         setNavSource('brgy');
-                    }
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                 );
             }
         }
@@ -1990,7 +2010,7 @@ const SubdViewReport = () => {
                                                                 }
                                                             },
                                                             ...(report?.pickup_latitude != null && report?.pickup_longitude != null ? [{
-                                                                id: -888,
+                                                                id: -889,
                                                                 lat: parseFloat(report.pickup_latitude.toString()),
                                                                 lng: parseFloat(report.pickup_longitude.toString()),
                                                                 title: report.pickup_landmark ? `Picked Up: ${report.pickup_landmark}` : 'Animal Picked Up Location',
@@ -2041,8 +2061,8 @@ const SubdViewReport = () => {
                                                                 showReturnToSelera={false}
                                                                 markers={markersList}
                                                                 routing={(!isResolvedCase && isNavigating) ? (() => {
-                                                                    const repLoc: [number, number] = [report.latitude, report.longitude];
-                                                                    const destName = report.landmark || 'Incident Location';
+                                                                    const repLoc: [number, number] = isRelocated ? [holdingLat, holdingLng] : [Number(report.latitude), Number(report.longitude)];
+                                                                    const destName = isRelocated ? (report.facility?.name || report.landmark || 'Holding Place') : (report.landmark || 'Incident Location');
                                                                     if (navSource === 'current' && userLocation) {
                                                                         return {
                                                                             start: userLocation,
@@ -2052,10 +2072,17 @@ const SubdViewReport = () => {
                                                                             live: true
                                                                         };
                                                                     } else {
+                                                                        const useLiveTeam = report.status_id === 5 && activeDispatchLoc?.is_active && activeDispatchLoc.latitude != null && activeDispatchLoc.longitude != null;
+                                                                        const brgyStart: [number, number] = useLiveTeam
+                                                                            ? [activeDispatchLoc.latitude!, activeDispatchLoc.longitude!]
+                                                                            : BRGY_OFFICE;
+                                                                        const brgyLabel = useLiveTeam
+                                                                            ? (activeDispatchLoc.responder_name ? `Team: ${activeDispatchLoc.responder_name} (Live)` : 'Barangay Rescue Team (Live)')
+                                                                            : 'Barangay Office';
                                                                         return {
-                                                                            start: BRGY_OFFICE,
+                                                                            start: brgyStart,
                                                                             end: repLoc,
-                                                                            waypointNames: ["Barangay Office", destName] as [string, string],
+                                                                            waypointNames: [brgyLabel, destName] as [string, string],
                                                                             onClose: () => setIsNavigating(false)
                                                                         };
                                                                     }
@@ -3636,7 +3663,7 @@ const SubdViewReport = () => {
                                         }
                                     },
                                     ...(report?.pickup_latitude != null && report?.pickup_longitude != null ? [{
-                                        id: -888,
+                                        id: -889,
                                         lat: parseFloat(report.pickup_latitude.toString()),
                                         lng: parseFloat(report.pickup_longitude.toString()),
                                         title: report.pickup_landmark ? `Picked Up: ${report.pickup_landmark}` : 'Animal Picked Up Location',
@@ -3688,8 +3715,8 @@ const SubdViewReport = () => {
                                         showReturnToSelera={false}
                                         markers={markersList}
                                         routing={(!isResolvedCase && isNavigating) ? (() => {
-                                            const repLoc: [number, number] = [report.latitude, report.longitude];
-                                            const destName = report.landmark || 'Incident Location';
+                                            const repLoc: [number, number] = isRelocated ? [holdingLat, holdingLng] : [Number(report.latitude), Number(report.longitude)];
+                                            const destName = isRelocated ? (report.facility?.name || report.landmark || 'Holding Place') : (report.landmark || 'Incident Location');
                                             if (navSource === 'current' && userLocation) {
                                                 return {
                                                     start: userLocation,
@@ -3699,10 +3726,17 @@ const SubdViewReport = () => {
                                                     live: true
                                                 };
                                             } else {
+                                                const useLiveTeam = report.status_id === 5 && activeDispatchLoc?.is_active && activeDispatchLoc.latitude != null && activeDispatchLoc.longitude != null;
+                                                const brgyStart: [number, number] = useLiveTeam
+                                                    ? [activeDispatchLoc.latitude!, activeDispatchLoc.longitude!]
+                                                    : BRGY_OFFICE;
+                                                const brgyLabel = useLiveTeam
+                                                    ? (activeDispatchLoc.responder_name ? `Team: ${activeDispatchLoc.responder_name} (Live)` : 'Barangay Rescue Team (Live)')
+                                                    : 'Barangay Office';
                                                 return {
-                                                    start: BRGY_OFFICE,
+                                                    start: brgyStart,
                                                     end: repLoc,
-                                                    waypointNames: ["Barangay Office", destName] as [string, string],
+                                                    waypointNames: [brgyLabel, destName] as [string, string],
                                                     onClose: () => setIsNavigating(false)
                                                 };
                                             }

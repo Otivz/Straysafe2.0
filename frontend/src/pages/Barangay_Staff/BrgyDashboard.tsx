@@ -12,6 +12,7 @@ import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import MapComponent from '../../components/MapComponent';
+import { checkLocalGpsFix } from '../../utils/liveNavigation';
 import { Activity, Flame, Shield, CheckCircle2, Clock, Truck, FileText, X } from 'lucide-react';
 import ReportDescription from '../../components/ReportDescription';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
@@ -93,7 +94,9 @@ const BrgyDashboard = () => {
         if ("geolocation" in navigator) {
             navigator.geolocation.getCurrentPosition(
                 (position) => {
-                    setUserLocation([position.coords.latitude, position.coords.longitude]);
+                    if (checkLocalGpsFix(position.coords).reliable) {
+                        setUserLocation([position.coords.latitude, position.coords.longitude]);
+                    }
                 },
                 (error) => console.error("Geolocation fetch failed:", error)
             );
@@ -115,6 +118,18 @@ const BrgyDashboard = () => {
 
         navigator.geolocation.getCurrentPosition(
             (pos) => {
+                const check = checkLocalGpsFix(pos.coords);
+                if (!check.reliable) {
+                    setUserLocation(null);
+                    setSelectedReport(fullReport);
+                    setNavSource('brgy');
+                    setIsNavigating(true);
+                    setGeoToast({
+                        message: `${check.message} Showing route from Barangay Hall instead.`,
+                        type: 'error'
+                    });
+                    return;
+                }
                 const coords: [number, number] = [pos.coords.latitude, pos.coords.longitude];
                 setUserLocation(coords);
                 setSelectedReport(fullReport);

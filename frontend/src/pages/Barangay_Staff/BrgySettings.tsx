@@ -550,10 +550,10 @@ const BrgySettings: React.FC = () => {
         }
     ];
 
-    useBarangayHQCoords(user?.barangay_id || 1);
-    const currentLat = latitude ? parseFloat(latitude.toString()) : SAN_VICENTE_HQ[0];
-    const currentLng = longitude ? parseFloat(longitude.toString()) : SAN_VICENTE_HQ[1];
-    const mapPos: [number, number] = (latitude && longitude) ? [currentLat, currentLng] : SAN_VICENTE_HQ;
+    const hqCoords = useBarangayHQCoords(user?.barangay_id || 1);
+    const currentLat = hqCoords[0];
+    const currentLng = hqCoords[1];
+    const mapPos: [number, number] = [currentLat, currentLng];
 
     return (
         <div className="flex h-screen bg-[#F8FAFC]">
@@ -821,12 +821,10 @@ const BrgySettings: React.FC = () => {
                                                 </MapContainer>
                                             </div>
 
-                                            {latitude && longitude && (
-                                                <div className="flex items-center justify-between text-xs bg-gray-50 p-3 rounded-xl border border-gray-200 font-medium text-gray-600">
-                                                    <span>Lat: <strong className="text-gray-900">{parseFloat(latitude.toString()).toFixed(5)}</strong>, Lng: <strong className="text-gray-900">{parseFloat(longitude.toString()).toFixed(5)}</strong></span>
-                                                    <span className="text-gray-500 font-semibold">Managed by System Admin</span>
-                                                </div>
-                                            )}
+                                            <div className="flex items-center justify-between text-xs bg-gray-50 p-3 rounded-xl border border-gray-200 font-medium text-gray-600">
+                                                <span>Lat: <strong className="text-gray-900">{currentLat.toFixed(5)}</strong>, Lng: <strong className="text-gray-900">{currentLng.toFixed(5)}</strong></span>
+                                                <span className="text-gray-500 font-semibold">Managed by System Admin</span>
+                                            </div>
                                         </div>
 
                                         <div className="flex justify-end pt-4">

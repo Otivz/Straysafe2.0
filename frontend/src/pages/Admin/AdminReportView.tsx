@@ -31,6 +31,7 @@ import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import { printElementById } from '../../utils/exportUtils';
 
 import MapAutoResize from '../../components/MapControls/MapAutoResize';
+import { createPickupLocationIcon } from '../../components/MapComponent';
 import ReportDescription from '../../components/ReportDescription';
 import ReportVisibilityPanel from '../../components/ReportVisibilityPanel';
 import CaseSummaryPanel from '../../components/History/CaseSummaryPanel';
@@ -141,6 +142,13 @@ interface ReportDetails {
     latitude: number;
     longitude: number;
     landmark: string;
+    initial_latitude?: number | null;
+    initial_longitude?: number | null;
+    initial_landmark?: string | null;
+    pickup_latitude?: number | null;
+    pickup_longitude?: number | null;
+    pickup_landmark?: string | null;
+    pickup_at?: string | null;
     location_address?: string | null;
     animal_count: number;
     animal_type?: string;
@@ -1373,42 +1381,114 @@ export const AdminReportView: React.FC = () => {
                                         </div>
                                     </div>
 
+                                    {report.pickup_latitude != null && report.pickup_longitude != null && isValidLatLng(Number(report.pickup_latitude), Number(report.pickup_longitude)) && (
+                                        <div className="p-3 bg-purple-50/70 rounded-2xl border border-purple-100 flex items-start justify-between gap-2.5">
+                                            <div className="min-w-0">
+                                                <p className="text-[10px] font-black uppercase tracking-wider text-purple-700">
+                                                    🐾 Verified Animal Pickup Location
+                                                </p>
+                                                <p className="text-xs font-bold text-slate-800 mt-0.5 truncate">
+                                                    {report.pickup_landmark || 'Recorded pickup coordinates'}
+                                                </p>
+                                            </div>
+                                            <span className="text-[11px] font-mono font-bold text-purple-700 bg-white px-2.5 py-1 rounded-xl border border-purple-200 shrink-0">
+                                                {Number(report.pickup_latitude).toFixed(5)}, {Number(report.pickup_longitude).toFixed(5)}
+                                            </span>
+                                        </div>
+                                    )}
+
                                     {/* Leaflet Map Preview */}
-                                    {isValidLatLng(report.latitude, report.longitude) ? (
-                                    <div className="w-full h-64 rounded-2xl overflow-hidden border border-slate-200 shadow-inner relative z-0">
-                                        <MapContainer
-                                            center={[report.latitude, report.longitude]}
-                                            zoom={16}
-                                            scrollWheelZoom={false}
-                                            className="w-full h-full"
-                                        >
-                                            <MapAutoResize />
-                                            <TileLayer
-                                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                                                attribution='&copy; OpenStreetMap contributors'
-                                            />
-                                            {/* Selera Homes Boundary */}
-                                            <Polygon
-                                                positions={SELERA_POLYGON_BOUNDS}
-                                                pathOptions={SELERA_BOUNDARY_PATH_OPTIONS}
-                                            />
-                                            {/* San Vicente HQ */}
-                                            <Marker key={`hq-${hqCoords[0]}-${hqCoords[1]}`} position={hqCoords}>
-                                                <Popup>{report.barangay_name ? `Barangay ${report.barangay_name} HQ` : 'Barangay HQ'}</Popup>
-                                            </Marker>
-                                            {/* Incident Location Marker */}
-                                            <Marker position={[report.latitude, report.longitude]}>
-                                                <Popup>
-                                                    <div className="text-xs font-bold">
-                                                        <span>Case #{report.report_id}</span>
-                                                        <br />
-                                                        <span>{categoryMap[report.category_id] || 'Incident'}</span>
-                                                    </div>
-                                                </Popup>
-                                            </Marker>
-                                        </MapContainer>
-                                    </div>
-                                    ) : (
+                                    {isValidLatLng(report.latitude, report.longitude) ? (() => {
+                                        const isRelocatedInFacility = [7, 8].includes(report.status_id) && Boolean(report.facility_id || report.facility);
+                                        const originLat = report.initial_latitude != null && isValidLatLng(Number(report.initial_latitude), Number(report.initial_longitude))
+                                            ? Number(report.initial_latitude)
+                                            : Number(report.latitude);
+                                        const originLng = report.initial_longitude != null && isValidLatLng(Number(report.initial_latitude), Number(report.initial_longitude))
+                                            ? Number(report.initial_longitude)
+                                            : Number(report.longitude);
+                                        const primaryLat = isRelocatedInFacility ? Number(report.latitude) : originLat;
+                                        const primaryLng = isRelocatedInFacility ? Number(report.longitude) : originLng;
+                                        const hasDistinctOrigin = isRelocatedInFacility && (Math.abs(originLat - primaryLat) > 0.0001 || Math.abs(originLng - primaryLng) > 0.0001);
+
+                                        const rawPickupLat = report.pickup_latitude != null ? Number(report.pickup_latitude) : null;
+                                        const rawPickupLng = report.pickup_longitude != null ? Number(report.pickup_longitude) : null;
+                                        const hasValidPickup = rawPickupLat != null && rawPickupLng != null && isValidLatLng(rawPickupLat, rawPickupLng);
+                                        const pickupCollides = hasValidPickup && (
+                                            (Math.abs(rawPickupLat! - primaryLat) < 0.00012 && Math.abs(rawPickupLng! - primaryLng) < 0.00012) ||
+                                            (hasDistinctOrigin && Math.abs(rawPickupLat! - originLat) < 0.00012 && Math.abs(rawPickupLng! - originLng) < 0.00012)
+                                        );
+                                        const pickupRenderLat = rawPickupLat;
+                                        const pickupRenderLng = rawPickupLng != null ? (pickupCollides ? rawPickupLng + 0.00014 : rawPickupLng) : null;
+
+                                        return (
+                                            <div className="w-full h-64 rounded-2xl overflow-hidden border border-slate-200 shadow-inner relative z-0">
+                                                <MapContainer
+                                                    center={[primaryLat, primaryLng]}
+                                                    zoom={16}
+                                                    scrollWheelZoom={false}
+                                                    className="w-full h-full"
+                                                >
+                                                    <MapAutoResize />
+                                                    <TileLayer
+                                                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                                        attribution='&copy; OpenStreetMap contributors'
+                                                    />
+                                                    {/* Selera Homes Boundary */}
+                                                    <Polygon
+                                                        positions={SELERA_POLYGON_BOUNDS}
+                                                        pathOptions={SELERA_BOUNDARY_PATH_OPTIONS}
+                                                    />
+                                                    {/* San Vicente HQ */}
+                                                    <Marker key={`hq-${hqCoords[0]}-${hqCoords[1]}`} position={hqCoords}>
+                                                        <Popup>{report.barangay_name ? `Barangay ${report.barangay_name} HQ` : 'Barangay HQ'}</Popup>
+                                                    </Marker>
+                                                    {/* Primary Incident / Holding Facility Marker */}
+                                                    <Marker position={[primaryLat, primaryLng]}>
+                                                        <Popup>
+                                                            <div className="text-xs font-bold">
+                                                                <span>Case #{report.report_id}</span>
+                                                                <br />
+                                                                <span>{isRelocatedInFacility ? `Holding Facility: ${report.facility?.name || report.landmark}` : (categoryMap[report.category_id] || 'Animal Sighting Spot')}</span>
+                                                            </div>
+                                                        </Popup>
+                                                    </Marker>
+                                                    {/* Initial Sighting Marker when relocated into a Holding Facility */}
+                                                    {hasDistinctOrigin && (
+                                                        <Marker position={[originLat, originLng]}>
+                                                            <Popup>
+                                                                <div className="text-xs font-bold">
+                                                                    <span>Animal Sighting Spot (Case #{report.report_id})</span>
+                                                                    {report.initial_landmark && (
+                                                                        <>
+                                                                            <br />
+                                                                            <span>{report.initial_landmark}</span>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            </Popup>
+                                                        </Marker>
+                                                    )}
+                                                    {/* Verified Animal Pickup Location Marker (Status 6+) */}
+                                                    {hasValidPickup && pickupRenderLat != null && pickupRenderLng != null && (
+                                                        <Marker
+                                                            position={[pickupRenderLat, pickupRenderLng]}
+                                                            icon={createPickupLocationIcon(report.pickup_landmark || 'Picked Up Here')}
+                                                        >
+                                                            <Popup>
+                                                                <div className="text-xs font-bold space-y-0.5">
+                                                                    <div className="text-purple-700">🐾 Picked Up Location</div>
+                                                                    {report.pickup_landmark && <div>{report.pickup_landmark}</div>}
+                                                                    <div className="font-mono text-[10px] text-slate-500">
+                                                                        {rawPickupLat!.toFixed(6)}, {rawPickupLng!.toFixed(6)}
+                                                                    </div>
+                                                                </div>
+                                                            </Popup>
+                                                        </Marker>
+                                                    )}
+                                                </MapContainer>
+                                            </div>
+                                        );
+                                    })() : (
                                         <div className="w-full h-24 rounded-2xl border border-dashed border-slate-200 flex items-center justify-center text-xs font-semibold text-slate-400">No map location was recorded for this report.</div>
                                     )}
                                 </div>

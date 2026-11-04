@@ -91,16 +91,31 @@ export const useBarangayHQCoords = (barangayId: number = 1): [number, number] =>
         const load = async () => {
             const latest = await fetchBarangayHQCoords(barangayId);
             if (mounted) {
-                setCoords([latest[0], latest[1]]);
+                setCoords((prev) =>
+                    Math.abs(prev[0] - latest[0]) > 1e-7 || Math.abs(prev[1] - latest[1]) > 1e-7
+                        ? [latest[0], latest[1]]
+                        : prev
+                );
             }
         };
         load();
         const unsubscribe = onFacilitySync(() => {
             load();
         });
+        const onWinFocus = () => {
+            load();
+        };
+        window.addEventListener('focus', onWinFocus);
+        const pollTimer = window.setInterval(() => {
+            if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+                load();
+            }
+        }, 8000);
         return () => {
             mounted = false;
             unsubscribe();
+            window.removeEventListener('focus', onWinFocus);
+            window.clearInterval(pollTimer);
         };
     }, [barangayId]);
 
