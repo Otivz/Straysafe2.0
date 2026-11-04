@@ -82,9 +82,12 @@ from app.schemas.report import (
     ReportUpdate,
     ReportVerifyRequest,
     StatusHistoryResponse,
+    LiveLocationPing,
+    LiveLocationResponse,
 )
 from app.utils.ai_suggestions import call_gemini_with_fallback, is_gemini_enabled_in_db
 from app.utils.audit import log_activity
+from app.utils.live_dispatch_tracker import dispatch_tracker
 from app.utils import ai_jobs, ai_pipeline
 from app.utils.case_groups import (
     case_members, case_pet_claims, case_root, group_pet_conflict, pet_name, release_inherited_pet, require_case_pet, require_direct_pet_link,
@@ -470,7 +473,7 @@ def populate_location_and_facility_info(
         if holding_facs_by_subd is None and landmarks_map:
             holding_facs_by_subd = {l.subdivision_id: l for l in landmarks_map.values() if l.is_holding_facility and l.subdivision_id}
         if default_holding_fac is None and landmarks_map:
-            default_holding_fac = next((l for l in landmarks_map.values() if l.is_holding_facility), None)
+            default_holding_fac = next((l for l in landmarks_map.values() if l.is_holding_facility and l.subdivision_id is None), None) or next((l for l in landmarks_map.values() if l.is_holding_facility), None)
 
         # Current coordinates/landmark may belong to a holding facility. Missing
         # original fields must stay missing rather than rewriting the incident's origin.
@@ -495,7 +498,7 @@ def populate_location_and_facility_info(
         # An animal is in a holding place only with recorded evidence: an open holding record or a recorded facility.
         # A status alone never places it there: 7 is also the owner observation (the animal stays with its owner).
         open_holding = holding_rec is not None and not is_holding_resolved
-        is_in_custody = (rep.current_status_id in (7, 8)) and not is_report_resolved and (open_holding or rep.facility_id is not None)
+        is_in_custody = (rep.current_status_id in (7, 8)) and not is_report_resolved and (open_holding or rep.facility_id is not None or rep.custody_status == "In Barangay Facility")
         if open_holding and not is_report_resolved and rep.current_status_id not in (1, 2, 3, 4, 5, 6, 13, 14, 17, 18):
             is_in_custody = True
 
@@ -526,10 +529,10 @@ def populate_location_and_facility_info(
             if landmarks_map is not None:
                 fac = landmarks_map.get(rep.facility_id)
             else:
-                fac = db.query(Landmark).filter(Landmark.landmark_id == rep.facility_id).first()
-        elif is_in_custody and open_holding:
+                fac = db.query(Landmark).filter(Landmark.landmark_id == rep.facility_id, Landmark.status == "Active").first()
+        if not fac and is_in_custody and (open_holding or rep.custody_status == "In Barangay Facility"):
             # Held (open holding record) but the place wasn't recorded: the subdivision's or barangay's holding place
-            if rep.subdivision_id:
+            if rep.subdivision_id and rep.custody_status != "In Barangay Facility":
                 if holding_facs_by_subd is not None:
                     fac = holding_facs_by_subd.get(rep.subdivision_id)
                 else:
@@ -559,11 +562,21 @@ def populate_location_and_facility_info(
                 "contact_number": fac.contact_number,
                 "status": fac.status
             }
-            if rep.latitude == rep.initial_latitude or rep.latitude == rep_data.initial_latitude:
+            if True:  # Always synchronize report coordinates with the active holding facility coordinates
                 rep_data.latitude = float(fac.latitude)
                 rep_data.longitude = float(fac.longitude)
-                if not rep.landmark or rep.landmark == rep.initial_landmark:
+                if True:  # Always synchronize report landmark with the active holding facility name
                     rep_data.landmark = fac.name
+        elif is_in_custody and not fac:
+            rep_data.facility_id = None
+            rep_data.facility = None
+            if rep_data.custody_status in IN_FACILITY_CUSTODY:
+                rep_data.custody_status = "Sighting"
+            if rep_data.initial_latitude is not None and rep_data.initial_longitude is not None:
+                rep_data.latitude = rep_data.initial_latitude
+                rep_data.longitude = rep_data.initial_longitude
+            if rep_data.initial_landmark:
+                rep_data.landmark = rep_data.initial_landmark
 
         if rep.history:
             for i, hist in enumerate(rep.history):
@@ -1139,7 +1152,7 @@ def get_reports(
     try:
         landmarks_map = get_landmarks_map(db)
         holding_facs_by_subd = {l.subdivision_id: l for l in landmarks_map.values() if l.is_holding_facility and l.subdivision_id}
-        default_holding_fac = next((l for l in landmarks_map.values() if l.is_holding_facility), None)
+        default_holding_fac = next((l for l in landmarks_map.values() if l.is_holding_facility and l.subdivision_id is None), None) or next((l for l in landmarks_map.values() if l.is_holding_facility), None)
     except Exception as e:
         print(f"Error batch fetching landmarks from cache: {e}")
         landmarks_map = {}
@@ -3974,6 +3987,12 @@ def update_report_status(
         report.custody_status = status_update.custody_status or "Animal Picked Up"
         report.facility_id = None
         relocation_note = None
+        if status_update.latitude is not None and status_update.longitude is not None:
+            report.latitude = Decimal(str(status_update.latitude))
+            report.longitude = Decimal(str(status_update.longitude))
+            if status_update.landmark:
+                report.landmark = status_update.landmark
+        dispatch_tracker.stop_location(report.report_id)
     elif status_update.status_id in (9, 10, 11, 12, 14, 17, 18):
         # Case resolved / animal adopted, impounded, claimed, or dismissed: restore original incident coordinates
         if report.initial_latitude is not None and report.initial_longitude is not None:
@@ -3983,7 +4002,8 @@ def update_report_status(
                 report.landmark = report.initial_landmark
         report.facility_id = None
         relocation_note = None
-    elif status_update.latitude is not None and status_update.longitude is not None:
+        dispatch_tracker.stop_location(report.report_id)
+    elif status_update.latitude is not None and status_update.longitude is not None and status_update.status_id != 6:
         report.latitude = Decimal(str(status_update.latitude))
         report.longitude = Decimal(str(status_update.longitude))
         if status_update.landmark:
@@ -6404,3 +6424,92 @@ def review_report_dispute(
     populate_verification_and_disputes(rep_data, report, db)
     return rep_data
 
+
+
+# ── Live Dispatch Team Location Tracking ─────────────────────────────────────
+
+@router.post("/{report_id}/live-location", response_model=LiveLocationResponse)
+def post_live_location(
+    report_id: int,
+    ping: LiveLocationPing,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if report.current_status_id != 5:
+        raise HTTPException(
+            status_code=400,
+            detail="Live location broadcast is only allowed while the report is in Dispatched status (Status 5)."
+        )
+
+    rescue_obj = db.query(Rescue).filter(Rescue.report_id == report_id).first()
+    if current_user.role_id == 3:
+        is_head = getattr(current_user, 'is_head_officer', False)
+        if not is_head:
+            is_assigned = False
+            if rescue_obj and (rescue_obj.staff_id == current_user.user_id or rescue_obj.leader_id == current_user.user_id):
+                is_assigned = True
+            elif rescue_obj:
+                asgn = db.query(RescueAssignment).filter(
+                    RescueAssignment.rescue_id == rescue_obj.rescue_id,
+                    (RescueAssignment.user_id == current_user.user_id) | (RescueAssignment.staff_id == current_user.user_id),
+                    RescueAssignment.assignment_status == "Assigned"
+                ).first()
+                if asgn:
+                    is_assigned = True
+            if not is_assigned:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Only assigned rescue responders or administrators can broadcast live location."
+                )
+    elif current_user.role_id != 4:
+        raise HTTPException(status_code=403, detail="Staff or Admin role required to broadcast live location.")
+
+    updated_record = dispatch_tracker.update_location(
+        report_id=report_id,
+        user_id=current_user.user_id,
+        responder_name=current_user.name,
+        latitude=ping.latitude,
+        longitude=ping.longitude,
+        accuracy=ping.accuracy,
+        heading=ping.heading,
+        speed=ping.speed,
+        rescue_id=rescue_obj.rescue_id if rescue_obj else None
+    )
+    return LiveLocationResponse(**updated_record)
+
+
+@router.delete("/{report_id}/live-location")
+def stop_live_location(
+    report_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    dispatch_tracker.stop_location(report_id)
+    return {"message": "Live location tracking stopped", "is_active": False}
+
+
+@router.get("/{report_id}/live-location", response_model=LiveLocationResponse)
+def get_live_location(
+    report_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if report.current_status_id != 5:
+        return LiveLocationResponse(report_id=report_id, is_active=False)
+
+    loc = dispatch_tracker.get_location(report_id)
+    if not loc or not loc.get("is_active"):
+        return LiveLocationResponse(report_id=report_id, is_active=False)
+
+    return LiveLocationResponse(**loc)

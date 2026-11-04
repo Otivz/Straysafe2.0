@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
-import LostPetDashboardSection from '../../components/LostPets/LostPetDashboardSection';
+
 import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { useNavigate } from 'react-router-dom';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { api } from '../../utils/api';
 import MapComponent from '../../components/MapComponent';
+import { checkLocalGpsFix } from '../../utils/liveNavigation';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
@@ -115,7 +116,9 @@ const SubdDashboard = () => {
         if ("geolocation" in navigator) {
             navigator.geolocation.getCurrentPosition(
                 (position) => {
-                    setUserLocation([position.coords.latitude, position.coords.longitude]);
+                    if (checkLocalGpsFix(position.coords).reliable) {
+                        setUserLocation([position.coords.latitude, position.coords.longitude]);
+                    }
                 },
                 (error) => {
                     console.log("Could not get current location:", error.message);
@@ -678,6 +681,15 @@ const SubdDashboard = () => {
 
         navigator.geolocation.getCurrentPosition(
             (pos) => {
+                const check = checkLocalGpsFix(pos.coords);
+                if (!check.reliable) {
+                    setIsNavigating(false);
+                    setGeoToast({
+                        message: check.message || 'Precise Bulacan GPS unavailable on this device.',
+                        type: 'error'
+                    });
+                    return;
+                }
                 const coords: [number, number] = [pos.coords.latitude, pos.coords.longitude];
                 setUserLocation(coords);
                 setSelectedReport(fullReport);
@@ -1324,8 +1336,8 @@ const SubdDashboard = () => {
                         </div>
                     </div>
 
-                    {/* Lost pet alerts and sightings (Neighbor-to-Neighbor Lost Pet Sighting Ping) */}
-                    <LostPetDashboardSection />
+
+
 
                     {/* 4. Secondary Row: Active Hazard Notices (Left) & Recent Pet Claims (Right) */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-5 items-start">

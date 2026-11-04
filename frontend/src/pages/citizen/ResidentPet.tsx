@@ -915,13 +915,15 @@ const ResidentPet = () => {
         const cached = getCachedData<any[]>('straysafe_landmarks');
         if (cached) {
             setLostLandmarks(toSpots(cached));
+        }
+        if (false) {
             return;
         }
         let alive = true;
         api.get('/landmarks')
             .then((res) => {
                 if (!Array.isArray(res.data)) return;
-                setCachedData('straysafe_landmarks', res.data, 30 * 60 * 1000);
+                setCachedData('straysafe_landmarks', res.data, 60 * 1000);
                 if (alive) setLostLandmarks(toSpots(res.data));
             })
             .catch(() => { /* the map and the text box still work without quick picks */ });

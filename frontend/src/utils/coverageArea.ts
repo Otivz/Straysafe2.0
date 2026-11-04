@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { api } from './api';
+import { getCachedData, onFacilitySync, setCachedData } from './cache';
 
 export const SELERA_DEFAULT_POLYGON = [
     { lat: 14.801496, lng: 121.005174 },
@@ -36,17 +38,88 @@ export const getPolygonLatLngs = (polygon?: Array<{ lat: number; lng: number }> 
 // Calculated centroid from Selera Homes boundary polygon
 export const SELERA_DEFAULT_CENTER: [number, number] = [14.801042, 121.003648];
 
-// Official fixed coordinates for Barangay San Vicente New Barangay Hall HQ (R243+QH)
-export const SAN_VICENTE_HQ: [number, number] = [14.806906, 121.0039297];
-export const BARANGAY_SAN_VICENTE_HQ: [number, number] = SAN_VICENTE_HQ;
-export const ADMIN_HQ: [number, number] = SAN_VICENTE_HQ;
-
-/** True only for a real, usable map coordinate (rejects null, "", NaN, 0,0 and out-of-range values). */
+/**True only for a real, usable map coordinate (rejects null, "", NaN, 0,0 and out-of-range values). */
 export const isValidLatLng = (lat: unknown, lng: unknown): boolean => {
     if (lat === null || lat === undefined || lat === '' || lng === null || lng === undefined || lng === '') return false;
     const nLat = Number(lat);
     const nLng = Number(lng);
     return Number.isFinite(nLat) && Number.isFinite(nLng) && !(nLat === 0 && nLng === 0) && Math.abs(nLat) <= 90 && Math.abs(nLng) <= 180;
+};
+
+// Authoritative Barangay San Vicente HQ coordinates (kept synchronized in-place with the database)
+export const SAN_VICENTE_HQ: [number, number] = [14.80745, 121.00941];
+export const BARANGAY_SAN_VICENTE_HQ: [number, number] = SAN_VICENTE_HQ;
+export const ADMIN_HQ: [number, number] = SAN_VICENTE_HQ;
+
+export const syncSanVicenteHQ = (lat: unknown, lng: unknown): [number, number] => {
+    if (isValidLatLng(lat, lng)) {
+        SAN_VICENTE_HQ[0] = Number(lat);
+        SAN_VICENTE_HQ[1] = Number(lng);
+    }
+    return [SAN_VICENTE_HQ[0], SAN_VICENTE_HQ[1]];
+};
+
+export const fetchBarangayHQCoords = async (barangayId: number = 1): Promise<[number, number]> => {
+    try {
+        const res = await api.get(`/landmarks/barangay/${barangayId}/hq`);
+        if (res.data && isValidLatLng(res.data.hq_lat, res.data.hq_lng)) {
+            const updated = syncSanVicenteHQ(res.data.hq_lat, res.data.hq_lng);
+            setCachedData('straysafe_brgy_hq', res.data, 60_000);
+            return updated;
+        }
+    } catch {
+        // Fallback to active barangay holding facility or current SAN_VICENTE_HQ
+    }
+    return [SAN_VICENTE_HQ[0], SAN_VICENTE_HQ[1]];
+};
+
+/**
+ * React hook that returns the latest Barangay HQ coordinates [lat, lng] from the database
+ * and automatically updates whenever Admin modifies facilities or Barangay HQ.
+ */
+export const useBarangayHQCoords = (barangayId: number = 1): [number, number] => {
+    const [coords, setCoords] = useState<[number, number]>(() => {
+        const cached = getCachedData<any>('straysafe_brgy_hq');
+        if (cached && isValidLatLng(cached.hq_lat, cached.hq_lng)) {
+            return syncSanVicenteHQ(cached.hq_lat, cached.hq_lng);
+        }
+        return [SAN_VICENTE_HQ[0], SAN_VICENTE_HQ[1]];
+    });
+
+    useEffect(() => {
+        let mounted = true;
+        const load = async () => {
+            const latest = await fetchBarangayHQCoords(barangayId);
+            if (mounted) {
+                setCoords((prev) =>
+                    Math.abs(prev[0] - latest[0]) > 1e-7 || Math.abs(prev[1] - latest[1]) > 1e-7
+                        ? [latest[0], latest[1]]
+                        : prev
+                );
+            }
+        };
+        load();
+        const unsubscribe = onFacilitySync(() => {
+            load();
+        });
+        const onWinFocus = () => {
+            load();
+        };
+        window.addEventListener('focus', onWinFocus);
+        const pollTimer = window.setInterval(() => {
+            if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+                load();
+            }
+        }, 8000);
+        return () => {
+            mounted = false;
+            unsubscribe();
+            window.removeEventListener('focus', onWinFocus);
+            window.clearInterval(pollTimer);
+        };
+    }, [barangayId]);
+
+    return coords;
 };
 
 export const COVERAGE_OUTSIDE_ERROR_MESSAGE = "This report location is outside the current STRAY-SAFE reporting coverage area.";

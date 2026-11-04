@@ -7,6 +7,7 @@ import { reportSightingMarkers } from '../../components/LostPets/sightingMarkers
 import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { SIGHTING_TITLE, sightingLandmark, reverseGeocodeStreet } from '../../utils/sighting';
 import { getOriginalSighting } from '../../utils/originalSighting';
+import { useWatchDispatchLocation, checkLocalGpsFix } from '../../utils/liveNavigation';
 import { useNavigate, useParams, useSearchParams, useLocation, Link } from 'react-router-dom';
 import api from '../../utils/api';
 import { nominatimReverse } from '../../utils/geocode';
@@ -39,6 +40,8 @@ import { reportDescriptionSummary } from '../../utils/reportDescription';
 import { petName } from '../../utils/petName';
 import CaseStageStepper from '../../components/CaseStageStepper';
 import { getCaseStages, getWhereNow, type CaseStep } from '../../utils/caseStages';
+import { useBarangayHQCoords } from '../../utils/coverageArea';
+import { onFacilitySync } from '../../utils/cache';
 
 const reportStatusMap = REPORT_STATUS_MAP;
 
@@ -139,6 +142,7 @@ const ResiViewReport = () => {
     const location = useLocation();
 
     const [report, setReport] = useState<any | null>(null);
+    const { liveLocation: activeDispatchLoc } = useWatchDispatchLocation(report?.report_id || null, report?.status_id === 5);
     const savedOriginalSighting = getOriginalSighting(report);
     const originalLat = savedOriginalSighting.point?.[0] ?? null;
     const originalLng = savedOriginalSighting.point?.[1] ?? null;
@@ -155,6 +159,7 @@ const ResiViewReport = () => {
     const [isNavbarMenuOpen, setIsNavbarMenuOpen] = useState(false);
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
     const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
+    const BRGY_OFFICE: [number, number] = useBarangayHQCoords(1);
     const [selectedQrPreview, setSelectedQrPreview] = useState<{ url: string; petName?: string; hash?: string; ownerName?: string; ownerPhone?: string } | null>(null);
 
     // Geocoding address
@@ -219,10 +224,12 @@ const ResiViewReport = () => {
         distance?: string;
         time?: string;
         isRealtime?: boolean;
+        source?: 'gps' | 'hq' | 'home' | 'custom';
     } | null>(null);
     const [isLocatingRoute, setIsLocatingRoute] = useState(false);
     const [locationNotice, setLocationNotice] = useState<string | null>(null);
     const [locationAmbiguous, setLocationAmbiguous] = useState(false);
+    const [ambiguousLocationReason, setAmbiguousLocationReason] = useState<string | null>(null);
     const [isSettingStartingPoint, setIsSettingStartingPoint] = useState(false);
     const [isMapExpanded, setIsMapExpanded] = useState(false);
     const [isMapMaximized, setIsMapMaximized] = useState(false);
@@ -285,20 +292,41 @@ const ResiViewReport = () => {
         }
     };
 
+    const getActiveDestination = (rep: any): { coords: [number, number]; name: string } | null => {
+        if (!rep) return null;
+        const relocated = isHeldInFacility(rep) || Boolean(rep.facility_id);
+        const facLat = rep.facility?.latitude != null ? parseFloat(rep.facility.latitude.toString()) : NaN;
+        const facLng = rep.facility?.longitude != null ? parseFloat(rep.facility.longitude.toString()) : NaN;
+        if (relocated && !isNaN(facLat) && !isNaN(facLng)) {
+            return {
+                coords: [facLat, facLng],
+                name: rep.facility?.name || rep.landmark || 'Holding Place',
+            };
+        }
+        const repLat = rep.latitude != null ? parseFloat(rep.latitude.toString()) : NaN;
+        const repLng = rep.longitude != null ? parseFloat(rep.longitude.toString()) : NaN;
+        if (!isNaN(repLat) && !isNaN(repLng)) {
+            return {
+                coords: [repLat, repLng],
+                name: rep.facility?.name || rep.landmark || 'Animal Location',
+            };
+        }
+        return null;
+    };
+
     const handlePinReposition = (lat: number, lng: number) => {
         stopLocationTracking();
-        if (!report?.latitude || !report?.longitude) return;
-        const destLat = parseFloat(report.latitude);
-        const destLng = parseFloat(report.longitude);
-        const destName = report.facility?.name || report.landmark || 'Animal Location';
+        const dest = getActiveDestination(report);
+        if (!dest) return;
 
         setIsSettingStartingPoint(false);
         setLocationAmbiguous(false);
         setRoutingState({
             start: [lat, lng],
-            end: [destLat, destLng],
-            waypointNames: ['Custom Starting Point', destName],
-            isRealtime: false
+            end: dest.coords,
+            waypointNames: ['Custom Starting Point', dest.name],
+            isRealtime: false,
+            source: 'custom',
         });
         setLocationNotice('Starting point updated. Route recalculated!');
         setTimeout(() => setLocationNotice(null), 4000);
@@ -333,13 +361,19 @@ const ResiViewReport = () => {
             return;
         }
 
-        if (!report?.latitude || !report?.longitude) return;
+        const dest = getActiveDestination(report);
+        if (!dest) return;
 
-        const destLat = parseFloat(report.latitude);
-        const destLng = parseFloat(report.longitude);
-        const destName = report.facility?.name || report.landmark || 'Animal Location';
+        const [destLat, destLng] = dest.coords;
+        const destName = dest.name;
 
-        const applyRouting = (startLat: number, startLng: number, startLabel: string = 'My Location', isRealtime: boolean = false) => {
+        const applyRouting = (
+            startLat: number,
+            startLng: number,
+            startLabel: string = 'My Location',
+            isRealtime: boolean = false,
+            source: 'gps' | 'hq' | 'home' | 'custom' = mode
+        ) => {
             setIsLocatingRoute(false);
             setLocationAmbiguous(false);
             setIsSettingStartingPoint(false);
@@ -347,7 +381,8 @@ const ResiViewReport = () => {
                 start: [startLat, startLng],
                 end: [destLat, destLng],
                 waypointNames: [startLabel, destName],
-                isRealtime
+                isRealtime,
+                source,
             });
             setTimeout(() => {
                 const mapEl = document.getElementById('report-map-container');
@@ -360,7 +395,13 @@ const ResiViewReport = () => {
         if (mode === 'hq') {
             stopLocationTracking();
             setLocationNotice(null);
-            applyRouting(14.8069, 121.0039, 'Barangay San Vicente HQ', false);
+            const useLiveTeam = report?.status_id === 5 && activeDispatchLoc?.is_active && activeDispatchLoc.latitude != null && activeDispatchLoc.longitude != null;
+            const startLat = useLiveTeam ? activeDispatchLoc.latitude! : BRGY_OFFICE[0];
+            const startLng = useLiveTeam ? activeDispatchLoc.longitude! : BRGY_OFFICE[1];
+            const startName = useLiveTeam
+                ? (activeDispatchLoc.responder_name ? `Team: ${activeDispatchLoc.responder_name} (Live)` : 'Barangay Rescue Team (Live)')
+                : 'Barangay San Vicente HQ';
+            applyRouting(startLat, startLng, startName, false, 'hq');
             return;
         }
 
@@ -399,7 +440,17 @@ const ResiViewReport = () => {
             setIsLocatingRoute(true);
 
             const onLocationSuccess = (pos: GeolocationPosition) => {
+                const check = checkLocalGpsFix(pos.coords, [destLat, destLng]);
+                if (!check.reliable) {
+                    setIsLocatingRoute(false);
+                    stopLocationTracking();
+                    setRoutingState(null);
+                    setAmbiguousLocationReason(check.message);
+                    setLocationAmbiguous(true);
+                    return;
+                }
                 setIsLocatingRoute(false);
+                setAmbiguousLocationReason(null);
                 const userLat = pos.coords.latitude;
                 const userLng = pos.coords.longitude;
                 applyRouting(userLat, userLng, 'My Current Location', true);
@@ -407,12 +458,12 @@ const ResiViewReport = () => {
                 // Live tracking while navigating is done by the map itself (routing.live): moving marker, route kept current
             };
 
-            // Attempt 1: High Accuracy GPS (with 10s timeout)
+            // Attempt 1: High Accuracy GPS (fresh fix, 10s timeout)
             navigator.geolocation.getCurrentPosition(
                 onLocationSuccess,
                 (err) => {
                     console.warn('High accuracy GPS timed out or failed, falling back to standard location:', err);
-                    // Attempt 2: Standard Accuracy GPS Fallback (fast cell/wifi assisted, 15s timeout)
+                    // Attempt 2: Standard Accuracy GPS Fallback (cell/wifi assisted, 15s timeout)
                     navigator.geolocation.getCurrentPosition(
                         onLocationSuccess,
                         (fallbackErr) => {
@@ -420,6 +471,7 @@ const ResiViewReport = () => {
                             setIsLocatingRoute(false);
                             stopLocationTracking();
                             setRoutingState(null);
+                            setAmbiguousLocationReason(null);
                             setLocationAmbiguous(true);
                             if (fallbackErr.code === fallbackErr.PERMISSION_DENIED) {
                                 alert('Location access was denied. Please allow location permissions in your browser or phone settings to use Live GPS.');
@@ -432,23 +484,69 @@ const ResiViewReport = () => {
                         {
                             enableHighAccuracy: false,
                             timeout: 15000,
-                            maximumAge: 30000
+                            maximumAge: 0
                         }
                     );
                 },
                 {
                     enableHighAccuracy: true,
                     timeout: 10000,
-                    maximumAge: 10000
+                    maximumAge: 0
                 }
             );
         }
     };
 
-    const fetchReportDetails = async () => {
+    // Dynamically follow Barangay HQ or Live Barangay Dispatch pinpoint whenever it moves
+    useEffect(() => {
+        setRoutingState((prev) => {
+            if (!prev || prev.source !== 'hq') return prev;
+            const useLiveTeam = report?.status_id === 5 && activeDispatchLoc?.is_active && activeDispatchLoc.latitude != null && activeDispatchLoc.longitude != null;
+            const nextLat = useLiveTeam ? activeDispatchLoc.latitude! : BRGY_OFFICE[0];
+            const nextLng = useLiveTeam ? activeDispatchLoc.longitude! : BRGY_OFFICE[1];
+            const nextLabel = useLiveTeam
+                ? (activeDispatchLoc.responder_name ? `Team: ${activeDispatchLoc.responder_name} (Live)` : 'Barangay Rescue Team (Live)')
+                : 'Barangay San Vicente HQ';
+            if (
+                Math.abs(prev.start[0] - nextLat) <= 1e-7 &&
+                Math.abs(prev.start[1] - nextLng) <= 1e-7 &&
+                prev.waypointNames?.[0] === nextLabel
+            ) {
+                return prev;
+            }
+            return {
+                ...prev,
+                start: [nextLat, nextLng],
+                waypointNames: [nextLabel, prev.waypointNames?.[1] || 'Animal Location'],
+            };
+        });
+    }, [BRGY_OFFICE[0], BRGY_OFFICE[1], report?.status_id, activeDispatchLoc?.is_active, activeDispatchLoc?.latitude, activeDispatchLoc?.longitude, activeDispatchLoc?.responder_name]);
+
+    // Dynamically follow report / Barangay Holding Facility destination pinpoint whenever it moves
+    useEffect(() => {
+        const dest = getActiveDestination(report);
+        if (!dest) return;
+        setRoutingState((prev) => {
+            if (!prev) return prev;
+            if (
+                Math.abs(prev.end[0] - dest.coords[0]) <= 1e-7 &&
+                Math.abs(prev.end[1] - dest.coords[1]) <= 1e-7 &&
+                prev.waypointNames?.[1] === dest.name
+            ) {
+                return prev;
+            }
+            return {
+                ...prev,
+                end: dest.coords,
+                waypointNames: [prev.waypointNames?.[0] || 'Starting Point', dest.name],
+            };
+        });
+    }, [report?.latitude, report?.longitude, report?.facility_id, report?.facility?.latitude, report?.facility?.longitude, report?.facility?.name, report?.status_id, report?.custody_status]);
+
+    const fetchReportDetails = async (silent: boolean = false) => {
         if (!id) return;
         try {
-            setLoading(true);
+            if (!silent) setLoading(true);
             const response = await api.get(`/reports/${id}`);
             if (response.data) {
                 setReport(response.data);
@@ -520,17 +618,35 @@ const ResiViewReport = () => {
 
     useEffect(() => {
         fetchReportDetails();
+        const unsub = onFacilitySync(() => {
+            fetchReportDetails(true);
+        });
+        const onWinFocus = () => {
+            fetchReportDetails(true);
+        };
+        window.addEventListener('focus', onWinFocus);
+        return () => {
+            unsub();
+            window.removeEventListener('focus', onWinFocus);
+        };
     }, [id]);
 
-    // Status sync: another user (e.g. the subdivision resolving an observation) can change this report's status.
-    // A light check keeps it current; the full reload (with its spinner) only runs when the status really changed.
-    const shownStatusRef = useRef<number | null | undefined>(undefined);
-    useEffect(() => { shownStatusRef.current = report?.status_id; }, [report?.status_id]);
+    // Status & pinpoint sync: keeps status, incident coordinates, pickup pinpoint, and holding facility pinpoint live across devices.
+    const reportSyncSigRef = useRef<string | undefined>(undefined);
+    const makeReportSyncSig = (r: any) =>
+        r
+            ? `${r.status_id}|${r.latitude}|${r.longitude}|${r.facility_id}|${r.facility?.latitude}|${r.facility?.longitude}|${r.pickup_latitude}|${r.pickup_longitude}|${r.custody_status}`
+            : '';
+    useEffect(() => {
+        reportSyncSigRef.current = report ? makeReportSyncSig(report) : undefined;
+    }, [report?.status_id, report?.latitude, report?.longitude, report?.facility_id, report?.facility?.latitude, report?.facility?.longitude, report?.pickup_latitude, report?.pickup_longitude, report?.custody_status]);
     useAutoRefresh(async () => {
-        if (!id || shownStatusRef.current === undefined) return;
+        if (!id || reportSyncSigRef.current === undefined) return;
         const res = await api.get(`/reports/${id}`);
-        if (res.data && res.data.status_id !== shownStatusRef.current) await fetchReportDetails();
-    }, !!id, 30000);
+        if (res.data && makeReportSyncSig(res.data) !== reportSyncSigRef.current) {
+            await fetchReportDetails(true);
+        }
+    }, !!id, 8000);
 
     useEffect(() => {
         if ((searchParams.get('openChat') === 'true' || (location.state as any)?.openChat) && isReporter) {
@@ -1875,9 +1991,9 @@ const ResiViewReport = () => {
                                             <MapPin className="w-4 h-4" />
                                         </div>
                                         <div>
-                                            <h4 className="text-xs font-black uppercase tracking-tight text-white">Location Unreliable</h4>
+                                            <h4 className="text-xs font-black uppercase tracking-tight text-white">Precise Bulacan GPS Unavailable on This Device</h4>
                                             <p className="text-xs text-amber-200 font-semibold mt-0.5">
-                                                Your device could not determine your exact location.
+                                                {ambiguousLocationReason || 'Your device could not determine your exact street location in Bulacan.'}
                                             </p>
                                         </div>
                                     </div>
@@ -1975,6 +2091,29 @@ const ResiViewReport = () => {
                             </div>
                         )}
 
+                        {/* Live Dispatch Tracker Banner for Status 5 */}
+                        {report?.status_id === 5 && activeDispatchLoc?.is_active && (
+                            <div className="flex items-center justify-between gap-3 p-3.5 mb-3 rounded-2xl bg-blue-500/10 border border-blue-400/30 text-blue-200 shadow-xs animate-in fade-in">
+                                <div className="flex items-center gap-2.5">
+                                    <span className="relative flex h-3 w-3 shrink-0">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                                    </span>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-xs font-black text-white uppercase tracking-wide">Barangay Rescue Team En Route</p>
+                                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">
+                                                Live Tracking Active
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] font-medium text-slate-300 mt-0.5">
+                                            The Barangay rescue team ({activeDispatchLoc.responder_name || 'Assigned Responders'}) is actively on the way. Follow their live vehicle/team location on the map below.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <div 
                             id="report-map-container" 
                             className={`w-full ${
@@ -2004,8 +2143,8 @@ const ResiViewReport = () => {
                                     (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                     (h.action && h.action.toLowerCase().includes('holding'))
                                 ) || Boolean(report.facility_id) || Boolean(report.facility);
-                                const histFacLat = 14.8069;
-                                const histFacLng = 121.0039;
+                                const histFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : BRGY_OFFICE[0];
+                                const histFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : BRGY_OFFICE[1];
                                 const histFacName = 'Barangay Holding Pen';
 
                                 const resiMarkers = isResolvedCase ? [
@@ -2032,7 +2171,7 @@ const ResiViewReport = () => {
                                         rawData: { ...report, landmark: histFacName, is_resolved: true }
                                     }] : [])
                                 ] : [
-                                    ...(routingState ? [{
+                                    ...(routingState && routingState.source !== 'hq' ? [{
                                         id: -888,
                                         lat: routingState.start[0],
                                         lng: routingState.start[1],
@@ -2064,6 +2203,23 @@ const ResiViewReport = () => {
                                         }
                                     },
                                     ...(isRelocated ? [] : reportSightingPins),
+                                    ...(report?.pickup_latitude != null && report?.pickup_longitude != null ? [{
+                                        id: -889,
+                                        lat: parseFloat(report.pickup_latitude.toString()),
+                                        lng: parseFloat(report.pickup_longitude.toString()),
+                                        title: report.pickup_landmark ? `Picked Up: ${report.pickup_landmark}` : 'Animal Picked Up Location',
+                                        category: 'Pickup Location',
+                                        priority: 'High',
+                                        rawData: report
+                                    }] : []),
+                                    ...(activeDispatchLoc?.is_active && activeDispatchLoc.latitude != null && activeDispatchLoc.longitude != null ? [{
+                                        id: -777,
+                                        lat: activeDispatchLoc.latitude,
+                                        lng: activeDispatchLoc.longitude,
+                                        title: activeDispatchLoc.responder_name ? `Team: ${activeDispatchLoc.responder_name}` : 'Dispatch Team (Live)',
+                                        category: 'Dispatch Team',
+                                        priority: 'High'
+                                    }] : []),
                                     ...(hasDifferentInitialSpot ? [{
                                         id: -999,
                                         lat: initLat!,
@@ -2078,8 +2234,8 @@ const ResiViewReport = () => {
                                 return (
                                     <MapComponent
                                         height="100%"
-                                        center={routingState ? [(routingState.start[0] + currentLat) / 2, (routingState.start[1] + currentLng) / 2] : (mapFocus || [currentLat, currentLng])}
-                                        zoom={routingState ? 16 : 17}
+                                        center={mapFocus || [currentLat, currentLng]}
+                                        zoom={17}
                                         showHeatmap={false}
                                         showGeofence={true}
                                         showLandmarks={false}
@@ -2240,8 +2396,8 @@ const ResiViewReport = () => {
                                         (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                         (h.action && h.action.toLowerCase().includes('holding'))
                                     ) || Boolean(report.facility_id) || Boolean(report.facility);
-                                    const histFacLat = 14.8069;
-                                    const histFacLng = 121.0039;
+                                    const histFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : BRGY_OFFICE[0];
+                                    const histFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : BRGY_OFFICE[1];
                                     const histFacName = 'Barangay Holding Pen';
 
                                     const resiMarkers = isResolvedCase ? [
@@ -2268,7 +2424,7 @@ const ResiViewReport = () => {
                                             rawData: { ...report, landmark: histFacName, is_resolved: true }
                                         }] : [])
                                     ] : [
-                                        ...(routingState ? [{
+                                        ...(routingState && routingState.source !== 'hq' ? [{
                                             id: -888,
                                             lat: routingState.start[0],
                                             lng: routingState.start[1],
@@ -2300,6 +2456,23 @@ const ResiViewReport = () => {
                                             }
                                         },
                                         ...(isRelocated ? [] : reportSightingPins),
+                                    ...(report?.pickup_latitude != null && report?.pickup_longitude != null ? [{
+                                        id: -889,
+                                        lat: parseFloat(report.pickup_latitude.toString()),
+                                        lng: parseFloat(report.pickup_longitude.toString()),
+                                        title: report.pickup_landmark ? `Picked Up: ${report.pickup_landmark}` : 'Animal Picked Up Location',
+                                        category: 'Pickup Location',
+                                        priority: 'High',
+                                        rawData: report
+                                    }] : []),
+                                    ...(activeDispatchLoc?.is_active && activeDispatchLoc.latitude != null && activeDispatchLoc.longitude != null ? [{
+                                        id: -777,
+                                        lat: activeDispatchLoc.latitude,
+                                        lng: activeDispatchLoc.longitude,
+                                        title: activeDispatchLoc.responder_name ? `Team: ${activeDispatchLoc.responder_name}` : 'Dispatch Team (Live)',
+                                        category: 'Dispatch Team',
+                                        priority: 'High'
+                                    }] : []),
                                     ...(hasDifferentInitialSpot ? [{
                                             id: -999,
                                             lat: initLat!,
@@ -2314,8 +2487,8 @@ const ResiViewReport = () => {
                                     return (
                                         <MapComponent
                                             height="100%"
-                                            center={routingState ? [(routingState.start[0] + currentLat) / 2, (routingState.start[1] + currentLng) / 2] : (mapFocus || [currentLat, currentLng])}
-                                            zoom={routingState ? 16 : 17}
+                                            center={mapFocus || [currentLat, currentLng]}
+                                            zoom={17}
                                             showHeatmap={false}
                                             showGeofence={true}
                                             showLandmarks={true}

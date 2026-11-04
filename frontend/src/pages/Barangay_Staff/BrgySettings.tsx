@@ -22,7 +22,8 @@ import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import { LANDMARK_CATEGORIES, getLandmarkCategory, createLandmarkPinIcon } from '../../utils/landmarkIcons';
 
-import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
+import { SAN_VICENTE_HQ, useBarangayHQCoords } from '../../utils/coverageArea';
+import { broadcastFacilitySync, onFacilitySync } from '../../utils/cache';
 import MapAutoResize from '../../components/MapControls/MapAutoResize';
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -167,8 +168,8 @@ const BrgySettings: React.FC = () => {
         name: '',
         category: 'facility',
         description: '',
-        latitude: 14.8069,
-        longitude: 121.0039,
+        latitude: SAN_VICENTE_HQ[0],
+        longitude: SAN_VICENTE_HQ[1],
         is_holding_facility: true,
         facility_type: 'Municipal Animal Impound',
         capacity: 20,
@@ -203,6 +204,8 @@ const BrgySettings: React.FC = () => {
     useEffect(() => {
         fetchLandmarks();
         fetchBrgyPersonnel();
+        const unsub = onFacilitySync(() => { fetchLandmarks(); });
+        return () => unsub();
     }, [user?.barangay_id]);
 
     const handleSaveLandmark = async (e: React.FormEvent) => {
@@ -246,14 +249,15 @@ const BrgySettings: React.FC = () => {
                 name: '',
                 category: 'facility',
                 description: '',
-                latitude: latitude ? parseFloat(latitude.toString()) : 14.8069,
-                longitude: longitude ? parseFloat(longitude.toString()) : 121.0039,
+                latitude: latitude ? parseFloat(latitude.toString()) : SAN_VICENTE_HQ[0],
+                longitude: longitude ? parseFloat(longitude.toString()) : SAN_VICENTE_HQ[1],
                 is_holding_facility: true,
                 facility_type: 'Municipal Animal Impound',
                 capacity: 20,
                 contact_person: '',
                 contact_number: ''
             });
+            broadcastFacilitySync();
             fetchLandmarks();
         } catch (err: any) {
             console.error('Failed to save landmark:', err);
@@ -274,6 +278,7 @@ const BrgySettings: React.FC = () => {
         try {
             await api.delete(`/landmarks/${landmarkId}`);
             showToast('success', `Landmark "${landmarkName}" deleted successfully.`);
+            broadcastFacilitySync();
             fetchLandmarks();
         } catch (err: any) {
             console.error('Failed to delete landmark:', err);
@@ -291,8 +296,8 @@ const BrgySettings: React.FC = () => {
             name: item.name || '',
             category: item.category || 'facility',
             description: item.description || '',
-            latitude: item.latitude || (latitude ? parseFloat(latitude.toString()) : 14.8069),
-            longitude: item.longitude || (longitude ? parseFloat(longitude.toString()) : 121.0039),
+            latitude: item.latitude || (latitude ? parseFloat(latitude.toString()) : SAN_VICENTE_HQ[0]),
+            longitude: item.longitude || (longitude ? parseFloat(longitude.toString()) : SAN_VICENTE_HQ[1]),
             is_holding_facility: Boolean(item.is_holding_facility),
             facility_type: item.facility_type || 'Municipal Animal Impound',
             capacity: item.capacity || 20,
@@ -545,9 +550,10 @@ const BrgySettings: React.FC = () => {
         }
     ];
 
-    const currentLat = latitude ? parseFloat(latitude.toString()) : 14.8069;
-    const currentLng = longitude ? parseFloat(longitude.toString()) : 121.0039;
-    const mapPos: [number, number] = (latitude && longitude) ? [currentLat, currentLng] : SAN_VICENTE_HQ;
+    const hqCoords = useBarangayHQCoords(user?.barangay_id || 1);
+    const currentLat = hqCoords[0];
+    const currentLng = hqCoords[1];
+    const mapPos: [number, number] = [currentLat, currentLng];
 
     return (
         <div className="flex h-screen bg-[#F8FAFC]">
@@ -815,12 +821,10 @@ const BrgySettings: React.FC = () => {
                                                 </MapContainer>
                                             </div>
 
-                                            {latitude && longitude && (
-                                                <div className="flex items-center justify-between text-xs bg-gray-50 p-3 rounded-xl border border-gray-200 font-medium text-gray-600">
-                                                    <span>Lat: <strong className="text-gray-900">{parseFloat(latitude.toString()).toFixed(5)}</strong>, Lng: <strong className="text-gray-900">{parseFloat(longitude.toString()).toFixed(5)}</strong></span>
-                                                    <span className="text-gray-500 font-semibold">Managed by System Admin</span>
-                                                </div>
-                                            )}
+                                            <div className="flex items-center justify-between text-xs bg-gray-50 p-3 rounded-xl border border-gray-200 font-medium text-gray-600">
+                                                <span>Lat: <strong className="text-gray-900">{currentLat.toFixed(5)}</strong>, Lng: <strong className="text-gray-900">{currentLng.toFixed(5)}</strong></span>
+                                                <span className="text-gray-500 font-semibold">Managed by System Admin</span>
+                                            </div>
                                         </div>
 
                                         <div className="flex justify-end pt-4">
@@ -975,8 +979,8 @@ const BrgySettings: React.FC = () => {
                                                                     name: '',
                                                                     category: 'facility',
                                                                     description: '',
-                                                                    latitude: latitude ? parseFloat(latitude.toString()) : 14.8069,
-                                                                    longitude: longitude ? parseFloat(longitude.toString()) : 121.0039,
+                                                                    latitude: latitude ? parseFloat(latitude.toString()) : SAN_VICENTE_HQ[0],
+                                                                    longitude: longitude ? parseFloat(longitude.toString()) : SAN_VICENTE_HQ[1],
                                                                     is_holding_facility: true,
                                                                     facility_type: 'Municipal Animal Impound',
                                                                     capacity: 20,

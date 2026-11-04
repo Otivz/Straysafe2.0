@@ -2,7 +2,8 @@ import { getPersonnelAvailability } from '../../utils/personnelAvailability';
 import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { useState, useEffect } from 'react';
 import SectionJumpNav from '../../components/SectionJumpNav';
-import { SIGHTING_TITLE, sightingLandmark } from '../../utils/sighting';
+import { SIGHTING_TITLE, sightingLandmark, reverseGeocodeStreet } from '../../utils/sighting';
+import { useDispatchBroadcaster, useWatchDispatchLocation, checkLocalGpsFix, BULACAN_REFERENCE_CENTER } from '../../utils/liveNavigation';
 import OwnerReturnPicker, { EMPTY_OWNER_RETURN, ownerReturnError, prepareOwnerReturn, type OwnerReturnValue } from '../../components/OwnerReturnPicker';
 import {
     AlertTriangle, Check, MessageCircle, FileText, Search, MapPin,
@@ -23,7 +24,7 @@ import SuccessModal from '../../components/Modals/SuccessModal';
 import { api } from '../../utils/api';
 import { nominatimReverse } from '../../utils/geocode';
 import { cloudinaryResized } from '../../utils/cloudinaryImage';
-import { getCachedData } from '../../utils/cache';
+import { getCachedData, onFacilitySync } from '../../utils/cache';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle, isHoldingHistoryEntry } from '../../utils/reportStatus';
 import NoticeModal from '../../components/Modals/NoticeModal';
@@ -33,7 +34,7 @@ import AddPetModal from '../../components/PetRecords/AddPetModal';
 import RescueTimeline from '../../components/RescueTimeline';
 import { buildCaseTimeline, useCaseHolding } from '../../utils/caseTimeline';
 
-import { SAN_VICENTE_HQ, isValidLatLng } from '../../utils/coverageArea';
+import { isValidLatLng, useBarangayHQCoords } from '../../utils/coverageArea';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
 import CasePetBadge from '../../components/CasePetBadge';
 import ReportVisibilityPanel from '../../components/ReportVisibilityPanel';
@@ -130,6 +131,10 @@ interface Report {
     initial_latitude?: number | null;
     initial_longitude?: number | null;
     initial_landmark?: string | null;
+    pickup_latitude?: number | null;
+    pickup_longitude?: number | null;
+    pickup_landmark?: string | null;
+    pickup_at?: string | null;
     facility_id?: number | null;
     custody_status?: string | null;
     facility?: {
@@ -205,8 +210,6 @@ const STAGE_ORDER: Record<number, number> = {
     9: 6,  // Returned to Owner / Reunited (terminal)
     11: 6, // Resolved (Operation Complete)
 };
-
-const BRGY_OFFICE_COORDS: [number, number] = SAN_VICENTE_HQ; // Barangay San Vicente Operations HQ
 
 const PREDEFINED_CONDITIONS = [
     'Healthy',
@@ -308,8 +311,20 @@ const BrgyReportView = () => {
             return;
         }
         navigator.geolocation.getCurrentPosition(
-            (position) => setUserLocation([position.coords.latitude, position.coords.longitude]),
-            () => setRouteFrom('brgy')
+            (position) => {
+                const refPoint: [number, number] | undefined =
+                    report?.latitude && report?.longitude ? [Number(report.latitude), Number(report.longitude)] : undefined;
+                const check = checkLocalGpsFix(position.coords, refPoint);
+                if (!check.reliable) {
+                    setUserLocation(null);
+                    setRouteFrom('brgy');
+                    alert(`${check.message}\n\nShowing directions from Barangay Hall HQ instead.`);
+                    return;
+                }
+                setUserLocation([position.coords.latitude, position.coords.longitude]);
+            },
+            () => setRouteFrom('brgy'),
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
     }, [routeFrom, userLocation]);
     const [showSuccess, setShowSuccess] = useState(false);
@@ -343,6 +358,31 @@ const BrgyReportView = () => {
 
     // Status Update Modal State (Supports 2-5 Multi-Personnel Team)
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+    const [isBroadcasting, setIsBroadcasting] = useState(false);
+    const [pickupLat, setPickupLat] = useState<number | null>(null);
+    const [pickupLng, setPickupLng] = useState<number | null>(null);
+    const [pickupLandmark, setPickupLandmark] = useState('');
+    const [isDetectingPickupGps, setIsDetectingPickupGps] = useState(false);
+
+    const BRGY_OFFICE_COORDS: [number, number] = useBarangayHQCoords(1);
+    const isReportDispatched = report?.status_id === 5;
+    const { gpsError: broadcastGpsError, lastSentPos: localBroadcastPos, sendManualPosition } = useDispatchBroadcaster(
+        report?.report_id || null,
+        isBroadcasting && Boolean(isReportDispatched),
+        BRGY_OFFICE_COORDS
+    );
+    const { liveLocation: polledDispatchLoc } = useWatchDispatchLocation(report?.report_id || null, Boolean(isReportDispatched));
+    const activeDispatchLoc = polledDispatchLoc?.is_active
+        ? polledDispatchLoc
+        : (isBroadcasting && localBroadcastPos
+            ? {
+                is_active: true,
+                report_id: report?.report_id || 0,
+                latitude: localBroadcastPos[0],
+                longitude: localBroadcastPos[1],
+                responder_name: 'You (Live)',
+            }
+            : polledDispatchLoc);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [targetStatusId, setTargetStatusId] = useState<number>(5);
     const [statusRemarks, setStatusRemarks] = useState('');
@@ -550,6 +590,11 @@ const BrgyReportView = () => {
         fetchReportDetails();
         fetchPersonnel();
         fetchFacilities();
+        const unsub = onFacilitySync(() => {
+            fetchReportDetails();
+            fetchFacilities();
+        });
+        return () => unsub();
     }, [id]);
 
     // Approve / reject use an in-page dialog (not the browser's native popup at the top of the screen)
@@ -744,6 +789,33 @@ const BrgyReportView = () => {
     const [ownerReturn, setOwnerReturn] = useState<OwnerReturnValue>(EMPTY_OWNER_RETURN);
     const [existingReportReturn, setExistingReportReturn] = useState<any | null>(null);
 
+    const seedPickupCoordinates = () => {
+        if (
+            activeDispatchLoc?.is_active &&
+            activeDispatchLoc.latitude != null &&
+            activeDispatchLoc.longitude != null &&
+            Number.isFinite(Number(activeDispatchLoc.latitude)) &&
+            Number.isFinite(Number(activeDispatchLoc.longitude))
+        ) {
+            const liveLat = Number(activeDispatchLoc.latitude);
+            const liveLng = Number(activeDispatchLoc.longitude);
+            setPickupLat(liveLat);
+            setPickupLng(liveLng);
+            setPickupLandmark(report?.pickup_landmark || report?.landmark || '');
+            reverseGeocodeStreet(liveLat, liveLng)
+                .then((st) => {
+                    if (st) setPickupLandmark(st);
+                })
+                .catch(() => {});
+            return;
+        }
+        const fallbackLat = report?.pickup_latitude ?? report?.latitude;
+        const fallbackLng = report?.pickup_longitude ?? report?.longitude;
+        setPickupLat(fallbackLat != null ? parseFloat(fallbackLat.toString()) : null);
+        setPickupLng(fallbackLng != null ? parseFloat(fallbackLng.toString()) : null);
+        setPickupLandmark(report?.pickup_landmark || report?.landmark || '');
+    };
+
     const openStatusModal = (statusId: number) => {
         if (awaitingApproval) {
             setApproveFirstNotice(true);
@@ -823,6 +895,9 @@ const BrgyReportView = () => {
         setStatusPersonnelSearch('');
         setStatusFiles([]);
         setIsConfirmModalOpen(false);
+        if (initialStatusId === 6 || statusId === 6) {
+            seedPickupCoordinates();
+        }
         setIsStatusModalOpen(true);
     };
 
@@ -938,6 +1013,11 @@ const BrgyReportView = () => {
                 if (targetStatusId === 6) {
                     payload.custody_status = 'Animal Picked Up';
                     payload.facility_id = null;
+                    if (pickupLat != null && pickupLng != null) {
+                        payload.latitude = pickupLat;
+                        payload.longitude = pickupLng;
+                        if (pickupLandmark.trim()) payload.landmark = pickupLandmark.trim();
+                    }
                 } else if (selectedFac) {
                     payload.facility_id = selectedFac.landmark_id;
                     payload.latitude = parseFloat(selectedFac.latitude.toString());
@@ -961,6 +1041,11 @@ const BrgyReportView = () => {
                 if (targetStatusId === 6) {
                     reportPayload.custody_status = 'Animal Picked Up';
                     reportPayload.facility_id = null;
+                    if (pickupLat != null && pickupLng != null) {
+                        reportPayload.latitude = pickupLat;
+                        reportPayload.longitude = pickupLng;
+                        if (pickupLandmark.trim()) reportPayload.landmark = pickupLandmark.trim();
+                    }
                 } else if (selectedFac) {
                     reportPayload.facility_id = selectedFac.landmark_id;
                     reportPayload.latitude = parseFloat(selectedFac.latitude.toString());
@@ -1619,6 +1704,50 @@ const BrgyReportView = () => {
                                                     <span>{isGeocoding ? 'Resolving address...' : (resolvedAddress || report.landmark || 'No landmark recorded')}</span>
                                                 </p>
                                             </div>
+                                            {/* Live Dispatch Tracker Banner for Status 5 */}
+                                            {report.status_id === 5 && (
+                                                <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 mb-1 rounded-2xl bg-blue-50/90 border border-blue-200 shadow-xs">
+                                                    <div className="flex items-center gap-2.5">
+                                                        <span className={`w-3 h-3 rounded-full shrink-0 ${activeDispatchLoc?.is_active ? 'bg-emerald-500 animate-ping' : 'bg-blue-400'}`} />
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <p className="text-xs font-black text-blue-950 uppercase tracking-wide">Live Dispatch Tracker</p>
+                                                                {activeDispatchLoc?.is_active && (
+                                                                    <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                                                        Live GPS Broadcast Active
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-[11px] font-semibold text-blue-700">
+                                                                {activeDispatchLoc?.is_active
+                                                                    ? `Team ${activeDispatchLoc.responder_name || 'assigned'} is en route. Live location is visible to Barangay, Subdivision, and Resident.`
+                                                                    : 'Assigned field team can broadcast their moving GPS location in real time.'}
+                                                            </p>
+                                                            {isBroadcasting && (
+                                                                <p className="text-[11px] font-semibold text-emerald-800 mt-1">
+                                                                    📍 Tip: You can drag the 🚓 Dispatch Team pin on the map to move the Barangay pinpoint in real time.
+                                                                </p>
+                                                            )}
+                                                            {isBroadcasting && broadcastGpsError && (
+                                                                <p className="text-[11px] font-bold text-amber-700 mt-1">
+                                                                    ⚠️ {broadcastGpsError}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {canUpdateStatus && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setIsBroadcasting(!isBroadcasting)}
+                                                            className={`px-3.5 py-1.5 rounded-xl text-xs font-black shadow-xs transition-all flex items-center gap-1.5 shrink-0 ${
+                                                                isBroadcasting ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-blue-600 text-white hover:bg-blue-700'
+                                                            }`}
+                                                        >
+                                                            <span>{isBroadcasting ? '⏹️ Stop Live GPS' : '📡 Start Live GPS Broadcast'}</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
                                             <div className={`w-full ${isInlineMapExpanded ? 'h-[500px] sm:h-[560px]' : 'h-[400px] sm:h-[460px] md:h-72'} transition-all duration-300 rounded-3xl overflow-hidden border border-gray-200 shadow-inner relative`}>
                                                 {/* Floating Expand Map Button inside canvas */}
                                                 <div className="absolute top-3 right-3 z-[400]">
@@ -1636,19 +1765,31 @@ const BrgyReportView = () => {
                                                 </div>
 
                                                 {(() => {
-                                                    const isRelocated = !isResolvedCase && [7, 8].includes(report.status_id) && (!!report.facility_id || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || !!report.facility);
-                                                    const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : (report.latitude ? parseFloat(report.latitude.toString()) : null);
-                                                    const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : (report.longitude ? parseFloat(report.longitude.toString()) : null);
+                                                    const isRelocated = !isResolvedCase && report.status_id !== 6 && [7, 8].includes(report.status_id) && (!!report.facility_id || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || !!report.facility);
+                                                    const initLat = report.initial_latitude != null ? parseFloat(report.initial_latitude.toString()) : (report.latitude != null ? parseFloat(report.latitude.toString()) : null);
+                                                    const initLng = report.initial_longitude != null ? parseFloat(report.initial_longitude.toString()) : (report.longitude != null ? parseFloat(report.longitude.toString()) : null);
+                                                    const marker1Lat = isRelocated ? sightingLat : (initLat ?? sightingLat);
+                                                    const marker1Lng = isRelocated ? sightingLng : (initLng ?? sightingLng);
                                                     const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
-                                                    const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && (Math.abs(initLat - sightingLat) > 0.0001 || Math.abs(initLng - sightingLng) > 0.0001);
+                                                    const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && (Math.abs(initLat - marker1Lat) > 0.0001 || Math.abs(initLng - marker1Lng) > 0.0001);
+
+                                                    const rawPickupLat = report.pickup_latitude != null ? parseFloat(report.pickup_latitude.toString()) : null;
+                                                    const rawPickupLng = report.pickup_longitude != null ? parseFloat(report.pickup_longitude.toString()) : null;
+                                                    const pickupCollidesWithOrigin =
+                                                        rawPickupLat != null &&
+                                                        rawPickupLng != null &&
+                                                        ((Math.abs(rawPickupLat - marker1Lat) < 0.00012 && Math.abs(rawPickupLng - marker1Lng) < 0.00012) ||
+                                                            (hasDifferentInitialSpot && initLat != null && initLng != null && Math.abs(rawPickupLat - initLat) < 0.00012 && Math.abs(rawPickupLng - initLng) < 0.00012));
+                                                    const pickupRenderLat = rawPickupLat;
+                                                    const pickupRenderLng = rawPickupLng != null ? (pickupCollidesWithOrigin ? rawPickupLng + 0.00014 : rawPickupLng) : null;
 
                                                     const hadHoldingHistory = report.history?.some((h: any) => 
                                                         isHoldingHistoryEntry(h) || 
                                                         (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                                         (h.action && h.action.toLowerCase().includes('holding'))
                                                     ) || Boolean(report.facility_id) || Boolean(report.facility);
-                                                    const histFacLat = 14.8069;
-                                                    const histFacLng = 121.0039;
+                                                    const histFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : BRGY_OFFICE_COORDS[0];
+                                                    const histFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : BRGY_OFFICE_COORDS[1];
                                                     const histFacName = 'Barangay Holding Pen';
 
                                                     const brgyMarkers = isResolvedCase ? [
@@ -1682,17 +1823,36 @@ const BrgyReportView = () => {
                                                     ] : [
                                                         {
                                                             id: 1,
-                                                            lat: sightingLat,
-                                                            lng: sightingLng,
-                                                            title: isRelocated 
-                                                                ? `Secured: ${report.facility?.name || report.landmark}` 
-                                                                : (report.status_id === 6 
-                                                                    ? `Animal Picked Up · ${SIGHTING_TITLE}` 
-                                                                    : SIGHTING_TITLE),
+                                                            lat: marker1Lat,
+                                                            lng: marker1Lng,
+                                                            title: isRelocated
+                                                                ? `Secured: ${report.facility?.name || report.landmark}`
+                                                                : SIGHTING_TITLE,
                                                             category: isRelocated ? 'Holding Facility' : (report.animal_type || 'Stray Animal'),
-                                                            color: report.status_id === 6 ? 'blue' : 'orange',
-                                                            rawData: report
+                                                            color: 'orange',
+                                                            rawData: isRelocated ? report : { ...report, landmark: report.initial_landmark || report.landmark }
                                                         },
+                                                        ...(pickupRenderLat != null && pickupRenderLng != null ? [{
+                                                            id: -889,
+                                                            lat: pickupRenderLat,
+                                                            lng: pickupRenderLng,
+                                                            title: report.pickup_landmark ? `Picked Up: ${report.pickup_landmark}` : 'Picked Up Location',
+                                                            category: 'Pickup Location',
+                                                            priority: 'High',
+                                                            rawData: { ...report, landmark: report.pickup_landmark || report.landmark }
+                                                        }] : []),
+                                                        ...(activeDispatchLoc?.is_active && activeDispatchLoc.latitude != null && activeDispatchLoc.longitude != null ? [{
+                                                            id: -777,
+                                                            lat: activeDispatchLoc.latitude,
+                                                            lng: activeDispatchLoc.longitude,
+                                                            title: activeDispatchLoc.responder_name ? `Team: ${activeDispatchLoc.responder_name}` : 'Dispatch Team (Live)',
+                                                            category: 'Dispatch Team',
+                                                            priority: 'High',
+                                                            draggable: Boolean(isBroadcasting && canUpdateStatus),
+                                                            onDragEnd: (newLat: number, newLng: number) => {
+                                                                sendManualPosition(newLat, newLng);
+                                                            }
+                                                        }] : []),
                                                         ...(hasDifferentInitialSpot ? [{
                                                             id: -999,
                                                             lat: initLat!,
@@ -1721,13 +1881,22 @@ const BrgyReportView = () => {
                                                             showLandmarks={true}
                                                             showConnectingLine={false}
                                                             hideViewDetailsButton={true}
-                                                            routing={!isResolvedCase && routeFrom && isValidLatLng(sightingLat, sightingLng) ? {
-                                                                start: routeFrom === 'current' && userLocation ? userLocation : BRGY_OFFICE_COORDS,
-                                                                end: [sightingLat, sightingLng] as [number, number],
-                                                                waypointNames: [routeFrom === 'current' && userLocation ? 'Your Location' : 'Barangay Hall', report.landmark || 'Incident Location'] as [string, string],
-                                                                onClose: () => setRouteFrom(null),
-                                                                live: routeFrom === 'current' && Boolean(userLocation)
-                                                            } : undefined}
+                                                            routing={!isResolvedCase && routeFrom && isValidLatLng(sightingLat, sightingLng) ? (() => {
+                                                                const useLiveTeam = routeFrom === 'brgy' && report.status_id === 5 && activeDispatchLoc?.is_active && activeDispatchLoc.latitude != null && activeDispatchLoc.longitude != null;
+                                                                const routeStartPos: [number, number] = routeFrom === 'current' && userLocation
+                                                                    ? userLocation
+                                                                    : (useLiveTeam ? [activeDispatchLoc.latitude!, activeDispatchLoc.longitude!] : BRGY_OFFICE_COORDS);
+                                                                const routeStartName = routeFrom === 'current' && userLocation
+                                                                    ? 'Your Location'
+                                                                    : (useLiveTeam ? 'Dispatch Team (Live)' : 'Barangay Hall');
+                                                                return {
+                                                                    start: routeStartPos,
+                                                                    end: [sightingLat, sightingLng] as [number, number],
+                                                                    waypointNames: [routeStartName, report.landmark || 'Incident Location'] as [string, string],
+                                                                    onClose: () => setRouteFrom(null),
+                                                                    live: routeFrom === 'current' && Boolean(userLocation)
+                                                                };
+                                                            })() : undefined}
                                                             onDirectionsClick={!isResolvedCase ? () => setRouteFrom('current') : undefined}
                                                             onDirectionsFromBrgyClick={!isResolvedCase ? () => setRouteFrom('brgy') : undefined}
                                                             onRouteCalculated={(dist) => setRoadDistance(dist)}
@@ -2467,6 +2636,9 @@ const BrgyReportView = () => {
                                     onChange={(e) => {
                                         const nextId = parseInt(e.target.value);
                                         setTargetStatusId(nextId);
+                                        if (nextId === 6) {
+                                            seedPickupCoordinates();
+                                        }
                                         if (nextId === 9) {
                                             const currentRep = report || rescueRequest?.report || null;
                                             const regOwner = (currentRep?.owner_id) ? {
@@ -2707,6 +2879,122 @@ const BrgyReportView = () => {
                                 </div>
                             )}
 
+                            {/* Pickup Location Section - Show for "Picked Up" (6) */}
+                            {targetStatusId === 6 && (
+                                <div className="space-y-3 bg-purple-50/70 p-5 rounded-[2rem] border border-purple-200 shadow-sm">
+                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-xs text-xs font-bold">
+                                                📍
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest block">Exact Animal Pickup Location</label>
+                                                <span className="text-[9px] text-purple-700 font-bold uppercase tracking-wider">GPS Capture Point</span>
+                                            </div>
+                                        </div>
+                                        {pickupLat != null && pickupLng != null && (
+                                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-white text-purple-700 border border-purple-200">
+                                                GPS Captured
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-[11px] text-purple-900 font-medium leading-relaxed">
+                                        Where was the animal secured into the vehicle? These coordinates will appear on the map as the verified pickup pin.
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                        <button
+                                            type="button"
+                                            disabled={isDetectingPickupGps}
+                                            onClick={() => {
+                                                if (!('geolocation' in navigator)) {
+                                                    alert('Geolocation is not supported by your browser.');
+                                                    return;
+                                                }
+                                                setIsDetectingPickupGps(true);
+                                                navigator.geolocation.getCurrentPosition(
+                                                    async (pos) => {
+                                                        const check = checkLocalGpsFix(pos.coords, BULACAN_REFERENCE_CENTER);
+                                                        if (!check.reliable) {
+                                                            setIsDetectingPickupGps(false);
+                                                            alert(
+                                                                check.reason === 'outside_bulacan'
+                                                                    ? 'Your browser reported an approximate network/ISP location outside Bulacan (common on desktop PCs without a GPS sensor). Pickup coordinates were not overwritten — please capture from a mobile phone on site or use "Same as Sighting Spot".'
+                                                                    : (check.message || 'GPS location is not accurate enough to verify the pickup spot. Please capture from a mobile phone with GPS enabled or use "Same as Sighting Spot".')
+                                                            );
+                                                            return;
+                                                        }
+                                                        const lat = pos.coords.latitude;
+                                                        const lng = pos.coords.longitude;
+                                                        setPickupLat(lat);
+                                                        setPickupLng(lng);
+                                                        setIsDetectingPickupGps(false);
+                                                        try {
+                                                            const st = await reverseGeocodeStreet(lat, lng);
+                                                            if (st) setPickupLandmark(st);
+                                                        } catch {}
+                                                    },
+                                                    () => {
+                                                        setIsDetectingPickupGps(false);
+                                                        alert('Unable to acquire current GPS location. Please check phone permissions.');
+                                                    },
+                                                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                                                );
+                                            }}
+                                            className="px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                                        >
+                                            {isDetectingPickupGps ? '📡 Acquiring Phone GPS...' : '📍 Use My Current Phone Location'}
+                                        </button>
+                                        {activeDispatchLoc?.is_active && activeDispatchLoc.latitude != null && activeDispatchLoc.longitude != null && (
+                                            <button
+                                                type="button"
+                                                onClick={async () => {
+                                                    const lat = Number(activeDispatchLoc.latitude);
+                                                    const lng = Number(activeDispatchLoc.longitude);
+                                                    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+                                                    setPickupLat(lat);
+                                                    setPickupLng(lng);
+                                                    try {
+                                                        const st = await reverseGeocodeStreet(lat, lng);
+                                                        if (st) setPickupLandmark(st);
+                                                    } catch {}
+                                                }}
+                                                className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                                            >
+                                                🚓 Use Live Dispatch Pin Location
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const initL = report?.initial_latitude ?? report?.latitude;
+                                                const initG = report?.initial_longitude ?? report?.longitude;
+                                                if (initL != null && initG != null) {
+                                                    setPickupLat(parseFloat(initL.toString()));
+                                                    setPickupLng(parseFloat(initG.toString()));
+                                                    setPickupLandmark(report?.initial_landmark || report?.landmark || '');
+                                                }
+                                            }}
+                                            className="px-3 py-2 rounded-xl bg-white border border-purple-200 text-purple-800 hover:bg-purple-100/50 text-xs font-bold transition-all cursor-pointer"
+                                        >
+                                            Same as Sighting Spot
+                                        </button>
+                                    </div>
+                                    <div className="space-y-1.5 pt-1">
+                                        <input
+                                            type="text"
+                                            placeholder="Pickup street name or landmark (e.g. Block 12 Corner Elm St)..."
+                                            value={pickupLandmark}
+                                            onChange={(e) => setPickupLandmark(e.target.value)}
+                                            className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-800 focus:ring-2 focus:ring-purple-500 outline-none shadow-sm"
+                                        />
+                                        {pickupLat != null && pickupLng != null && (
+                                            <p className="text-[10px] font-mono font-bold text-purple-800 pl-1">
+                                                Coordinates: {pickupLat.toFixed(6)}, {pickupLng.toFixed(6)}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                             {/* Multi-Personnel Team Assignment (2 to 5 Responders) */}
                             {(targetStatusId === 5 || targetStatusId === 13 || targetStatusId === 6) && (
                                 <div className="space-y-3 bg-role-soft/50 p-4 sm:p-5 rounded-3xl border border-role-border/80 shadow-2xs">
@@ -3494,19 +3782,31 @@ const BrgyReportView = () => {
                         {/* Map Area */}
                         <div className="flex-1 rounded-2xl overflow-hidden relative border border-gray-200 min-h-0 shadow-inner">
                             {(() => {
-                                const isRelocated = !isResolvedCase && [7, 8].includes(report.status_id) && (!!report.facility_id || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || !!report.facility);
-                                const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : (report.latitude ? parseFloat(report.latitude.toString()) : null);
-                                const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : (report.longitude ? parseFloat(report.longitude.toString()) : null);
+                                const isRelocated = !isResolvedCase && report.status_id !== 6 && [7, 8].includes(report.status_id) && (!!report.facility_id || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || !!report.facility);
+                                const initLat = report.initial_latitude != null ? parseFloat(report.initial_latitude.toString()) : (report.latitude != null ? parseFloat(report.latitude.toString()) : null);
+                                const initLng = report.initial_longitude != null ? parseFloat(report.initial_longitude.toString()) : (report.longitude != null ? parseFloat(report.longitude.toString()) : null);
+                                const marker1Lat = isRelocated ? sightingLat : (initLat ?? sightingLat);
+                                const marker1Lng = isRelocated ? sightingLng : (initLng ?? sightingLng);
                                 const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
-                                const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && (Math.abs(initLat - sightingLat) > 0.0001 || Math.abs(initLng - sightingLng) > 0.0001);
+                                const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && (Math.abs(initLat - marker1Lat) > 0.0001 || Math.abs(initLng - marker1Lng) > 0.0001);
+
+                                const rawPickupLat = report.pickup_latitude != null ? parseFloat(report.pickup_latitude.toString()) : null;
+                                const rawPickupLng = report.pickup_longitude != null ? parseFloat(report.pickup_longitude.toString()) : null;
+                                const pickupCollidesWithOrigin =
+                                    rawPickupLat != null &&
+                                    rawPickupLng != null &&
+                                    ((Math.abs(rawPickupLat - marker1Lat) < 0.00012 && Math.abs(rawPickupLng - marker1Lng) < 0.00012) ||
+                                        (hasDifferentInitialSpot && initLat != null && initLng != null && Math.abs(rawPickupLat - initLat) < 0.00012 && Math.abs(rawPickupLng - initLng) < 0.00012));
+                                const pickupRenderLat = rawPickupLat;
+                                const pickupRenderLng = rawPickupLng != null ? (pickupCollidesWithOrigin ? rawPickupLng + 0.00014 : rawPickupLng) : null;
 
                                 const hadHoldingHistory = report.history?.some((h: any) => 
                                     isHoldingHistoryEntry(h) || 
                                     (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding place') || h.notes.toLowerCase().includes('holding pen'))) ||
                                     (h.action && h.action.toLowerCase().includes('holding'))
                                 ) || Boolean(report.facility_id) || Boolean(report.facility);
-                                const histFacLat = 14.8069;
-                                const histFacLng = 121.0039;
+                                const histFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : BRGY_OFFICE_COORDS[0];
+                                const histFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : BRGY_OFFICE_COORDS[1];
                                 const histFacName = 'Barangay Holding Pen';
 
                                 const brgyMarkers = isResolvedCase ? [
@@ -3540,17 +3840,36 @@ const BrgyReportView = () => {
                                 ] : [
                                     {
                                         id: 1,
-                                        lat: sightingLat,
-                                        lng: sightingLng,
-                                        title: isRelocated 
-                                            ? `Secured: ${report.facility?.name || report.landmark}` 
-                                            : (report.status_id === 6 
-                                                ? `Animal Picked Up · ${SIGHTING_TITLE}` 
-                                                : SIGHTING_TITLE),
+                                        lat: marker1Lat,
+                                        lng: marker1Lng,
+                                        title: isRelocated
+                                            ? `Secured: ${report.facility?.name || report.landmark}`
+                                            : SIGHTING_TITLE,
                                         category: isRelocated ? 'Holding Facility' : (report.animal_type || 'Stray Animal'),
-                                        color: report.status_id === 6 ? 'blue' : 'orange',
-                                        rawData: report
+                                        color: 'orange',
+                                        rawData: isRelocated ? report : { ...report, landmark: report.initial_landmark || report.landmark }
                                     },
+                                    ...(pickupRenderLat != null && pickupRenderLng != null ? [{
+                                        id: -889,
+                                        lat: pickupRenderLat,
+                                        lng: pickupRenderLng,
+                                        title: report.pickup_landmark ? `Picked Up: ${report.pickup_landmark}` : 'Picked Up Location',
+                                        category: 'Pickup Location',
+                                        priority: 'High',
+                                        rawData: { ...report, landmark: report.pickup_landmark || report.landmark }
+                                    }] : []),
+                                    ...(activeDispatchLoc?.is_active && activeDispatchLoc.latitude != null && activeDispatchLoc.longitude != null ? [{
+                                        id: -777,
+                                        lat: activeDispatchLoc.latitude,
+                                        lng: activeDispatchLoc.longitude,
+                                        title: activeDispatchLoc.responder_name ? `Team: ${activeDispatchLoc.responder_name}` : 'Dispatch Team (Live)',
+                                        category: 'Dispatch Team',
+                                        priority: 'High',
+                                        draggable: Boolean(isBroadcasting && canUpdateStatus),
+                                        onDragEnd: (newLat: number, newLng: number) => {
+                                            sendManualPosition(newLat, newLng);
+                                        }
+                                    }] : []),
                                     ...(hasDifferentInitialSpot ? [{
                                         id: -999,
                                         lat: initLat!,
@@ -3579,13 +3898,22 @@ const BrgyReportView = () => {
                                         showLandmarks={true}
                                         showConnectingLine={false}
                                         hideViewDetailsButton={true}
-                                        routing={!isResolvedCase && routeFrom && isValidLatLng(sightingLat, sightingLng) ? {
-                                                                start: routeFrom === 'current' && userLocation ? userLocation : BRGY_OFFICE_COORDS,
-                                                                end: [sightingLat, sightingLng] as [number, number],
-                                                                waypointNames: [routeFrom === 'current' && userLocation ? 'Your Location' : 'Barangay Hall', report.landmark || 'Incident Location'] as [string, string],
-                                                                onClose: () => setRouteFrom(null),
-                                                                live: routeFrom === 'current' && Boolean(userLocation)
-                                                            } : undefined}
+                                        routing={!isResolvedCase && routeFrom && isValidLatLng(sightingLat, sightingLng) ? (() => {
+                                                                const useLiveTeam = routeFrom === 'brgy' && report.status_id === 5 && activeDispatchLoc?.is_active && activeDispatchLoc.latitude != null && activeDispatchLoc.longitude != null;
+                                                                const routeStartPos: [number, number] = routeFrom === 'current' && userLocation
+                                                                    ? userLocation
+                                                                    : (useLiveTeam ? [activeDispatchLoc.latitude!, activeDispatchLoc.longitude!] : BRGY_OFFICE_COORDS);
+                                                                const routeStartName = routeFrom === 'current' && userLocation
+                                                                    ? 'Your Location'
+                                                                    : (useLiveTeam ? 'Dispatch Team (Live)' : 'Barangay Hall');
+                                                                return {
+                                                                    start: routeStartPos,
+                                                                    end: [sightingLat, sightingLng] as [number, number],
+                                                                    waypointNames: [routeStartName, report.landmark || 'Incident Location'] as [string, string],
+                                                                    onClose: () => setRouteFrom(null),
+                                                                    live: routeFrom === 'current' && Boolean(userLocation)
+                                                                };
+                                                            })() : undefined}
                                                             onDirectionsClick={!isResolvedCase ? () => setRouteFrom('current') : undefined}
                                                             onDirectionsFromBrgyClick={!isResolvedCase ? () => setRouteFrom('brgy') : undefined}
                                         onRouteCalculated={(dist) => setRoadDistance(dist)}
