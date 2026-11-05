@@ -230,7 +230,21 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             [/^observation extended/i, 'OBSERVATION EXTENDED', 'orange'],
             [/^observation ended/i, 'OBSERVATION ENDED', 'green'],
         ] as [RegExp, string, 'blue' | 'green' | 'orange' | 'red' | 'gray'][]).find(([re]) => re.test(rawRemarks));
-        if (observationRule) {
+        // Barangay Referral log (Subdivision-only): the Barangay is external. Checked before the keyword rules so
+        // that "held" or "impounded" reported by the Barangay is never shown as a StraySafe holding event.
+        const referralRule = ([
+            [/^referred to (the )?barangay/i, 'REFERRED TO BARANGAY', 'orange'],
+            [/^reported by barangay/i, 'REPORTED BY BARANGAY', 'blue'],
+        ] as [RegExp, string, 'blue' | 'green' | 'orange' | 'red' | 'gray'][]).find(([re]) => re.test(rawRemarks));
+        if (referralRule) {
+            actionTitle = referralRule[1];
+            type = referralRule[2];
+            IconComponent = ArrowRightCircle;
+            description = rawRemarks;
+            const recordedBy = rawRemarks.match(/recorded by ([^.:]+)[.:]/i) || rawRemarks.match(/\bby ([^.(]+?) \(/i);
+            if (recordedBy && !author) author = recordedBy[1].trim();
+        }
+        else if (observationRule) {
             actionTitle = observationRule[1];
             type = observationRule[2];
             IconComponent = Eye;

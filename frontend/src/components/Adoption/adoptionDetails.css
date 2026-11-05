@@ -37,3 +37,6 @@
     #straysafe-adoption-certificate-root { width: 8.5in !important; max-width: none !important; min-height: 0 !important; height: 11in !important; box-sizing: border-box !important; margin: 0 !important; border-radius: 0 !important; box-shadow: none !important; border: none !important; overflow: hidden !important; break-inside: avoid !important; print-color-adjust: exact !important; -webkit-print-color-adjust: exact !important; }
     @page { size: letter portrait; margin: 0; }
 }
+
+/* Subdivision-only: adoption records are a read-only Admin archive; hide every action that would change them */
+.adoption-archive [data-archive-write] { display: none !important; }

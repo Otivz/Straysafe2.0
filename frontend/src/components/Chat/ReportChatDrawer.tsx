@@ -219,7 +219,8 @@ export default function ReportChatDrawer({
     const handleOpenCaseInfo = () => {
         if (isAdoptionMode && adoptionId) {
             onClose();
-            navigate(isResidentUser ? `/adopt/applications?adoption=${adoptionId}` : `/brgy/adoptions/${adoptionId}`);
+            // Subdivision-only: adoption records are a read-only Admin archive; Barangay pages no longer exist
+            navigate(isResidentUser ? `/adopt/applications?adoption=${adoptionId}` : activeUser?.role_id === 4 ? '/admin/adoptions' : '/brgy');
             return;
         }
         setIsCaseInfoModalOpen(true);

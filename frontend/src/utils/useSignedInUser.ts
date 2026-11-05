@@ -19,7 +19,7 @@ const readStoredUser = () => {
 export const homePathFor = (user: any): string =>
     user?.role_id === 4 ? '/admin/dashboard'
         : user?.role_id === 2 ? '/subd/dashboard'
-            : user?.role_id === 3 ? '/brgy/dashboard'
+            : user?.role_id === 3 ? '/brgy'
                 : '/resident-home';
 
 export function useSignedInUser() {

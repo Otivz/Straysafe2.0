@@ -56,6 +56,7 @@ Status values: **Current** (matches the code when last checked), **Reference** (
 | [Settings landmark cards change record](05-operations/agents/feature-updates/2026-11-03_0200_settings-landmark-cards.md) | Current | Readable names and category badges, natural card heights, wrapping actions, desktop and phone mock-data preview |
 | [Minimal history layout change record](05-operations/agents/feature-updates/2026-11-03_0145_minimal-history-layout.md) | Current | Shared Summary / Report details / Activity layout for Subdivision and Barangay history, cleaner shared summaries including Admin, keyboard and responsive checks, PDF validation, broader fixture timeout |
 | [01-system/overview.md](01-system/overview.md) | Current | System boundary, roles, services, known gaps |
+| [01-system/BARANGAY_REFERRAL_LOG.md](01-system/BARANGAY_REFERRAL_LOG.md) | Current | Subdivision-only Barangay Referral log: leader records the external Barangay's updates and outcome; scope, rules, endpoints |
 | [01-system/DATABASE_SCHEMA.md](01-system/DATABASE_SCHEMA.md) | Current | Generated schema of every table: columns, types, keys, foreign keys (structure only, no data) |
 | [01-system/AI_COMPONENTS.md](01-system/AI_COMPONENTS.md) | Current | The AI parts: local YOLOv8 nano, optional admin-controlled Gemini, rule-based fallback, human confirmation, known test-set gap |
 | [01-system/HEATMAP_RULES.md](01-system/HEATMAP_RULES.md) | Current | Incident counting, original sighting heat, active pins, hotspot thresholds, public directions and Phase 1 validation |

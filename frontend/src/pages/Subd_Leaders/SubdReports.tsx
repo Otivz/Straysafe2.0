@@ -139,6 +139,8 @@ const SubdReports = () => {
     const [isEscalating, setIsEscalating] = useState(false);
     const [escalationTitle, setEscalationTitle] = useState('');
     const [escalationDescription, setEscalationDescription] = useState('');
+    const [escalationContactMethod, setEscalationContactMethod] = useState('call');
+    const [escalationReferenceNo, setEscalationReferenceNo] = useState('');
     const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
     const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
     const [resolvingReportId, setResolvingReportId] = useState<number | null>(null);
@@ -530,17 +532,16 @@ const SubdReports = () => {
             await api.patch(`${API_URL}/${escalatingReportId}/status`, {
                 status_id: 4,
                 user_id: currentUserId,
-                remarks: "Report forwarded to Barangay Operations for official review and approval.",
+                remarks: "Referred to the Barangay by the Subdivision Leader. The Barangay is contacted outside StraySafe.",
                 ...(preservedCondition ? { animal_condition: preservedCondition } : {})
             });
 
-            // 3. Create official Rescue Request record
-            await api.post('/rescue-requests/', {
-                report_id: escalatingReportId,
-                leader_id: currentUserId,
-                title: escalationTitle,
-                description: escalationDescription,
-                status_id: 1 // Pending
+            // 3. Barangay Referral record (the Barangay is external; no rescue request is created)
+            await api.post(`/reports/${escalatingReportId}/referral`, {
+                reason: escalationDescription.trim() || 'Referred to the Barangay by the Subdivision Leader.',
+                contact_method: escalationContactMethod,
+                reference_no: escalationReferenceNo.trim() || null,
+                letter_title: escalationTitle.trim() || `Endorsement for Report #${escalatingReportId}`,
             });
 
             setIsEscalateModalOpen(false);
@@ -548,12 +549,14 @@ const SubdReports = () => {
             setEndorsementFile(null);
             setEscalationTitle('');
             setEscalationDescription('');
+            setEscalationReferenceNo('');
             setShowSuccess(true);
             fetchReports();
             setTimeout(() => setShowSuccess(false), 3000);
         } catch (error) {
-            console.error('Error escalating report:', error);
-            alert('Failed to escalate report. Please try again.');
+            console.error('Error referring report:', error);
+            const detail = (error as any)?.response?.data?.detail;
+            alert(typeof detail === 'string' ? detail : 'Failed to refer the report to the Barangay. Please try again.');
         } finally {
             setIsEscalating(false);
         }
@@ -2240,7 +2243,7 @@ const SubdReports = () => {
                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                                                                 </svg>
-                                                                ESCALATE TO BARANGAY
+                                                                REFER TO BARANGAY
                                                             </button>
                                                         )}
 
@@ -2491,8 +2494,8 @@ const SubdReports = () => {
                     <div className="bg-white rounded-none sm:rounded-[2.5rem] shadow-2xl w-full h-full sm:h-auto max-w-xl overflow-y-auto border-none sm:border border-role-muted animate-in zoom-in-95 duration-300">
                         <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                             <div>
-                                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Escalation Letter</h3>
-                                <p className="text-xs text-gray-400 mt-1 font-medium">Attach endorsement document to forward request to Barangay.</p>
+                                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Refer to Barangay</h3>
+                                <p className="text-xs text-gray-400 mt-1 font-medium">Contact the Barangay outside StraySafe, then record the referral and attach the endorsement letter.</p>
                             </div>
                             <button onClick={() => setIsEscalateModalOpen(false)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-900 rounded-full hover:bg-gray-100 transition-all">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2517,8 +2520,36 @@ const SubdReports = () => {
                                     className="w-full px-5 py-4 bg-white border border-gray-200 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-role-muted focus:border-role outline-none transition-all placeholder:text-gray-300 resize-none"
                                     value={escalationDescription}
                                     onChange={(e) => setEscalationDescription(e.target.value)}
-                                    placeholder="Provide detailed description of why emergency rescue is needed..."
+                                    placeholder="Why the Barangay is needed for this case..."
                                 />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label htmlFor="reports-escalation-contact-method" className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Barangay contacted by</label>
+                                    <select
+                                        id="reports-escalation-contact-method"
+                                        className="w-full px-5 py-4 bg-white border border-gray-200 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-role-muted focus:border-role outline-none"
+                                        value={escalationContactMethod}
+                                        onChange={(e) => setEscalationContactMethod(e.target.value)}
+                                    >
+                                        <option value="call">Phone call</option>
+                                        <option value="visit">Visit</option>
+                                        <option value="message">Message</option>
+                                        <option value="letter">Letter</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label htmlFor="reports-escalation-reference-no" className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Reference no. (optional)</label>
+                                    <input
+                                        id="reports-escalation-reference-no"
+                                        type="text" maxLength={100}
+                                        className="w-full px-5 py-4 bg-white border border-gray-200 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-role-muted focus:border-role outline-none placeholder:text-gray-300"
+                                        value={escalationReferenceNo}
+                                        onChange={(e) => setEscalationReferenceNo(e.target.value)}
+                                        placeholder="Barangay blotter / log no."
+                                    />
+                                </div>
                             </div>
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Endorsement Letter File (PDF/DOCX/IMAGE)</label>
@@ -2552,7 +2583,7 @@ const SubdReports = () => {
                                     disabled={isEscalating || !endorsementFile}
                                     className="flex-1 py-3.5 bg-[#FBB065] hover:bg-[#F99D43] disabled:bg-role-border text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                                 >
-                                    {isEscalating ? 'Escalating...' : 'SEND ESCALATION'}
+                                    {isEscalating ? 'Saving...' : 'RECORD REFERRAL'}
                                 </button>
                             </div>
                         </div>

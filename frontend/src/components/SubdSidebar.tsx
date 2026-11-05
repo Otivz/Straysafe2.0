@@ -36,7 +36,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
     const [isOpen, setIsOpen] = useState(true);
     const [pendingReportsCount, setPendingReportsCount] = useCachedState<number>('subd_sidebar_pendingReportsCount', 0);
     const [, setActiveObservationsCount] = useCachedState<number>('subd_sidebar_activeObservationsCount', 0);
-    const [pendingClaimsCount, setPendingClaimsCount] = useCachedState<number>('subd_sidebar_pendingClaimsCount', 0);
+    const [, setPendingClaimsCount] = useCachedState<number>('subd_sidebar_pendingClaimsCount', 0); // Pet Claims link retired (Subdivision-only); count kept until the claim code is deleted
     const [unreadMessagesCount, setUnreadMessagesCount] = useCachedState<number>('subd_sidebar_unreadMessagesCount', 0);
     const location = useLocation();
     const navigate = useNavigate();
@@ -204,15 +204,6 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                     )
                 },
                 {
-                    path: '/subd/holding-facility',
-                    label: 'Barangay Holding',
-                    icon: (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                        </svg>
-                    )
-                },
-                {
                     path: '/subd/hazard-alert',
                     label: 'Broadcast Alerts',
                     icon: (
@@ -232,16 +223,6 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                     icon: (
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M12 21.5c-3.038 0-5.5-2.462-5.5-5.5s2.462-5.5 5.5-5.5s5.5 2.462 5.5 5.5s-2.462 5.5-5.5 5.5zm-5.5-12c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zm11 0c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zM12 8c-1.381 0-2.5-1.119-2.5-2.5S10.619 3 12 3s2.5 1.119 2.5 2.5S13.381 8 12 8z" />
-                        </svg>
-                    )
-                },
-                {
-                    path: '/subd/pet-claims',
-                    label: 'Pet Claims',
-                    badgeCount: pendingClaimsCount,
-                    icon: (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     )
                 },
@@ -270,7 +251,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                 },
                 {
                     path: '/subd/endorsements',
-                    label: 'Endorsement Archive',
+                    label: 'Barangay Referrals',
                     icon: (
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />

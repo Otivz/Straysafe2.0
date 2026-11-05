@@ -31,8 +31,45 @@ export function useCaseHolding(reportId?: number | null, duplicateOfReportId?: n
     return holding;
 }
 
-export function buildCaseTimeline(report: any, holdingAnimal: any | null): any[] {
+/**
+ * Loads the Barangay Referral (Subdivision-only) for a report. Leader and Administrator only: anyone else gets
+ * null quietly (the referral's opening and outcome are already in the report history).
+ */
+export function useCaseReferral(reportId?: number | null, reloadKey?: unknown) {
+    const [referral, setReferral] = useState<any | null>(null);
+    useEffect(() => {
+        if (!reportId) return;
+        let cancelled = false;
+        api.get(`/reports/${reportId}/referral`)
+            .then(res => { if (!cancelled) setReferral(res.data); })
+            .catch(() => { if (!cancelled) setReferral(null); });
+        return () => { cancelled = true; };
+    }, [reportId, reloadKey]);
+    return referral;
+}
+
+const REFERRAL_UPDATE_LABELS: Record<string, string> = {
+    acknowledged: 'acknowledged the case', dispatched: 'dispatched a team', picked_up: 'picked up the animal',
+    held: 'is holding the animal', impounded: 'impounded the animal', claimed: 'says the owner claimed the animal',
+    adopted: 'says the animal was adopted', not_found: 'could not find the animal', other: 'sent an update',
+};
+
+export function buildCaseTimeline(report: any, holdingAnimal: any | null, referral?: any | null): any[] {
     const h: any[] = [...(report?.history || [])];
+    // Barangay updates recorded by the leader: labelled external, never a StraySafe custody event
+    (referral?.updates || []).forEach((u: any) => {
+        const day = u.update_date ? new Date(`${u.update_date}T00:00:00`).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+        const who = referral.barangay_name ? `Barangay ${referral.barangay_name}` : 'Barangay';
+        h.push({
+            history_id: `referral-update-${u.update_id}`,
+            external: true,
+            remarks: `Reported by ${who}${day ? ` on ${day}` : ''}: ${REFERRAL_UPDATE_LABELS[u.update_type] || u.update_type}.`
+                + `${u.note ? ` ${u.note}` : ''}${u.recorded_by_name ? ` Recorded by ${u.recorded_by_name}.` : ''}`,
+            created_at: u.recorded_at,
+            updater_name: u.recorded_by_name || '',
+            media: u.evidence_url ? [{ media_id: `referral-evidence-${u.update_id}`, file_url: u.evidence_url, media_type: /\.(jpg|jpeg|png|webp|gif)$/i.test(u.evidence_url) ? 'Image' : 'Document' }] : [],
+        });
+    });
     if (holdingAnimal && holdingAnimal.timeline) {
         holdingAnimal.timeline.forEach((log: any) => {
             // Media attached to this holding log

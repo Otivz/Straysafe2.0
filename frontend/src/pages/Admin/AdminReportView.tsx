@@ -34,6 +34,7 @@ import MapAutoResize from '../../components/MapControls/MapAutoResize';
 import { createPickupLocationIcon } from '../../components/MapComponent';
 import ReportDescription from '../../components/ReportDescription';
 import ReportVisibilityPanel from '../../components/ReportVisibilityPanel';
+import BarangayReferralCard from '../../components/Referral/BarangayReferralCard';
 import CaseSummaryPanel from '../../components/History/CaseSummaryPanel';
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -367,7 +368,7 @@ export const AdminReportView: React.FC = () => {
 
     // Direct Action / Override Modal state
     const [isActionModalOpen, setIsActionModalOpen] = useState<boolean>(false);
-    const [targetStatusId, setTargetStatusId] = useState<number>(5);
+    const [targetStatusId, setTargetStatusId] = useState<number>(2);
     const [selectedStaffId, setSelectedStaffId] = useState<number | ''>('');
     const [actionRemarks, setActionRemarks] = useState<string>('');
     const [staffList, setStaffList] = useState<Array<{ user_id: number; name: string; email: string; role_id: number }>>([]);
@@ -793,7 +794,7 @@ export const AdminReportView: React.FC = () => {
 
                                 <button
                                     onClick={() => {
-                                        setTargetStatusId(report.status_id < 5 ? 5 : report.status_id);
+                                        setTargetStatusId(report.status_id);
                                         setIsActionModalOpen(true);
                                     }}
                                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-black uppercase tracking-wider border border-amber-200 transition-all shadow-2xs"
@@ -874,7 +875,12 @@ export const AdminReportView: React.FC = () => {
                         {/* Case record: outcome, verification, animal, events, visibility, comments (same panel as the history pages) */}
                         <CaseSummaryPanel report={report} reportHref={(reportId) => `/admin/incidents/${reportId}`} printable />
 
-                        {/* Animal Custody Telemetry & Multi-Jurisdictional Care Monitor */}
+                        {/* Subdivision-only: the Barangay is external; its updates are recorded in the referral log */}
+                        {(report.status_id === 4 || report.endorsement_letter) && (
+                            <BarangayReferralCard reportId={report.report_id} reportStatusId={report.status_id} canEdit onChanged={fetchReport} />
+                        )}
+
+                        {/* Animal Custody Telemetry & Multi-Jurisdictional Care Monitor (earlier holding records, read-only) */}
                         {holdingRecord ? (
                             <div className="bg-white rounded-3xl p-6 shadow-xs border border-slate-100 space-y-6">
                                 {/* Header with Active Enclosure Badges */}
@@ -1062,13 +1068,9 @@ export const AdminReportView: React.FC = () => {
                                             </div>
                                         </div>
 
-                                        <button
-                                            onClick={() => setIsCareLogModalOpen(true)}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#F97316] text-xs font-black uppercase tracking-wider border border-orange-200 transition-all shadow-2xs"
-                                        >
-                                            <Plus className="w-3.5 h-3.5" />
-                                            <span>Log Care Check as Admin</span>
-                                        </button>
+                                        <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
+                                            Archive, read-only
+                                        </span>
                                     </div>
 
                                     {holdingRecord.timeline && holdingRecord.timeline.length > 0 ? (
@@ -1111,43 +1113,11 @@ export const AdminReportView: React.FC = () => {
                                     ) : (
                                         <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 text-center space-y-2">
                                             <p className="text-xs text-slate-500 font-semibold">No daily care logs registered in the holding timeline yet.</p>
-                                            <button
-                                                onClick={() => setIsCareLogModalOpen(true)}
-                                                className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-100"
-                                            >
-                                                Record First Feeding / Observation Check
-                                            </button>
                                         </div>
                                     )}
                                 </div>
                             </div>
-                        ) : (
-                            /* Animal Not in Facility Card */
-                            <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center font-bold text-base shrink-0">
-                                        ℹ️
-                                    </div>
-                                    <div>
-                                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                                            Animal Not Yet Placed in Facility Custody
-                                        </h4>
-                                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                                            This incident report is currently in field reporting or dispatch stage. Custody telemetry, duration clocks, and care logs will automatically activate once the animal is admitted into a holding pen.
-                                        </p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => {
-                                        setTargetStatusId(7); // Observation
-                                        setIsActionModalOpen(true);
-                                    }}
-                                    className="px-4 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-black uppercase tracking-wider border border-amber-200 transition-all shrink-0"
-                                >
-                                    Admit Animal to Holding
-                                </button>
-                            </div>
-                        )}
+                        ) : null}
 
                         {/* Main Grid: 2 Columns */}
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1687,7 +1657,7 @@ export const AdminReportView: React.FC = () => {
                                         <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Assigned Handler</h3>
                                         <button
                                             onClick={() => {
-                                                setTargetStatusId(report.status_id < 5 ? 5 : report.status_id);
+                                                setTargetStatusId(report.status_id);
                                                 setIsActionModalOpen(true);
                                             }}
                                             className="text-[10.5px] font-black text-[#F97316] hover:underline"
@@ -1864,11 +1834,8 @@ export const AdminReportView: React.FC = () => {
                                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-[#F97316]"
                                 >
                                     <option value={2}>Verified</option>
-                                    <option value={4}>Escalated to Barangay</option>
-                                    <option value={5}>Rescue in Progress / Dispatched</option>
-                                    <option value={6}>Picked Up</option>
+                                    <option value={4}>Referred to Barangay</option>
                                     <option value={7}>Under Observation</option>
-                                    <option value={8}>Impounded</option>
                                     <option value={11}>Incident Resolved</option>
                                     <option value={3}>Rejected</option>
                                     <option value={14}>False Alarm / Dismissed</option>

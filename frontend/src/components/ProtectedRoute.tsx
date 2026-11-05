@@ -46,6 +46,13 @@ const ProtectedRoute = ({ allowedRoles = [4] }: ProtectedRouteProps) => {
                 const parsedUser = JSON.parse(rawUser);
                 const roleId = parsedUser.role_id;
 
+                // Subdivision-only: Barangay accounts are retired. Send a stored Barangay session to the information
+                // page (the server refuses it anyway) instead of a sign-in form that would refuse it again.
+                if (roleId === 3) {
+                    if (isMounted) { setUserRole(3); setStatus('forbidden'); }
+                    return;
+                }
+
                 // Validate token with backend endpoint
                 const res = await api.get('/auth/verify-session');
                 if (res.status === 200 && res.data && res.data.status === 'valid') {
@@ -110,6 +117,7 @@ const ProtectedRoute = ({ allowedRoles = [4] }: ProtectedRouteProps) => {
     }
 
     if (status === 'forbidden') {
+        if (userRole === 3) return <Navigate to="/brgy" replace />;
         if (allowedRoles.includes(1) && !allowedRoles.includes(userRole || 0)) {
             return <Navigate to="/login" replace state={{ from: location }} />;
         }
@@ -121,7 +129,7 @@ const ProtectedRoute = ({ allowedRoles = [4] }: ProtectedRouteProps) => {
         }
         if (userRole === 1) return <Navigate to="/resident-home" replace />;
         if (userRole === 2) return <Navigate to="/subd/dashboard" replace />;
-        if (userRole === 3) return <Navigate to="/brgy/dashboard" replace />;
+        if (userRole === 3) return <Navigate to="/brgy" replace />; // Barangay accounts retired: information page
         if (userRole === 4) return <Navigate to="/admin/dashboard" replace />;
         return <Navigate to="/login" replace />;
     }

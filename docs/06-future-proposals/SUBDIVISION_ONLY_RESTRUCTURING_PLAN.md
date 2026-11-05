@@ -1,6 +1,6 @@
 # Subdivision-only restructuring: guide and checklist
 
-- **Status:** Approved direction. **Phase 1 (backend gate) implemented 2026-11-05**; later phases need the developer's go-ahead one at a time.
+- **Status:** Approved direction. **Phases 1 (backend gate), 2 (referral log) and 3 (screens, parts 3a to 3d) implemented 2026-11-05**; later phases need the developer's go-ahead one at a time.
 - **Written:** 2026-11-05. File and line references are as of commit `73f0ebf` on branch `subdivision-only` (`main` after PR #102). Function and route names are stable; re-grep a line number before editing.
 - **Deadline:** 2026-11-16. Estimated effort: 5 to 6 working days (approximate, from the line and test counts below).
 - **How to use this file:** each phase lists exact files and a checklist. Do one phase, test it, write the change record, stop for review.
@@ -73,45 +73,50 @@
 
 Reuse: `EndorsementLetter` (`models/report.py`, one per report: `letter_content`, `file_url`, `leader_id`), `StatusHistory`, `ReportMedia`, `audit_logs`.
 
-- [ ] Ask approval, then add two tables (created by `create_all`, listed in `Database3.3.txt`):
+- [X] Ask approval, then add two tables (created by `create_all`, listed in `Database3.3.txt`):
   - `barangay_referrals`: `referral_id`, `report_id`, `barangay_id` (FK `barangays`), `referred_by`, `referred_at`, `reason`, `reference_no`, `contact_method` (call, visit, message, letter, other), `final_outcome`, `outcome_recorded_by`, `outcome_recorded_at`;
   - `barangay_referral_updates`: `update_id`, `referral_id`, `update_type` (acknowledged, dispatched, picked up, held, impounded, claimed, adopted, not found, other), `source` (`barangay_reported` | `straysafe_user`), `update_date`, `note`, `evidence_url`, `recorded_by`, `recorded_at`.
-- [ ] New `backend/app/models/barangay_referral.py` (import in `models/__init__.py`), schemas, and `backend/app/routes/barangay_referrals.py` registered in `main.py`:
+- [X] New `backend/app/models/barangay_referral.py` (import in `models/__init__.py`), schemas, and `backend/app/routes/barangay_referrals.py` registered in `main.py`:
   - `POST /reports/{id}/referral` (create), `GET /reports/{id}/referral`, `POST /referrals/{id}/updates`, `POST /referrals/{id}/outcome`;
   - leader (own subdivision via `verify_subdivision_scope`) and Administrator only; every write is audited.
-- [ ] Rules enforced in the route: an update never touches `facility_id`, `custody_status` or the holding tables; a final outcome may close the report with one of the closing statuses (9, 10, 11, 12, 17) with a history entry marked external.
-- [ ] Referral creation sets status 4 and keeps the endorsement letter; it no longer creates a `Rescue` row.
-- [ ] Back-fill: leave the 3 existing endorsement letters and rescues as they are (no automatic migration).
-- [ ] Tests: `backend/tests/test_barangay_referrals.py` (access scope, audit entries, no custody change, outcome closes the report once, other subdivision refused).
+- [X] Rules enforced in the route: an update never touches `facility_id`, `custody_status` or the holding tables; a final outcome may close the report with one of the closing statuses (9, 10, 11, 12, 17) with a history entry marked external.
+- [X] Referral creation sets status 4 and keeps the endorsement letter; it no longer creates a `Rescue` row.
+- [X] Back-fill: leave the 3 existing endorsement letters and rescues as they are (no automatic migration).
+- [X] Tests: `backend/tests/test_barangay_referrals.py` (access scope, audit entries, no custody change, outcome closes the report once, other subdivision refused).
+- *Done 2026-11-05. Approved choices: the subdivision's own Barangay only (San Vicente); a final outcome closes the report. Added beyond the list: `outcome_date`, `outcome_note`, `GET /referrals/`; an older status-4 case may get a referral record without a status change. See [BARANGAY_REFERRAL_LOG.md](../01-system/BARANGAY_REFERRAL_LOG.md).*
 
 ## 7. Phase 3: Screens (about 1 to 2 days)
 
 **Leader.**
 
-- [ ] `pages/Subd_Leaders/SubdViewReport.tsx:762` and `SubdReports.tsx:538`: replace `POST /rescue-requests/` with the referral create call.
-- [ ] A "Barangay Referral" card on `SubdViewReport.tsx` (date, reference, method, updates, outcome) with "Record Barangay update" and "Record outcome" actions.
-- [ ] `pages/Subd_Leaders/EndorsementArch.tsx` and `EscelatedMissions.tsx`: read referrals instead of `/rescue-requests`.
-- [ ] Timeline: `components/RescueTimeline.tsx` and `utils/caseTimeline.ts` label external updates "Reported by Barangay, recorded by <leader></leader>".
-- [ ] `utils/casePrint.ts` and `components/History/CaseSummaryPanel.tsx`: include the referral, labelled external.
-- [ ] `components/SubdSidebar.tsx`: remove `/subd/holding-facility` (line 207) and `/subd/pet-claims` (line 239); keep `/subd/endorsements` (line 272), renamed "Barangay referrals".
-- [ ] `routes/AppRoutes.tsx`: remove the leader routes for holding and pet claims (lines near 170-176).
+- [X] `pages/Subd_Leaders/SubdViewReport.tsx:762` and `SubdReports.tsx:538`: replace `POST /rescue-requests/` with the referral create call.
+- [X] A "Barangay Referral" card on `SubdViewReport.tsx` (date, reference, method, updates, outcome) with "Record Barangay update" and "Record outcome" actions.
+- [X] `pages/Subd_Leaders/EndorsementArch.tsx` and `EscelatedMissions.tsx`: read referrals instead of `/rescue-requests`.
+- [X] Timeline: `components/RescueTimeline.tsx` and `utils/caseTimeline.ts` label external updates "Reported by Barangay, recorded by <leader></leader>".
+- [X] `utils/casePrint.ts` and `components/History/CaseSummaryPanel.tsx`: include the referral, labelled external.
+- [X] `components/SubdSidebar.tsx`: remove `/subd/holding-facility` (line 207) and `/subd/pet-claims` (line 239); keep `/subd/endorsements` (line 272), renamed "Barangay referrals".
+- [X] `routes/AppRoutes.tsx`: remove the leader routes for holding and pet claims (lines near 170-176).
+- *Part 3a done 2026-11-05 (change record `2026-11-05_1100_subdivision-only-phase3a-leader-referral-screens.md`). The status change to 4 is kept before the referral so its side effects still run. `EscelatedMissions.tsx` is not routed; left for deletion. Case Summary and print needed no change: the closing entry already reads "Reported by Barangay … recorded by …". The two routes redirect to `/subd/endorsements` instead of being removed.*
 
 **Barangay pages and routes (hide).**
 
-- [ ] `routes/AppRoutes.tsx`: replace the `/brgy/*` block (about lines 182-200) and the `[3, 4]` block (about 223-226) with a redirect to a short "handled outside StraySafe" page. Remove the duplicate `/brgy/adoptions` registration.
-- [ ] Remove the staff-login routes for Barangay: `pages/Subd_Leaders/CommunityStaffLogin.tsx:53`, `components/ProtectedRoute.tsx:124`, `components/Auth/SessionGuard.tsx:13,29`, `utils/useSignedInUser.ts:22`, `pages/citizen/ResidentsLogin.tsx:59`.
-- [ ] `/brgy` references in shared code (replace or drop): `components/Chat/ReportChatDrawer.tsx:155,222,235`, `Chat/MessagesDropdown.tsx:346`, `components/MapComponent.tsx:1681`, `Modals/WarningDetailsModal.tsx:99-128`, `PetRecords/PetDetailPanel.tsx:107,1297`, `ManualMatching/ManualMatchingWorkspace.tsx:950-952`, `utils/chatLinks.ts:8`, `utils/petClaimLink.ts:6`, `utils/api.ts:67,130`, `utils/inactivity.ts:19,100`, `components/PushBridge.tsx:17`, `RoleThemeSync.tsx:10`, `context/ThemeContext.tsx:43`, `pages/citizen/AnimalJourneyMap.tsx:24-26,217,618`.
+- [X] `routes/AppRoutes.tsx`: replace the `/brgy/*` block (about lines 182-200) and the `[3, 4]` block (about 223-226) with a redirect to a short "handled outside StraySafe" page. Remove the duplicate `/brgy/adoptions` registration.
+- [X] Remove the staff-login routes for Barangay: `pages/Subd_Leaders/CommunityStaffLogin.tsx:53`, `components/ProtectedRoute.tsx:124`, `components/Auth/SessionGuard.tsx:13,29`, `utils/useSignedInUser.ts:22`, `pages/citizen/ResidentsLogin.tsx:59`.
+- [X] `/brgy` references in shared code (replace or drop): `components/Chat/ReportChatDrawer.tsx:155,222,235`, `Chat/MessagesDropdown.tsx:346`, `components/MapComponent.tsx:1681`, `Modals/WarningDetailsModal.tsx:99-128`, `PetRecords/PetDetailPanel.tsx:107,1297`, `ManualMatching/ManualMatchingWorkspace.tsx:950-952`, `utils/chatLinks.ts:8`, `utils/petClaimLink.ts:6`, `utils/api.ts:67,130`, `utils/inactivity.ts:19,100`, `components/PushBridge.tsx:17`, `RoleThemeSync.tsx:10`, `context/ThemeContext.tsx:43`, `pages/citizen/AnimalJourneyMap.tsx:24-26,217,618`.
+- *Part 3b done 2026-11-05 (change record `2026-11-05_1122_subdivision-only-phase3b-barangay-pages-retired.md`). Only the links a leader, resident or Admin can still reach were changed; `/brgy` checks that apply only on a Barangay page are left for code deletion. `holdingStayLimit.browser.mjs` fails (retired feature) and is for Phase 5.*
 
 **Admin.**
 
-- [ ] `/admin/holding-facility` and `/admin/adoptions` (`AppRoutes.tsx`, `components/AdminSidebar.tsx:165,188,325-326`) become read-only archive views (hide the write actions in `BrgyHoldingFacility.tsx` and `BrgyAdoptions.tsx`, or point them at a small read-only list).
-- [ ] `pages/Admin/AdminReportView.tsx`: show the referral; hide the Barangay action cards.
+- [X] `/admin/holding-facility` and `/admin/adoptions` (`AppRoutes.tsx`, `components/AdminSidebar.tsx:165,188,325-326`) become read-only archive views (hide the write actions in `BrgyHoldingFacility.tsx` and `BrgyAdoptions.tsx`, or point them at a small read-only list).
+- [X] `pages/Admin/AdminReportView.tsx`: show the referral; hide the Barangay action cards.
+- *Part 3c done 2026-11-05 (change record `2026-11-05_1207_subdivision-only-phase3c-admin-archive.md`). Write buttons are hidden (holding: the page's leader read-only mode; adoptions: `data-archive-write` plus one CSS rule). Direct Override drops statuses 5, 6 and 8.*
 
 **Residents.**
 
-- [ ] Remove the adoption and claim entry points: `components/Navbars/LandingPageNavbar.tsx:46`, `components/Navbars/ResiNavbar.tsx:516,519,635,658`, `components/PetRecordRequestsForResident.tsx:17` (ownership claims stay; check).
-- [ ] Routes: `/adopt`, `/adopt/journey*`, `/adopt/apply/:id`, `/adopt/applications`, `/resident/pet/:petId/claims-dashboard` (`AppRoutes.tsx:107-152`): redirect to a "no longer available" page.
-- [ ] `pages/citizen/PetMatchReview.tsx`: **keep the owner YES/NO confirmation; remove the claim filing** (lines 74, 260, 421, 619, 693). See open decision 1.
+- [X] Remove the adoption and claim entry points: `components/Navbars/LandingPageNavbar.tsx:46`, `components/Navbars/ResiNavbar.tsx:516,519,635,658`, `components/PetRecordRequestsForResident.tsx:17` (ownership claims stay; check).
+- [X] Routes: `/adopt`, `/adopt/journey*`, `/adopt/apply/:id`, `/adopt/applications`, `/resident/pet/:petId/claims-dashboard` (`AppRoutes.tsx:107-152`): redirect to a "no longer available" page.
+- [X] `pages/citizen/PetMatchReview.tsx`: **keep the owner YES/NO confirmation; remove the claim filing** (lines 74, 260, 421, 619, 693). See open decision 1.
+- *Part 3d done 2026-11-05 (change record `2026-11-05_1215_subdivision-only-phase3d-resident-pages.md`). Retired pages show a "no longer available" page; `/admin/adopt/journey*` and `/verify/certificate/:number` are kept read-only.*
 
 ## 8. Phase 4: Statuses, analytics and wording (about 1 day)
 
@@ -147,7 +152,7 @@ Measured on the local database for user 4 (Kyla Bianca Frias):
 
 ## 11. Open decisions
 
-1. **What replaces the claim step in `PetMatchReview`?** Proposed: after the owner says YES, show "Contact your Subdivision Leader", and the leader records the outcome in the referral log.
+1. **Resolved 2026-11-05 (part 3d):** **What replaces the claim step in `PetMatchReview`?** Chosen as proposed: after the owner says YES, show "Contact your Subdivision Leader", and the leader records the outcome in the referral log.
 2. The owner-return flow (`OwnerReturnPicker`, `report_returns`) stays for leader-resolved lost pets; confirm it needs no claim proof (`/claims/proof-on-file`) and if not, retire that endpoint too.
 3. Does the Administrator keep read access to adoption certificates and the public certificate verification page (`/verify/certificate/:number`)?
 4. The referral's receiving Barangay: San Vicente only, or a list?

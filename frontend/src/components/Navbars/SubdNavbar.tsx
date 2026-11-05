@@ -282,7 +282,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                 navigate('/subd/reports');
             }
         } else if (typeStr.includes('pet_claim') || (typeStr.includes('claim') && !titleStr.includes('report'))) {
-            navigate('/subd/pet-claims');
+            navigate('/subd/reports'); // claims are handled outside StraySafe now; related_id may be a claim id
         } else if (typeStr.includes('hazard') || titleStr.includes('hazard') || titleStr.includes('warning') || msgStr.includes('hazard')) {
             navigate('/subd/hazard-alert');
         } else if (titleStr.includes('mission') || titleStr.includes('escalat') || msgStr.includes('escalated') || typeStr.includes('rescue')) {

@@ -31,9 +31,9 @@ const CommunityStaffLogin = () => {
             const res = await api.post('/auth/login', { email, password });
             const data = res.data;
 
-            // Enforce Role Access Control (2 = Subdivision Leader, 3 = Barangay Staff)
-            if (data.role_id !== 2 && data.role_id !== 3) {
-                setError("Access denied. This login portal is strictly for Community Staff and Subdivision Leaders.");
+            // Subdivision-only: this sign-in is for Subdivision Leaders (Barangay accounts are refused by the server)
+            if (data.role_id !== 2) {
+                setError("Access denied. This sign-in is for Subdivision Leaders.");
                 return;
             }
 
@@ -47,11 +47,7 @@ const CommunityStaffLogin = () => {
             }
             storage.setItem('staff_user', JSON.stringify(data));
 
-            if (data.role_id === 2) {
-                navigate('/subd/dashboard');
-            } else if (data.role_id === 3) {
-                navigate('/brgy/dashboard');
-            }
+            navigate('/subd/dashboard');
         } catch (err: any) {
             const detail = err?.response?.data?.detail;
             if (detail) {
@@ -81,7 +77,7 @@ const CommunityStaffLogin = () => {
                         </h1>
                         <div className="h-1.5 w-16 bg-white/40 rounded-full my-4" />
                         <p className="text-white/80 text-xs xl:text-sm font-bold tracking-widest uppercase">
-                            Barangay Staff & Subdivision Leaders
+                            Subdivision Leaders
                         </p>
                     </div>
                 </div>
@@ -191,7 +187,7 @@ const CommunityStaffLogin = () => {
 
                     {/* Footer note */}
                     <div className="mt-6 sm:mt-8 text-[10px] sm:text-[11px] text-gray-400 text-center lg:text-left leading-relaxed">
-                        This login portal is restricted to authorized Barangay Staff and Subdivision Leaders. Unauthorized access is strictly prohibited.
+                        This login portal is restricted to authorized Subdivision Leaders. Unauthorized access is strictly prohibited.
                     </div>
                 </div>
             </div>

@@ -797,38 +797,6 @@ const LandingPage = () => {
             </section>
 
             {/* ========================================================================= */}
-            {/* 8. ADOPTION SHOWCASE BANNER */}
-            {/* ========================================================================= */}
-            <section className="py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-                <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-3xl p-6 sm:p-10 text-white shadow-xl shadow-orange-500/15 flex flex-col md:flex-row items-center justify-between gap-6">
-                    <div className="space-y-2 text-center md:text-left max-w-xl">
-                        <span className="text-xs font-extrabold uppercase tracking-widest text-orange-100 bg-white/20 px-3 py-1 rounded-full inline-block">
-                            Animal Rehoming
-                        </span>
-                        <h3 className="text-2xl sm:text-3xl font-extrabold font-plus-jakarta">
-                            Looking to Adopt a Rescued Pet?
-                        </h3>
-                        <p className="text-xs sm:text-sm text-orange-50 leading-relaxed">
-                            Browse verified shelter pets currently in barangay holding places that are medically cleared and waiting for a safe home.
-                        </p>
-                    </div>
-                    <div className="shrink-0 w-full sm:w-auto">
-                        <Link to="/adopt" className="block w-full sm:w-auto">
-                            <Button
-                                variant="light"
-                                size="lg"
-                                className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-sm sm:text-base text-orange-600 bg-white hover:bg-orange-50 shadow-md border-none"
-                            >
-                                <span className="inline-flex items-center gap-2">
-                                    <Heart className="w-4 h-4 fill-orange-500" /> Browse Adoption Catalog
-                                </span>
-                            </Button>
-                        </Link>
-                    </div>
-                </div>
-            </section>
-
-            {/* ========================================================================= */}
             {/* 9. CALL TO ACTION SECTION */}
             {/* ========================================================================= */}
             <section className="py-14 sm:py-20 md:py-24 bg-stone-900 text-white text-center relative overflow-hidden" id="contact">
@@ -935,13 +903,10 @@ const LandingPage = () => {
                                     <Link to="/staff/login" className="hover:text-orange-400 transition-colors">Subdivision Leader Portal</Link>
                                 </li>
                                 <li>
-                                    <Link to="/staff/login" className="hover:text-orange-400 transition-colors">Barangay Staff Portal</Link>
+                                    <Link to="/staff/login" className="hover:text-orange-400 transition-colors">Subdivision Leader Portal</Link>
                                 </li>
                                 <li>
                                     <Link to="/admin/login" className="hover:text-orange-400 transition-colors">System Administrator</Link>
-                                </li>
-                                <li>
-                                    <Link to="/adopt" className="hover:text-orange-400 transition-colors">Public Adoption Catalog</Link>
                                 </li>
                             </ul>
                         </div>

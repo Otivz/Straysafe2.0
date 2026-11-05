@@ -56,12 +56,12 @@ const SubdBottomNav: React.FC<SubdBottomNavProps> = ({
                     </span>
                 </button>
 
-                {/* 3. Holding Facility */}
+                {/* 3. Barangay Referrals (the holding place is the Barangay's, outside StraySafe) */}
                 <button
                     type="button"
-                    onClick={() => navigate('/subd/holding-facility')}
+                    onClick={() => navigate('/subd/endorsements')}
                     className={`${navItemBase} ${activeTab === 'facility' ? activeColor : inactiveColor}`}
-                    title="Barangay Holding Place"
+                    title="Barangay Referrals"
                 >
                     <span className={`absolute -top-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-role transition-all duration-300 ${activeTab === 'facility' ? 'opacity-100 scale-100' : 'opacity-0 scale-0'}`} />
                     <div className={`p-1.5 rounded-xl transition-all duration-200 ${activeTab === 'facility' ? 'bg-role-soft' : ''}`}>
@@ -70,7 +70,7 @@ const SubdBottomNav: React.FC<SubdBottomNavProps> = ({
                         </svg>
                     </div>
                     <span className={`text-[9px] leading-tight text-center uppercase tracking-wide whitespace-nowrap max-w-full truncate px-0.5 ${activeTab === 'facility' ? 'font-black' : 'font-bold'}`}>
-                        Brgy Holding
+                        Referrals
                     </span>
                 </button>
 

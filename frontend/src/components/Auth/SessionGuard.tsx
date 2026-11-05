@@ -10,7 +10,8 @@ type SessionKey = 'resident_user' | 'staff_user' | 'admin_user';
 
 const keyForPath = (path: string): SessionKey | null => {
     if (path.startsWith('/admin') && !path.startsWith('/admin/login')) return 'admin_user';
-    if ((path.startsWith('/subd') || path.startsWith('/brgy') || path.startsWith('/staff')) && !path.startsWith('/staff/login')) return 'staff_user';
+    // /brgy is a public information page now (Subdivision-only), not a signed-in area
+    if ((path.startsWith('/subd') || path.startsWith('/staff')) && !path.startsWith('/staff/login')) return 'staff_user';
     if (path.startsWith('/resident') || path.startsWith('/adopt/apply') || path.startsWith('/adopt/applications')) return 'resident_user';
     return null;
 };
@@ -26,7 +27,7 @@ const readSession = (key: SessionKey): any | null => {
 const homeFor = (u: any): string => {
     if (u?.role_id === 4) return '/admin/dashboard';
     if (u?.role_id === 2) return '/subd/dashboard';
-    if (u?.role_id === 3) return '/brgy/dashboard';
+    if (u?.role_id === 3) return '/brgy';
     return '/resident-home';
 };
 

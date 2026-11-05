@@ -31,6 +31,8 @@
 --             closed_reason, closed_by, closed_at
 --           + lost_pet_alerts, lost_pet_sightings (Neighbor-to-Neighbor Lost Pet
 --             Sighting Ping: neighborhood alerts and resident sightings)
+--           + barangay_referrals, barangay_referral_updates (2026-11-05, Subdivision-only
+--             Barangay Referral log: the leader records the Barangay's external updates)
 --           The running backend creates / adds these itself at startup
 --           (Base.metadata.create_all + ensure_* in backend/app/main.py).
 -- =============================================================================
@@ -2269,6 +2271,54 @@ CREATE TABLE `email_logs` (
   KEY `fk_email_logs_user` (`user_id`),
   KEY `idx_email_status_attempts` (`status`,`attempts`),
   CONSTRAINT `fk_email_logs_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- BARANGAY REFERRAL LOG (Subdivision-only, 2026-11-05)
+-- The Barangay is an external party with no account. The Subdivision Leader records the referral,
+-- what the Barangay reports back (date, note, evidence) and the final outcome. An update never changes
+-- custody, the facility or any holding record. One referral per report.
+-- =========================================
+DROP TABLE IF EXISTS `barangay_referral_updates`;
+DROP TABLE IF EXISTS `barangay_referrals`;
+CREATE TABLE `barangay_referrals` (
+  `referral_id` int NOT NULL AUTO_INCREMENT,
+  `report_id` int NOT NULL,
+  `barangay_id` int NOT NULL,
+  `referred_by` int DEFAULT NULL,
+  `referred_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `reason` text NOT NULL,
+  `reference_no` varchar(100) DEFAULT NULL,
+  `contact_method` varchar(20) NOT NULL COMMENT 'call, visit, message, letter, other',
+  `final_outcome` varchar(20) DEFAULT NULL COMMENT 'claimed, released, resolved, deceased, not_found',
+  `outcome_date` date DEFAULT NULL,
+  `outcome_note` text,
+  `outcome_recorded_by` int DEFAULT NULL,
+  `outcome_recorded_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`referral_id`),
+  UNIQUE KEY `uq_barangay_referrals_report_id` (`report_id`),
+  KEY `ix_barangay_referrals_referral_id` (`referral_id`),
+  CONSTRAINT `fk_barangay_referrals_report_id` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_barangay_referrals_barangay_id` FOREIGN KEY (`barangay_id`) REFERENCES `barangays` (`barangay_id`),
+  CONSTRAINT `fk_barangay_referrals_referred_by` FOREIGN KEY (`referred_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_barangay_referrals_outcome_recorded_by` FOREIGN KEY (`outcome_recorded_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `barangay_referral_updates` (
+  `update_id` int NOT NULL AUTO_INCREMENT,
+  `referral_id` int NOT NULL,
+  `update_type` varchar(20) NOT NULL COMMENT 'acknowledged, dispatched, picked_up, held, impounded, claimed, adopted, not_found, other',
+  `source` varchar(20) NOT NULL DEFAULT 'barangay_reported' COMMENT 'barangay_reported or straysafe_user',
+  `update_date` date NOT NULL,
+  `note` text,
+  `evidence_url` varchar(500) DEFAULT NULL,
+  `recorded_by` int DEFAULT NULL,
+  `recorded_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`update_id`),
+  KEY `ix_barangay_referral_updates_update_id` (`update_id`),
+  KEY `ix_barangay_referral_updates_referral_id` (`referral_id`),
+  CONSTRAINT `fk_barangay_referral_updates_referral_id` FOREIGN KEY (`referral_id`) REFERENCES `barangay_referrals` (`referral_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_barangay_referral_updates_recorded_by` FOREIGN KEY (`recorded_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================================================

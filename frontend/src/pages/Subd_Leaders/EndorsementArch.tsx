@@ -3,6 +3,7 @@ import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import api from '../../utils/api';
+import BarangayReferralCard from '../../components/Referral/BarangayReferralCard';
 import { isReportClosed } from '../../utils/reportStatus';
 import { getCachedData, setCachedData } from '../../utils/cache';
 import { whenVisible } from '../../utils/visibleInterval';
@@ -24,15 +25,17 @@ interface EndorsementDocument {
     title: string;
     date_sent: string;
     recipient: string;
-    status: 'In Review' | 'Accepted';
+    status: 'Open' | 'Closed';
     file_type: 'PDF' | 'DOCX' | 'IMAGE';
     file_size: string;
     file_url?: string;
+    /** 'referral' = Barangay Referral log (current); 'legacy' = an older rescue-request endorsement (read-only history) */
+    kind: 'referral' | 'legacy';
 }
 
 const EndorsementArch = () => {
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState<'all' | 'Accepted' | 'In Review'>('all');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'Closed' | 'Open'>('all');
     const [fileTypeFilter, setFileTypeFilter] = useState<'all' | 'PDF' | 'IMAGE'>('all');
     const [selectedDoc, setSelectedDoc] = useState<EndorsementDocument | null>(null);
     const [missionData, setMissionData] = useState<any | null>(null);
@@ -42,7 +45,8 @@ const EndorsementArch = () => {
         if (!cached) return [];
         return cached.map(d => ({
             ...d,
-            status: (d.status as string) === 'Received' ? 'In Review' : d.status
+            status: (d.status as string) === 'Closed' ? 'Closed' : 'Open',
+            kind: (d as any).kind === 'legacy' ? 'legacy' : 'referral'
         }));
     });
     const [loadingDocs, setLoadingDocs] = useState<boolean>(() => !getCachedData<EndorsementDocument[]>('subd_endorsement_docs'));
@@ -125,6 +129,18 @@ const EndorsementArch = () => {
         setSelectedDoc(doc);
         setLoadingMission(true);
         setMissionData(null);
+        if (doc.kind === 'referral') {
+            // The Barangay is external: no dispatch record to read. The referral card shows its updates.
+            try {
+                const reportRes = await api.get(`/reports/${doc.report_id}`);
+                setMissionData({ rescue_id: null, report_id: doc.report_id, title: doc.title, report: reportRes.data, status_id: null });
+            } catch {
+                setMissionData(null);
+            } finally {
+                setLoadingMission(false);
+            }
+            return;
+        }
         try {
             const res = await api.get(`/rescue-requests/report/${doc.report_id}`);
             if (res.data) {
@@ -172,52 +188,50 @@ const EndorsementArch = () => {
     const fetchDocs = async (showLoading = true) => {
         try {
             if (showLoading && !getCachedData('subd_endorsement_docs')) setLoadingDocs(true);
-            const response = await api.get('/rescue-requests/');
-            if (response.data && response.data.length > 0) {
-                const mapped: EndorsementDocument[] = response.data.map((m: any) => {
-                    const sid = m.status_id;
-                    const repSid = m.report?.status_id || m.report?.current_status_id;
-                    
-                    // Once escalated to barangay, endorsement remains 'In Review' until barangay accepts it
-                    const isAccepted = 
-                        sid === 4 || sid === 5 || sid === 6 || sid === 7 || sid === 11 || sid === 13 ||
-                        repSid === 13 || repSid === 5 || repSid === 6 || repSid === 7 || repSid === 11 ||
-                        m.barangay_status === 'Accepted' || m.barangay_status === 'In Progress' || m.barangay_status === 'Resolved';
-
-                    const friendlyStatus: 'In Review' | 'Accepted' = isAccepted ? 'Accepted' : 'In Review';
-
-                    const media = m.report?.media || [];
-                    const escFile = media.find((file: any) => file.is_evidence === true && file.status_id !== 11);
-                    const isPdf = escFile?.file_url?.toLowerCase().includes('.pdf');
-
-                    const escDate = m.created_at ? new Date(m.created_at).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric'
-                    }) : 'N/A';
-
-                    let docTitle = m.title || `Rescue Request #${m.rescue_id}`;
-                    if (!docTitle.toLowerCase().includes('endorsement')) {
-                        docTitle = `Endorsement for ${docTitle}`;
-                    }
-
-                    return {
-                        doc_id: `END-2026-${m.rescue_id.toString().padStart(3, '0')}`,
-                        report_id: m.report_id,
-                        title: docTitle,
-                        date_sent: escDate,
-                        recipient: "Barangay San Vicente Ops",
-                        status: friendlyStatus,
-                        file_type: isPdf ? "PDF" : "IMAGE",
-                        file_size: isPdf ? "1.2 MB" : "850 KB",
-                        file_url: escFile?.file_url
-                    };
-                });
-                setDocs(mapped);
-                setCachedData('subd_endorsement_docs', mapped);
-            } else {
-                setDocs([]);
-            }
+            const [referralRes, legacyRes] = await Promise.allSettled([api.get('/referrals/'), api.get('/rescue-requests/')]);
+            const fmtDate = (v?: string) => v ? new Date(v).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+            const referrals: any[] = referralRes.status === 'fulfilled' && Array.isArray(referralRes.value.data) ? referralRes.value.data : [];
+            const referralDocs: EndorsementDocument[] = referrals.map((ref: any) => {
+                const isPdf = String(ref.letter_file_url || '').toLowerCase().includes('.pdf');
+                return {
+                    doc_id: `REF-${String(ref.referral_id).padStart(3, '0')}`,
+                    report_id: ref.report_id,
+                    title: ref.letter_title || `Endorsement for Report #${ref.report_id}`,
+                    date_sent: fmtDate(ref.referred_at),
+                    recipient: `Barangay ${ref.barangay_name || ''}`.trim(),
+                    status: ref.final_outcome ? 'Closed' : 'Open',
+                    file_type: isPdf ? 'PDF' : 'IMAGE',
+                    file_size: '',
+                    file_url: ref.letter_file_url || undefined,
+                    kind: 'referral',
+                };
+            });
+            // Older endorsements made through rescue requests (before the referral log): read-only history
+            const referred = new Set(referralDocs.map(d => d.report_id));
+            const legacy: any[] = legacyRes.status === 'fulfilled' && Array.isArray(legacyRes.value.data) ? legacyRes.value.data : [];
+            const legacyDocs: EndorsementDocument[] = legacy.filter((m: any) => !referred.has(m.report_id)).map((m: any) => {
+                const repSid = m.report?.status_id || m.report?.current_status_id;
+                const media = m.report?.media || [];
+                const escFile = media.find((file: any) => file.is_evidence === true && file.status_id !== 11);
+                const isPdf = escFile?.file_url?.toLowerCase().includes('.pdf');
+                let docTitle = m.title || `Rescue Request #${m.rescue_id}`;
+                if (!docTitle.toLowerCase().includes('endorsement')) docTitle = `Endorsement for ${docTitle}`;
+                return {
+                    doc_id: `END-2026-${m.rescue_id.toString().padStart(3, '0')}`,
+                    report_id: m.report_id,
+                    title: docTitle,
+                    date_sent: fmtDate(m.created_at),
+                    recipient: 'Barangay San Vicente',
+                    status: isReportClosed(repSid) ? 'Closed' : 'Open',
+                    file_type: isPdf ? 'PDF' : 'IMAGE',
+                    file_size: '',
+                    file_url: escFile?.file_url,
+                    kind: 'legacy',
+                };
+            });
+            const mapped = [...referralDocs, ...legacyDocs];
+            setDocs(mapped);
+            setCachedData('subd_endorsement_docs', mapped);
         } catch (error) {
             console.error('Error fetching endorsement documents:', error);
             if (!getCachedData('subd_endorsement_docs')) {
@@ -274,7 +288,7 @@ const EndorsementArch = () => {
     }, []);
 
     useEffect(() => {
-        if (!selectedDoc) return;
+        if (!selectedDoc || selectedDoc.kind !== 'legacy') return;
         
         const pollMission = async () => {
             try {
@@ -309,8 +323,8 @@ const EndorsementArch = () => {
     }, [selectedDoc?.doc_id]);
 
     // Statistics Counts
-    const acceptedCount = useMemo(() => docs.filter(d => d.status === 'Accepted').length, [docs]);
-    const inReviewCount = useMemo(() => docs.filter(d => d.status === 'In Review').length, [docs]);
+    const acceptedCount = useMemo(() => docs.filter(d => d.status === 'Closed').length, [docs]);
+    const inReviewCount = useMemo(() => docs.filter(d => d.status === 'Open').length, [docs]);
     const acceptanceRate = docs.length > 0 ? Math.round((acceptedCount / docs.length) * 100) : 0;
     const hasFilters = Boolean(searchTerm) || statusFilter !== 'all' || fileTypeFilter !== 'all';
 
@@ -363,9 +377,9 @@ const EndorsementArch = () => {
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
                             {[
                                 { label: 'Total Endorsements', sub: 'Sent to the Barangay', value: docs.length, color: 'text-slate-900' },
-                                { label: 'Accepted', sub: 'Confirmed by the Barangay', value: acceptedCount, color: 'text-emerald-600' },
-                                { label: 'In Review', sub: 'Awaiting the Barangay', value: inReviewCount, color: 'text-amber-600' },
-                                { label: 'Acceptance Rate', sub: 'Accepted of all letters', value: `${acceptanceRate}%`, color: 'text-role' },
+                                { label: 'Closed', sub: 'Outcome reported by the Barangay', value: acceptedCount, color: 'text-emerald-600' },
+                                { label: 'Open', sub: 'Waiting for Barangay updates', value: inReviewCount, color: 'text-amber-600' },
+                                { label: 'Closed Rate', sub: 'Closed of all referrals', value: `${acceptanceRate}%`, color: 'text-role' },
                             ].map((m) => (
                                 <div key={m.label} className="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-4 flex flex-col gap-1.5 h-full min-w-0">
                                     <p className={`text-2xl sm:text-3xl font-black leading-none ${m.color}`}>{m.value}</p>
@@ -406,8 +420,8 @@ const EndorsementArch = () => {
                                 <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-xl sm:w-96" role="tablist" aria-label="Status">
                                     {([
                                         ['all', 'All', docs.length],
-                                        ['Accepted', 'Accepted', acceptedCount],
-                                        ['In Review', 'In Review', inReviewCount],
+                                        ['Closed', 'Closed', acceptedCount],
+                                        ['Open', 'Open', inReviewCount],
                                     ] as const).map(([value, label, count]) => {
                                         const isActive = statusFilter === value;
                                         return (
@@ -462,7 +476,7 @@ const EndorsementArch = () => {
                                 ))
                             ) : filteredDocs.length > 0 ? (
                                 filteredDocs.map((doc) => {
-                                    const isAccepted = doc.status === 'Accepted';
+                                    const isAccepted = doc.status === 'Closed';
                                     const isPdf = doc.file_type === 'PDF';
 
                                     return (
@@ -567,7 +581,7 @@ const EndorsementArch = () => {
                         </p>
                     </div>
                 </main>
-                <SubdBottomNav />
+                <SubdBottomNav activeTab="facility" />
             </div>
 
             {/* Endorsement Preview Modal */}
@@ -585,7 +599,7 @@ const EndorsementArch = () => {
                     ['Target animal', rep?.animal_type ? `${rep.animal_type}${rep?.animal_breed ? ` (${rep.animal_breed})` : ''}` : 'Not recorded'],
                     ['Location', rep?.landmark || 'Not recorded'],
                     ['Condition', rep?.condition || missionData?.description || 'Not recorded'],
-                    ['Rescue team', missionData?.assigned_staff_name || 'Awaiting dispatch'],
+                    ['Rescue team', selectedDoc.kind === 'referral' ? 'Handled by the Barangay outside StraySafe' : (missionData?.assigned_staff_name || 'Awaiting dispatch')],
                 ];
 
                 return (
@@ -656,7 +670,7 @@ const EndorsementArch = () => {
                                     <div className="min-w-0">
                                         <dt className="text-[11px] font-semibold text-slate-500">Barangay status</dt>
                                         <dd className="mt-0.5">
-                                            <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border ${selectedDoc.status === 'Accepted' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                                            <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border ${selectedDoc.status === 'Closed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
                                                 {selectedDoc.status}
                                             </span>
                                         </dd>
@@ -664,7 +678,12 @@ const EndorsementArch = () => {
                                 </dl>
                                 {/* Sync state: "Live" only once the mission record has loaded (it then refreshes every 5 s) */}
                                 <p className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
-                                    {loadingMission ? (
+                                    {selectedDoc.kind === 'referral' ? (
+                                        <>
+                                            <span className="w-2 h-2 rounded-full bg-indigo-400" />
+                                            The Barangay is contacted outside StraySafe; its updates are recorded by the Subdivision Leader.
+                                        </>
+                                    ) : loadingMission ? (
                                         <>
                                             <span className="w-2 h-2 rounded-full bg-slate-300 animate-pulse" />
                                             Loading Barangay operations…
@@ -771,8 +790,20 @@ const EndorsementArch = () => {
                                 </dl>
                             </section>
 
-                            {/* Progress */}
-                            {missionData && (
+                            {/* Barangay referral (current) */}
+                            {selectedDoc.kind === 'referral' && (
+                                <section>
+                                    <BarangayReferralCard
+                                        reportId={selectedDoc.report_id}
+                                        reportStatusId={missionData?.report?.status_id ?? missionData?.report?.current_status_id}
+                                        canEdit
+                                        onChanged={() => { fetchDocs(false); handlePreview(selectedDoc); }}
+                                    />
+                                </section>
+                            )}
+
+                            {/* Progress (older rescue-request endorsements only) */}
+                            {selectedDoc.kind === 'legacy' && missionData && (
                                 <section>
                                     <h3 className="text-xs font-black text-slate-900 mb-3">Progress</h3>
                                     <ol className="flex flex-col">
