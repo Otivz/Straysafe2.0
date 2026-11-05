@@ -150,6 +150,9 @@ def skip_reason(db: Session, delivery: PushDelivery, sub: PushSubscription, noti
         return "device now belongs to another account"
     if user is None or (getattr(user, "status", "Active") or "Active") != "Active":
         return "account not active"
+    from app.utils.retired import barangay_account_blocked
+    if barangay_account_blocked(user):
+        return "Barangay account retired (Subdivision-only)"
     cat = pc.category_for(notif.type)
     if cat is None:
         return "type not pushed"

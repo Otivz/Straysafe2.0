@@ -522,6 +522,13 @@ def get_subdivision_pets(
     return query.options(joinedload(Pet.owner)).all()
 
 def get_actor_user(req: Request, db: Session) -> Optional[User]:
+    """The calling user, or None. Barangay accounts are refused (Subdivision-only, app/utils/retired.py)."""
+    from app.utils.retired import barangay_account_blocked
+    user = _resolve_actor_user(req, db)
+    return None if barangay_account_blocked(user) else user
+
+
+def _resolve_actor_user(req: Request, db: Session) -> Optional[User]:
     """Helper to resolve the authenticated/calling user from headers or token."""
     actor_id_str = req.headers.get("x-user-id") or req.headers.get("X-User-Id")
     if actor_id_str:

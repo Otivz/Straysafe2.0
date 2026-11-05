@@ -422,6 +422,13 @@ def unlink_pet_match(match: ReportMatch, db: Session, actor: User, reason: str, 
 
 
 def get_actor_user(req: Request, db: Session) -> Optional[User]:
+    """The calling user, or None. Barangay accounts are refused (Subdivision-only, app/utils/retired.py)."""
+    from app.utils.retired import barangay_account_blocked
+    user = _resolve_actor_user(req, db)
+    return None if barangay_account_blocked(user) else user
+
+
+def _resolve_actor_user(req: Request, db: Session) -> Optional[User]:
     """Helper to resolve current acting user from Authorization header or x-user-id."""
     token = None
     auth_header = req.headers.get("Authorization") or req.headers.get("authorization")

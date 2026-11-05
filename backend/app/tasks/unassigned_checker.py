@@ -132,7 +132,11 @@ def check_and_notify_overdue_holding_animals(default_stay_days: Optional[int] = 
 
     Sends a holding_overdue_alert notification to relevant staff,
     records a timeline entry, and marks overdue_notified = True.
+    Off in the Subdivision-only system: holding is handled by the Barangay outside StraySafe (app/utils/retired.py).
     """
+    from app.utils.retired import barangay_workflows_enabled
+    if not barangay_workflows_enabled():
+        return 0
     db: Session = SessionLocal()
     processed_count = 0
     try:
@@ -154,9 +158,9 @@ def check_and_notify_overdue_holding_animals(default_stay_days: Optional[int] = 
         if not overdue_animals:
             return 0
 
-        # Query all Barangay personnel (role_id 3: Staff, 4: Head Officer, 5: Admin)
+        # Barangay staff (role 3; the Head Officer is role 3 with is_head_officer) and the Administrator (role 4)
         brgy_staff_all = db.query(User).filter(
-            User.role_id.in_([3, 4, 5])
+            User.role_id.in_([3, 4])
         ).all()
 
         from app.utils.holding_stay import facility_stay_start

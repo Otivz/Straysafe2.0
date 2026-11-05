@@ -161,6 +161,14 @@ def queue_email(
         logger.warning(f"Skipping email queue: invalid recipient email '{recipient_email}'")
         return None
 
+    # Subdivision-only: no email to retired Barangay accounts (app/utils/retired.py)
+    from app.utils.retired import barangay_account_blocked
+    recipient = db.query(User).filter(User.user_id == user_id).first() if user_id else (
+        db.query(User).filter(User.email == recipient_email).first())
+    if barangay_account_blocked(recipient):
+        logger.info(f"Email to retired Barangay account suppressed ({template_key}).")
+        return None
+
     # Check user preferences
     if not check_user_email_preference(db, user_id, category):
         logger.info(f"User {user_id} has opted out of category '{category}'. Email suppressed.")

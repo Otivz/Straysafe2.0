@@ -299,6 +299,10 @@ def get_pending_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Subdivision-only: Barangay accounts no longer use StraySafe (app/utils/retired.py)
+    from app.utils.retired import refuse_barangay_account
+    refuse_barangay_account(user)
+
     return user
 
 def get_current_user(user: User = Depends(get_pending_user)) -> User:
@@ -388,6 +392,9 @@ def get_optional_user(
     except Exception:
         return None
     if user and token_predates_password_change(payload, user):
+        return None
+    from app.utils.retired import barangay_account_blocked
+    if barangay_account_blocked(user):
         return None
     return user
 
