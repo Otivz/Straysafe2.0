@@ -44,6 +44,7 @@ import {
 import MaskedIdDisplay from '../../components/MaskedIdDisplay';
 import AdoptionStageStepper from '../../components/AdoptionStageStepper';
 import AdoptionCasePanel from '../../components/Adoption/AdoptionCasePanel';
+import ArchiveBanner from '../../components/Referral/ArchiveBanner';
 import AdoptionCertificatePanel from '../../components/Adoption/AdoptionCertificatePanel';
 import AdoptionCertificateViewer from '../../components/Adoption/AdoptionCertificateViewer';
 import '../../components/Adoption/adoptionDetails.css';
@@ -212,6 +213,9 @@ const BrgyAdoptions = () => {
     const isAdmin = Boolean(rawAdmin);
     const staffUser = rawStaff ? JSON.parse(rawStaff) : null;
     const isHeadOfficer = isAdmin || Boolean(staffUser?.is_head_officer);
+    // Subdivision-only: the Administrator sees adoptions as a read-only archive (/admin/adoptions). Every button
+    // marked data-archive-write is hidden by the .adoption-archive rule in adoptionDetails.css.
+    const archiveReadOnly = isAdmin;
     const HEAD_ONLY_HINT = 'Only the Barangay Head Officer or an Administrator can do this';
     // Who can confirm decisions (shown to regular staff next to the locked buttons)
     const [headOfficerNames, setHeadOfficerNames] = useState<string[]>([]);
@@ -872,7 +876,7 @@ const BrgyAdoptions = () => {
         : false;
 
     return (
-        <div className="flex h-screen bg-[#FBFBF9] text-[#1E293B] font-sans overflow-hidden">
+        <div className={`flex h-screen bg-[#FBFBF9] text-[#1E293B] font-sans overflow-hidden${archiveReadOnly ? ' adoption-archive' : ''}`}>
             {/* Sidebar */}
             {isAdmin ? (
                 <AdminSidebar />
@@ -910,6 +914,7 @@ const BrgyAdoptions = () => {
                 {viewAppModal ? (
                     /* ─── COMPLETE IN-PAGE ADOPTION REPORT & DOSSIER VIEW ─── */
                     <main className="adoption-detail-page p-3 sm:p-6 pb-32 lg:pb-8 max-w-7xl w-full min-w-0 mx-auto space-y-4 animate-in fade-in duration-200">
+                        {archiveReadOnly && <ArchiveBanner what="Adoptions" />}
                         <section className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-4" aria-label="Adoption overview">
                             <div className="grid grid-cols-[44px_minmax(0,1fr)] sm:flex items-center gap-3">
                                 <button type="button" onClick={() => setViewAppModal(null)} className="adoption-detail-action border border-slate-200 text-slate-700 shrink-0" aria-label="Back to applications"><ArrowLeft className="w-4 h-4" /><span className="hidden sm:inline">Applications</span></button>
@@ -926,7 +931,7 @@ const BrgyAdoptions = () => {
                             </dl>
                             <div className="rounded-xl bg-role-soft border border-role-border p-3 flex flex-col sm:flex-row sm:items-center gap-2">
                                 <p className="text-xs flex-1"><span className="font-bold">Current focus: </span>{getUnifiedAdoptionStatus(viewAppModal).activeSubtask}</p>
-                                {isStage1 && viewAppModal.status === 'Pending' && isHeadOfficer ? <button type="button" onClick={() => handleOpenReviewModal(viewAppModal, 'approve')} className="adoption-detail-action bg-role text-white">Review application</button> : <button type="button" onClick={() => setDetailTab(['Certificate', 'Payment'].includes(viewAppModal.current_stage || '') ? 'certificate' : 'process')} className="adoption-detail-action bg-role text-white">View current actions</button>}
+                                {isStage1 && viewAppModal.status === 'Pending' && isHeadOfficer ? <button data-archive-write type="button" onClick={() => handleOpenReviewModal(viewAppModal, 'approve')} className="adoption-detail-action bg-role text-white">Review application</button> : <button type="button" onClick={() => setDetailTab(['Certificate', 'Payment'].includes(viewAppModal.current_stage || '') ? 'certificate' : 'process')} className="adoption-detail-action bg-role text-white">View current actions</button>}
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                                 <button type="button" onClick={() => openAdoptionChat(viewAppModal.adoption_id)} className="adoption-detail-action border border-role-border text-role-strong"><MessageCircle className="w-4 h-4" /> Chat with Adopter{(chatUnread[viewAppModal.adoption_id] || 0) > 0 && <span className="rounded-full bg-red-600 px-1.5 text-white">{chatUnread[viewAppModal.adoption_id]}</span>}</button>
@@ -1143,7 +1148,7 @@ const BrgyAdoptions = () => {
                                             Applicant identity, Government ID authenticity, and residency need verification before approving for interview.
                                         </div>
                                         <div className="flex items-center gap-2 shrink-0">
-                                            <button
+                                            <button data-archive-write
                                                 type="button"
                                                 onClick={() => setStageModalState({ app: viewAppModal, modal: 'verify' })}
                                                 className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
@@ -1222,7 +1227,7 @@ const BrgyAdoptions = () => {
 
                                                 {/* Action Buttons */}
                                                 <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                                                    <button
+                                                    <button data-archive-write
                                                         type="button"
                                                         onClick={() => setStageModalState({ app: viewAppModal, modal: 'interview_schedule' })}
                                                         className="px-4 py-2 bg-white hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-xl font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
@@ -1231,7 +1236,7 @@ const BrgyAdoptions = () => {
                                                         <span>Edit Schedule</span>
                                                     </button>
 
-                                                    <button
+                                                    <button data-archive-write
                                                         type="button"
                                                         onClick={() => setStageModalState({ app: viewAppModal, modal: 'interview_eval' })}
                                                         className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-black text-xs transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1.5"
@@ -1241,7 +1246,7 @@ const BrgyAdoptions = () => {
                                                     </button>
 
                                                     {viewAppModal.interview_result === 'Successful' && (
-                                                        <button
+                                                        <button data-archive-write
                                                             type="button"
                                                             onClick={() => setStageModalState({ app: viewAppModal, modal: 'home_visit_schedule' })}
                                                             className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-black text-xs transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1.5 ml-auto"
@@ -1266,7 +1271,7 @@ const BrgyAdoptions = () => {
                                                         Application approved and passed initial assessment. Schedule the applicant's interview session to assess pet care knowledge, living readiness, and commitment.
                                                     </p>
                                                 </div>
-                                                <button
+                                                <button data-archive-write
                                                     type="button"
                                                     onClick={() => setStageModalState({ app: viewAppModal, modal: 'interview_schedule' })}
                                                     className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-black text-xs transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1.5 shrink-0 self-start sm:self-auto"
@@ -1301,7 +1306,7 @@ const BrgyAdoptions = () => {
                                         )}
 
                                         <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                                            <button
+                                            <button data-archive-write
                                                 type="button"
                                                 onClick={() => setStageModalState({ app: viewAppModal, modal: 'home_visit_schedule' })}
                                                 className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
@@ -1310,7 +1315,7 @@ const BrgyAdoptions = () => {
                                                 <span>{viewAppModal.home_visit_scheduled_date ? 'Reschedule Home Visit' : 'Schedule Home Visit'}</span>
                                             </button>
 
-                                            <button
+                                            <button data-archive-write
                                                 type="button"
                                                 onClick={() => setStageModalState({ app: viewAppModal, modal: 'home_visit_eval' })}
                                                 className="px-4 py-2 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
@@ -1320,7 +1325,7 @@ const BrgyAdoptions = () => {
                                             </button>
 
                                             {viewAppModal.home_visit_notes && (
-                                                <button
+                                                <button data-archive-write
                                                     type="button"
                                                     onClick={() => setStageModalState({ app: viewAppModal, modal: 'home_visit_log' })}
                                                     className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
@@ -1333,7 +1338,7 @@ const BrgyAdoptions = () => {
                                             {(viewAppModal.home_visit_result === 'Suitable' || viewAppModal.home_visit_result === 'Suitable with Conditions' || viewAppModal.home_visit_result === 'Passed') && (
                                                 <>
                                                     {headOnlyNote(viewAppModal.case_owner_name)}
-                                                    <button
+                                                    <button data-archive-write
                                                         type="button"
                                                         disabled={!isHeadOfficer}
                                                         title={!isHeadOfficer ? HEAD_ONLY_HINT : undefined}
@@ -1411,7 +1416,7 @@ const BrgyAdoptions = () => {
 
                                         <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
                                             {headOnlyNote(viewAppModal.case_owner_name)}
-                                            <button
+                                            <button data-archive-write
                                                 type="button"
                                                 disabled={actionLoading || !isHeadOfficer}
                                                 title={!isHeadOfficer ? HEAD_ONLY_HINT : undefined}
@@ -1535,7 +1540,7 @@ const BrgyAdoptions = () => {
 
                                         {/* Handover Action Buttons */}
                                         <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                                            <button
+                                            <button data-archive-write
                                                 type="button"
                                                 onClick={() => setStageModalState({ app: viewAppModal, modal: 'handover_schedule' })}
                                                 className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
@@ -1545,7 +1550,7 @@ const BrgyAdoptions = () => {
                                             </button>
 
                                             {!viewAppModal.staff_handed_over && (
-                                                <button
+                                                <button data-archive-write
                                                     type="button"
                                                     onClick={() => setHandoverModalApp(viewAppModal)}
                                                     className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ml-auto"
@@ -1558,7 +1563,7 @@ const BrgyAdoptions = () => {
                                             {viewAppModal.staff_handed_over && (
                                                 <>
                                                     {headOnlyNote(viewAppModal.case_owner_name)}
-                                                    <button
+                                                    <button data-archive-write
                                                         type="button"
                                                         disabled={actionLoading || !isHeadOfficer || !isHandoverFinalized(viewAppModal)}
                                                         title={!isHeadOfficer ? HEAD_ONLY_HINT : !isHandoverFinalized(viewAppModal) ? HANDOVER_PENDING_HINT : undefined}
@@ -1628,7 +1633,7 @@ const BrgyAdoptions = () => {
                                                         <Clock className="w-3.5 h-3.5" />
                                                         <span>Monitoring History ({dossierMonitoringLogs.length})</span>
                                                     </button>
-                                                    <button
+                                                    <button data-archive-write
                                                         type="button"
                                                         onClick={() => setMonitoringInlineTab('add')}
                                                         className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${monitoringInlineTab === 'add'
@@ -1659,7 +1664,7 @@ const BrgyAdoptions = () => {
                                                                 <h5 className="font-black text-sm text-slate-800 uppercase tracking-wide">MONITORING HISTORY</h5>
                                                                 <p className="text-xs text-slate-500 font-medium">No monitoring records logged yet.</p>
                                                             </div>
-                                                            <button
+                                                            <button data-archive-write
                                                                 type="button"
                                                                 onClick={() => setMonitoringInlineTab('add')}
                                                                 className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs transition-colors inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
@@ -2111,7 +2116,7 @@ const BrgyAdoptions = () => {
                                                     </p>
                                                 </div>
                                                 {headOnlyNote(viewAppModal.case_owner_name)}
-                                                <button
+                                                <button data-archive-write
                                                     type="button"
                                                     disabled={actionLoading || !isHeadOfficer || !isHandoverFinalized(viewAppModal)}
                                                     title={!isHeadOfficer ? HEAD_ONLY_HINT : !isHandoverFinalized(viewAppModal) ? HANDOVER_PENDING_HINT : undefined}
@@ -2726,7 +2731,7 @@ const BrgyAdoptions = () => {
                                             </div>
                                             <div className="flex items-center gap-3">
                                                 {headOnlyNote(viewAppModal.case_owner_name)}
-                                                <button
+                                                <button data-archive-write
                                                     type="button"
                                                     disabled={actionLoading || !isHeadOfficer}
                                                     title={!isHeadOfficer ? HEAD_ONLY_HINT : undefined}
@@ -2736,7 +2741,7 @@ const BrgyAdoptions = () => {
                                                     <CheckCircle2 className="w-4 h-4" />
                                                     <span>{actionLoading ? 'Approving...' : 'APPROVE ADOPTION'}</span>
                                                 </button>
-                                                <button
+                                                <button data-archive-write
                                                     type="button"
                                                     disabled={actionLoading}
                                                     onClick={() => {
@@ -2758,7 +2763,7 @@ const BrgyAdoptions = () => {
                         </div>
                         <div role="tabpanel" id="adoption-panel-certificate" aria-labelledby="adoption-tab-certificate" hidden={detailTab !== 'certificate'}>
                             {detailTab === 'certificate' && <AdoptionCertificatePanel
-                                application={viewAppModal} canSend={isHeadOfficer} busy={actionLoading}
+                                application={viewAppModal} canSend={isHeadOfficer && !archiveReadOnly} busy={actionLoading}
                                 refreshKey={certificateRefreshKey} onUpdated={() => setCertificateRefreshKey(k => k + 1)}
                                 onPreview={(print = false) => setCertificatePreview({ print })}
                                 onSend={() => handleSendDigitalCertificate(viewAppModal.adoption_id)}
@@ -2807,7 +2812,7 @@ const BrgyAdoptions = () => {
 
                                         {viewAppModal.status === 'Pending' && (
                                             <div className="flex items-center gap-2">
-                                                <button
+                                                <button data-archive-write
                                                     type="button"
                                                     onClick={() => handleOpenReviewModal(viewAppModal, 'reject')}
                                                     className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs hover:-translate-y-0.5 active:scale-95"
@@ -2816,7 +2821,7 @@ const BrgyAdoptions = () => {
                                                     <XCircle className="w-3.5 h-3.5" />
                                                     <span>Reject</span>
                                                 </button>
-                                                <button
+                                                <button data-archive-write
                                                     type="button"
                                                     onClick={() => handleOpenReviewModal(viewAppModal, 'approve')}
                                                     className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all shadow-xs cursor-pointer flex items-center gap-1.5 hover:-translate-y-0.5 active:scale-95"
@@ -2962,6 +2967,7 @@ const BrgyAdoptions = () => {
                 ) : (
                     /* ─── MAIN ADOPTION MANAGEMENT LIST VIEW ─── */
                     <main className="px-3 py-4 sm:p-6 lg:p-8 pb-32 lg:pb-8 max-w-6xl w-full mx-auto space-y-3 sm:space-y-4 min-w-0">
+                        {archiveReadOnly && <ArchiveBanner what="Adoptions" />}
                         {/* Heading (phones; desktop shows it in the top bar) */}
                         <div className="md:hidden">
                             <h1 className="text-lg font-black text-gray-900 tracking-tight leading-tight">Adoptions</h1>
@@ -3219,7 +3225,7 @@ const BrgyAdoptions = () => {
                                                     </Link>
                                                     {canQuickDecide && (
                                                         <div className="col-span-3 sm:col-span-1 grid grid-cols-2 sm:flex gap-2">
-                                                            <button
+                                                            <button data-archive-write
                                                                 type="button"
                                                                 onClick={() => handleOpenReviewModal(app, 'reject')}
                                                                 className="h-9 px-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-bold transition-colors border border-red-200 cursor-pointer flex items-center justify-center gap-1"
@@ -3227,7 +3233,7 @@ const BrgyAdoptions = () => {
                                                                 <XCircle className="w-4 h-4" />
                                                                 Reject
                                                             </button>
-                                                            <button
+                                                            <button data-archive-write
                                                                 type="button"
                                                                 onClick={() => handleOpenReviewModal(app, 'approve')}
                                                                 className="h-9 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1"
@@ -3347,7 +3353,7 @@ const BrgyAdoptions = () => {
                                                             {mCase.post_monitoring_status || 'Active'}
                                                         </span>
 
-                                                        <button
+                                                        <button data-archive-write
                                                             type="button"
                                                             onClick={() => setStageModalState({
                                                                 app: {
@@ -3363,7 +3369,7 @@ const BrgyAdoptions = () => {
                                                             <span>Inspect & Review Logs</span>
                                                         </button>
 
-                                                        <button
+                                                        <button data-archive-write
                                                             type="button"
                                                             onClick={() => setStageModalState({
                                                                 app: {

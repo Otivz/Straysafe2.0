@@ -8,6 +8,7 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from app.utils.retired import barangay_account_blocked, refuse_barangay_account
 from app.database import get_db
 from app.models.user import User, Subdivision
 from app.models.otp import OtpVerification
@@ -199,6 +200,7 @@ def start_admin_login_code(request: Request, db: Session, user: User) -> dict:
 
 def finish_login(request: Request, response: Response, db: Session, user: User) -> dict:
     """Everything that happens once someone is fully authenticated: tokens, cookie, audit log, response body."""
+    refuse_barangay_account(user)
     token = create_access_token({
         "sub": str(user.user_id),
         "user_id": user.user_id,
@@ -313,6 +315,9 @@ def login(request: Request, login_request: LoginRequest, response: Response, db:
             detail="Account inactive. Please contact the administrator for assistance.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Subdivision-only: Barangay accounts can no longer sign in
+    refuse_barangay_account(user)
     
     # Check if resident requires profile completion or OTP
     if user.role_id == 1 and not user.is_verified:
@@ -514,6 +519,9 @@ def google_auth(request: Request, payload: GoogleAuthRequest, response: Response
             log_type="security",
             request=request
         )
+
+    # Subdivision-only: Barangay accounts can no longer sign in
+    refuse_barangay_account(user)
 
     # Check profile completion status
     profile_complete = is_resident_profile_complete(user)
@@ -752,6 +760,8 @@ def verify_otp(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Maximum verification attempts exceeded. Please request a new code."
             )
+
+    refuse_barangay_account(user)
 
     # Success! Mark OTP as used and user as verified
     otp_record.is_used = True
@@ -1131,6 +1141,10 @@ def refresh_session_token(request: Request, response: Response, db: Session = De
             detail="Account inactive. Please contact the administrator.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    if barangay_account_blocked(user):
+        clear_refresh_cookie(response)
+        refuse_barangay_account(user)
 
     # Blacklist previous refresh token upon rotation
     if jti:

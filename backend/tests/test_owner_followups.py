@@ -31,6 +31,7 @@ from app.utils.owner_followups import (
     get_default_duration_days,
     set_default_duration_days,
     check_and_notify_due_followups,
+    enrich_and_redact_followup,
     _now
 )
 
@@ -399,6 +400,32 @@ check("Expiry does NOT auto-close observation (still observing)", fu_due.status 
 notified_second = check_and_notify_due_followups(db)
 check("No duplicate due notice sent on subsequent run", fu_due.due_notice_sent_at is not None)
 
+
+# Display wording uses the actual referral recipient, then the subdivision's Barangay for older cases.
+from app.models.barangay_referral import BarangayReferral
+
+referred_report = Report(user_id=resident_owner.user_id, subdivision_id=1, category_id=4, animal_type="Dog",
+                         current_status_id=4, latitude=14.5, longitude=121.0, pet_id=pet1.pet_id)
+db.add(referred_report)
+db.flush()
+referred_followup = OwnerFollowUp(report_id=referred_report.report_id, pet_id=pet1.pet_id, subdivision_id=1,
+                                 leader_id=leader_subd1.user_id, status="escalated", duration_days=3,
+                                 due_at=_now(), owner_name="Synthetic Owner")
+db.add(referred_followup)
+db.flush()
+display = enrich_and_redact_followup(referred_followup, leader_subd1, db)
+check("Referral display falls back to subdivision Barangay", display["observation_day_display"] == "Referred to Barangay San Antonio"
+      and display["endorsement_status"] == "Referred to Barangay San Antonio")
+db.add(Barangay(barangay_id=2, barangay_name="Sample Recipient", city="Test City"))
+db.flush()
+db.add(BarangayReferral(report_id=referred_report.report_id, barangay_id=2, referred_by=leader_subd1.user_id,
+                        reason="Synthetic historical recipient", contact_method="call"))
+db.flush()
+display = enrich_and_redact_followup(referred_followup, leader_subd1, db)
+check("Referral display prefers the recorded recipient", display["observation_day_display"] == "Referred to Barangay Sample Recipient"
+      and display["endorsement_status"] == "Referred to Barangay Sample Recipient")
+check("Referral display marks Barangay work external", display["remaining_time_display"] == "Handled by Barangay outside StraySafe")
+check("Referral display never changes observation/report state", referred_followup.status == "escalated" and referred_report.current_status_id == 4)
 
 print(f"\n==========================================")
 print(f"Total Checks: {len(checks)} | Passed: {sum(checks)} | Failed: {len(checks) - sum(checks)}")

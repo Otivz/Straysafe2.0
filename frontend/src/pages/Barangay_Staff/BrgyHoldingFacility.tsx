@@ -1,4 +1,5 @@
 import { useAutoRefresh } from '../../utils/useAutoRefresh';
+import ArchiveBanner from '../../components/Referral/ArchiveBanner';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import AnimalRecordsPanel from '../../components/AnimalRecordsPanel';
 import type { ReactNode } from 'react';
@@ -423,6 +424,10 @@ const BrgyHoldingFacility = () => {
     const isAdmin = currentUser?.role_id === 4;
     const isSubdLeader = currentUser?.role_id === 2;
     const isHeadOfficer = Boolean(currentUser?.is_head_officer || isAdmin);
+    // Subdivision-only: the Administrator sees this page as a read-only archive (/admin/holding-facility);
+    // the holding place is the Barangay's, outside StraySafe. Leaders already had a read-only view.
+    const archiveReadOnly = isAdmin;
+    const viewOnly = isSubdLeader || archiveReadOnly;
     const defaultSubdId = currentUser?.subdivision_id;
     const defaultBrgyId = currentUser?.barangay_id;
 
@@ -883,9 +888,9 @@ const BrgyHoldingFacility = () => {
                     <AdminNavbar
                         leftContent={
                             <div className="flex flex-col">
-                                <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Holding Place</h1>
+                                <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Holding Archive</h1>
                                 <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">
-                                    Cross-jurisdiction animal holding places, intake & duration tracking
+                                    Earlier holding records, read-only
                                 </p>
                             </div>
                         }
@@ -906,6 +911,7 @@ const BrgyHoldingFacility = () => {
 
                 <main className="flex-1 overflow-y-auto px-3 py-4 sm:p-6 md:p-8 pb-32 lg:pb-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto space-y-3 sm:space-y-4">
+                        {archiveReadOnly && <ArchiveBanner what="Holding, impounding and adoption" />}
 
                         {/* ── Heading (phones; desktop shows it in the top bar) + facility selector ── */}
                         <div className="flex flex-col md:flex-row md:items-end justify-between gap-2.5">
@@ -967,7 +973,7 @@ const BrgyHoldingFacility = () => {
                                         </select>
                                         <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                                     </label>
-                                    {isHeadOfficer && (
+                                    {isHeadOfficer && !archiveReadOnly && (
                                         <button
                                             type="button"
                                             onClick={() => navigate('/brgy/settings')}
@@ -1026,7 +1032,7 @@ const BrgyHoldingFacility = () => {
                         })()}
 
                         {/* ── Stay-limit warning (compact; details with Adopt / Impound expand) ── */}
-                        {overdueAnimals.length > 0 && (
+                        {overdueAnimals.length > 0 && !archiveReadOnly && (
                             <div className="rounded-2xl border border-red-200 bg-red-50/70 overflow-hidden">
                                 <button
                                     type="button"
@@ -1313,7 +1319,7 @@ const BrgyHoldingFacility = () => {
 
                                             {/* Actions, evenly sized */}
                                             <div className="px-3 pb-3 sm:px-4 sm:pb-4 flex gap-2">
-                                                {isOverdue && !isSubdLeader ? (
+                                                {isOverdue && !viewOnly ? (
                                                     <>
                                                         <button
                                                             type="button"
@@ -1338,7 +1344,7 @@ const BrgyHoldingFacility = () => {
                                                             <Scale className="w-3.5 h-3.5" /> Impound
                                                         </button>
                                                     </>
-                                                ) : isForAdoption && !isSubdLeader ? (
+                                                ) : isForAdoption && !viewOnly ? (
                                                     <button
                                                         type="button"
                                                         onClick={e => {
@@ -1385,7 +1391,7 @@ const BrgyHoldingFacility = () => {
                         </div>
 
                     </div>
-                    {!isSubdLeader && <BrgyBottomNav />}
+                    {!viewOnly && <BrgyBottomNav />}
                 </main>
             </div>
 
@@ -1617,7 +1623,7 @@ const BrgyHoldingFacility = () => {
                                                         {selected.adoption_catalog_notes}
                                                     </div>
                                                 )}
-                                                {!isSubdLeader && (
+                                                {!viewOnly && (
                                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                                         <button
                                                             type="button"
@@ -1646,7 +1652,7 @@ const BrgyHoldingFacility = () => {
                                                         </button>
                                                     </div>
                                                 )}
-                                                {isHeadOfficer && !isSubdLeader && (
+                                                {isHeadOfficer && !viewOnly && (
                                                     <button
                                                         type="button"
                                                         onClick={() => {
@@ -1671,7 +1677,7 @@ const BrgyHoldingFacility = () => {
                                             </div>
                                         )}
                                         {/* Before the stay limit; overdue animals use the action panel below. */}
-                                        {!adoptionBlocked && !isResolved && !isForAdoptionSel && !isOverdueSel && !isSubdLeader && (
+                                        {!adoptionBlocked && !isResolved && !isForAdoptionSel && !isOverdueSel && !viewOnly && (
                                             <div className="border border-emerald-200 bg-emerald-50/70 rounded-2xl p-3 space-y-2.5">
                                                 <div className="flex items-start gap-2.5">
                                                     <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
@@ -1717,7 +1723,7 @@ const BrgyHoldingFacility = () => {
                                                         </p>
                                                     </div>
                                                 </div>
-                                                {!isSubdLeader && (
+                                                {!viewOnly && (
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                                         <button
                                                             type="button"
@@ -1739,7 +1745,7 @@ const BrgyHoldingFacility = () => {
                                         )}
 
                                         {/* Update condition */}
-                                        {!RESOLVED_IDS.has(selected.facility_status) && (
+                                        {!RESOLVED_IDS.has(selected.facility_status) && !viewOnly && (
                                             !isEditingCondition ? (
                                                 <button
                                                     type="button"
@@ -1937,7 +1943,7 @@ const BrgyHoldingFacility = () => {
                                     <div className="space-y-4">
 
                                         {/* Add an entry */}
-                                        {!RESOLVED_IDS.has(selected.facility_status) && (
+                                        {!RESOLVED_IDS.has(selected.facility_status) && !viewOnly && (
                                             <div className="bg-gray-50 border border-gray-100 rounded-2xl p-3 space-y-2.5">
                                                 <h3 className="text-xs font-black text-gray-700">Add timeline entry</h3>
                                                 <div className="flex flex-col sm:flex-row gap-2">

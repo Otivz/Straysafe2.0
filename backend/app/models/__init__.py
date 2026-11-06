@@ -21,6 +21,7 @@ from app.models.pet_match_confirmation import PetMatchConfirmationRequest  # noq
 from app.models.warning import OwnerWarning
 from app.models.owner_followup import OwnerFollowUp, FollowUpContactLog, OwnerObservationUpdate, OwnerObservationUpdatePhoto, FollowUpRepeatedIncident  # noqa: F401
 from app.models.leader_identity import LeaderIdentityVerification  # noqa: F401
+from app.models.barangay_referral import BarangayReferral, BarangayReferralUpdate  # noqa: F401  (Subdivision-only referral log)
 from app.models.chat import ChatThread, ChatMessage
 from app.models.notification import Notification
 from app.models.notification_preference import UserNotificationPreference

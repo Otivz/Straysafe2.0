@@ -349,7 +349,7 @@ const SubdDashboard = () => {
             case 1: return 'Pending Verification';
             case 2: return 'Verified';
             case 3: return 'Rejected';
-            case 4: return 'Forwarded to Barangay';
+            case 4: return 'Referred to Barangay';
             case 5: return 'Team Dispatched';
             case 6: return 'Picked Up';
             case 7: return 'Under Observation';
@@ -564,7 +564,7 @@ const SubdDashboard = () => {
 
     const getQueueStatusStyle = (status: string) => {
         const s = (status || 'pending').toLowerCase();
-        if (s.includes('escalat')) return 'bg-purple-50 text-purple-700 border-purple-200';
+        if (s.includes('escalat') || s.includes('refer')) return 'bg-purple-50 text-purple-700 border-purple-200';
         if (s.includes('dispatch') || s.includes('progress') || s.includes('ongoing')) return 'bg-role-soft text-role-hover border-role-border';
         if (s.includes('unassigned') || s.includes('unverified') || s.includes('review') || s.includes('pending')) return 'bg-amber-50 text-amber-700 border-amber-200';
         if (s.includes('resolved') || s.includes('claimed')) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -857,7 +857,7 @@ const SubdDashboard = () => {
                     <section aria-label="Quick overview" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
                         {[
                             { label: 'Pending Review', sub: 'Awaiting verification', value: pendingReviewCount, to: '/subd/reports', tone: 'text-role-hover', note: null as string | null },
-                            { label: 'Barangay Action', sub: 'Endorsed to Brgy', value: underBrgyCount, to: '/subd/reports?status=Escalated%20to%20Barangay', tone: 'text-blue-600', note: null },
+                            { label: 'Barangay Referrals', sub: 'Outside StraySafe', value: underBrgyCount, to: '/subd/reports?status=Referred%20to%20Barangay', tone: 'text-blue-600', note: null },
                             { label: 'Registered Pets', sub: 'Subdivision pets', value: displayPetCount, to: '/subd/pet-records', tone: 'text-emerald-600', note: `↑ ${petsRegisteredThisMonth} this month` },
                             { label: 'Pending Claims', sub: 'Owner confirmation', value: pendingClaimsCount, to: '/subd/pet-claims', tone: 'text-purple-600', note: null },
                             { label: 'At Barangay', sub: 'Your animals held', value: holdingCount, to: '/subd/holding-facility', tone: 'text-teal-600', note: null },

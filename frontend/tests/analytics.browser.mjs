@@ -94,13 +94,13 @@ try {
 
         // Admin: operations KPIs, status groups, locations, observations, rescues, claims, admin-only sections
         await navigate('mode=admin');
-        for (const t of ['Municipal analytics', 'Rescue requests', 'In Barangay custody now', 'Available for adoption now', 'Successful adoptions',
-            'Report status', 'Most frequent locations', 'Gate 1', 'Under observation now', 'Report → rescue started', 'Claims filed in this period', 'AI MATCH REVIEWS']) {
+        for (const t of ['System analytics', 'Rescue requests', 'In Barangay custody now', 'Available for adoption now', 'Successful adoptions',
+            'Barangay referrals', 'Open referrals', 'Closed referrals', 'Referral outcomes', 'Claimed by owner', 'Not found', 'Report status', 'Most frequent locations', 'Gate 1', 'Under observation now', 'Report → rescue started', 'Claims filed in this period', 'AI MATCH REVIEWS']) {
             assert((await text()).includes(t), `admin shows ${t}`);
         }
         assert(!(await text()).includes('Barangay analytics'), 'no Barangay analytics');
         assert.equal(await overflow(), false, 'no horizontal overflow');
-        await click('[...document.querySelectorAll("button")].find(b => b.textContent.trim() === "Endorsed to Barangay")');
+        await click('[...document.querySelectorAll("button")].find(b => b.textContent.trim() === "Referred to Barangay")');
         await waitFor('window.analyticsRequests.some(r => r.status === "endorsed")', 'status filter request');
         await evaluate('(() => { const s = [...document.querySelectorAll("select")].find(x => [...x.options].some(o => o.value === "week")); const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set; set.call(s, "week"); s.dispatchEvent(new Event("change", { bubbles: true })); })()');
         await waitFor('window.analyticsRequests.some(r => r.start_date && r.end_date && !r.days)', 'this-week preset sends dates');
@@ -111,7 +111,16 @@ try {
         // Subdivision: no operations sections
         await navigate('mode=subdivision');
         assert((await text()).includes('Community analytics') && (await text()).includes('Report status') && (await text()).includes('Owner observations'), 'subdivision sections');
+        assert((await text()).includes('Barangay referrals') && (await text()).includes('Referral outcomes'), 'referral counts available to leaders');
         assert(!(await text()).includes('In Barangay custody now') && !(await text()).includes('Claims filed in this period'), 'subdivision has no operations sections');
+        scenarios++;
+
+        // Counts remain available when the old rescue records have no valid timing samples.
+        await navigate('mode=admin&noRescueTiming');
+        assert((await text()).includes('Rescue requests') && (await text()).includes('Referral outcomes'), 'counts remain visible');
+        for (const label of ['Report → rescue started', 'Timed samples', 'Rescue started → completed', 'Completed rescue samples']) {
+            assert(!(await text()).includes(label), `empty rescue timing hidden: ${label}`);
+        }
         scenarios++;
 
         // Empty data: honest empty states, no fabricated numbers

@@ -61,7 +61,7 @@ const LandingPage = () => {
                 'Track real-time progress and milestone updates on submitted reports',
                 'Register family pets and print QR recovery tags',
                 'Review potential look-alike matches for lost pets',
-                'Browse verified shelter pets and submit adoption applications'
+                'Follow lost-pet alerts and confirm potential matches'
             ]
         },
         {
@@ -73,13 +73,13 @@ const LandingPage = () => {
             bgColor: 'bg-amber-50',
             borderColor: 'border-amber-200',
             badgeBg: 'bg-amber-100 text-amber-800',
-            summary: 'Review neighborhood sightings, confirm location details, filter duplicates, and endorse to the barangay.',
+            summary: 'Review neighborhood sightings, confirm locations, filter duplicates, and record referrals to the Barangay outside StraySafe.',
             capabilities: [
                 'Area-scoped dashboard restricted to assigned subdivision',
                 'Review resident sightings and confirm exact on-ground location',
                 'Filter false reports and duplicate sighting entries',
                 'Split multi-animal sightings into individual trackable records',
-                'Formally endorse verified cases to Barangay personnel for action'
+                'Record Barangay referrals, externally reported updates and outcomes'
             ]
         },
         {
@@ -109,16 +109,16 @@ const LandingPage = () => {
             bgColor: 'bg-slate-50',
             borderColor: 'border-slate-200',
             badgeBg: 'bg-slate-100 text-slate-800',
-            summary: 'Govern user access, monitor municipal activity heat maps, inspect audit logs, and configure system settings.',
+            summary: 'Govern subdivision user access, inspect incident heat maps and audit logs, and configure system settings.',
             capabilities: [
                 'Manage user accounts, credentials, and geographic jurisdiction assignments',
                 'Monitor system-wide activity logs tracking all status transitions and edits',
-                'Analyze municipal heat maps to identify stray concentration patterns',
+                'Analyze subdivision heat maps to identify incident concentrations',
                 'Configure operational settings and toggle AI matching and vision parameters',
                 'Oversee community warnings and official citation logs'
             ]
         }
-    ];
+    ].filter(role => role.roleName !== 'Barangay Staff');
 
     // 4 Verified Workflow Steps
     const workflowSteps = [
@@ -138,17 +138,17 @@ const LandingPage = () => {
         },
         {
             step: '03',
-            role: 'Barangay Personnel',
-            title: 'Coordinate Dispatch & Animal Care',
-            desc: 'Verified cases requiring official response are endorsed to the Barangay. Staff approve rescue requests, coordinate field dispatch, safely secure the animal, and log intake into a holding place.',
-            tags: ['Rescue Dispatch', 'Humane Transport', 'Holding Intake']
+            role: 'Subdivision Leader',
+            title: 'Refer to the Barangay Outside StraySafe',
+            desc: 'When outside assistance is needed, the leader contacts the Barangay outside StraySafe and records the referral, reason, contact method and reference number. The Barangay has no StraySafe account.',
+            tags: ['External Barangay', 'Referral Log', 'Contact Record']
         },
         {
             step: '04',
-            role: 'Community & Officials',
-            title: 'Monitor Progress & Complete Resolution',
-            desc: 'All authorized stakeholders follow transparent milestone updates. Animals are held during an observation period, verified for owner return, or placed in the public adoption catalog for rehoming.',
-            tags: ['Holding Timeline', 'Owner Claims', 'Adoption Pipeline']
+            role: 'Subdivision Leader',
+            title: 'Record Updates & the Final Outcome',
+            desc: 'The leader records updates and the final outcome reported by the Barangay, clearly identifying the external source and the person who recorded them. Residents follow their case progress.',
+            tags: ['Reported by Barangay', 'Recorded by Leader', 'Case Outcome']
         }
     ];
 
@@ -202,13 +202,13 @@ const LandingPage = () => {
         },
         {
             icon: Landmark,
-            title: 'Holding Place Oversight',
-            description: 'Real-time tracking of holding place capacity, mandatory observation windows, feeding logs, and health status for captured animals.'
+            title: 'Owner Observation & Follow-ups',
+            description: 'Leaders track owner observation deadlines, warnings and follow-up notes while residents submit updates about their pets.'
         },
         {
             icon: Heart,
-            title: 'Full 5-Stage Adoption Pipeline',
-            description: 'Structured adoption process from public catalog browsing to digital applications, officer home assessments, adoption agreements, and verified certificates.'
+            title: 'Barangay Referral Log',
+            description: 'Record referrals to the Barangay outside StraySafe, with the updates and final outcomes it reports clearly attributed to their source and recorder.'
         },
         {
             icon: AlertTriangle,
@@ -218,7 +218,7 @@ const LandingPage = () => {
         {
             icon: FileText,
             title: 'Traceable Audit Trail',
-            description: 'Complete accountability with immutable system logs recording every status change, duplicate merge, and official officer endorsement.'
+            description: 'Complete accountability with immutable system logs recording every status change, duplicate merge, and recorded Barangay referral.'
         }
     ];
 
@@ -268,7 +268,7 @@ const LandingPage = () => {
 
                         {/* DESCRIPTION */}
                         <p className="text-sm sm:text-base md:text-lg text-stone-600 leading-relaxed max-w-2xl mx-auto lg:mx-0">
-                            StraySafe is a community-based stray animal reporting and management platform that helps residents, subdivision leaders, and barangay personnel coordinate animal sightings, verify reports, and monitor response progress.
+                            StraySafe serves Selera Homes Subdivision. Residents report animal sightings, Subdivision Leaders verify cases and record referrals to the Barangay outside StraySafe, and Administrators oversee the system.
                         </p>
 
                         {/* ACTION BUTTONS */}
@@ -448,10 +448,10 @@ const LandingPage = () => {
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
                         <div className="text-center sm:text-left space-y-1">
                             <div className="text-2xl sm:text-3xl font-extrabold font-plus-jakarta text-orange-400">
-                                4 Dedicated Roles
+                                3 Dedicated Roles
                             </div>
                             <div className="text-xs text-stone-300 font-medium">
-                                Citizen, Subdivision Leader, Barangay Staff, Admin
+                                Resident, Subdivision Leader, Administrator
                             </div>
                         </div>
 
@@ -499,7 +499,7 @@ const LandingPage = () => {
                         Modernizing Neighborhood Animal Welfare & Public Safety
                     </h2>
                     <p className="text-sm sm:text-base text-stone-600 leading-relaxed">
-                        In many communities, stray animal reporting is fragmented across informal group chats, social media posts, and unrecorded phone calls. StraySafe replaces uncertainty with a unified, role-based platform that coordinates citizens, subdivision leaders, and local barangay personnel.
+                        In many communities, stray animal reporting is fragmented across informal group chats, social media posts, and unrecorded phone calls. StraySafe gives Selera Homes residents, Subdivision Leaders and Administrators one place to record sightings, follow up cases and log referrals to the external Barangay.
                     </p>
                 </div>
 
@@ -524,7 +524,7 @@ const LandingPage = () => {
                             Neighborhood Verification
                         </h3>
                         <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
-                            Subdivision leaders filter duplicate reports, confirm on-the-ground sightings, and separate multi-animal encounters before creating formal action requests for the local barangay.
+                            Subdivision Leaders check sightings, filter duplicates and separate multi-animal records before deciding whether a referral to the external Barangay is needed.
                         </p>
                     </div>
 
@@ -533,10 +533,10 @@ const LandingPage = () => {
                             <Landmark className="w-6 h-6" />
                         </div>
                         <h3 className="font-plus-jakarta font-bold text-lg text-[#1a1208] mb-2">
-                            Barangay Action & Care
+                            External Barangay Referrals
                         </h3>
                         <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
-                            Barangay personnel dispatch responders, manage humane holding places, coordinate veterinary observation, process owner claims, and oversee transparent adoption.
+                            The Barangay handles its work outside StraySafe. The Subdivision Leader records the referral and later records the updates and final outcome the Barangay reports.
                         </p>
                     </div>
                 </div>
@@ -558,7 +558,7 @@ const LandingPage = () => {
                             From Sighting to Resolution — Step by Step
                         </h2>
                         <p className="text-sm sm:text-base text-stone-600 leading-relaxed">
-                            A clear handoff between residents, subdivision officials, and barangay responders ensures no stray report gets lost or overlooked.
+                            Residents report sightings, Subdivision Leaders verify and follow up cases, and the leader records any referral to the Barangay outside StraySafe.
                         </p>
                     </div>
 
@@ -606,7 +606,7 @@ const LandingPage = () => {
                     <div className="mt-8 bg-white rounded-2xl p-4 sm:p-5 border border-stone-200/80 max-w-3xl mx-auto flex items-start gap-3 text-xs sm:text-sm text-stone-600">
                         <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                         <div>
-                            <strong className="text-stone-900">Responsible Outcome Guarantee:</strong> StraySafe coordinates reports through formal verification. Not every report results in immediate impoundment; cases may be resolved through owner reunification, localized assistance, medical care, or verified adoption.
+                            <strong className="text-stone-900">Recorded Case Outcomes:</strong> StraySafe supports subdivision verification and owner follow-ups. For referred cases, the leader records the outcome reported by the Barangay; external actions are never presented as work performed by StraySafe.
                         </div>
                     </div>
 
@@ -614,7 +614,7 @@ const LandingPage = () => {
             </section>
 
             {/* ========================================================================= */}
-            {/* 5. FOUR USER ROLES SECTION */}
+            {/* 5. THREE ACTIVE USER ROLES */}
             {/* ========================================================================= */}
             <section className="py-14 sm:py-18 md:py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" id="roles">
                 <div className="max-w-3xl mx-auto text-center space-y-4 mb-12 sm:mb-16">
@@ -624,7 +624,7 @@ const LandingPage = () => {
                         <span className="w-6 h-[2px] bg-orange-500" />
                     </div>
                     <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold font-plus-jakarta text-[#1a1208] tracking-tight">
-                        One Platform, Four Distinct User Roles
+                        One Platform, Three Distinct User Roles
                     </h2>
                     <p className="text-sm sm:text-base text-stone-600 leading-relaxed">
                         To protect privacy and ensure operational accountability, StraySafe implements strict role-based access control. Each stakeholder only accesses the tools and data pertinent to their jurisdiction.
@@ -632,7 +632,7 @@ const LandingPage = () => {
                 </div>
 
                 {/* ROLES GRID */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {userRoles.map((role) => {
                         const Icon = role.icon;
 
@@ -695,7 +695,7 @@ const LandingPage = () => {
                             Built for Real-World Community Animal Management
                         </h2>
                         <p className="text-sm sm:text-base text-stone-600 leading-relaxed">
-                            Every module in StraySafe 2.0 addresses verified operational needs documented during barangay and community animal welfare audits.
+                            StraySafe supports subdivision reporting, pet records, owner follow-ups and referrals to the external Barangay.
                         </p>
                     </div>
 
@@ -797,38 +797,6 @@ const LandingPage = () => {
             </section>
 
             {/* ========================================================================= */}
-            {/* 8. ADOPTION SHOWCASE BANNER */}
-            {/* ========================================================================= */}
-            <section className="py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-                <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-3xl p-6 sm:p-10 text-white shadow-xl shadow-orange-500/15 flex flex-col md:flex-row items-center justify-between gap-6">
-                    <div className="space-y-2 text-center md:text-left max-w-xl">
-                        <span className="text-xs font-extrabold uppercase tracking-widest text-orange-100 bg-white/20 px-3 py-1 rounded-full inline-block">
-                            Animal Rehoming
-                        </span>
-                        <h3 className="text-2xl sm:text-3xl font-extrabold font-plus-jakarta">
-                            Looking to Adopt a Rescued Pet?
-                        </h3>
-                        <p className="text-xs sm:text-sm text-orange-50 leading-relaxed">
-                            Browse verified shelter pets currently in barangay holding places that are medically cleared and waiting for a safe home.
-                        </p>
-                    </div>
-                    <div className="shrink-0 w-full sm:w-auto">
-                        <Link to="/adopt" className="block w-full sm:w-auto">
-                            <Button
-                                variant="light"
-                                size="lg"
-                                className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-sm sm:text-base text-orange-600 bg-white hover:bg-orange-50 shadow-md border-none"
-                            >
-                                <span className="inline-flex items-center gap-2">
-                                    <Heart className="w-4 h-4 fill-orange-500" /> Browse Adoption Catalog
-                                </span>
-                            </Button>
-                        </Link>
-                    </div>
-                </div>
-            </section>
-
-            {/* ========================================================================= */}
             {/* 9. CALL TO ACTION SECTION */}
             {/* ========================================================================= */}
             <section className="py-14 sm:py-20 md:py-24 bg-stone-900 text-white text-center relative overflow-hidden" id="contact">
@@ -843,7 +811,7 @@ const LandingPage = () => {
                     </h2>
 
                     <p className="text-sm sm:text-base text-stone-300 max-w-xl mx-auto leading-relaxed">
-                        Whether you are spotting an animal on your street, reviewing reports in your subdivision, or managing response across your barangay, StraySafe gives you the tools to coordinate effectively.
+                        Whether you are reporting a sighting in Selera Homes, reviewing a case or overseeing the system, StraySafe keeps subdivision records and external Barangay referrals together.
                     </p>
 
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 pt-3">
@@ -894,7 +862,7 @@ const LandingPage = () => {
                                 </span>
                             </div>
                             <p className="text-xs text-stone-400 leading-relaxed">
-                                Community-based stray animal reporting and coordination platform for residents, subdivision leaders, and barangay personnel.
+                                Animal reporting and case follow-ups for Selera Homes residents, Subdivision Leaders and Administrators, with referrals to the Barangay outside StraySafe.
                             </p>
                         </div>
 
@@ -935,13 +903,10 @@ const LandingPage = () => {
                                     <Link to="/staff/login" className="hover:text-orange-400 transition-colors">Subdivision Leader Portal</Link>
                                 </li>
                                 <li>
-                                    <Link to="/staff/login" className="hover:text-orange-400 transition-colors">Barangay Staff Portal</Link>
+                                    <Link to="/staff/login" className="hover:text-orange-400 transition-colors">Subdivision Leader Portal</Link>
                                 </li>
                                 <li>
                                     <Link to="/admin/login" className="hover:text-orange-400 transition-colors">System Administrator</Link>
-                                </li>
-                                <li>
-                                    <Link to="/adopt" className="hover:text-orange-400 transition-colors">Public Adoption Catalog</Link>
                                 </li>
                             </ul>
                         </div>

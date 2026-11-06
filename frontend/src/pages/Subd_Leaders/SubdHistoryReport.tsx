@@ -124,7 +124,7 @@ const SubdHistoryReport = () => {
             if (sf === 'resolved') {
                 matchesStatus = [11, 9, 10].includes(rep.status_id);
             } else if (sf === 'impounded' || sf.includes('impound')) {
-                matchesStatus = [8, 7].includes(rep.status_id);
+                matchesStatus = rep.status_id === 8;
             } else if (sf === 'dismissed' || sf.includes('dismissed') || sf.includes('false alarm')) {
                 matchesStatus = [14, 17].includes(rep.status_id);
             } else if (sf === 'deceased') {
@@ -142,7 +142,7 @@ const SubdHistoryReport = () => {
     // Metrics
     const totalHistory = historyReports.length;
     const resolvedCount = historyReports.filter(r => r.status_id === 11 || r.status_id === 9 || r.status_id === 10).length;
-    const impoundedCount = historyReports.filter(r => r.status_id === 8 || r.status_id === 7).length;
+    const impoundedCount = historyReports.filter(r => r.status_id === 8).length;
     const deceasedCount = historyReports.filter(r => r.status_id === 12).length;
     const dismissedCount = historyReports.filter(r => r.status_id === 14 || r.status_id === 17).length;
     const rejectedCount = historyReports.filter(r => r.status_id === 3).length;

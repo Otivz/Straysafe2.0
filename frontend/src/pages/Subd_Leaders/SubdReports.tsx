@@ -26,7 +26,7 @@ import SubdReportModal from '../../components/Modals/SubdReportModal';
 import AddPetModal from '../../components/PetRecords/AddPetModal';
 import WarningDetailsModal from '../../components/Modals/WarningDetailsModal';
 import { getCachedData, setCachedData } from '../../utils/cache';
-import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
+import { REPORT_STATUS_MAP, normalizeReportStatusFilter } from '../../utils/reportStatus';
 
 import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
 import ReportDescription from '../../components/ReportDescription';
@@ -119,7 +119,7 @@ const SubdReports = () => {
     const [loading, setLoading] = useState<boolean>(() => !getCachedData<Report[]>('subd_reports_list'));
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'all');
+    const [statusFilter, setStatusFilter] = useState(() => normalizeReportStatusFilter(searchParams.get('status')));
     const [reportQueue, setReportQueue] = useState<'all' | 'unassigned' | 'my_reports'>('my_reports');
     const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
     const [takeoverTarget, setTakeoverTarget] = useState<{ id: number; currentHandlerName: string } | null>(null);
@@ -139,6 +139,8 @@ const SubdReports = () => {
     const [isEscalating, setIsEscalating] = useState(false);
     const [escalationTitle, setEscalationTitle] = useState('');
     const [escalationDescription, setEscalationDescription] = useState('');
+    const [escalationContactMethod, setEscalationContactMethod] = useState('call');
+    const [escalationReferenceNo, setEscalationReferenceNo] = useState('');
     const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
     const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
     const [resolvingReportId, setResolvingReportId] = useState<number | null>(null);
@@ -530,17 +532,16 @@ const SubdReports = () => {
             await api.patch(`${API_URL}/${escalatingReportId}/status`, {
                 status_id: 4,
                 user_id: currentUserId,
-                remarks: "Report forwarded to Barangay Operations for official review and approval.",
+                remarks: "Referred to the Barangay by the Subdivision Leader. The Barangay is contacted outside StraySafe.",
                 ...(preservedCondition ? { animal_condition: preservedCondition } : {})
             });
 
-            // 3. Create official Rescue Request record
-            await api.post('/rescue-requests/', {
-                report_id: escalatingReportId,
-                leader_id: currentUserId,
-                title: escalationTitle,
-                description: escalationDescription,
-                status_id: 1 // Pending
+            // 3. Barangay Referral record (the Barangay is external; no rescue request is created)
+            await api.post(`/reports/${escalatingReportId}/referral`, {
+                reason: escalationDescription.trim() || 'Referred to the Barangay by the Subdivision Leader.',
+                contact_method: escalationContactMethod,
+                reference_no: escalationReferenceNo.trim() || null,
+                letter_title: escalationTitle.trim() || `Endorsement for Report #${escalatingReportId}`,
             });
 
             setIsEscalateModalOpen(false);
@@ -548,12 +549,14 @@ const SubdReports = () => {
             setEndorsementFile(null);
             setEscalationTitle('');
             setEscalationDescription('');
+            setEscalationReferenceNo('');
             setShowSuccess(true);
             fetchReports();
             setTimeout(() => setShowSuccess(false), 3000);
         } catch (error) {
-            console.error('Error escalating report:', error);
-            alert('Failed to escalate report. Please try again.');
+            console.error('Error referring report:', error);
+            const detail = (error as any)?.response?.data?.detail;
+            alert(typeof detail === 'string' ? detail : 'Failed to refer the report to the Barangay. Please try again.');
         } finally {
             setIsEscalating(false);
         }
@@ -703,7 +706,7 @@ const SubdReports = () => {
                 return 'bg-amber-50 text-amber-600 border-amber-100';
             case 'verified':
                 return 'bg-blue-50 text-blue-600 border-blue-100';
-            case 'escalated to barangay':
+            case 'referred to barangay':
                 return 'bg-purple-50 text-purple-600 border-purple-100';
             case 'approved':
                 return 'bg-indigo-50 text-indigo-600 border-indigo-100';
@@ -740,31 +743,20 @@ const SubdReports = () => {
                     }
                 />
 
-                <main className="flex-1 overflow-y-auto px-3 py-4 sm:p-8 pb-32 md:pb-8 custom-scrollbar">
+                <main className="flex-1 overflow-y-auto px-3 py-4 sm:p-8 pb-52 sm:pb-52 md:pb-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto">
                         {viewingReportId === null ? (
                             <>
                                 {/* Closed cases where the owner later said a merged sighting wasn't their pet */}
                                 <NeedsReviewSightings className="mb-6" />
 
-                                {/* Action Toolbar: icon Refresh + prominent Report Incident (one row on phones) */}
-                                <div className="flex items-center gap-2 mb-3 sm:mb-5 md:justify-end">
+                                {/* Desktop report action; mobile uses the floating action above the bottom navigation. */}
+                                <div className="hidden md:flex justify-end mb-4">
                                     <button
                                         type="button"
-                                        onClick={() => fetchReports(true)}
-                                        className="h-11 w-11 md:w-auto md:px-4 shrink-0 inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white text-gray-600 text-sm font-bold shadow-2xs hover:border-role-border hover:text-role active:scale-95 transition-all cursor-pointer"
-                                        title="Refresh reports"
-                                        aria-label="Refresh reports"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                        </svg>
-                                        <span className="hidden md:inline">Refresh</span>
-                                    </button>
-                                    <button
-                                        type="button"
+                                        data-desktop-report-action
                                         onClick={() => setIsModalOpen(true)}
-                                        className="h-11 flex-1 md:flex-none px-5 inline-flex items-center justify-center gap-2 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-sm font-black shadow-md shadow-orange-500/25 active:scale-95 transition-all cursor-pointer"
+                                        className="h-11 px-5 inline-flex items-center justify-center gap-2 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-sm font-black shadow-md shadow-orange-500/25 active:scale-95 transition-all cursor-pointer"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                             <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
@@ -807,19 +799,34 @@ const SubdReports = () => {
 
                                 {/* Search & Filters */}
                                 <div className="bg-white rounded-2xl shadow-2xs border border-gray-100 p-2.5 sm:p-3 mb-4 sm:mb-5 flex flex-col md:flex-row md:items-center justify-between gap-2 sm:gap-3">
-                                    <div className="relative flex-1 md:max-w-md">
-                                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    <div className="flex items-center gap-2 flex-1 md:max-w-md">
+                                        <div className="relative flex-1 min-w-0">
+                                            <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400 pointer-events-none">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                                </svg>
+                                            </span>
+                                            <input
+                                                type="text"
+                                                placeholder="Search category, location or landmark"
+                                                className="w-full h-10 pl-10 pr-4 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder:text-gray-400 focus:ring-2 focus:ring-role focus:bg-white outline-none transition-all"
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                            />
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => fetchReports(true)}
+                                            disabled={loading}
+                                            className="h-10 px-3 sm:px-3.5 shrink-0 inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white text-gray-600 text-xs font-bold shadow-2xs hover:border-role-border hover:text-role active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                                            title="Refresh reports"
+                                            aria-label="Refresh reports"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${loading ? 'animate-spin text-role' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                             </svg>
-                                        </span>
-                                        <input
-                                            type="text"
-                                            placeholder="Search category, location or landmark"
-                                            className="w-full h-10 pl-10 pr-4 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder:text-gray-400 focus:ring-2 focus:ring-role focus:bg-white outline-none transition-all"
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                        />
+                                            <span className="hidden sm:inline">Refresh</span>
+                                        </button>
                                     </div>
                                     <div className="grid grid-cols-2 gap-2 md:flex md:items-center md:gap-2.5">
                                         <Select
@@ -830,7 +837,7 @@ const SubdReports = () => {
                                                 { value: 'Reported', label: 'Reported' },
                                                 { value: 'Verified', label: 'Verified' },
                                                 { value: 'Under Observation', label: 'Under Observation' },
-                                                { value: 'Escalated to Barangay', label: 'Escalated' },
+                                                { value: 'Referred to Barangay', label: 'Referred to Barangay' },
                                                 { value: 'Approved', label: 'Approved' },
                                                 { value: 'Rescue In Progress', label: 'In Progress' }
                                             ]}
@@ -1324,7 +1331,7 @@ const SubdReports = () => {
                                                 )
                                             },
                                             {
-                                                header: "Rescue Status",
+                                                header: "Case Status",
                                                 key: "rescue_status",
                                                 render: (rep) => (
                                                     <div className="flex items-center space-x-2">
@@ -1608,9 +1615,9 @@ const SubdReports = () => {
                                                         </span>
                                                     </div>
                                                     <div>
-                                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Rescue Status</span>
+                                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Case Status</span>
                                                         <span className={`text-sm font-bold ${viewReport.status_id >= 5 ? 'text-blue-600' : 'text-gray-400'}`}>
-                                                            {viewReport.status_id >= 5 ? statusMap[viewReport.status_id] : 'Not Yet Initiated'}
+                                                            {statusMap[viewReport.status_id] || 'Reported'}
                                                         </span>
                                                     </div>
                                                     <div>
@@ -1828,7 +1835,7 @@ const SubdReports = () => {
                                                                 </div>
                                                                 <div>
                                                                     <p className="text-xs font-black text-gray-900 uppercase tracking-widest">Endorsement Letter</p>
-                                                                    <p className="text-[10px] font-bold text-gray-400 mt-0.5">Sent to Barangay for Rescue Request</p>
+                                                                    <p className="text-[10px] font-bold text-gray-400 mt-0.5">Referral letter; Barangay contacted outside StraySafe</p>
                                                                 </div>
                                                             </div>
                                                             <button
@@ -2219,7 +2226,7 @@ const SubdReports = () => {
                                                         {/* STEP 2: ESCALATE (When Verified or Under Observation / Secured and not yet Escalated) */}
                                                         {escalateBlockedFor === viewReport.report_id && ([2, 16].includes(viewReport.status_id)) && !(viewReport as any).pet_id && !Boolean(viewReport.endorsement_letter || (viewReport as any).rescue) && (
                                                             <p role="alert" className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                                                                🐾 Add a record for this animal first. A report can't be escalated or resolved until the animal is in the records.
+                                                                🐾 Add a record for this animal first. A report can't be referred or resolved until the animal is in the records.
                                                             </p>
                                                         )}
                                                         {([2, 7, 8, 16].includes(viewReport.status_id)) && !Boolean(viewReport.status_id === 4 || viewReport.status_id === 13 || viewReport.endorsement_letter || (viewReport as any).rescue) && (
@@ -2240,7 +2247,7 @@ const SubdReports = () => {
                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                                                                 </svg>
-                                                                ESCALATE TO BARANGAY
+                                                                REFER TO BARANGAY
                                                             </button>
                                                         )}
 
@@ -2358,7 +2365,7 @@ const SubdReports = () => {
                                         <option value="Notice">Notice (Initial Friendly Reminder)</option>
                                         <option value="1st Warning">1st Warning (Official 1st Citation)</option>
                                         <option value="2nd Warning">2nd Warning (Strict 2nd Citation)</option>
-                                        <option value="Final Notice / Escalation">Final Notice / Escalation (Barangay Action)</option>
+                                        <option value="Final Notice / Escalation">Final Notice (Barangay referral)</option>
                                     </select>
                                 </div>
                                 <div className="space-y-2">
@@ -2491,8 +2498,8 @@ const SubdReports = () => {
                     <div className="bg-white rounded-none sm:rounded-[2.5rem] shadow-2xl w-full h-full sm:h-auto max-w-xl overflow-y-auto border-none sm:border border-role-muted animate-in zoom-in-95 duration-300">
                         <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                             <div>
-                                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Escalation Letter</h3>
-                                <p className="text-xs text-gray-400 mt-1 font-medium">Attach endorsement document to forward request to Barangay.</p>
+                                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Refer to Barangay</h3>
+                                <p className="text-xs text-gray-400 mt-1 font-medium">Contact the Barangay outside StraySafe, then record the referral and attach the endorsement letter.</p>
                             </div>
                             <button onClick={() => setIsEscalateModalOpen(false)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-900 rounded-full hover:bg-gray-100 transition-all">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2517,8 +2524,36 @@ const SubdReports = () => {
                                     className="w-full px-5 py-4 bg-white border border-gray-200 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-role-muted focus:border-role outline-none transition-all placeholder:text-gray-300 resize-none"
                                     value={escalationDescription}
                                     onChange={(e) => setEscalationDescription(e.target.value)}
-                                    placeholder="Provide detailed description of why emergency rescue is needed..."
+                                    placeholder="Why the Barangay is needed for this case..."
                                 />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label htmlFor="reports-escalation-contact-method" className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Barangay contacted by</label>
+                                    <select
+                                        id="reports-escalation-contact-method"
+                                        className="w-full px-5 py-4 bg-white border border-gray-200 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-role-muted focus:border-role outline-none"
+                                        value={escalationContactMethod}
+                                        onChange={(e) => setEscalationContactMethod(e.target.value)}
+                                    >
+                                        <option value="call">Phone call</option>
+                                        <option value="visit">Visit</option>
+                                        <option value="message">Message</option>
+                                        <option value="letter">Letter</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label htmlFor="reports-escalation-reference-no" className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Reference no. (optional)</label>
+                                    <input
+                                        id="reports-escalation-reference-no"
+                                        type="text" maxLength={100}
+                                        className="w-full px-5 py-4 bg-white border border-gray-200 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-role-muted focus:border-role outline-none placeholder:text-gray-300"
+                                        value={escalationReferenceNo}
+                                        onChange={(e) => setEscalationReferenceNo(e.target.value)}
+                                        placeholder="Barangay blotter / log no."
+                                    />
+                                </div>
                             </div>
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Endorsement Letter File (PDF/DOCX/IMAGE)</label>
@@ -2552,7 +2587,7 @@ const SubdReports = () => {
                                     disabled={isEscalating || !endorsementFile}
                                     className="flex-1 py-3.5 bg-[#FBB065] hover:bg-[#F99D43] disabled:bg-role-border text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                                 >
-                                    {isEscalating ? 'Escalating...' : 'SEND ESCALATION'}
+                                    {isEscalating ? 'Saving...' : 'RECORD REFERRAL'}
                                 </button>
                             </div>
                         </div>
@@ -2780,6 +2815,21 @@ const SubdReports = () => {
                     navigate(`/subd/reports/${reportId}`);
                 }}
             />
+
+            {viewingReportId === null && !isModalOpen && (
+                <button
+                    type="button"
+                    data-mobile-report-action
+                    aria-label="Report incident"
+                    onClick={() => setIsModalOpen(true)}
+                    className="md:hidden fixed right-4 bottom-[calc(env(safe-area-inset-bottom,0px)+6rem)] z-40 h-14 min-w-28 px-5 inline-flex items-center justify-center gap-2 rounded-full bg-[#F97316] hover:bg-[#EA580C] text-white text-sm font-black shadow-lg shadow-orange-500/30 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-600 active:scale-95 transition-transform cursor-pointer"
+                >
+                    <svg aria-hidden="true" className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" d="M12 5v14M5 12h14" />
+                    </svg>
+                    <span>Report</span>
+                </button>
+            )}
 
             {/* Reusable Mobile Bottom Navigation */}
             <SubdBottomNav activeTab="reports" />

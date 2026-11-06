@@ -10,7 +10,7 @@ import NoticeModal from '../../components/Modals/NoticeModal';
 import ActivityPhotos from '../../components/ActivityPhotos';
 import ReportDescription from '../../components/ReportDescription';
 import RescueTimeline from '../../components/RescueTimeline';
-import { buildCaseTimeline, useCaseHolding } from '../../utils/caseTimeline';
+import { buildCaseTimeline, useCaseHolding, useCaseReferral } from '../../utils/caseTimeline';
 import {
     AlertTriangle, Mail, MessageCircle, Check, X, Shield, User, Lock, RefreshCw,
     Search, Link2, Ban, Scale, Home, MapPin, Flag, Building2, PawPrint,
@@ -34,6 +34,7 @@ import RepeatedReportBanner from '../../components/RepeatedReportBanner';
 import LeaderIdentityConfirm from '../../components/LeaderIdentityConfirm';
 import ResolveLostPetModal from '../../components/Modals/ResolveLostPetModal';
 import AddPetModal from '../../components/PetRecords/AddPetModal';
+import BarangayReferralCard from '../../components/Referral/BarangayReferralCard';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import { useReportChatCount } from '../../utils/chatUtils';
 import TakeoverReportModal from '../../components/Modals/TakeoverReportModal';
@@ -370,6 +371,8 @@ const SubdViewReport = () => {
     const [isEscalating, setIsEscalating] = useState(false);
     const [escalationTitle, setEscalationTitle] = useState('');
     const [escalationDescription, setEscalationDescription] = useState('');
+    const [escalationContactMethod, setEscalationContactMethod] = useState('call');
+    const [escalationReferenceNo, setEscalationReferenceNo] = useState('');
 
     // Resolve Modal state
     const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
@@ -413,6 +416,8 @@ const SubdViewReport = () => {
 
     const [noOwnerNotice, setNoOwnerNotice] = useState(false);
     const caseHolding = useCaseHolding(report?.report_id, report?.duplicate_of_report_id, `${report?.status_id}-${report?.history?.length ?? 0}`);
+    const [referralVersion, setReferralVersion] = useState(0);
+    const caseReferral = useCaseReferral(report?.report_id, `${report?.status_id}-${report?.history?.length}-${referralVersion}`);
 
     const openIssueWarningModal = async () => {
         if (!report) return;
@@ -754,29 +759,30 @@ const SubdViewReport = () => {
             await api.patch(`/reports/${report.report_id}/status`, {
                 status_id: 4,
                 user_id: currentUserId,
-                remarks: "Report forwarded to Barangay Operations for official review and approval.",
+                remarks: "Referred to the Barangay by the Subdivision Leader. The Barangay is contacted outside StraySafe.",
                 ...(preservedCondition ? { animal_condition: preservedCondition } : {})
             });
 
-            // 3. Create official Rescue Request record
-            await api.post('/rescue-requests/', {
-                report_id: report.report_id,
-                leader_id: currentUserId,
-                title: escalationTitle || `Endorsement for Report #${report.report_id}`,
-                description: escalationDescription || 'No notes provided.',
-                status_id: 1 // Pending
+            // 3. Barangay Referral record (the Barangay is external; no rescue request is created)
+            await api.post(`/reports/${report.report_id}/referral`, {
+                reason: escalationDescription.trim() || 'Referred to the Barangay by the Subdivision Leader.',
+                contact_method: escalationContactMethod,
+                reference_no: escalationReferenceNo.trim() || null,
+                letter_title: escalationTitle.trim() || `Endorsement for Report #${report.report_id}`,
             });
 
             setIsEscalateModalOpen(false);
             setEndorsementFile(null);
             setEscalationTitle('');
             setEscalationDescription('');
+            setEscalationReferenceNo('');
             setShowSuccess(true);
             fetchReportDetails();
             setTimeout(() => setShowSuccess(false), 3000);
         } catch (error) {
-            console.error('Error escalating report:', error);
-            alert('Failed to escalate report. Please try again.');
+            console.error('Error referring report:', error);
+            const detail = (error as any)?.response?.data?.detail;
+            alert(typeof detail === 'string' ? detail : 'Failed to refer the report to the Barangay. Please try again.');
         } finally {
             setIsEscalating(false);
         }
@@ -1584,9 +1590,9 @@ const SubdViewReport = () => {
                                                     </span>
                                                 </div>
                                                 <div>
-                                                    <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Rescue Status</span>
+                                                    <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Case Status</span>
                                                     <span className={`text-xs font-bold ${report.status_id >= 5 ? 'text-blue-600' : 'text-gray-400'}`}>
-                                                        {report.status_id >= 5 ? statusMap[report.status_id] : 'Not Yet Initiated'}
+                                                        {statusMap[report.status_id] || 'Reported'}
                                                     </span>
                                                 </div>
                                                 <div>
@@ -2552,7 +2558,7 @@ const SubdViewReport = () => {
                                                             </div>
                                                             <div>
                                                                 <p className="text-xs font-black text-gray-900 uppercase tracking-wider">Endorsement Letter</p>
-                                                                <p className="text-[10px] font-bold text-gray-400 mt-0.5">Sent to Barangay for Rescue Request</p>
+                                                                <p className="text-[10px] font-bold text-gray-400 mt-0.5">Referral letter; Barangay contacted outside StraySafe</p>
                                                             </div>
                                                         </div>
                                                         <button
@@ -2571,7 +2577,7 @@ const SubdViewReport = () => {
                                     </div>
 
                                     <div id="sec-rescue" className="step-group space-y-5 scroll-mt-3">
-                                        <SectionStep title="Rescue & Custody" />
+                                        <SectionStep title="Barangay Referral & Earlier Custody Records" />
 
                                         {/* Location & Custody Movement History Card */}
                                         {(report.facility_id || report.custody_status === 'Secured in Facility' || report.facility || custodyProgression.hasMoved) && (
@@ -2708,7 +2714,7 @@ const SubdViewReport = () => {
                                                     </div>
                                                 </div>
                                                 {(() => {
-                                                    const validHistory = buildCaseTimeline(report, caseHolding).filter((h: any) => (h.remarks || '').trim() !== 'Initial report submitted by resident.');
+                                                    const validHistory = buildCaseTimeline(report, caseHolding, caseReferral).filter((h: any) => (h.remarks || '').trim() !== 'Initial report submitted by resident.');
                                                     const totalEvents = validHistory.length + 1;
                                                     return (
                                                         <span className="text-[9px] font-black text-gray-600 bg-gray-100/90 px-2 py-0.5 rounded-full border border-gray-200/60 shadow-2xs whitespace-nowrap">
@@ -2721,7 +2727,7 @@ const SubdViewReport = () => {
                                             {/* Shared activity timeline (same entries as the resident view) */}
                                             <div className="max-h-[600px] overflow-y-auto pr-1 custom-scrollbar">
                                                 <RescueTimeline
-                                                    history={buildCaseTimeline(report, caseHolding)}
+                                                    history={buildCaseTimeline(report, caseHolding, caseReferral)}
                                                     currentStatusId={report.status_id}
                                                     assignedLeaderName={(report as any).assigned_leader_name}
                                                     reporterName={(report as any).reporter_name}
@@ -2917,7 +2923,7 @@ const SubdViewReport = () => {
                                             </div>
                                             <div>
                                                 <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide">Case Actions</h4>
-                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Verify, escalate, resolve & manage this case</p>
+                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Verify, refer, resolve & manage this case</p>
                                             </div>
                                         </div>
                                         {/* ACTION PANEL */}
@@ -2997,27 +3003,12 @@ const SubdViewReport = () => {
                                                         {/* OPTION: ADD PET RECORD IF UNREGISTERED */}
                                                         {/* STEP 0: ESCALATED TO BARANGAY (Strictly Read-Only / Tracking Mode) */}
                                                         {isEscalatedToBarangay ? (
-                                                            <div className="w-full p-4 bg-gradient-to-br from-indigo-50/90 via-purple-50/50 to-white border border-indigo-200/80 rounded-2xl shadow-2xs flex flex-col gap-3 animate-in fade-in duration-300">
-                                                                <div className="flex items-start gap-3">
-                                                                    <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                                                                        <Building2 className="w-4 h-4" />
-                                                                    </div>
-                                                                    <div className="flex-1">
-                                                                        <div className="flex items-center gap-1.5">
-                                                                            <span className="text-xs font-black uppercase tracking-wider text-indigo-900">Escalated to Barangay</span>
-                                                                            <span className="px-2 py-0.2 rounded-full text-[8px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-700 border border-indigo-200">
-                                                                                {report.status_id === 4 ? 'Pending Barangay Action' : 'In Barangay Care'}
-                                                                            </span>
-                                                                        </div>
-                                                                        <p className="text-xs text-indigo-950 font-bold mt-0.5 leading-relaxed">
-                                                                            This animal case has been endorsed and escalated to the Barangay.
-                                                                        </p>
-                                                                        <p className="text-[10px] text-indigo-700 mt-0.5 leading-normal font-medium">
-                                                                            Subdivision leaders can track all live progress directly in Incident Reports.
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
+                                                            <BarangayReferralCard
+                                                                reportId={report.report_id}
+                                                                reportStatusId={report.status_id}
+                                                                canEdit
+                                                                onChanged={() => { setReferralVersion(v => v + 1); fetchReportDetails(); }}
+                                                            />
                                                         ) : (
                                                             <>
                                                                 {report.pet_id && disputedLinkedMatch ? (
@@ -3122,7 +3113,7 @@ const SubdViewReport = () => {
                                                                 {/* STEP 2: ESCALATE (Only when Verified or Under Observation / Secured and not yet Escalated) */}
                                                                 {escalateBlockedFor === report.report_id && ([2, 7, 8, 16].includes(report.status_id)) && !report.pet_id && ![7, 8].includes(report.status_id) && (
                                                                     <p role="alert" className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                                                                        🐾 Add a record for this animal first. A report can't be escalated or resolved until the animal is in the records.
+                                                                        🐾 Add a record for this animal first. A report can't be referred or resolved until the animal is in the records.
                                                                     </p>
                                                                 )}
                                                                 {([2, 7, 8, 16].includes(report.status_id)) && (
@@ -3143,7 +3134,7 @@ const SubdViewReport = () => {
                                                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                                                                         </svg>
-                                                                        ESCALATE TO BARANGAY
+                                                                        REFER TO BARANGAY
                                                                     </button>
                                                                 )}
 
@@ -3305,8 +3296,8 @@ const SubdViewReport = () => {
                     <div className="bg-white rounded-none sm:rounded-2xl shadow-2xl w-full h-full sm:h-auto max-w-lg overflow-y-auto border-none sm:border border-gray-100 animate-in zoom-in-95 duration-300">
                         <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                             <div>
-                                <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Escalation Letter</h3>
-                                <p className="text-[11px] text-gray-400 mt-0.5 font-medium">Attach endorsement document to forward request to Barangay.</p>
+                                <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Refer to Barangay</h3>
+                                <p className="text-[11px] text-gray-400 mt-0.5 font-medium">Contact the Barangay outside StraySafe, then record the referral and attach the endorsement letter.</p>
                             </div>
                             <button onClick={() => setIsEscalateModalOpen(false)} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-900 rounded-full hover:bg-gray-100 transition-all cursor-pointer">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -3331,8 +3322,36 @@ const SubdViewReport = () => {
                                     className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-role-muted focus:border-role outline-none transition-all placeholder:text-gray-300 resize-none"
                                     value={escalationDescription}
                                     onChange={(e) => setEscalationDescription(e.target.value)}
-                                    placeholder="Provide detailed description of why emergency rescue is needed..."
+                                    placeholder="Why the Barangay is needed for this case..."
                                 />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label htmlFor="escalation-contact-method" className="text-[9px] font-black text-gray-900 uppercase tracking-widest ml-1">Barangay contacted by</label>
+                                    <select
+                                        id="escalation-contact-method"
+                                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-role-muted focus:border-role outline-none"
+                                        value={escalationContactMethod}
+                                        onChange={(e) => setEscalationContactMethod(e.target.value)}
+                                    >
+                                        <option value="call">Phone call</option>
+                                        <option value="visit">Visit</option>
+                                        <option value="message">Message</option>
+                                        <option value="letter">Letter</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label htmlFor="escalation-reference-no" className="text-[9px] font-black text-gray-900 uppercase tracking-widest ml-1">Reference no. (optional)</label>
+                                    <input
+                                        id="escalation-reference-no"
+                                        type="text" maxLength={100}
+                                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-role-muted focus:border-role outline-none placeholder:text-gray-300"
+                                        value={escalationReferenceNo}
+                                        onChange={(e) => setEscalationReferenceNo(e.target.value)}
+                                        placeholder="Barangay blotter / log no."
+                                    />
+                                </div>
                             </div>
                             <div className="space-y-1.5">
                                 <label className="text-[9px] font-black text-gray-900 uppercase tracking-widest ml-1">Endorsement Letter File (PDF/DOCX/IMAGE)</label>
@@ -3366,7 +3385,7 @@ const SubdViewReport = () => {
                                     disabled={isEscalating || !endorsementFile}
                                     className="flex-1 py-2.5 bg-[#FBB065] hover:bg-[#F99D43] disabled:bg-role-border text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                                 >
-                                    {isEscalating ? 'Escalating...' : 'SEND ESCALATION'}
+                                    {isEscalating ? 'Saving...' : 'RECORD REFERRAL'}
                                 </button>
                             </div>
                         </div>
@@ -3447,7 +3466,7 @@ const SubdViewReport = () => {
                                         <option value="Notice">Notice (Initial Friendly Reminder)</option>
                                         <option value="1st Warning">1st Warning (Official 1st Citation)</option>
                                         <option value="2nd Warning">2nd Warning (Strict 2nd Citation)</option>
-                                        <option value="Final Notice / Escalation">Final Notice / Escalation (Barangay Action)</option>
+                                        <option value="Final Notice / Escalation">Final Notice (Barangay referral)</option>
                                     </select>
                                 </div>
                                 <div className="space-y-1.5">
@@ -4196,7 +4215,7 @@ const SubdViewReport = () => {
                                         <div className="p-3.5 bg-rose-50 rounded-2xl border border-rose-200 text-xs text-rose-900 flex items-start gap-2">
                                             <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                                             <p className="leading-relaxed">
-                                                <strong>Substantiated Threat:</strong> Aggression or bite confirmed. This will be recorded on the animal's permanent profile and may escalate dispatch or rabies observation protocols.
+                                                <strong>Substantiated Threat:</strong> Aggression or bite confirmed. This will be recorded on the animal's permanent profile and may require referral to the Barangay outside StraySafe.
                                             </p>
                                         </div>
                                     );

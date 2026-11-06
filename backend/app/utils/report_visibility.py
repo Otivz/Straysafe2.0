@@ -312,6 +312,25 @@ def _observation_owner_names(report: Report, viewer_id: Optional[int]) -> list:
     return [name for name, oid in rows if name and len(name) >= 3 and (viewer_id is None or oid != viewer_id)]
 
 
+def owner_notification_activity(db: Session, report_id: int) -> list:
+    """Anonymous activity from persisted notifications to the matched pet's owner, never a suggestion alone."""
+    rows = (db.query(ReportMatch.match_id, ReportMatch.owner_confirmation_status, Notification.created_at)
+            .join(Pet, Pet.pet_id == ReportMatch.matched_pet_id)
+            .join(Notification, and_(Notification.user_id == Pet.owner_id,
+                                     Notification.related_id == ReportMatch.source_report_id,
+                                     Notification.type == 'potential_match'))
+            .filter(ReportMatch.source_report_id == report_id)
+            .order_by(Notification.created_at, ReportMatch.match_id).all())
+    seen, activity = set(), []
+    responses = {'OWNER_CONFIRMED': 'confirmed', 'OWNER_REJECTED': 'declined', 'UNSURE': 'unsure'}
+    for row in rows:
+        if row.match_id in seen or not row.created_at:
+            continue
+        seen.add(row.match_id)
+        activity.append({'notified_at': row.created_at, 'response': responses.get(row.owner_confirmation_status, 'pending')})
+    return activity
+
+
 def redact_response(rep_data, viewer: Optional[User], access: str, report: Report):
     """
     Fill the visibility fields and remove what this viewer may not see. Staff get everything. Other residents never
@@ -325,6 +344,8 @@ def redact_response(rep_data, viewer: Optional[User], access: str, report: Repor
     rep_data.visible_to_residents = is_publicly_visible(report)
     rep_data.comments_open = comments_open(report)
     rep_data.viewer_access = access
+    rep_data.can_view_owner_details = access == STAFF or bool(
+        viewer and rep_data.owner_id and rep_data.owner_id == viewer.user_id)
     if access == STAFF:
         rep_data.visibility_reason = report.visibility_reason
         rep_data.visibility_needs_review = visibility_needs_review(report)
@@ -351,6 +372,12 @@ def redact_response(rep_data, viewer: Optional[User], access: str, report: Repor
         rep_data.reporter_photo = None
     if not is_owner:
         published = published_lost_pet_contact(rep_data, report)
+        if not rep_data.is_owner_report:
+            # A suggested/linked pet's identity and QR tag are not an ownership confirmation for other residents.
+            rep_data.pet_name = None
+            rep_data.case_pet_name = None
+            rep_data.pet_qr_code_url = None
+            rep_data.pet_qr_code_hash = None
         if rep_data.owner_name:
             rep_data.owner_name = REGISTERED_OWNER
         rep_data.owner_id = None

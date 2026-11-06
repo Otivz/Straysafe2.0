@@ -1,8 +1,10 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Eye, MessageCircle } from 'lucide-react';
+import { useUnreadMessageCount } from '../../utils/useUnreadMessageCount';
 
 interface SubdBottomNavProps {
-    activeTab?: 'dashboard' | 'reports' | 'facility' | 'records' | 'map';
+    activeTab?: 'dashboard' | 'reports' | 'facility' | 'records' | 'map' | 'messages' | 'observation';
     onMapClick?: () => void;
 }
 
@@ -10,6 +12,8 @@ const SubdBottomNav: React.FC<SubdBottomNavProps> = ({
     activeTab = 'dashboard',
 }) => {
     const navigate = useNavigate();
+    const user = JSON.parse(localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user') || 'null');
+    const { unreadCount } = useUnreadMessageCount(user?.user_id || user?.id);
 
     const navItemBase = 'relative flex-1 min-w-0 flex flex-col items-center gap-0.5 py-0.5 transition-all duration-200 active:scale-90 select-none cursor-pointer';
     const activeColor = 'text-role';
@@ -56,25 +60,47 @@ const SubdBottomNav: React.FC<SubdBottomNavProps> = ({
                     </span>
                 </button>
 
-                {/* 3. Holding Facility */}
+                {/* 3. Messages */}
                 <button
                     type="button"
-                    onClick={() => navigate('/subd/holding-facility')}
-                    className={`${navItemBase} ${activeTab === 'facility' ? activeColor : inactiveColor}`}
-                    title="Barangay Holding Place"
+                    onClick={() => navigate('/subd/messages')}
+                    className={`${navItemBase} ${activeTab === 'messages' ? activeColor : inactiveColor}`}
+                    title="Messages"
+                    aria-label={unreadCount > 0 ? `Messages, ${unreadCount} unread` : 'Messages'}
+                    aria-current={activeTab === 'messages' ? 'page' : undefined}
                 >
-                    <span className={`absolute -top-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-role transition-all duration-300 ${activeTab === 'facility' ? 'opacity-100 scale-100' : 'opacity-0 scale-0'}`} />
-                    <div className={`p-1.5 rounded-xl transition-all duration-200 ${activeTab === 'facility' ? 'bg-role-soft' : ''}`}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
+                    <span className={`absolute -top-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-role transition-all duration-300 ${activeTab === 'messages' ? 'opacity-100 scale-100' : 'opacity-0 scale-0'}`} />
+                    <div className={`relative p-1.5 rounded-xl transition-all duration-200 ${activeTab === 'messages' ? 'bg-role-soft' : ''}`}>
+                        <MessageCircle aria-hidden="true" className="h-5 w-5" strokeWidth={2} />
+                        {unreadCount > 0 && (
+                            <span aria-hidden="true" className="absolute -top-1 -right-2 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+                                {unreadCount > 9 ? '9+' : unreadCount}
+                            </span>
+                        )}
                     </div>
-                    <span className={`text-[9px] leading-tight text-center uppercase tracking-wide whitespace-nowrap max-w-full truncate px-0.5 ${activeTab === 'facility' ? 'font-black' : 'font-bold'}`}>
-                        Brgy Holding
+                    <span className={`text-[9px] leading-tight text-center uppercase tracking-wide whitespace-nowrap max-w-full truncate px-0.5 ${activeTab === 'messages' ? 'font-black' : 'font-bold'}`}>
+                        Messages
                     </span>
                 </button>
 
-                {/* 4. Pet Records */}
+                {/* 4. Observation follow-ups */}
+                <button
+                    type="button"
+                    onClick={() => navigate('/subd/under-observation')}
+                    className={`${navItemBase} ${activeTab === 'observation' ? activeColor : inactiveColor}`}
+                    title="Under Observation"
+                    aria-current={activeTab === 'observation' ? 'page' : undefined}
+                >
+                    <span className={`absolute -top-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-role transition-all duration-300 ${activeTab === 'observation' ? 'opacity-100 scale-100' : 'opacity-0 scale-0'}`} />
+                    <div className={`p-1.5 rounded-xl transition-all duration-200 ${activeTab === 'observation' ? 'bg-role-soft' : ''}`}>
+                        <Eye aria-hidden="true" className="h-5 w-5" strokeWidth={2} />
+                    </div>
+                    <span className={`text-[9px] leading-tight text-center uppercase tracking-wide whitespace-nowrap max-w-full truncate px-0.5 ${activeTab === 'observation' ? 'font-black' : 'font-bold'}`}>
+                        Observation
+                    </span>
+                </button>
+
+                {/* 5. Pet Records */}
                 <button
                     type="button"
                     onClick={() => navigate('/subd/pet-records')}

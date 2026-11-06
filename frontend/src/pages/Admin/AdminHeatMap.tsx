@@ -58,7 +58,7 @@ const getStatusName = (statusId: number) => {
         case 1: return 'Reported';
         case 2: return 'Verified';
         case 3: return 'Rejected';
-        case 4: return 'Escalated to Barangay';
+        case 4: return 'Referred to Barangay';
         case 5: return 'Rescue In Progress';
         case 6: return 'Picked Up';
         case 7: return 'Under Observation';
@@ -260,7 +260,7 @@ const AdminHeatMap = () => {
             const normalizedReport = { ...r, status_id: reportStatusId };
             const isUntouched = isUntouchedByStaff(normalizedReport, associatedRescue);
             const color = getMarkerColor(normalizedReport, associatedRescue);
-            const statusName = isUntouched ? '⚠️ Untouched (Awaiting Staff)' : (r.status?.status_name || getStatusName(reportStatusId));
+            const statusName = isUntouched ? '⚠️ Untouched (Awaiting Staff)' : (reportStatusId === 4 ? getStatusName(4) : (r.status?.status_name || getStatusName(reportStatusId)));
 
             return {
                 id: r.report_id,
@@ -607,15 +607,15 @@ const AdminHeatMap = () => {
                                 </div>
                                 <div className="flex items-center gap-2.5">
                                     <span className="w-3 h-3 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)] shrink-0 border border-orange-400"></span>
-                                    <span className="truncate">🟠 Orange: Verified / Forwarded</span>
+                                    <span className="truncate">🟠 Orange: Verified / Referred</span>
                                 </div>
                                 <div className="flex items-center gap-2.5">
                                     <span className="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)] shrink-0 border border-blue-400"></span>
-                                    <span className="truncate">🔵 Blue: Team Dispatched</span>
+                                    <span className="truncate">🔵 Blue: Earlier Team Dispatch</span>
                                 </div>
                                 <div className="flex items-center gap-2.5">
                                     <span className="w-3 h-3 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(139,92,246,0.6)] shrink-0 border border-purple-400"></span>
-                                    <span className="truncate">🟣 Purple: In Custody / Holding</span>
+                                    <span className="truncate">🟣 Purple: Observation / Earlier Pickup or Custody</span>
                                 </div>
                                 <div className={`flex items-center justify-between gap-2.5 transition-all ${includeResolved ? 'opacity-100' : 'opacity-40'}`}>
                                     <div className="flex items-center gap-2.5 truncate">

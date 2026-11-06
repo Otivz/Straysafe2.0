@@ -16,7 +16,7 @@ import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
-import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle, isHeldInFacility } from '../../utils/reportStatus';
+import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle, isHeldInFacility, isHoldingHistoryEntry } from '../../utils/reportStatus';
 import { getCachedData, invalidateCache } from '../../utils/cache';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import { SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS, isValidLatLng, useBarangayHQCoords } from '../../utils/coverageArea';
@@ -34,6 +34,7 @@ import MapAutoResize from '../../components/MapControls/MapAutoResize';
 import { createPickupLocationIcon } from '../../components/MapComponent';
 import ReportDescription from '../../components/ReportDescription';
 import ReportVisibilityPanel from '../../components/ReportVisibilityPanel';
+import BarangayReferralCard from '../../components/Referral/BarangayReferralCard';
 import CaseSummaryPanel from '../../components/History/CaseSummaryPanel';
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -294,18 +295,21 @@ const getRoleBadge = (roleId?: number, updaterName?: string, remarks?: string) =
     return { label: 'Officer / Staff', bg: 'bg-slate-100 text-slate-700 border-slate-200', icon: '🛡️' };
 };
 
-const getActionTitle = (statusId?: number, remarks?: string) => {
+const getActionTitle = (statusId?: number, remarks?: string, entry?: any) => {
     const rem = (remarks || '').toLowerCase();
+    if (rem.startsWith('reported by barangay')) return 'REPORTED BY BARANGAY';
+    if (rem.startsWith('referred to barangay') || rem.startsWith('referred to the barangay')) return 'REFERRED TO BARANGAY';
+    if (statusId === 7 && !isHoldingHistoryEntry(entry)) return 'OWNER OBSERVATION UPDATE';
     if (rem.includes('verified') || rem.includes('verification')) return 'FIELD VERIFICATION COMPLETED';
-    if (rem.includes('escalat') || rem.includes('endorse')) return 'OFFICIAL ESCALATION / ENDORSEMENT';
+    if (rem.includes('escalat') || rem.includes('endorse')) return 'BARANGAY REFERRAL';
     if (rem.includes('picked up') || rem.includes('secured')) return 'ANIMAL PICKED UP / SECURED';
     if (rem.includes('holding') || rem.includes('pen') || rem.includes('admitted')) return 'ADMITTED TO HOLDING PLACE';
-    if (rem.includes('observation') || statusId === 7) return 'TRANSFERRED TO OBSERVATION';
+    if (rem.includes('observation') || statusId === 7) return 'OBSERVATION UPDATE';
     if (rem.includes('direct action') || rem.includes('override') || rem.includes('admin')) return 'ADMIN DIRECT STATUS OVERRIDE';
     if (rem.includes('resolved') || statusId === 11) return 'INCIDENT RESOLVED';
     if (statusId === 1) return 'INCIDENT REPORT FILED';
     if (statusId === 2) return 'INCIDENT VERIFIED';
-    if (statusId === 4) return 'ESCALATED TO BARANGAY';
+    if (statusId === 4) return 'REFERRED TO BARANGAY';
     if (statusId === 5) return 'RESCUERS DISPATCHED';
     if (statusId === 6) return 'ANIMAL PICKED UP';
     if (statusId === 8) return 'TRANSFERRED TO IMPOUND';
@@ -367,7 +371,7 @@ export const AdminReportView: React.FC = () => {
 
     // Direct Action / Override Modal state
     const [isActionModalOpen, setIsActionModalOpen] = useState<boolean>(false);
-    const [targetStatusId, setTargetStatusId] = useState<number>(5);
+    const [targetStatusId, setTargetStatusId] = useState<number>(2);
     const [selectedStaffId, setSelectedStaffId] = useState<number | ''>('');
     const [actionRemarks, setActionRemarks] = useState<string>('');
     const [staffList, setStaffList] = useState<Array<{ user_id: number; name: string; email: string; role_id: number }>>([]);
@@ -669,7 +673,7 @@ export const AdminReportView: React.FC = () => {
                 const updaterName = h.updater?.name || (h as any).updater_name || 'Subdivision / Municipal Staff';
                 const roleId = h.updater?.role_id;
                 const roleInfo = getRoleBadge(roleId, updaterName, rem);
-                const title = getActionTitle(h.new_status_id || (h as any).report_status_id, rem);
+                const title = getActionTitle(h.new_status_id || (h as any).report_status_id, rem, h);
                 const isOverride = rem.toLowerCase().includes('admin') || rem.toLowerCase().includes('override') || roleId === 4;
 
                 list.push({
@@ -793,7 +797,7 @@ export const AdminReportView: React.FC = () => {
 
                                 <button
                                     onClick={() => {
-                                        setTargetStatusId(report.status_id < 5 ? 5 : report.status_id);
+                                        setTargetStatusId([2, 4, 7, 11, 3, 14].includes(report.status_id) ? report.status_id : 2);
                                         setIsActionModalOpen(true);
                                     }}
                                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-black uppercase tracking-wider border border-amber-200 transition-all shadow-2xs"
@@ -826,8 +830,8 @@ export const AdminReportView: React.FC = () => {
                         <div className="bg-white rounded-3xl p-6 shadow-xs border border-slate-100">
                             <div className="flex items-center justify-between mb-4">
                                 <div>
-                                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Incident Response Pipeline</h3>
-                                    <p className="text-[11px] text-slate-400 font-medium">Standard emergency workflow from report filing to resolution</p>
+                                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Case Progress</h3>
+                                    <p className="text-[11px] text-slate-400 font-medium">Subdivision review, external referral and recorded outcomes</p>
                                 </div>
                                 <span className="text-[11px] font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/60">
                                     Stage {activeStageIndex + 1} of {STAGES.length}
@@ -874,7 +878,12 @@ export const AdminReportView: React.FC = () => {
                         {/* Case record: outcome, verification, animal, events, visibility, comments (same panel as the history pages) */}
                         <CaseSummaryPanel report={report} reportHref={(reportId) => `/admin/incidents/${reportId}`} printable />
 
-                        {/* Animal Custody Telemetry & Multi-Jurisdictional Care Monitor */}
+                        {/* Subdivision-only: the Barangay is external; its updates are recorded in the referral log */}
+                        {(report.status_id === 4 || report.endorsement_letter) && (
+                            <BarangayReferralCard reportId={report.report_id} reportStatusId={report.status_id} canEdit onChanged={fetchReport} />
+                        )}
+
+                        {/* Animal Custody Telemetry & Multi-Jurisdictional Care Monitor (earlier holding records, read-only) */}
                         {holdingRecord ? (
                             <div className="bg-white rounded-3xl p-6 shadow-xs border border-slate-100 space-y-6">
                                 {/* Header with Active Enclosure Badges */}
@@ -1062,13 +1071,9 @@ export const AdminReportView: React.FC = () => {
                                             </div>
                                         </div>
 
-                                        <button
-                                            onClick={() => setIsCareLogModalOpen(true)}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#F97316] text-xs font-black uppercase tracking-wider border border-orange-200 transition-all shadow-2xs"
-                                        >
-                                            <Plus className="w-3.5 h-3.5" />
-                                            <span>Log Care Check as Admin</span>
-                                        </button>
+                                        <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
+                                            Archive, read-only
+                                        </span>
                                     </div>
 
                                     {holdingRecord.timeline && holdingRecord.timeline.length > 0 ? (
@@ -1111,43 +1116,11 @@ export const AdminReportView: React.FC = () => {
                                     ) : (
                                         <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 text-center space-y-2">
                                             <p className="text-xs text-slate-500 font-semibold">No daily care logs registered in the holding timeline yet.</p>
-                                            <button
-                                                onClick={() => setIsCareLogModalOpen(true)}
-                                                className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-100"
-                                            >
-                                                Record First Feeding / Observation Check
-                                            </button>
                                         </div>
                                     )}
                                 </div>
                             </div>
-                        ) : (
-                            /* Animal Not in Facility Card */
-                            <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center font-bold text-base shrink-0">
-                                        ℹ️
-                                    </div>
-                                    <div>
-                                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                                            Animal Not Yet Placed in Facility Custody
-                                        </h4>
-                                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                                            This incident report is currently in field reporting or dispatch stage. Custody telemetry, duration clocks, and care logs will automatically activate once the animal is admitted into a holding pen.
-                                        </p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => {
-                                        setTargetStatusId(7); // Observation
-                                        setIsActionModalOpen(true);
-                                    }}
-                                    className="px-4 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-black uppercase tracking-wider border border-amber-200 transition-all shrink-0"
-                                >
-                                    Admit Animal to Holding
-                                </button>
-                            </div>
-                        )}
+                        ) : null}
 
                         {/* Main Grid: 2 Columns */}
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1277,8 +1250,8 @@ export const AdminReportView: React.FC = () => {
                                                 <FileCheck className="w-4 h-4" />
                                             </div>
                                             <div>
-                                                <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Official Escalation & Custodial Endorsement</h3>
-                                                <p className="text-[11px] text-slate-400 font-medium">Inter-jurisdictional formal endorsement and custody handover</p>
+                                                <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Barangay Referral Document</h3>
+                                                <p className="text-[11px] text-slate-400 font-medium">Referral to an external Barangay, recorded by the subdivision</p>
                                             </div>
                                         </div>
                                         {report.status_id >= 4 && (
@@ -1296,7 +1269,7 @@ export const AdminReportView: React.FC = () => {
                                         <div className="space-y-3">
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                 <div className="p-3 bg-slate-50/80 rounded-2xl border border-slate-100">
-                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Endorsing Subdivision Officer</span>
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Referring Subdivision Leader</span>
                                                     <p className="text-xs font-black text-slate-800 mt-1">
                                                         {typeof report.endorsement_letter === 'object' && report.endorsement_letter?.leader_name
                                                             ? report.endorsement_letter.leader_name
@@ -1310,12 +1283,12 @@ export const AdminReportView: React.FC = () => {
                                                 </div>
 
                                                 <div className="p-3 bg-slate-50/80 rounded-2xl border border-slate-100">
-                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Receiving Municipal Authority</span>
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Receiving Barangay (outside StraySafe)</span>
                                                     <p className="text-xs font-black text-slate-800 mt-1">
-                                                        {report.barangay_name ? `Barangay ${report.barangay_name}` : 'Barangay'} Animal Care & Control
+                                                        {report.barangay_name ? `Barangay ${report.barangay_name}` : 'Barangay'}
                                                     </p>
                                                     <span className="text-[10.5px] font-semibold text-slate-500">
-                                                        Municipal Holding & Observation Facility
+                                                        External party; no StraySafe account
                                                     </span>
                                                 </div>
                                             </div>
@@ -1324,10 +1297,10 @@ export const AdminReportView: React.FC = () => {
                                                 <div className="flex items-center justify-between mb-1.5">
                                                     <span className="text-[10px] font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1">
                                                         <Shield className="w-3 h-3 text-indigo-600" />
-                                                        Formal Transfer Statement Excerpt
+                                                        Referral Letter Excerpt
                                                     </span>
                                                     <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">
-                                                        RA 9482 Endorsed
+                                                        Recorded Letter
                                                     </span>
                                                 </div>
                                                 <p className="text-xs text-slate-700 font-medium leading-relaxed italic bg-white/70 p-2.5 rounded-xl border border-indigo-200/50">
@@ -1335,7 +1308,7 @@ export const AdminReportView: React.FC = () => {
                                                         ? (report.endorsement_letter.letter_content.length > 180 ? report.endorsement_letter.letter_content.substring(0, 180) + '...' : report.endorsement_letter.letter_content)
                                                         : (typeof report.endorsement_letter === 'string' && report.endorsement_letter
                                                             ? (report.endorsement_letter.length > 180 ? report.endorsement_letter.substring(0, 180) + '...' : report.endorsement_letter)
-                                                            : `Official endorsement transferring custody from ${report.subdivision_name || 'the subdivision'} holding to ${report.barangay_name ? `Barangay ${report.barangay_name}` : 'the Barangay'} Animal Care & Control Facility for clinical observation, quarantine, and municipal disposition under Anti-Rabies Act.`)}"
+                                                            : `Referred by ${report.subdivision_name || 'the subdivision'} to ${report.barangay_name ? `Barangay ${report.barangay_name}` : 'the Barangay'}. The Barangay handles its work outside StraySafe; the Subdivision Leader records the updates and final outcome it reports.`)}"
                                                 </p>
                                             </div>
                                         </div>
@@ -1343,7 +1316,7 @@ export const AdminReportView: React.FC = () => {
                                         <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-500 font-medium flex items-center gap-2.5">
                                             <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
                                             <span>
-                                                This incident currently remains within {report.subdivision_name || 'the subdivision'}'s local jurisdiction. Official endorsement to {report.barangay_name ? `Barangay ${report.barangay_name}` : 'the Barangay'} will be generated upon escalation or formal transfer request.
+                                                No Barangay referral has been recorded for this incident. If outside assistance is needed, the Subdivision Leader contacts {report.barangay_name ? `Barangay ${report.barangay_name}` : 'the Barangay'} outside StraySafe and records the referral.
                                             </span>
                                         </div>
                                     )}
@@ -1687,7 +1660,7 @@ export const AdminReportView: React.FC = () => {
                                         <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Assigned Handler</h3>
                                         <button
                                             onClick={() => {
-                                                setTargetStatusId(report.status_id < 5 ? 5 : report.status_id);
+                                                setTargetStatusId([2, 4, 7, 11, 3, 14].includes(report.status_id) ? report.status_id : 2);
                                                 setIsActionModalOpen(true);
                                             }}
                                             className="text-[10.5px] font-black text-[#F97316] hover:underline"
@@ -1718,15 +1691,15 @@ export const AdminReportView: React.FC = () => {
                                     ) : (
                                         <div className="p-4 bg-amber-50/60 rounded-2xl border border-amber-200/60 text-center">
                                             <span className="text-xs font-black text-amber-800 block">Unassigned Incident</span>
-                                            <p className="text-[11px] text-amber-700/80 mt-1 mb-3">No subdivision leader or barangay personnel has claimed this case yet.</p>
+                                            <p className="text-[11px] text-amber-700/80 mt-1 mb-3">No Subdivision Leader is assigned to this case yet.</p>
                                             <button
                                                 onClick={() => {
-                                                    setTargetStatusId(5);
+                                                    setTargetStatusId(2);
                                                     setIsActionModalOpen(true);
                                                 }}
                                                 className="w-full py-2 bg-[#F97316] hover:bg-[#ea580c] text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-xs transition-all"
                                             >
-                                                Dispatch Personnel
+                                                Review Case Status
                                             </button>
                                         </div>
                                     )}
@@ -1864,11 +1837,8 @@ export const AdminReportView: React.FC = () => {
                                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-[#F97316]"
                                 >
                                     <option value={2}>Verified</option>
-                                    <option value={4}>Escalated to Barangay</option>
-                                    <option value={5}>Rescue in Progress / Dispatched</option>
-                                    <option value={6}>Picked Up</option>
+                                    <option value={4}>Referred to Barangay</option>
                                     <option value={7}>Under Observation</option>
-                                    <option value={8}>Impounded</option>
                                     <option value={11}>Incident Resolved</option>
                                     <option value={3}>Rejected</option>
                                     <option value={14}>False Alarm / Dismissed</option>

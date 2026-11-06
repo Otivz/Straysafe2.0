@@ -1291,7 +1291,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                         <p className="text-xs text-role-strong font-medium">{adoptionLockText} An owner can't be assigned here.</p>
                                     </div>
                                 </div>
-                                {userRoleId !== 2 && adoptionInfo?.adoption_id && (
+                                {userRoleId === 4 && adoptionInfo?.adoption_id && (
                                     <button
                                         type="button"
                                         onClick={() => navigate(userRoleId === 4 ? '/admin/adoptions' : `/brgy/adoptions?view=${adoptionInfo.adoption_id}`)}

@@ -146,7 +146,7 @@ try {
     const setSession = role => command('Page.addScriptToEvaluateOnNewDocument', { source:
         `try { localStorage.setItem('${role === 4 ? 'admin_user' : 'staff_user'}', JSON.stringify({ user_id: 42, name: 'Test Staff', role_id: ${role}, access_token: '${token}' })); } catch (e) {}` });
 
-    for (const [role, path] of [[2, '/subd/history/1'], [3, '/brgy/history/1'], [4, '/admin/incidents/1']]) {
+    for (const [role, path] of [[2, '/subd/history/1'], [4, '/admin/incidents/1']]  /* Barangay pages retired (Subdivision-only) */) {
         roleId = role;
         const { identifier } = await setSession(role);
         for (const width of [1280, 390]) {
@@ -245,7 +245,7 @@ try {
     await command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
     const printCases = [
         { role: 2, path: '/subd/history/2', fails: false, name: 'Leader Santos, Subdivision Leader' },
-        { role: 3, path: '/brgy/history/1', fails: true, name: 'Test Staff, Barangay Staff' },
+        { role: 2, path: '/subd/history/1', fails: true, name: 'Test Staff, Subdivision Leader' },  // was the Barangay case (retired)
         { role: 4, path: '/admin/incidents/2', fails: false, name: 'Admin Reyes, Administrator' },
     ];
     for (const pc of printCases) {

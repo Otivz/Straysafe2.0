@@ -37,13 +37,12 @@ const LandingPageNavbar = () => {
         setIsMobileMenuOpen(false);
     }, [location]);
 
-    const navLinks = [
+    const navLinks: { name: string; href: string; isInternal: boolean; highlight?: boolean }[] = [
         { name: 'What is StraySafe', href: '#about', isInternal: false },
         { name: 'How It Works', href: '#how-it-works', isInternal: false },
         { name: 'User Roles', href: '#roles', isInternal: false },
         { name: 'Features', href: '#features', isInternal: false },
         { name: 'AI Assistance', href: '#ai', isInternal: false },
-        { name: 'Adopt a Pet', href: '/adopt', isInternal: true, highlight: true },
     ];
 
     const scrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
@@ -279,7 +278,7 @@ const LandingPageNavbar = () => {
                                         className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-stone-700 hover:bg-amber-50 hover:text-amber-700 transition-colors"
                                     >
                                         <ShieldCheck className="w-4 h-4 text-amber-500" />
-                                        <span>Subdivision & Barangay Staff</span>
+                                        <span>Subdivision Leaders</span>
                                     </Link>
                                     <Link
                                         to="/admin/login"

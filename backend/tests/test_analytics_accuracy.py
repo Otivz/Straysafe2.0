@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 import app.models  # noqa: E402,F401
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models.owner_followup import OwnerFollowUp  # noqa: E402
+from app.models.barangay_referral import BarangayReferral, BarangayReferralUpdate, OUTCOME_STATUS  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
 from app.models.pet_claim import PetClaim  # noqa: E402
 from app.models.report import (Adoption, EndorsementLetter, HoldingAnimal, Report, ReportCategory, ReportReturn,  # noqa: E402
@@ -205,6 +206,64 @@ check("performance: query count independent of the number of pets (31 vs 61 pets
 check("registry: vaccination counted from records", r["pet_compliance"]["vaccinated"] == 60)
 event.remove(engine, "before_cursor_execute", listener)
 check("status groups cover every status id", all(analytics_service.status_group(i) for i in range(1, 19)))
+
+# Referrals use their own date and current outcome, not the old rescue workflow or current report status.
+empty_referrals = client.get("/analytics/subdivision", headers=H(leader)).json()["referral_summary"]
+check("referrals: no status-only or endorsement-only referrals invented", empty_referrals == {
+    "referred": 0, "open": 0, "closed": 0, "outcomes": {key: 0 for key in OUTCOME_STATUS}
+}, empty_referrals)
+
+
+def referral_for(r, outcome=None, days_ago=0, barangay=1):
+    ref = BarangayReferral(report_id=r.report_id, barangay_id=barangay, referred_by=leader.user_id,
+                          referred_at=NOW - timedelta(days=days_ago), reason="Synthetic referral", contact_method="call",
+                          final_outcome=outcome)
+    db.add(ref)
+    db.flush()
+    return ref
+
+
+open_ref = referral_for(report(4, days_ago=200))   # older incident, recent referral
+for outcome, status in OUTCOME_STATUS.items():
+    r = report(status)
+    if outcome == "claimed":
+        r.animal_type = "Cat"
+        r.priority_level = "High"
+    referral_for(r, outcome)
+referral_for(report(4, subd=2), barangay=2)
+referral_for(report(4, days_ago=200), days_ago=90)
+for kind in ("acknowledged", "held"):
+    db.add(BarangayReferralUpdate(referral_id=open_ref.referral_id, update_type=kind, source="barangay_reported",
+                                 update_date=NOW.date(), recorded_by=leader.user_id))
+db.commit()
+leader_data = client.get("/analytics/subdivision", headers=H(leader), params={"days": 30}).json()
+refs = leader_data["referral_summary"]
+check("referrals: leader scope and referral dates include older cases, exclude other areas and older referrals",
+      (refs["referred"], refs["open"], refs["closed"]) == (6, 1, 5), refs)
+check("referrals: all five outcomes counted once", refs["outcomes"] == {key: 1 for key in OUTCOME_STATUS}, refs)
+check("referrals: open and closed add up, closed outcomes add up",
+      refs["referred"] == refs["open"] + refs["closed"] and sum(refs["outcomes"].values()) == refs["closed"])
+check("referrals: multiple external updates never multiply counts", refs["referred"] == 6)
+admin_refs = client.get("/analytics/admin", headers=H(admin), params={"days": 30}).json()["referral_summary"]
+check("referrals: Admin sees all permitted subdivisions", (admin_refs["referred"], admin_refs["open"]) == (7, 2), admin_refs)
+scoped_refs = client.get("/analytics/admin", headers=H(admin), params={"days": 30, "subdivision_id": 1}).json()["referral_summary"]
+check("referrals: Admin subdivision filter agrees with leader", scoped_refs == refs)
+filtered = client.get("/analytics/subdivision", headers=H(leader), params={"days": 30, "animal_type": "Cat", "priority": "High", "category_id": 4}).json()["referral_summary"]
+check("referrals: animal, priority and category filters apply", filtered["referred"] == 1 and filtered["outcomes"]["claimed"] == 1, filtered)
+filtered = client.get("/analytics/subdivision", headers=H(leader), params={"days": 30, "status": "resolved"}).json()["referral_summary"]
+check("referrals: status group filter applies", filtered["referred"] == 3 and filtered["closed"] == 3, filtered)
+check("referrals: leader cannot request a different subdivision", client.get("/analytics/subdivision", headers=H(leader), params={"subdivision_id": 2}).status_code == 403)
+all_refs = client.get("/analytics/subdivision", headers=H(leader)).json()["referral_summary"]
+check("referrals: all time retains older referrals", all_refs["referred"] == 7 and all_refs["open"] == 2, all_refs)
+legacy_before = client.get("/analytics/admin", headers=H(admin)).json()
+for sid in (5, 6, 7, 8, 13):
+    report(sid)
+db.commit()
+legacy_after = client.get("/analytics/admin", headers=H(admin)).json()
+check("history: legacy 5, 6, 7, 8 and 13 still count", legacy_after["kpis"]["total_reports"] == legacy_before["kpis"]["total_reports"] + 5)
+check("history: status groups still add up", sum(row["count"] for row in legacy_after["status_distribution"]) == legacy_after["kpis"]["total_reports"])
+check("history: legacy rescue and custody counts unchanged by referrals", legacy_after["rescue_summary"] == legacy_before["rescue_summary"] and legacy_after["custody_snapshot"] == legacy_before["custody_snapshot"])
+check("labels: status 4 group is Referred to Barangay", next(row for row in leader_data["status_distribution"] if row["key"] == "endorsed")["label"] == "Referred to Barangay")
 
 print(f"\n{sum(results)}/{len(results)} checks passed")
 sys.exit(0 if all(results) else 1)

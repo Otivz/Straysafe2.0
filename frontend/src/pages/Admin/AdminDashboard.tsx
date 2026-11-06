@@ -159,12 +159,12 @@ const AdminDashboard = () => {
             case 1: return 'Pending Verification';
             case 2: return 'Verified';
             case 3: return 'Rejected';
-            case 4: return 'Forwarded to Barangay';
+            case 4: return 'Referred to Barangay';
             case 5: return 'Team Dispatched';
-            case 6: return 'Resolved';
-            case 7: return 'Picked Up';
-            case 8: return 'Under Observation';
-            case 9: return 'Impounded';
+            case 6: return 'Picked Up';
+            case 7: return 'Under Observation';
+            case 8: return 'Impounded';
+            case 9: return 'Claimed by Owner';
             case 10: return 'Released';
             case 11: return 'Incident Resolved';
             case 12: return 'Deceased';
@@ -340,7 +340,7 @@ const AdminDashboard = () => {
                             </div>
                             <div>
                                 <p className="text-2xl sm:text-3xl font-black text-gray-900 leading-none">{activeUsers.toLocaleString()}</p>
-                                <p className="text-[10px] font-bold text-gray-400 mt-1">Residents, HOA, Barangay</p>
+                                <p className="text-[10px] font-bold text-gray-400 mt-1">Residents, Subdivision Leaders, Admin</p>
                             </div>
                             <div className="flex items-center space-x-1 text-[10px] font-bold text-emerald-600">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
@@ -522,7 +522,7 @@ const AdminDashboard = () => {
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <span className="w-2.5 h-2.5 rounded-full bg-[#F97316] shrink-0" />
-                                            <span>Endorsed</span>
+                                            <span>Referred</span>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <span className="w-2.5 h-2.5 rounded-full bg-[#3B82F6] shrink-0" />
@@ -541,7 +541,7 @@ const AdminDashboard = () => {
                             </div>
                             {/* Phone legend: one row under the map instead of a box over it */}
                             <div className="md:hidden mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] font-semibold text-gray-600">
-                                {([['#EF4444', 'Pending'], ['#F97316', 'Endorsed'], ['#3B82F6', 'Assigned'], ['#F59E0B', 'In progress'], ['#10B981', 'Resolved']] as const).map(([c, l]) => (
+                                {([['#EF4444', 'Pending'], ['#F97316', 'Referred'], ['#3B82F6', 'Assigned'], ['#F59E0B', 'In progress'], ['#10B981', 'Resolved']] as const).map(([c, l]) => (
                                     <span key={l} className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{ background: c }} />{l}</span>
                                 ))}
                             </div>
@@ -595,7 +595,7 @@ const AdminDashboard = () => {
                                                 </svg>
                                             </div>
                                             <div>
-                                                <p className="text-xs font-semibold text-gray-500">Endorsed to Barangay</p>
+                                                <p className="text-xs font-semibold text-gray-500">Referred to Barangay</p>
                                                 <p className="text-sm font-black text-gray-900 leading-none">{endorsedCount.toLocaleString()}</p>
                                             </div>
                                         </div>

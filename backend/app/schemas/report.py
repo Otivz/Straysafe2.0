@@ -192,6 +192,11 @@ def effective_priority(ai_priority: Optional[str], ai_risk: Optional[str], store
     return stored or "Medium"
 
 
+class OwnerNotificationEvent(BaseModel):
+    notified_at: datetime
+    response: Literal['pending', 'confirmed', 'declined', 'unsure'] = 'pending'
+
+
 class ReportResponse(ReportBase):
     # Set by the AI only (never accepted from a client): YOLOv8 detection confidence and Gemini's per-field confidence
     ai_detection_confidence: Optional[float] = None
@@ -333,6 +338,8 @@ class ReportResponse(ReportBase):
     comments_open: Optional[bool] = None
     # How much of the report this viewer gets: staff / reporter / owner / case_reporter / public / match_owner
     viewer_access: Optional[str] = None
+    can_view_owner_details: bool = False
+    owner_notification_events: List[OwnerNotificationEvent] = []
 
     # Pickup Location Tracking (Status 6)
     pickup_latitude: Optional[float] = None

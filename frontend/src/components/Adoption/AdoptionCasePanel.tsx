@@ -228,7 +228,7 @@ export default function AdoptionCasePanel({ adoptionId, compactHistory = false, 
                     {info.can_assign && !isDone && (
                         <div className="flex items-center gap-1.5 shrink-0">
                             {current && (
-                                <button
+                                <button data-archive-write
                                     type="button"
                                     disabled={busy}
                                     onClick={() => run(() => api.post(`/adoption-tasks/${current.assignment_id}/cancel`, { reason: 'Withdrawn by case owner' }))}
@@ -237,7 +237,7 @@ export default function AdoptionCasePanel({ adoptionId, compactHistory = false, 
                                     Cancel
                                 </button>
                             )}
-                            <button
+                            <button data-archive-write
                                 type="button"
                                 disabled={busy}
                                 onClick={() => openAssign(task.type)}
@@ -288,7 +288,7 @@ export default function AdoptionCasePanel({ adoptionId, compactHistory = false, 
                                 ? 'Tip: you can also assign while scheduling. The assignee accepts the task, then conducts and records it.'
                                 : 'The assignee accepts the task on their Adoption Tasks page, then records it.'}
                         </p>
-                        <button
+                        <button data-archive-write
                             type="button"
                             disabled={busy || target === ''}
                             onClick={submitAssign}
@@ -336,7 +336,7 @@ export default function AdoptionCasePanel({ adoptionId, compactHistory = false, 
                         <span className="font-bold text-amber-700">No case owner yet</span>
                     )}
                     {info.can_claim && (
-                        <button
+                        <button data-archive-write
                             type="button"
                             disabled={busy}
                             onClick={() => run(() => api.post(`/adoptions/${adoptionId}/claim`))}
@@ -356,7 +356,7 @@ export default function AdoptionCasePanel({ adoptionId, compactHistory = false, 
                         <p>{decisionNote} Review the assessment, then reject the application or have the task redone.</p>
                     </div>
                     {info.can_assign && onRejectRequested && (
-                        <button
+                        <button data-archive-write
                             type="button"
                             onClick={onRejectRequested}
                             className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-black text-[11px] cursor-pointer shrink-0"

@@ -13,7 +13,7 @@ Implemented for Resident, Subdivision Leader, Barangay Staff and Admin.
 
 ## Changes
 
-- Removed the resident "View All" / "View More" controls and list limits. The complete active list is available by scrolling, including the desktop home sidebar.
+- Removed the resident "View All" / "View More" controls and list limits. The complete active list is available by scrolling in the navbar panel on desktop and mobile. The redundant desktop home notification card was removed; the announcements sidebar remains.
 - Reused existing role-specific cards, filters, detail views, actions, routing and API endpoints inside a shared `NotificationPanel` shell.
 - Kept panels mounted when closed to preserve their list, filter and scroll position. Reopening does not trigger a notification fetch.
 - Made outside-click handling aware of both the portaled panel and its trigger. Added consistent close and Escape behavior.

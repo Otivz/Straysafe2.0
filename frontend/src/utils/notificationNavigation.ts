@@ -51,15 +51,9 @@ export async function resolveNotificationDestination(
         return { action: 'navigate', path: `/resident/observations` };
     }
 
-    // 2. Adoption notifications (holding animal available again, application updates, adoption chat)
-    if (typeStr === 'adoption_available_again' && notif.related_id) {
-        return { action: 'navigate', path: `/adopt/apply/${notif.related_id}` };
-    }
-    if (typeStr.startsWith('adoption') && notif.related_id) {
-        return {
-            action: 'navigate',
-            path: `/adopt/applications?adoption=${notif.related_id}${typeStr === 'adoption_chat' ? '&chat=1' : ''}`,
-        };
+    // 2. Adoption notifications: adoption is handled by the Barangay outside StraySafe now (Subdivision-only)
+    if (typeStr.startsWith('adoption')) {
+        return { action: 'navigate', path: '/adopt' };
     }
 
     // 3. Lost pet notifications (neighborhood alerts, resident sightings, missing pet notices)

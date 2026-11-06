@@ -15,9 +15,10 @@ const role = mode === 'admin' ? 4 : 2;
 localStorage.setItem('staff_user', JSON.stringify({ user_id: 9, name: 'Synthetic staff', role_id: role, barangay_id: 1, subdivision_id: 1, is_verified: true, status: 'Active',
     access_token: `test.${btoa(JSON.stringify({ user_id: 9, role_id: role, exp: 4102444800 }))}.test` }));
 const empty = params.has('empty');
+const noRescueTiming = empty || params.has('noRescueTiming');
 const n = (v: number) => (empty ? 0 : v);
-const statuses = [['pending', 'Pending', 2], ['under_review', 'Under review', 1], ['verified', 'Verified', 1], ['endorsed', 'Endorsed to Barangay', 3],
-    ['in_progress', 'Rescue / custody in progress', 2], ['resolved', 'Resolved', 4], ['rejected', 'Rejected / dismissed', 1], ['closed_other', 'Closed (deceased / not found)', 0]] as const;
+const statuses = [['pending', 'Pending', 2], ['under_review', 'Under review', 1], ['verified', 'Verified', 1], ['endorsed', 'Referred to Barangay', 3],
+    ['in_progress', 'Owner observation / legacy rescue or custody', 2], ['resolved', 'Resolved', 4], ['rejected', 'Rejected / dismissed', 1], ['closed_other', 'Closed (deceased / not found)', 0]] as const;
 const total = statuses.reduce((sum, [, , c]) => sum + n(c), 0);
 const payload = () => ({
     metadata: { start_date: '2026-10-04', end_date: '2026-11-02', group_by: 'day', timezone: 'Asia/Manila', generated_at: new Date().toISOString(), subdivision_id: null,
@@ -30,6 +31,7 @@ const payload = () => ({
         endorsed_reports: n(3), in_progress_reports: n(2), rejected_reports: n(1), total_rescues: n(5), completed_rescues: n(2), total_adoptions: n(1), total_intake: n(3) },
     status_distribution: statuses.map(([key, label, c]) => ({ key, label, count: n(c) })),
     top_locations: empty ? [] : [{ location: 'Gate 1', count: 5 }, { location: 'Clubhouse', count: 2 }],
+    referral_summary: { referred: n(6), open: n(1), closed: n(5), outcomes: { claimed: n(1), released: n(1), resolved: n(1), deceased: n(1), not_found: n(1) } },
     observations: { active_now: n(2), resolved_in_period: n(1), other_endings_in_period: 0 },
     incident_timeline: [{ date: '2026-11-01', total, resolved: n(4), high_risk: n(1) }],
     category_breakdown: empty ? [] : [{ category: 'Roaming Animal', count: total, percentage: 100 }],
@@ -37,10 +39,10 @@ const payload = () => ({
     pet_compliance: { total_pets: n(5), vaccinated: n(3), unvaccinated: n(2), compliance_rate: empty ? null : 60, bite_history_count: 0 },
     warnings_breakdown: [], holding_summary: { total_intake: n(3), returned_to_owner: n(1), currently_held: n(2), transferred_to_shelter: 0 },
     ...(mode !== 'subdivision' ? {
-        rescue_summary: { total: n(5), pending: n(1), active: n(2), completed: n(2), cancelled: 0, avg_report_to_start_hours: empty ? null : 1.5, response_samples: n(3) },
+        rescue_summary: { total: n(5), pending: n(1), active: n(2), completed: n(2), cancelled: 0, avg_report_to_start_hours: noRescueTiming ? null : 1.5, response_samples: noRescueTiming ? 0 : 3 },
         custody_snapshot: { in_custody_now: n(4), available_for_adoption_now: n(1), returned_to_owner_total: n(2), adopted_total: n(1) },
         claims_summary: { submitted: n(3), approved_pending_handover: n(1), handed_over: n(1), rejected: n(1) },
-        sla_metrics: { avg_verification_hours: 2.5, avg_rescue_hours: 1.0, total_verified_cases: n(6), total_completed_rescues: n(2) },
+        sla_metrics: { avg_verification_hours: 2.5, avg_rescue_hours: noRescueTiming ? null : 1.0, total_verified_cases: n(6), total_completed_rescues: noRescueTiming ? 0 : 2 },
         holding_and_adoption: { total_intake: n(3), currently_held: n(2), returned_to_owner: n(1), approved_adoptions: n(2), pending_adoptions: n(1), completed_handovers: n(1), successful_adoptions: n(1), total_adoptions: n(4), adoption_rate: 50 },
     } : {}),
 });

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
+import { isHoldingHistoryEntry } from './reportStatus';
 
 // One shared way to build the case activity timeline (resident, Subdivision and Barangay views all use it):
 // the report's status history, plus the holding facility's own log (admission, transfers, photos, adoption
@@ -31,8 +32,56 @@ export function useCaseHolding(reportId?: number | null, duplicateOfReportId?: n
     return holding;
 }
 
-export function buildCaseTimeline(report: any, holdingAnimal: any | null): any[] {
-    const h: any[] = [...(report?.history || [])];
+/**
+ * Loads the Barangay Referral (Subdivision-only) for a report. Leader and Administrator only: anyone else gets
+ * null quietly (the referral's opening and outcome are already in the report history).
+ */
+export function useCaseReferral(reportId?: number | null, reloadKey?: unknown) {
+    const [referral, setReferral] = useState<any | null>(null);
+    useEffect(() => {
+        if (!reportId) return;
+        let cancelled = false;
+        api.get(`/reports/${reportId}/referral`)
+            .then(res => { if (!cancelled) setReferral(res.data); })
+            .catch(() => { if (!cancelled) setReferral(null); });
+        return () => { cancelled = true; };
+    }, [reportId, reloadKey]);
+    return referral;
+}
+
+const REFERRAL_UPDATE_LABELS: Record<string, string> = {
+    acknowledged: 'acknowledged the case', dispatched: 'dispatched a team', picked_up: 'picked up the animal',
+    held: 'is holding the animal', impounded: 'impounded the animal', claimed: 'says the owner claimed the animal',
+    adopted: 'says the animal was adopted', not_found: 'could not find the animal', other: 'sent an update',
+};
+
+export function buildCaseTimeline(report: any, holdingAnimal: any | null, referral?: any | null): any[] {
+    const h: any[] = (report?.history || []).map((entry: any) => ({ ...entry }));
+    (report?.owner_notification_events || []).forEach((event: any, index: number) => {
+        if (!event.notified_at) return;
+        const responses: Record<string, string> = {
+            pending: 'A possible owner has been notified. Their response is pending.',
+            confirmed: 'The notified person confirmed the animal. Official match verification is separate.',
+            declined: 'The notified person said this is not their pet.',
+            unsure: 'The notified person is unsure whether this is their pet.',
+        };
+        h.push({ history_id: `owner-notified-${index}`, created_at: event.notified_at,
+            remarks: `Potential owner notified. ${responses[event.response] || responses.pending}`, updater_name: 'StraySafe' });
+    });
+    // Barangay updates recorded by the leader: labelled external, never a StraySafe custody event
+    (referral?.updates || []).forEach((u: any) => {
+        const day = u.update_date ? new Date(`${u.update_date}T00:00:00`).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+        const who = referral.barangay_name ? `Barangay ${referral.barangay_name}` : 'Barangay';
+        h.push({
+            history_id: `referral-update-${u.update_id}`,
+            external: true,
+            remarks: `Reported by ${who}${day ? ` on ${day}` : ''}: ${REFERRAL_UPDATE_LABELS[u.update_type] || u.update_type}.`
+                + `${u.note ? ` ${u.note}` : ''}${u.recorded_by_name ? ` Recorded by ${u.recorded_by_name}.` : ''}`,
+            created_at: u.recorded_at,
+            updater_name: u.recorded_by_name || '',
+            media: u.evidence_url ? [{ media_id: `referral-evidence-${u.update_id}`, file_url: u.evidence_url, media_type: /\.(jpg|jpeg|png|webp|gif)$/i.test(u.evidence_url) ? 'Image' : 'Document' }] : [],
+        });
+    });
     if (holdingAnimal && holdingAnimal.timeline) {
         holdingAnimal.timeline.forEach((log: any) => {
             // Media attached to this holding log
@@ -52,13 +101,16 @@ export function buildCaseTimeline(report: any, holdingAnimal: any | null): any[]
             if (log.event_type === 'intake' || log.event_type === 'transfer') {
                 const existingIndex = h.findIndex((rh: any) => {
                     if (/^observation (started|extended|ended)/i.test(rh.remarks || '')) return false;  // owner observation, not holding
-                    const isFacility = rh.report_status_id === 7 || rh.report_status_id === 8 ||
+                    const isFacility = isHoldingHistoryEntry(rh) ||
                         (rh.remarks && (rh.remarks.toLowerCase().includes('holding') || rh.remarks.toLowerCase().includes('facility')));
                     if (!isFacility) return false;
                     const diff = Math.abs(new Date(rh.created_at || rh.timestamp || 0).getTime() - new Date(log.logged_at).getTime());
                     return diff <= 300000; // within 5 minutes
                 });
                 if (existingIndex !== -1) {
+                    // The actual intake log supplies the evidence, without changing stored history remarks.
+                    h[existingIndex] = { ...h[existingIndex], holding_event_type: log.event_type,
+                        facility_id: holdingAnimal.facility_id, facility_name: holdingAnimal.facility_name };
                     if (logMedia.length > 0) {
                         const existingMedia = h[existingIndex].media || [];
                         const existingIds = new Set(existingMedia.map((m: any) => m.media_id || m.file_url));
@@ -89,6 +141,9 @@ export function buildCaseTimeline(report: any, holdingAnimal: any | null): any[]
             h.push({
                 history_id: 100000 + log.log_id,
                 report_status_id: statusId,
+                holding_event_type: log.event_type,
+                facility_id: holdingAnimal.facility_id,
+                facility_name: holdingAnimal.facility_name,
                 remarks: `${log.title}${log.notes ? ` — ${log.notes}` : ''}`,
                 created_at: log.logged_at,
                 updater_name: log.staff_name || (log.logged_by ? fallbackAuthor : 'System Monitor'),
