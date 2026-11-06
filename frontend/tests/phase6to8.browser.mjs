@@ -94,39 +94,42 @@ try {
             if (dark) assert(await evaluate('document.documentElement.classList.contains("dark")'), 'dark mode applied');
         };
 
-        // Manual Matching: AI off banner, owner-first states, gated final actions, Send Confirmation, Escape closes
+        // Use the current shared Potential Match Review screen opened by Manual Matching.
         await navigate('mode=matching');
-        await waitFor('document.body.textContent.includes("AI Disabled · Manual Matching Mode")', 'AI status banner');
-        await waitFor('document.body.textContent.includes("Registered pet")', 'registered-pet candidates');
-        for (const [name, label] of [['Fresh', 'Compare & send confirmation'], ['Waiting', 'View request'], ['Confirmed', 'Final verification'], ['Declined', 'View details']]) {
-            assert(await evaluate(`[...document.querySelectorAll('button')].some(b => b.textContent.trim() === ${JSON.stringify(label)})`), `${name}: ${label}`);
+        await waitFor('document.body.textContent.includes("Staff-Operated Manual Matching")', 'manual guidance with AI disabled');
+        const petButton = name => `document.querySelector(${JSON.stringify(`img[alt="Registered pet ${name}"]`)})?.closest('div.overflow-hidden')?.querySelector('button.bg-orange-500')`;
+        await waitFor(`!!${petButton('Fresh')}`, 'registered-pet candidates');
+        for (const [name,label] of [['Fresh','Review potential match'],['Waiting','Review potential match'],['Confirmed','Review & finalize'],['Declined','View match review']]) {
+            assert.equal(await evaluate(`${petButton(name)}.textContent.trim()`),label);
         }
         await noOverflow('matching list');
-        await click(button('View request'));
-        await waitFor('document.body.textContent.includes("Waiting for the owner")', 'awaiting state');
-        assert.equal(await evaluate(`!!${buttonIncl('Confirm Verified Match')}`), false, 'no final action while awaiting the owner');
-        await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
-        await waitFor('!document.querySelector("[role=dialog]")', 'Escape closes the comparison');
-        await click(button('Final verification'));
-        await waitFor(`!!${buttonIncl('Confirm Verified Match')} && !!${buttonIncl('Request Further Verification')}`, 'final actions after owner YES');
-        assert(await evaluate('document.body.textContent.includes("That is his red collar")'), "owner's answer shown");
-        await click(buttonIncl('Close'));
-        await click(button('View details'));
-        await waitFor('document.body.textContent.includes("can\'t be confirmed for this report")', 'owner rejected blocks the pet');
-        assert.equal(await evaluate(`!!${buttonIncl('Confirm Verified Match')}`), false, 'no confirm after owner NO');
-        await click(buttonIncl('Close'));
-        await click(button('Compare & send confirmation'));
-        await waitFor(`!!${button('Send Confirmation')}`, 'Send Confirmation offered');
-        await click(button('Send Confirmation'));
-        await waitFor(`window.fixtureRequests.some(r => r.path === '/manual-matching/pet-confirmations' && r.method === 'post')`, 'request sent');
-        const sent = (await requests()).find(r => r.path === '/manual-matching/pet-confirmations' && r.method === 'post');
-        assert.equal(sent.body.pet_id, 1); assert.equal(sent.body.report_id, 501);
+        for (const name of ['Fresh','Waiting','Confirmed','Declined']) {
+            await click(petButton(name));
+            await waitFor('!!document.querySelector("[role=dialog]")', `${name} match review`);
+            const confirm = buttonIncl('Confirm Match');
+            await waitFor(`!!${confirm}`, `${name} confirmation action`);
+            if (name === 'Declined') {
+                assert(await evaluate(`${confirm}.disabled`), 'owner NO blocks staff confirmation');
+            } else {
+                await click(confirm);
+                await waitFor('!!document.querySelector("textarea")', 'decision notes');
+                await fill('document.querySelector("textarea")','Synthetic physical identification evidence reviewed.');
+                if (name === 'Confirmed') {
+                    assert.equal(await evaluate(`${buttonIncl('Confirm & Save Match')}.disabled`),false,'owner YES enables final verification');
+                } else {
+                    assert(await evaluate(`${button('Awaiting Owner Confirmation')}.disabled`),'pending/no response cannot finalize');
+                }
+            }
+            await click(`document.querySelector('button[aria-label="Close modal"]')`);
+            await waitFor('!document.querySelector("[role=dialog]")', 'match review closed');
+        }
+        assert.equal((await requests()).some(r => r.path.includes('/verify')),false,'gate checks do not finalize a match');
         scenarios++;
 
         // Owner: both animals, YES needs a confirmation step
         await navigate('mode=owner');
         await waitFor('document.body.textContent.includes("Is this the animal you registered as your pet?")', 'owner question');
-        assert(await evaluate('!!document.querySelector("img[alt^=\\"Reported animal\\"]") && !!document.querySelector("img[alt^=\\"Your registered pet\\"]")'), 'both photos');
+        assert(await evaluate('!!document.querySelector("img[alt^=\\"Reported animal\\"]") && !!document.querySelector("img[alt^=\\"Registered pet\\"]")'), 'both photos');
         await noOverflow('owner request');
         await click(button('Yes, this is my pet'));
         await waitFor('document.querySelectorAll("[role=dialog]").length === 1', 'confirmation dialog');
@@ -187,7 +190,7 @@ try {
         }
         const upper = await evaluate('document.body.innerText.toUpperCase()');
         assert(upper.includes('RESCUE TEAM DISPATCHED') && upper.includes('ANIMAL ADOPTED'), 'rescue and adoption entries shown with the observation entries');
-        assert(upper.includes('OBSERVATION UPDATE') && !upper.includes('MOVED TO HOLDING PLACE'),
+        assert(upper.includes('OWNER OBSERVATION') && !upper.includes('MOVED TO HOLDING PLACE'),
             'a note during an owner observation is not titled as a move to a holding place');
         assert(await evaluate('document.body.textContent.includes("several times this week")'), 'long entry text kept');
         assert((await evaluate('window.fixtureStages.currentLabel')).startsWith('Under observation until'), 'stage label');

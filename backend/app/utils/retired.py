@@ -53,6 +53,16 @@ def refuse_barangay_account(user) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=BARANGAY_ACCOUNT_DISABLED_MESSAGE)
 
 
+def refuse_barangay_provisioning(role_id=None, is_head_officer=False) -> None:
+    """Prevent creating retired identities/authority, while leaving historical reads intact."""
+    if not barangay_workflows_enabled() and (role_id == BARANGAY_ROLE_ID or is_head_officer):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Barangay accounts and head-officer designations can no longer be provisioned in StraySafe. "
+                   "The Barangay is contacted outside the system.",
+        )
+
+
 def retired_workflow(request: Request) -> None:
     """
     Router-level dependency for the retired Barangay workflows (rescue dispatch, holding, claims,

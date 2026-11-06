@@ -31,3 +31,7 @@ Adoption routes, catalog, applications, ownership locks, pet adoption indicators
 See [Phase 5 validation and commands](../04-testing/README.md). Evidence uses isolated SQLite and synthetic browser fixtures, not live Gemini, Cloudinary, identity documents or production data. Real detector accuracy, physical Android behavior and live uploads remain unverified.
 
 Because match responses now carry additional staff claim metadata, a focused API-layer security review is recommended before release. Examine jurisdiction enforcement, resident redaction and merged-case authorization using the scoped tests as evidence. Worksheet command: `npx @ghostbyte/agent-docs-kit@latest security worksheet api-layer`. No security worksheet or security pass is asserted here.
+
+## Shared pet-record attribution after Barangay retirement - 2026-11-06
+
+Admin and Subdivision pet histories use Not recorded when a warning has no issuer name. They retain a genuinely recorded issuer name and role, including earlier Barangay staff, and do not rewrite the warning. Synthesized current status-4 captions use Referred to Barangay. The unassigned-owner guidance states that Barangay adoption work happens outside StraySafe. Earlier adoption origins, recorded adopter names and existing ownership/adoption locks remain intact.

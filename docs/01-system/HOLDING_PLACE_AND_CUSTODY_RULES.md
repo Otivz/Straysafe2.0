@@ -1,6 +1,6 @@
 # Holding place, custody and leader-view rules
 
-Status: Current code behavior, verified with isolated API tests and synthetic browser fixtures on 2026-10-30.
+Status: Current subdivision-only boundary updated 2026-11-06. Later custody/adoption operational details describe retained legacy compatibility behavior, gated off by default; the 2026-10-30 verification remains historical evidence.
 
 ## Names and existing data
 
@@ -8,22 +8,15 @@ Visible interface text and newly generated messages use Holding Place. Internal 
 
 Category `4` is labelled Roaming Animal in the updated forms, filters, report/chat labels and `Database3.3.txt` seed. This phase did not inspect or update the configured database. Database-sourced category names may retain earlier wording until a separately approved data update. Never reset the database just to apply the label.
 
-## Leader holding view
+## Current holding access
 
-The Subdivision Leader holding page opens on At Barangay and lists animals currently held at a Barangay place in the leader's Barangay, including animals from its other subdivisions. Rows identify their source subdivision and retain current treatment/healthy/adoption/impound status.
+The active Subdivision holding/claims URLs redirect to external referrals. The subdivision dashboard has no holding/claims/rescue queues or operational shortcuts. The Admin Holding Archive page and navigation entry are removed; its old `/admin/holding-facility` URL redirects to `/admin/incidents`. The Adoption Archive remains read only. Holding records remain readable inside related reports through existing read APIs; no historical holding data is deleted. Actual earlier custody and its recorded locations stay readable; external referral updates do not establish custody.
 
-- Lists and metrics derive the leader's Barangay/subdivision from the authenticated account. Caller-supplied subdivision, Barangay, facility and report filters cannot broaden that scope.
-- Detail reads allow the leader's own subdivision records or Barangay-held records within the account's Barangay. A leader without an assigned subdivision receives no holding list.
-- Barangay-held records are view-only for leaders: holding updates, care-log writes, deletion, transfers and report-status edits do not become available through this view.
-- Earlier own-subdivision pen records remain accessible and manageable through their existing permitted actions. The Earlier Subdivision Pen tab, facility picker, occupancy and stay-limit controls appear only while relevant active pen records remain.
-- Past records remain accessible. The new view does not delete earlier records, facilities or their history.
-- The dashboard's At Barangay count includes the leader's held Barangay animals, including impounded animals that remain held, and excludes earlier pens and discharged/closed cases.
-
-The new view does not change existing Barangay/adoption stage authority. Barangay adoption promotion, catalog reservations, assignments, two-way handover, monitoring and certificates remain part of the system.
+Operational admission, impound and adoption actions belong to the retired legacy system. The legacy switch exists for compatibility testing; it does not create a Barangay account or active holding workflow in the default subdivision-only portal.
 
 ## New pen restrictions and custody
 
-Subdivision Leaders can register ordinary landmarks and retain or turn off an existing pen designation. They cannot create a new holding designation, convert an ordinary landmark to a pen, change a landmark's jurisdiction, create a new holding admission or place/relocate an animal into a new facility through report-status requests. The server enforces these restrictions as well as the hidden controls. Administrators and authorized Barangay flows retain their existing functions.
+By default, both Administrators and Subdivision Leaders can register ordinary reference landmarks and edit permitted existing reference metadata, but cannot create a holding designation or convert an ordinary landmark into one. The landmark create/update routes apply the existing retirement gate to both `is_holding_facility` and the `facility` category, before any write. Historical designations and their saved types remain readable and may be retained during permitted metadata edits. Leader jurisdiction restrictions still apply. `BARANGAY_WORKFLOWS_ENABLED=1` preserves the existing Admin legacy facility behavior; it does not relax the pre-existing leader jurisdiction/new-pen restrictions.
 
 Secured by Resident means the animal is still with the resident/rescuer. The status modal preserves an eligible open case status instead of setting Under Observation (`7`), omits facility metadata and hides facility-placement choices for an unheld animal. It does not offer resident custody for an animal already held in a facility.
 
@@ -81,3 +74,9 @@ Isolated checks cover leader scope/filter bypasses, detail access, read-only wri
 Live database contents, native Android behavior and a complete live adoption run were not exercised. No schema migration, database reset, environment/dependency change or deployment was performed.
 
 Before release, recommend a scoped API-layer authorization review because this phase expands holding-read scope and restricts writes. Evidence should include the account/role and filter matrix, response fields, direct mutation paths and unchanged adoption authority. The worksheet command is `npx @ghostbyte/agent-docs-kit@latest security worksheet api-layer`. No worksheet or security sign-off was created by this implementation.
+
+## Reference settings and historical classifications - 2026-11-06
+
+Admin settings describe the external Barangay contact/reference location rather than rescue headquarters or deployment dispatch. Supported landmark registration and reference-pin editing remain available. New forms exclude holding-place categories and designation controls. Editing an earlier place displays its recorded facility type read-only; the UI does not offer replacement shelter/impound types. Existing metadata is retained when updating its name or coordinates. The leader's existing explicit switch-off action for an earlier designation remains available. No schema or stored landmark records were migrated.
+
+Operational stay-limit/custody descriptions elsewhere in this document are historical compatibility details, not permission to operate the retired workflow in default mode. New designation rejection and supported metadata edits are covered by `backend/tests/test_retired_landmark_designations.py`; the earlier facility/map synchronization script is run in an isolated database with the legacy switch enabled.

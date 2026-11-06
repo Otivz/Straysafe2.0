@@ -205,3 +205,96 @@ node frontend/tests/underObservation.browser.mjs
 The runner checks 320, 375, 390, 430, 640, 767, 768, 1024, 1280 and 1536px layouts: compact equal-height summary cards, a full-width status dropdown below 768px, wrapping desktop status tabs, responsive controls, small photos, elapsed observation progress, and card-only case presentation without a Table toggle. It exercises all summary and category filters through the mobile dropdown and desktop tabs, verifies that summary selections stay synchronized with the dropdown (including combined Warning & Escalation), and checks search and reset, the existing observation-day filter, refresh, case navigation, warning/referral dialog opening, and empty/error states. API mutations are prohibited in this regression; it does not issue warnings, refer cases, or change real records. Mobile and desktop previews are saved to uniquely named files in the system temporary directory.
 
 The list reuses the existing status/day badges, shared subdivision navigation, colors, fonts and rounded card/button styles. All four summary categories and stage-specific actions remain available. Backend workflow rules and persistence are unchanged.
+
+## Barangay trace removal Phase 1 - 2026-11-06
+
+Current behavior: Admin user management offers Resident/Citizen, Subdivision Leader and Administrator provisioning. Historical Barangay accounts remain available through a separate read-only history filter, without edit/delete/invite/head-designation actions. Default backend retirement guards refuse new role-3 accounts, new head authority and head assignment, and refuse setup invitations for retired accounts. The existing `BARANGAY_WORKFLOWS_ENABLED` switch still restores legacy backend behavior; the Admin UI stays scoped to supported roles. Public signup retains its existing unverified-resident role clamp.
+
+Commands from the repository root:
+
+```powershell
+.venv\Scripts\python.exe backend/tests/test_barangay_provisioning_retired.py
+.venv\Scripts\python.exe backend/tests/test_admin_invite.py
+.venv\Scripts\python.exe backend/tests/test_barangay_gate.py
+# With an isolated local Vite server running on port 5180:
+$env:PHASE1_ADMIN_TEST_URL='http://127.0.0.1:5180'
+node frontend/tests/adminRetirementPhase1.browser.mjs
+$env:ARCHIVE_TEST_URL='http://127.0.0.1:5180'
+node frontend/tests/adminArchive.browser.mjs
+npm --prefix frontend run build
+```
+
+All three backend scripts set a temporary SQLite database before importing application models/routes and mock mail delivery; they do not import the application startup module or use the live database. Recorded results for this phase: 44 provisioning, 28 invitation and 50 existing retirement-gate checks passed. The mocked Phase 1 browser suite passes at 390 and 1280px, covering supported creation/editing, historical account visibility, role/position restrictions and current/legacy referral preview/print consistency. The existing Admin archive browser suite passes. The production build passes with the existing large-chunk warning. Native print dialogs/physical printers and deployed environment-switch settings were not tested.
+
+## Barangay trace removal Phase 2 - 2026-11-06
+
+Phase 2 covers B03-B07: current dashboard counts/navigation, historical endorsement provenance, static earlier dispatch positions and viewer-only GPS directions, reference-only settings with preserved historical metadata, and neutral missing warning-issuer attribution. No current case/ownership transitions or archived record contents are rewritten.
+
+```powershell
+# Each backend script sets its own temporary SQLite database before importing routes.
+.venv\Scripts\python.exe backend/tests/test_retired_landmark_designations.py
+# Compatibility-only facility synchronization regression; use a separate terminal/process:
+$env:BARANGAY_WORKFLOWS_ENABLED='1'
+.venv\Scripts\python.exe backend/tests/test_facility_and_map_sync.py
+Remove-Item Env:BARANGAY_WORKFLOWS_ENABLED
+# With isolated local Vite on port 5180, from another terminal:
+$env:RETIREMENT_PHASE2_TEST_URL='http://127.0.0.1:5180'
+node frontend/tests/adminSubdRetirementPhase2.browser.mjs
+$env:REFERRAL_TEST_URL='http://127.0.0.1:5180'
+node frontend/tests/barangayReferral.browser.mjs
+$env:PHASE1_MAPS_TEST_URL='http://127.0.0.1:5180'
+node frontend/tests/phase1Maps.browser.mjs
+$env:PHASE5_PETS_TEST_URL='http://127.0.0.1:5180'
+node frontend/tests/phase5Pets.browser.mjs
+npm --prefix frontend run build
+```
+
+Recorded results: 25 default/legacy landmark-designation checks and 20 legacy facility/map synchronization checks passed in isolated SQLite. The targeted Phase 2 browser suite uses mocked APIs and a MapComponent prop observer for current sightings, current referrals, stale active dispatch records, known/unknown historical custody coordinates, inline/expanded map parity, GPS success/denial, current/historical endorsement provenance, ordinary landmark creation/editing, warning histories and recorded adoption locks at 390 and 1280px. Its pet-only fixture includes a synthetic-data notice. Settings submissions are mocked; no live data is edited. The existing referral browser suite, all 14 real-Leaflet map scenarios and all 26 pet/ownership/adoption-lock scenarios passed. TypeScript and production build passed with the existing large-chunk warning. Real GPS, routing services, devices and production configuration remain unverified.
+
+
+## Barangay trace removal Phase 3 - 2026-11-06
+
+Phase 3 removes unreachable Admin dispatch state/controls and proven-unused Subdivision holding/claims/escalation pages, the unused Barangay matching wrapper and its wording-only utility/branches. Historical status labels, Admin archives, retirement/session guards and compatibility redirects remain. See the [implementation follow-up](../03-development/implementation-reports/BARANGAY_TRACE_REMOVAL_FOLLOWUP_2026-11-06.md) for caller evidence and remaining concerns.
+
+With isolated local Vite on port 5180, run from the repository root:
+
+```powershell
+$env:ARCHIVE_TEST_URL='http://127.0.0.1:5180'
+node frontend/tests/adminArchive.browser.mjs
+$env:PHASE2_HOLDING_TEST_URL='http://127.0.0.1:5180'
+node frontend/tests/phase2Holding.browser.mjs
+$env:PHASE5_PETS_TEST_URL='http://127.0.0.1:5180'
+node frontend/tests/phase5Pets.browser.mjs
+$env:PHASE6TO8_TEST_URL='http://127.0.0.1:5180'
+node frontend/tests/phase6to8.browser.mjs
+$env:REFERRAL_TEST_URL='http://127.0.0.1:5180'
+node frontend/tests/barangayReferral.browser.mjs
+# Existing account/print, Phase 2 presentation and real-Leaflet suites use the commands above.
+npm --prefix frontend run build
+```
+
+The extended Admin suite mocks 16 status-only submissions and asserts that no responder ID or unused responder-directory fetch survives; archive checks still assert zero writes. The updated holding suite passes 14 scenarios, pet suite 26 and matching/owner/observation suite 24. Fixtures now exercise actual retired URLs and the current shared Potential Match Review modal. The matching regression checks that missing/pending owner responses block final submission, owner YES enables it and owner NO blocks confirmation; it does not finalize a real match. A role-3 claim component is mounted only for explicit legacy-compatibility regression, not as evidence that its portal is available. Matching test expectations for prior button/banner/photo-alt/observation labels were updated to the existing product UI; workflow code was not changed to satisfy them.
+
+The three account/retirement backend scripts passed 122 checks again using temporary SQLite; all mail is mocked. All browser APIs are mocked or blocked, and no application backend/database is used. Existing Phase 1 print/account and Phase 2 dashboard/map/settings/pet-history regressions passed, together with referral/retirement-route checks. No new backend/schema changes were made in Phase 3. Strict documentation audit must be compared with the known 12 pre-existing findings rather than described as a clean baseline.
+
+Final Phase 3 verification also passed all 14 real-Leaflet map scenarios and the TypeScript/production build (existing large-chunk warning). The strict documentation audit at 16:03 UTC returned the same 12 known broken-link/agent-pointer failures, with no new findings.
+
+
+## Admin Holding Archive removal
+
+Following the user's explicit removal request, the standalone Holding Archive is no longer mounted or linked in desktop/mobile Admin navigation. `/admin/holding-facility` redirects to `/admin/incidents`. Historical holding details remain visible inside related reports; the Adoption Archive remains read only. Earlier phase results above describe their point-in-time behavior before this decision.
+
+The existing `adminArchive.browser.mjs` now checks removed holding navigation/redirect at 390/1280px, no holding-list fetch for that redirect, preserved report enclosure details, unchanged Adoption Archive and supported status overrides. `phase2Holding.browser.mjs` retains resident-custody/single/multi-animal checks and verifies both retired holding URLs (12 scenarios). `barangayRetired.browser.mjs` checks the updated Admin destination together with existing retired-role/login guards. These tests mock/block APIs in isolated Chrome; no real backend or database is used.
+
+```powershell
+# With isolated Vite on port 5180:
+$env:ARCHIVE_TEST_URL='http://127.0.0.1:5180'
+node frontend/tests/adminArchive.browser.mjs
+$env:PHASE2_HOLDING_TEST_URL='http://127.0.0.1:5180'
+node frontend/tests/phase2Holding.browser.mjs
+$env:BRGY_TEST_URL='http://127.0.0.1:5180'
+node frontend/tests/barangayRetired.browser.mjs
+npm --prefix frontend run build
+```
+
+Removal verification passed all three browser scripts above and the TypeScript/production build. The documentation audit retains the same 12 existing findings; the browser checks do not use the application database.

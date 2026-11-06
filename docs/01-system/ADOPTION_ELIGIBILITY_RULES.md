@@ -1,5 +1,7 @@
 # Adoption eligibility after an owner claim or handover
 
+Current subdivision-only boundary: adoption operations happen outside StraySafe. The Admin Holding Archive is removed and its old URL redirects to incident reports; the Admin Adoption Archive remains read only; `/brgy/*` shows retirement information. The unused Subdivision holding page was removed in cleanup Phase 3 and its old URL still redirects to referrals. Operational actions below describe retained server/legacy compatibility; they are not available as current portal actions.
+
 An animal that went back to its original owner is never adopted out. The server enforces this rule; the screens follow it.
 
 ## When an animal counts as returned to its owner
@@ -60,18 +62,18 @@ Nothing is deleted: the animal, its ownership and return history, and the adopti
 
 ## Screens
 
-- **Barangay holding page:**
+- **Retained legacy holding implementation** (not mounted by current portal routes):
   - Status 3 reads **Returned to Owner**. A record whose history shows a return gets that label even if its stored status lags behind.
   - The **Adopt** / **Promote to adoption** actions don't appear for it; trying to open the promotion shows the message above.
   - The detail shows a "Returned to Owner" notice.
   - For Adoption and Adopted are disabled in its status form.
 - **Responses:** `GET /holding/...` returns `adoption_eligible` and `adoption_block_reason` for every animal.
-- **Subdivision holding page:** status 3 reads "Returned to Owner" too.
+- **Report details:** historical holding records remain readable within related reports. The separate Admin Holding Archive page/navigation is removed; old bookmarks redirect to incident reports.
 
 ## Code and tests
 
 - Backend: `app/utils/adoption_eligibility.py`, `app/utils/owner_returns.py`, `app/routes/adoptions.py`, `app/routes/holding.py`, `app/routes/claims.py`, `app/schemas/holding.py`, `app/models/report.py` (transient fields), `app/tasks/unassigned_checker.py`
-- Frontend: `src/pages/Barangay_Staff/BrgyHoldingFacility.tsx`, `src/pages/Subd_Leaders/SubdHoldingFacility.tsx`
-- Tests: `python tests/test_adoption_eligibility.py` from `backend/` (isolated SQLite); `node frontend/tests/phase2Holding.browser.mjs` (returned-animal scenario)
+- Frontend: `frontend/src/pages/Barangay_Staff/BrgyHoldingFacility.tsx` (unmounted legacy compatibility implementation)
+- Tests: `python tests/test_adoption_eligibility.py` from `backend/` (isolated SQLite); `node frontend/tests/phase2Holding.browser.mjs` (retired Subdivision/Admin holding redirects, supported resident-custody controls); `node frontend/tests/adminArchive.browser.mjs` (Holding Archive removal, related report holding details and read-only Adoption Archive)
 
 **Lists (2026-11-02):** `owner_handover_evidence_map()` applies the same rules to many animals in a fixed number of queries. `GET /holding/` uses it, together with one database time and one pet lookup for the whole list. Single-record checks still use `owner_handover_evidence()`.

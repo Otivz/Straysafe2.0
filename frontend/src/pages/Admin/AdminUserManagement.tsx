@@ -71,7 +71,6 @@ const AdminUserManagement = () => {
         phone: '',
         role_id: 1,
         barangay_id: 1,
-        is_head_officer: false,
         barangay: 'San Vicente',
         city: 'Santa Maria, Bulacan',
         address: '',
@@ -136,6 +135,8 @@ const AdminUserManagement = () => {
     }, []);
 
     const handleOpenModal = (user: User | null = null) => {
+        if (user?.role_id === 3) return; // Historical accounts are kept read-only.
+
         if (user) {
             setEditingUser(user);
             setFormData({
@@ -145,7 +146,6 @@ const AdminUserManagement = () => {
                 phone: user.phone || '',
                 role_id: user.role_id,
                 barangay_id: user.barangay_id || 1,
-                is_head_officer: user.is_head_officer || false,
                 barangay: user.barangay_name || user.barangay || 'San Vicente',
                 city: user.city || 'Santa Maria, Bulacan',
                 address: user.address || '',
@@ -162,7 +162,6 @@ const AdminUserManagement = () => {
                 phone: '',
                 role_id: 1,
                 barangay_id: 1,
-                is_head_officer: false,
                 barangay: 'San Vicente',
                 city: 'Santa Maria, Bulacan',
                 address: '',
@@ -176,6 +175,7 @@ const AdminUserManagement = () => {
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (editingUser?.role_id === 3 || formData.role_id === 3) return;
         try {
             const cleanData: any = {
                 ...formData,
@@ -184,8 +184,8 @@ const AdminUserManagement = () => {
                 address: formData.address.trim() || '',
                 phone: formData.phone.trim() || null,
                 subdivision_id: formData.role_id === 1 || formData.role_id === 2 ? 1 : null,
-                barangay_id: formData.role_id === 3 ? (formData.barangay_id || 1) : null,
-                is_head_officer: formData.role_id === 3 ? formData.is_head_officer : false
+                barangay_id: null,
+                is_head_officer: false
             };
 
             let inviteSent: boolean | null = null;
@@ -246,24 +246,6 @@ const AdminUserManagement = () => {
         }
     };
 
-    const handleAssignHead = async (user: User) => {
-        try {
-            await api.post(`/users/barangay/1/assign-head`, {
-                user_id: user.user_id,
-                position_id: user.role_id === 3 ? 6 : undefined // Default to Barangay Captain / Head
-            });
-            invalidateCache('admin_users_list');
-            invalidateCache('admin_dashboard_stats');
-            setSuccessMessage(`${user.name} is now designated as the Head Officer of Barangay San Vicente!`);
-            setShowSuccess(true);
-            fetchUsers(true);
-        } catch (error: any) {
-            console.error('Error designating barangay head:', error);
-            const detail = error.response?.data?.detail;
-            setErrorMessage(typeof detail === 'string' ? detail : 'Failed to designate head officer.');
-        }
-    };
-
     const confirmDeleteUser = async () => {
         if (!deleteTargetUser) return;
         try {
@@ -302,7 +284,7 @@ const AdminUserManagement = () => {
     const filteredUsers = users.filter(u => {
         const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             u.email.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesRole = roleFilter === 'all' || u.role_id === roleFilter;
+        const matchesRole = roleFilter === 'all' ? u.role_id !== 3 : u.role_id === roleFilter;
         const matchesStatus = statusFilter === 'all' || u.status === statusFilter;
 
         return matchesSearch && matchesRole && matchesStatus;
@@ -330,7 +312,7 @@ const AdminUserManagement = () => {
                     leftContent={
                         <div className="flex flex-col">
                             <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">User Management</h1>
-                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">Manage system users, roles, and barangay hierarchy</p>
+                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">Manage residents, subdivision leaders and administrators</p>
                         </div>
                     }
                 />
@@ -365,12 +347,13 @@ const AdminUserManagement = () => {
                             </div>
                             <div className="flex items-center space-x-2">
                                 <Select
+                                    aria-label="Filter users by role"
                                     value={roleFilter}
                                     onChange={(e) => setRoleFilter(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
                                     options={[
-                                        { value: 'all', label: 'All Roles' },
+                                        { value: 'all', label: 'Current portal roles' },
                                         { value: 4, label: 'Admin' },
-                                        { value: 3, label: 'Barangay Staff & Head' },
+                                        { value: 3, label: 'Historical Barangay accounts' },
                                         { value: 2, label: 'Subdivision Leader' },
                                         { value: 1, label: 'Citizen' }
                                     ]}
@@ -390,6 +373,11 @@ const AdminUserManagement = () => {
                             </div>
                         </div>
 
+                        {roleFilter === 3 && (
+                            <p data-historical-accounts className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                                Earlier Barangay accounts are preserved as read-only history. They cannot sign in or be provisioned through StraySafe.
+                            </p>
+                        )}
                         {/* Data Table Section */}
                         <DataTable
                             loading={loading}
@@ -466,18 +454,9 @@ const AdminUserManagement = () => {
                                                     Administrator
                                                 </span>
                                             ) : user.role_id === 3 ? (
-                                                user.is_head_officer ? (
-                                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black tracking-wide bg-gradient-to-r from-purple-700 via-purple-600 to-indigo-600 text-white shadow-sm border border-purple-300">
-                                                        <svg className="w-3 h-3 text-amber-300 fill-current" viewBox="0 0 20 20">
-                                                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                                        </svg>
-                                                        Barangay Head Officer
-                                                    </span>
-                                                ) : (
-                                                    <span className="px-3 py-1 rounded-full text-[10px] font-bold border bg-purple-50 text-purple-600 border-purple-100">
-                                                        Barangay Field Staff
-                                                    </span>
-                                                )
+                                                <span className="px-3 py-1 rounded-full text-[10px] font-bold border bg-slate-50 text-slate-600 border-slate-200">
+                                                    Historical Barangay account
+                                                </span>
                                             ) : user.role_id === 2 ? (
                                                 <span className="px-3 py-1 rounded-full text-[10px] font-bold border bg-blue-50 text-blue-600 border-blue-100">
                                                     Subdivision Leader
@@ -503,7 +482,7 @@ const AdminUserManagement = () => {
                                                 <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80 shrink-0" />
                                                 {user.status}
                                             </span>
-                                            {user.invite_pending && (
+                                            {user.role_id !== 3 && user.invite_pending && (
                                                 <span
                                                     title="They haven't set their password yet"
                                                     className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border bg-amber-50 text-amber-700 border-amber-200"
@@ -519,6 +498,9 @@ const AdminUserManagement = () => {
                                     key: "actions",
                                     className: "text-right",
                                     render: (user, rowIndex) => {
+                                        if (user.role_id === 3) return (
+                                            <span className="text-xs text-slate-500">Read-only history; sign-in unavailable</span>
+                                        );
                                         const index = typeof rowIndex === 'number' 
                                             ? rowIndex 
                                             : paginatedUsers.findIndex(u => u.user_id === user.user_id);
@@ -558,7 +540,7 @@ const AdminUserManagement = () => {
                                                             Edit User
                                                         </button>
 
-                                                        {user.invite_pending && (
+                                                        {user.role_id !== 3 && user.invite_pending && (
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
@@ -574,21 +556,7 @@ const AdminUserManagement = () => {
                                                             </button>
                                                         )}
 
-                                                        {user.role_id === 3 && !user.is_head_officer && (
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleAssignHead(user);
-                                                                    setOpenMenuId(null);
-                                                                }}
-                                                                className="w-full flex items-center gap-3 px-4 py-2 text-sm font-bold text-purple-700 hover:bg-purple-50 transition-colors cursor-pointer"
-                                                            >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                                                                </svg>
-                                                                Designate as Head Officer
-                                                            </button>
-                                                        )}
+
 
                                                         <button
                                                             onClick={(e) => {
@@ -721,7 +689,7 @@ const AdminUserManagement = () => {
                             </button>
                         </div>
 
-                        <form onSubmit={handleSave} autoComplete="off" className="p-4 sm:p-6 lg:p-8 max-h-[75vh] overflow-y-auto">
+                        <form data-account-form onSubmit={handleSave} autoComplete="off" className="p-4 sm:p-6 lg:p-8 max-h-[75vh] overflow-y-auto">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Full Name</label>
@@ -781,13 +749,13 @@ const AdminUserManagement = () => {
                                     />
                                 </div>
                                 <Select
+                                    aria-label="User Role"
                                     label="User Role"
                                     value={formData.role_id}
                                     onChange={(e) => setFormData({ ...formData, role_id: parseInt(e.target.value) })}
                                     options={[
                                         { value: 1, label: 'Citizen' },
                                         { value: 2, label: 'Leader' },
-                                        { value: 3, label: 'Barangay Staff / Personnel' },
                                         { value: 4, label: 'Administrator' }
                                     ]}
                                 />
@@ -802,30 +770,7 @@ const AdminUserManagement = () => {
                                     ]}
                                 />
 
-                                {formData.role_id === 3 && (
-                                    <div className="col-span-full bg-purple-50/80 border border-purple-100 rounded-2xl p-4 flex items-center justify-between shadow-sm">
-                                        <div className="pr-4">
-                                            <p className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
-                                                <svg className="w-3.5 h-3.5 text-purple-600 fill-current" viewBox="0 0 20 20">
-                                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                                </svg>
-                                                Designate as Barangay Head Officer (In Charge)
-                                            </p>
-                                            <p className="text-[11px] text-purple-700 mt-0.5">
-                                                Gives this account tactical command, team dispatch, and administrative sign-off authority for Barangay San Vicente.
-                                            </p>
-                                        </div>
-                                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={formData.is_head_officer} 
-                                                onChange={(e) => setFormData({ ...formData, is_head_officer: e.target.checked })} 
-                                                className="sr-only peer" 
-                                            />
-                                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-                                        </label>
-                                    </div>
-                                )}
+
 
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">City</label>
@@ -870,22 +815,18 @@ const AdminUserManagement = () => {
                                         </label>
                                         {(() => {
                                             const standardPositions = [
-                                                'Barangay Captain / Punong Barangay',
-                                                'Barangay Animal Rescuer / Field Handler',
-                                                'Barangay Tanod / Peace & Order Officer',
-                                                'Barangay Staff / Action Officer',
-                                                'Barangay Kagawad',
                                                 'Subdivision President / Leader',
                                                 'Subdivision Secretary'
                                             ];
                                             const allPositions = Array.from(new Set([
                                                 ...standardPositions,
-                                                ...dynamicPositions.map(dp => dp.position_name)
+                                                ...dynamicPositions.filter(dp => !/barangay|punong|tanod/i.test(dp.position_name)).map(dp => dp.position_name)
                                             ]));
                                             
                                             return (
                                                 <>
                                                     <select
+                                                        aria-label="Official designation"
                                                         value={allPositions.includes(formData.position) ? formData.position : (formData.position ? 'Other' : '')}
                                                         onChange={(e) => {
                                                             const val = e.target.value;

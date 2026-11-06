@@ -1841,136 +1841,183 @@ export default function SubdUnderObservation() {
                                             <div
                                                 key={item.followup_id}
                                                 data-observation-case={item.followup_id}
-                                                className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md transition-all p-3.5 sm:p-5 flex flex-col sm:flex-row gap-3.5 sm:gap-4 group"
+                                                className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md transition-all p-4 sm:p-5 flex flex-col justify-between group"
                                             >
-                                                {/* LEFT SECTION — COMPACT ANIMAL PHOTO */}
-                                                <div data-case-photo className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-slate-100 overflow-hidden shrink-0 relative flex items-center justify-center self-start">
-                                                    {photoSrc ? (
-                                                        <img
-                                                            src={cloudinaryResized(photoSrc, 300)}
-                                                            alt={animalTitle}
-                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 rounded-2xl"
-                                                        />
-                                                    ) : (
-                                                        <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-2xl">
-                                                            <span className="text-2xl sm:text-3xl">🐾</span>
-                                                            <span className="text-[10px] font-bold text-slate-400">No Photo</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {/* RIGHT SECTION — ANIMAL INFORMATION & ACTIONS */}
-                                                <div className="flex-1 flex flex-col justify-between min-w-0 space-y-2.5">
-                                                    {/* Top Row: Badges */}
-                                                    <div className="flex flex-wrap items-center gap-1.5">
-                                                        <span className="px-2.5 py-0.5 rounded-full bg-[#1E293B] text-white text-[11px] font-black">
-                                                            Report #{item.report_id}
-                                                        </span>
-
-                                                        {item.workflow_section === 'resolved' ? (
-                                                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[11px] font-bold">
-                                                                Resolved
-                                                            </span>
-                                                        ) : item.workflow_section === 'endorsed' ? (
-                                                            <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300 text-[11px] font-bold">
-                                                                Barangay Endorsed
-                                                            </span>
-                                                        ) : item.workflow_section === 'second_warning_issued' ? (
-                                                            <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300 text-[11px] font-bold">
-                                                                Second Warning Issued
-                                                            </span>
-                                                        ) : item.workflow_section === 'for_second_warning' ? (
-                                                            <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 text-[11px] font-bold">
-                                                                Non-Compliant
-                                                            </span>
+                                                {/* TOP SECTION: Photo + Core Case Info Side-by-Side */}
+                                                <div className="flex items-start gap-3.5 sm:gap-4">
+                                                    {/* Animal Photo Thumbnail */}
+                                                    <div data-case-photo className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-slate-100 overflow-hidden shrink-0 relative flex items-center justify-center border border-slate-100 shadow-2xs">
+                                                        {photoSrc ? (
+                                                            <img
+                                                                src={cloudinaryResized(photoSrc, 300)}
+                                                                alt={animalTitle}
+                                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                            />
                                                         ) : (
-                                                            <span className="px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-800 border border-orange-300 text-[11px] font-bold">
-                                                                First Warning Issued
-                                                            </span>
-                                                        )}
-
-                                                        {item.workflow_section === 'active' && (
-                                                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-white text-[11px] font-bold">
-                                                                Day {item.current_observation_day || 1} of 3
-                                                            </span>
-                                                        )}
-                                                        {item.workflow_section === 'for_second_warning' && (
-                                                            <span className="px-2.5 py-0.5 rounded-full bg-red-500 text-white text-[11px] font-bold">
-                                                                Overdue
-                                                            </span>
-                                                        )}
-                                                        {item.workflow_section === 'second_warning_issued' && (
-                                                            <span className="px-2.5 py-0.5 rounded-full bg-sky-500 text-white text-[11px] font-bold">
-                                                                Endorse to Barangay
-                                                            </span>
+                                                            <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 bg-slate-50">
+                                                                <span className="text-2xl sm:text-3xl">🐾</span>
+                                                                <span className="text-[10px] font-bold text-slate-400">No Photo</span>
+                                                            </div>
                                                         )}
                                                     </div>
 
-                                                    {/* Middle: Info */}
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                                                        <div className="space-y-1">
-                                                            <h3 className="text-sm font-black text-slate-900 leading-snug truncate">
-                                                                {animalTitle}
-                                                            </h3>
-                                                            <div className="text-[11px] text-slate-600 truncate">
+                                                    {/* Primary Information Beside Photo */}
+                                                    <div className="flex-1 min-w-0 flex flex-col justify-between">
+                                                        {/* Status & Report Badges */}
+                                                        <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                                            <span className="px-2.5 py-0.5 rounded-full bg-[#1E293B] text-white text-[10px] sm:text-[11px] font-black">
+                                                                Report #{item.report_id}
+                                                            </span>
+
+                                                            {item.workflow_section === 'resolved' ? (
+                                                                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] sm:text-[11px] font-bold">
+                                                                    Resolved
+                                                                </span>
+                                                            ) : item.workflow_section === 'endorsed' ? (
+                                                                <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300 text-[10px] sm:text-[11px] font-bold">
+                                                                    Referred to Barangay
+                                                                </span>
+                                                            ) : item.workflow_section === 'second_warning_issued' ? (
+                                                                <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300 text-[10px] sm:text-[11px] font-bold">
+                                                                    Second Warning Issued
+                                                                </span>
+                                                            ) : item.workflow_section === 'for_second_warning' ? (
+                                                                <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 text-[10px] sm:text-[11px] font-bold">
+                                                                    Non-Compliant (Expired)
+                                                                </span>
+                                                            ) : (
+                                                                <span className="px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-800 border border-orange-300 text-[10px] sm:text-[11px] font-bold">
+                                                                    Under Observation
+                                                                </span>
+                                                            )}
+
+                                                            {item.workflow_section === 'active' && (
+                                                                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] sm:text-[11px] font-bold">
+                                                                    Day {item.current_observation_day || 1} of 3
+                                                                </span>
+                                                            )}
+                                                            {item.workflow_section === 'for_second_warning' && (
+                                                                <span className="px-2.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] sm:text-[11px] font-bold">
+                                                                    Overdue
+                                                                </span>
+                                                            )}
+                                                            {item.workflow_section === 'second_warning_issued' && (
+                                                                <span className="px-2.5 py-0.5 rounded-full bg-sky-500 text-white text-[10px] sm:text-[11px] font-bold">
+                                                                    Endorse to Barangay
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Animal Title */}
+                                                        <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight truncate">
+                                                            {animalTitle}
+                                                        </h3>
+
+                                                        {/* Owner Details */}
+                                                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-600">
+                                                            <span className="truncate">
                                                                 <span className="text-slate-400 font-medium">Owner: </span>
                                                                 <span className="font-bold text-slate-800">{item.owner_name || 'Resident / Pet Owner'}</span>
-                                                            </div>
-                                                            <div className="text-[11px] text-slate-600 truncate">
-                                                                <span className="text-slate-400 font-medium">Contact: </span>
-                                                                <span className="font-semibold text-slate-800">{item.owner_phone || 'No phone recorded'}</span>
-                                                            </div>
+                                                            </span>
+                                                            {item.owner_phone && (
+                                                                <span className="text-slate-300">·</span>
+                                                            )}
+                                                            {item.owner_phone && (
+                                                                <span className="font-semibold text-slate-700 truncate">{item.owner_phone}</span>
+                                                            )}
                                                         </div>
 
-                                                        <div className="space-y-1 sm:pl-3 sm:border-l sm:border-slate-100">
-                                                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                                        {/* Landmark & Breed Context */}
+                                                        {(item.report_landmark || item.report_breed) && (
+                                                            <p className="text-[11px] text-slate-500 truncate mt-0.5 flex items-center gap-1">
+                                                                {item.report_landmark && <span>📍 {item.report_landmark}</span>}
+                                                                {item.report_landmark && item.report_breed && <span className="text-slate-300">·</span>}
+                                                                {item.report_breed && <span className="text-slate-600">{item.report_breed}</span>}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* MIDDLE SECTION: Workflow Stage Context & Progress Line */}
+                                                <div className="mt-3.5 pt-3 border-t border-slate-100 space-y-1.5">
+                                                    <div className="flex items-center justify-between text-xs">
+                                                        <span className="text-slate-600 font-medium text-[11px] flex items-center gap-1.5 truncate">
+                                                            <span className={`w-2 h-2 rounded-full shrink-0 ${
+                                                                item.workflow_section === 'resolved'
+                                                                    ? 'bg-emerald-500'
+                                                                    : item.workflow_section === 'endorsed' || item.workflow_section === 'second_warning_issued'
+                                                                        ? 'bg-purple-500'
+                                                                        : item.workflow_section === 'for_second_warning'
+                                                                            ? 'bg-rose-500'
+                                                                            : 'bg-amber-500 animate-pulse'
+                                                            }`} />
+                                                            <span className="font-bold text-slate-800 truncate">
                                                                 {item.workflow_section === 'resolved'
-                                                                    ? 'Resolved Date'
+                                                                    ? 'Resolution Verified & Case Closed'
                                                                     : item.workflow_section === 'endorsed'
-                                                                        ? 'Endorsed Date'
+                                                                        ? 'Formally Referred to Barangay'
                                                                         : item.workflow_section === 'second_warning_issued'
-                                                                            ? 'Second Warning'
-                                                                            : 'Observation Period'}
-                                                            </div>
-                                                            <div className="text-xs font-bold text-slate-800">
-                                                                {formatCardDate(item.resolved_at || item.endorsement_date || item.second_warning_date || item.first_warning_date)}
-                                                            </div>
-                                                            <div className="text-[11px] font-bold text-amber-600">
-                                                                {item.remaining_time_display || item.observation_day_display || ''}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Progress / Accent Bar */}
-                                                    <div className="w-full pt-1">
-                                                        <div
-                                                            role="progressbar"
-                                                            aria-valuenow={item.progress_percent || 0}
-                                                            aria-valuemin={0}
-                                                            aria-valuemax={100}
-                                                            className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden"
-                                                        >
-                                                            <div
-                                                                className={`h-full rounded-full transition-all duration-500 ${
-                                                                    item.workflow_section === 'resolved'
-                                                                        ? 'bg-emerald-500'
-                                                                        : item.workflow_section === 'endorsed' || item.workflow_section === 'second_warning_issued'
-                                                                            ? 'bg-purple-500'
+                                                                            ? 'Second Warning Active'
                                                                             : item.workflow_section === 'for_second_warning'
-                                                                                ? 'bg-red-500'
-                                                                                : 'bg-amber-500'
-                                                                }`}
-                                                                style={{ width: `${Math.min(100, Math.max(5, item.progress_percent || 0))}%` }}
-                                                            />
-                                                        </div>
+                                                                                ? '3-Day Compliance Period Expired'
+                                                                                : `Active Observation (Day ${item.current_observation_day || 1} of 3)`}
+                                                            </span>
+                                                        </span>
+
+                                                        <span className="text-[11px] font-bold text-slate-600 shrink-0">
+                                                            {item.workflow_section === 'resolved'
+                                                                ? (item.resolved_at ? formatCardDate(item.resolved_at) : 'Resolved')
+                                                                : item.workflow_section === 'endorsed'
+                                                                    ? (item.endorsement_date ? formatCardDate(item.endorsement_date) : 'Endorsed')
+                                                                    : item.workflow_section === 'second_warning_issued'
+                                                                        ? (item.second_warning_date ? formatCardDate(item.second_warning_date) : 'Issued')
+                                                                        : (item.remaining_time_display || item.observation_day_display || 'Day 1 of 3')}
+                                                        </span>
                                                     </div>
 
-                                                    {/* Action Buttons */}
-                                                    <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                                                    {/* Progress Bar */}
+                                                    <div
+                                                        role="progressbar"
+                                                        aria-valuenow={item.progress_percent || 0}
+                                                        aria-valuemin={0}
+                                                        aria-valuemax={100}
+                                                        className="w-full bg-slate-100 h-2 rounded-full overflow-hidden"
+                                                    >
+                                                        <div
+                                                            className={`h-full rounded-full transition-all duration-500 ${
+                                                                item.workflow_section === 'resolved'
+                                                                    ? 'bg-emerald-500'
+                                                                    : item.workflow_section === 'endorsed' || item.workflow_section === 'second_warning_issued'
+                                                                        ? 'bg-purple-500'
+                                                                        : item.workflow_section === 'for_second_warning'
+                                                                            ? 'bg-rose-500'
+                                                                            : 'bg-amber-500'
+                                                            }`}
+                                                            style={{ width: `${Math.min(100, Math.max(5, item.progress_percent || 0))}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {/* BOTTOM SECTION: Timeline Context on left, Action buttons on right */}
+                                                <div className="mt-3.5 pt-2.5 flex flex-wrap items-center justify-between gap-2.5">
+                                                    <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1.5">
+                                                        <span className="text-slate-400">First Warning:</span>
+                                                        <span className="font-semibold text-slate-700">
+                                                            {formatCardDate(item.first_warning_date || item.created_at)}
+                                                        </span>
+                                                        {(item.logs?.length || 0) > 0 && (
+                                                            <>
+                                                                <span className="text-slate-300">·</span>
+                                                                <span className="text-slate-600 font-semibold">{item.logs?.length} {item.logs?.length === 1 ? 'log' : 'logs'}</span>
+                                                            </>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="flex flex-wrap items-center gap-2">
                                                         <button
                                                             type="button"
                                                             onClick={() => handleViewDetails(item)}
-                                                            className="px-3.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 transition-colors cursor-pointer shadow-2xs"
+                                                            className="px-3.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 transition-colors cursor-pointer shadow-2xs hover:text-amber-700"
                                                         >
                                                             View Details
                                                         </button>

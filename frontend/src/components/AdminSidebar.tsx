@@ -160,15 +160,6 @@ const AdminSidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }
                             <path fillRule="evenodd" d="M12 1.586l-4 4v12.828l4-4V1.586zM3.707 3.293A1 1 0 002 4v10a1 1 0 00.553.894l4 2A1 1 0 008 16V3.172L3.707 3.293zM14 3.172V16a1 1 0 001.447.894l4-2A1 1 0 0020 14V4a1 1 0 00-1.707-.707L14 3.172z" clipRule="evenodd" />
                         </svg>
                     )
-                },
-                {
-                    path: '/admin/holding-facility',
-                    label: 'Holding Archive',
-                    icon: (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-                        </svg>
-                    )
                 }
             ]
         },
@@ -322,8 +313,7 @@ const AdminSidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }
 
                                 const isActive = item.path 
                                     ? (location.pathname === item.path || 
-                                       (item.path === '/admin/adoptions' && (location.pathname === '/brgy/adoptions' || location.pathname.startsWith('/admin/adoptions'))) ||
-                                       (item.path === '/admin/holding-facility' && (location.pathname === '/brgy/holding-facility' || location.pathname.startsWith('/admin/holding-facility'))) ||
+                                       (item.path === '/admin/adoptions' && location.pathname.startsWith('/admin/adoptions')) ||
                                        (item.path === '/admin/account-settings' && location.pathname === '/admin/settings') ||
                                        location.pathname.startsWith(item.path + '/'))
                                     : false;

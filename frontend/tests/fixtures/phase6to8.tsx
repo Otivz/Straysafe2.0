@@ -53,6 +53,13 @@ api.defaults.adapter = async config => {
     let data: unknown = [];
     let status = 200;
     if (path === '/manual-matching/status') data = { state: 'disabled', ai_available: false, manual_mode_active: true, reason: 'Google Gemini is turned OFF in Admin Settings.' };
+    else if (path === '/manual-matching/match-pair') {
+        const candidate = pets.find(p => p.pet_id === (body as {pet_id:number}).pet_id)!;
+        const confirmation = candidate.confirmation as {status:string;owner_note?:string} | null;
+        data = {match_id:candidate.pet_id,source_report_id:501,source_report:{...sourceReport,media:[]},matched_pet_id:candidate.pet_id,
+            matched_pet:{...candidate,owner_id:10,pet_type:'Dog'},matching_mode:'manual',ai_evidence:{engine:'manual'},
+            status:'PENDING_VERIFICATION',owner_confirmation_status:confirmation?.status || 'PENDING',owner_note:confirmation?.owner_note};
+    }
     else if (path === '/manual-matching/reports') data = { results: [sourceReport], count: 1 };
     else if (path === '/manual-matching/reports/501') data = sourceReport;
     else if (path === '/manual-matching/reports/501/pet-candidates') data = { source: sourceReport, results: pets, count: pets.length, blocked_reason: null };

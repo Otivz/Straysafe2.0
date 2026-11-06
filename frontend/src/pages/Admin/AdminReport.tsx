@@ -139,34 +139,13 @@ const AdminReport = () => {
     const [isDirectActionModalOpen, setIsDirectActionModalOpen] = useState(false);
     const [directActionReportId, setDirectActionReportId] = useState<number | null>(null);
     const [targetStatusId, setTargetStatusId] = useState<number>(16);
-    const [selectedStaffId, setSelectedStaffId] = useState<number | ''>('');
     const [actionRemarks, setActionRemarks] = useState<string>('');
-    const [staffList, setStaffList] = useState<Array<{ user_id: number; name: string; email: string; role_id: number }>>([]);
     const [isSubmittingAction, setIsSubmittingAction] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
     const userStr = localStorage.getItem('admin_user') || localStorage.getItem('user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
     const currentUserId = currentUser ? currentUser.user_id : 1;
-
-    const fetchStaffList = async () => {
-        try {
-            const res = await api.get('/users/');
-            const users = Array.isArray(res.data) ? res.data : [];
-            const staff = users.filter((u: any) => u.role_id === 3 || u.role_id === 2);
-            const activeStaff = staff.length > 0 ? staff : users;
-            setStaffList(activeStaff);
-            if (activeStaff.length > 0) {
-                setSelectedStaffId(activeStaff[0].user_id);
-            }
-        } catch (e) {
-            console.error('Error fetching staff list:', e);
-        }
-    };
-
-    useEffect(() => {
-        fetchStaffList();
-    }, []);
 
     const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
     const [replyingTo, setReplyingTo] = useState<Record<number, { commentId: number, userName: string } | null>>({});
@@ -257,21 +236,12 @@ const AdminReport = () => {
         e.preventDefault();
         if (!directActionReportId) return;
 
-        if (targetStatusId === 5 && !selectedStaffId) {
-            alert('Please select a rescue staff responder to dispatch.');
-            return;
-        }
-
         try {
             setIsSubmittingAction(true);
             const payload: any = {
                 status_id: targetStatusId,
                 remarks: actionRemarks.trim() || undefined
             };
-
-            if (targetStatusId === 5 && selectedStaffId) {
-                payload.assigned_staff_id = Number(selectedStaffId);
-            }
 
             await api.put(`${API_URL}/${directActionReportId}/status`, payload);
             invalidateCache('admin_reports_list');
@@ -1926,7 +1896,7 @@ const AdminReport = () => {
                                     Administrator Authority
                                 </div>
                                 <h3 className="text-xl font-bold text-gray-900">Direct Action / Status Override</h3>
-                                <p className="text-xs text-gray-500 mt-1">Directly assign rescue teams or update incident status without endorsement letters.</p>
+                                <p className="text-xs text-gray-500 mt-1">Investigate or dismiss an incident and record the reason in its history.</p>
                             </div>
                             <button
                                 onClick={() => setIsDirectActionModalOpen(false)}
@@ -1943,8 +1913,6 @@ const AdminReport = () => {
                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Target Action & Status</label>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                                     {[
-                                        { id: 5, label: 'Team Dispatched', desc: 'Deploy rescue responder' },
-                                        { id: 13, label: 'Approved by Barangay', desc: 'Authorize logistics' },
                                         { id: 16, label: 'Under Investigation', desc: 'Formal inspection inquiry' },
                                         { id: 14, label: 'False Alarm / Dismissed', desc: 'Close without penalty' }
                                     ].filter(action => isSelectableReportStatus(action.id)).map(action => (
@@ -1966,27 +1934,6 @@ const AdminReport = () => {
                                     ))}
                                 </div>
                             </div>
-
-                            {targetStatusId === 5 && (
-                                <div className="space-y-1.5 animate-in fade-in duration-200">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">
-                                        Assign Rescue Staff / Responder <span className="text-red-500">*</span>
-                                    </label>
-                                    <select
-                                        required
-                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-[#B35D25] outline-none transition-all"
-                                        value={selectedStaffId}
-                                        onChange={(e) => setSelectedStaffId(e.target.value ? Number(e.target.value) : '')}
-                                    >
-                                        <option value="">-- Select Field Personnel --</option>
-                                        {staffList.map((st) => (
-                                            <option key={st.user_id} value={st.user_id}>
-                                                {st.name} ({st.role_id === 3 ? 'Barangay Staff' : st.role_id === 2 ? 'Subdivision Leader' : 'Officer'})
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
 
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">

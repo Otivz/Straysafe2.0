@@ -1,6 +1,6 @@
 // Run with Vite on port 5173: node frontend/tests/barangayRetired.browser.mjs
 // Subdivision-only Phase 3b: every /brgy address shows the "handled outside StraySafe" page, a stale Barangay session is
-// sent there and can sign out, the staff sign-in is for Subdivision Leaders only, and the Admin archive pages still open.
+// sent there and can sign out, the staff sign-in is for Subdivision Leaders only, Adoption Archive stays available, and the removed Holding Archive redirects to incidents.
 // Isolated Chrome profile and a mocked API; no live data.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -125,17 +125,20 @@ try {
     console.log('PASS staff sign-in: Barangay account refused with the server message; Subdivision Leader signs in');
     void page;
 
-    // 4. Admin archive pages still open for the Administrator (made read-only in part 3c)
+    // 4. Adoption Archive remains available; Holding Archive is removed.
     await clearStorage();
     sessionRole = 4;
     await evaluate(`(localStorage.setItem('admin_user', JSON.stringify({ user_id: 9, name: 'Admin Reyes', role_id: 4, access_token: 'test.e30.test' })), true)`);
-    for (const path of ['/admin/adoptions', '/admin/holding-facility']) {
+    for (const path of ['/admin/adoptions']) {
         await go(path);
         await delay(1500);
         assert.equal(await evaluate(`location.pathname`), path, `${path} stays`);
         assert.equal(await evaluate(INFO), false, `${path} is not the information page`);
     }
-    console.log('PASS /admin/adoptions and /admin/holding-facility still open for the Administrator');
+    await go('/admin/holding-facility');
+    await waitFor(`location.pathname === '/admin/incidents'`, 'removed holding archive redirects');
+    assert.equal(await evaluate(`!!document.querySelector('a[href="/admin/holding-facility"]')`), false);
+    console.log('PASS Adoption Archive opens; removed Holding Archive redirects to incidents');
 
     assert.equal(browserErrors.length, 0, browserErrors.join('\n'));
     console.log('PASS no uncaught browser errors; all API calls mocked');

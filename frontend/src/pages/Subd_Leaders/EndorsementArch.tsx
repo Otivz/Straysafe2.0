@@ -85,44 +85,18 @@ const EndorsementArch = () => {
     };
 
     const getTimelineSteps = (mission: any) => {
-        const currentStatus = mission?.report?.status_id || mission?.report?.current_status_id || mission?.status_id || 4;
-        const hasAssignment = !!mission?.assigned_staff_name;
-        const isResolved = isReportClosed(currentStatus) || currentStatus === 6 || mission?.status_id === 6 || mission?.barangay_status?.toLowerCase() === 'resolved';
-        const isInProgress = currentStatus === 5 || mission?.status_id === 5 || mission?.status_id === 4 || mission?.barangay_status?.toLowerCase() === 'in progress';
-        const isTeamAssigned = hasAssignment || isResolved || isInProgress || currentStatus === 13 || (mission?.assignments && mission.assignments.length > 0);
-        
-        return [
-            {
-                label: 'Report Received',
-                status: 'Resolved',
-                timestamp: mission?.report?.created_at ? new Date(mission.report.created_at).toLocaleDateString() : 'N/A',
-                note: 'Initial incident report registered in subdivision.'
-            },
-            {
-                label: 'Endorsed to Barangay',
-                status: currentStatus >= 4 ? 'Resolved' : 'Pending',
-                timestamp: mission?.escalated_date || (mission?.created_at ? new Date(mission.created_at).toLocaleDateString() : 'N/A'),
-                note: 'Official subdivision endorsement sent to Barangay Operations.'
-            },
-            {
-                label: 'Rescue Team Assigned',
-                status: isTeamAssigned ? 'Resolved' : (currentStatus === 4 ? 'Pending' : 'Not Started'),
-                timestamp: mission?.assignments && mission.assignments.length > 0 ? new Date(mission.assignments[0].assigned_at).toLocaleDateString() : '-',
-                note: mission?.assigned_staff_name ? `Assigned to: ${mission.assigned_staff_name}` : (isResolved ? 'Rescue team dispatched and operation completed.' : 'Awaiting Barangay staff assignment.')
-            },
-            {
-                label: 'Rescue In Progress',
-                status: isResolved ? 'Resolved' : (isInProgress ? 'In Progress' : 'Not Started'),
-                timestamp: '-',
-                note: isInProgress ? 'Barangay rescue squad dispatched and on-site.' : (isResolved ? 'Dispatched and completed.' : '-')
-            },
-            {
-                label: 'Mission Resolved',
-                status: isResolved ? 'Resolved' : 'Not Started',
-                timestamp: '-',
-                note: isResolved ? 'Incident resolved successfully. Animal secured.' : '-'
-            }
-        ];
+        const steps = [];
+        if (mission?.report?.created_at) steps.push({ label: 'Report recorded', status: 'Resolved',
+            timestamp: new Date(mission.report.created_at).toLocaleDateString(), note: 'Earlier subdivision incident record.' });
+        if (mission?.escalated_date) steps.push({ label: 'Earlier endorsement recorded', status: 'Resolved',
+            timestamp: new Date(mission.escalated_date).toLocaleDateString(), note: 'Saved endorsement to the external Barangay.' });
+        const assignments = mission?.assignments || [];
+        if (assignments.length || mission?.assigned_staff_name) steps.push({ label: 'Earlier team assignment', status: 'Resolved',
+            timestamp: assignments[0]?.assigned_at ? new Date(assignments[0].assigned_at).toLocaleDateString() : 'Not recorded',
+            note: mission.assigned_staff_name ? `Recorded assignee: ${mission.assigned_staff_name}` : 'Assignment exists in the earlier dispatch record.' });
+        if (mission?.status_id != null) steps.push({ label: 'Recorded dispatch status', status: 'Resolved',
+            timestamp: '-', note: `Historical record: ${getBarangayStatusName(mission.status_id)}. This does not describe current Barangay activity.` });
+        return steps;
     };
 
     const handlePreview = async (doc: EndorsementDocument) => {
@@ -283,27 +257,11 @@ const EndorsementArch = () => {
 
     useEffect(() => {
         fetchDocs(true);
-        const interval = setInterval(whenVisible(() => fetchDocs(false)), 5000);
+        const interval = setInterval(whenVisible(() => fetchDocs(false)), 30000);
         return () => clearInterval(interval);
     }, []);
 
-    useEffect(() => {
-        if (!selectedDoc || selectedDoc.kind !== 'legacy') return;
-        
-        const pollMission = async () => {
-            try {
-                const res = await api.get(`/rescue-requests/report/${selectedDoc.report_id}`);
-                if (res.data) {
-                    setMissionData(res.data);
-                }
-            } catch (err) {
-                console.error('Error polling preview mission:', err);
-            }
-        };
 
-        const interval = setInterval(whenVisible(pollMission), 5000);
-        return () => clearInterval(interval);
-    }, [selectedDoc]);
 
     const closePreview = () => {
         setSelectedDoc(null);
@@ -359,7 +317,7 @@ const EndorsementArch = () => {
                                 </span>
                             </div>
                             <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">
-                                Legal records of all official incident endorsements transmitted to Barangay operations
+                                External referrals and earlier saved endorsement letters
                             </p>
                         </div>
                     }
@@ -531,6 +489,7 @@ const EndorsementArch = () => {
                                             <div className="grid grid-cols-2 gap-2 pt-2.5 border-t border-slate-100 mt-auto">
                                                 <button
                                                     type="button"
+                                                    aria-label={`Preview ${doc.title}`}
                                                     onClick={() => handlePreview(doc)}
                                                     className="h-10 flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-role-strong hover:bg-role-soft hover:border-role-border font-bold text-xs transition-colors cursor-pointer"
                                                 >
@@ -599,7 +558,7 @@ const EndorsementArch = () => {
                     ['Target animal', rep?.animal_type ? `${rep.animal_type}${rep?.animal_breed ? ` (${rep.animal_breed})` : ''}` : 'Not recorded'],
                     ['Location', rep?.landmark || 'Not recorded'],
                     ['Condition', rep?.condition || missionData?.description || 'Not recorded'],
-                    ['Rescue team', selectedDoc.kind === 'referral' ? 'Handled by the Barangay outside StraySafe' : (missionData?.assigned_staff_name || 'Awaiting dispatch')],
+                    [selectedDoc.kind === 'referral' ? 'External handling' : 'Earlier assigned team', selectedDoc.kind === 'referral' ? 'Handled by the Barangay outside StraySafe' : (missionData?.assigned_staff_name || 'Not recorded')],
                 ];
 
                 return (
@@ -676,32 +635,12 @@ const EndorsementArch = () => {
                                         </dd>
                                     </div>
                                 </dl>
-                                {/* Sync state: "Live" only once the mission record has loaded (it then refreshes every 5 s) */}
-                                <p className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
-                                    {selectedDoc.kind === 'referral' ? (
-                                        <>
-                                            <span className="w-2 h-2 rounded-full bg-indigo-400" />
-                                            The Barangay is contacted outside StraySafe; its updates are recorded by the Subdivision Leader.
-                                        </>
-                                    ) : loadingMission ? (
-                                        <>
-                                            <span className="w-2 h-2 rounded-full bg-slate-300 animate-pulse" />
-                                            Loading Barangay operations…
-                                        </>
-                                    ) : missionData ? (
-                                        <>
-                                            <span className="relative flex h-2 w-2">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                            </span>
-                                            <span className="text-emerald-700 font-bold">Live</span> · Barangay operations, updates automatically
-                                        </>
-                                    ) : (
-                                        <>
-                                            <span className="w-2 h-2 rounded-full bg-amber-400" />
-                                            Awaiting active dispatch sync from the Barangay
-                                        </>
-                                    )}
+                                <p data-endorsement-provenance className="mt-3 text-[11px] font-semibold text-slate-500">
+                                    {selectedDoc.kind === 'referral'
+                                        ? 'The Barangay is contacted outside StraySafe; its updates are recorded by the Subdivision Leader.'
+                                        : loadingMission ? 'Loading earlier dispatch records...'
+                                        : missionData ? 'Historical dispatch record. No live Barangay tracking is provided.'
+                                        : 'No earlier dispatch record was found. No current dispatch activity is implied.'}
                                 </p>
                             </section>
 
@@ -805,7 +744,7 @@ const EndorsementArch = () => {
                             {/* Progress (older rescue-request endorsements only) */}
                             {selectedDoc.kind === 'legacy' && missionData && (
                                 <section>
-                                    <h3 className="text-xs font-black text-slate-900 mb-3">Progress</h3>
+                                    <h3 className="text-xs font-black text-slate-900 mb-3">Earlier recorded events</h3>
                                     <ol className="flex flex-col">
                                         {getTimelineSteps(missionData).map((step, idx, arr) => {
                                             const isLast = idx === arr.length - 1;

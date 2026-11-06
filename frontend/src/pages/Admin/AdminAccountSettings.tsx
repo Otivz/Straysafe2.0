@@ -443,6 +443,12 @@ const AdminAccountSettings = () => {
             return;
         }
 
+        const originalLandmark = landmarks.find(item => item.landmark_id === editingLandmarkId);
+        if ((landmarkForm.is_holding_facility && !originalLandmark?.is_holding_facility) ||
+            (landmarkForm.category === 'facility' && originalLandmark?.category !== 'facility' && !originalLandmark?.is_holding_facility)) {
+            showToast('error', 'New holding places are handled outside StraySafe. Register a reference landmark instead.');
+            return;
+        }
         setIsSavingLandmark(true);
         try {
             const payload = {
@@ -454,7 +460,7 @@ const AdminAccountSettings = () => {
                 latitude: parseFloat(landmarkForm.latitude.toString()),
                 longitude: parseFloat(landmarkForm.longitude.toString()),
                 is_holding_facility: landmarkForm.is_holding_facility,
-                facility_type: landmarkForm.is_holding_facility ? (landmarkForm.facility_type || 'Temporary Holding Pen') : null,
+                facility_type: landmarkForm.is_holding_facility ? (landmarkForm.facility_type || null) : null,
                 capacity: landmarkForm.is_holding_facility ? (Number(landmarkForm.capacity) || 10) : null,
                 contact_person: landmarkForm.contact_person.trim() || null,
                 contact_number: landmarkForm.contact_number.trim() || null
@@ -465,7 +471,7 @@ const AdminAccountSettings = () => {
                 showToast('success', 'Landmark updated successfully!');
             } else {
                 await api.post('/landmarks', payload);
-                showToast('success', 'New landmark / facility registered!');
+                showToast('success', 'New reference landmark registered!');
             }
 
             setEditingLandmarkId(null);
@@ -520,7 +526,7 @@ const AdminAccountSettings = () => {
             latitude: item.latitude,
             longitude: item.longitude,
             is_holding_facility: item.is_holding_facility,
-            facility_type: item.facility_type || 'Temporary Holding Pen',
+            facility_type: item.facility_type || '',
             capacity: item.capacity || 10,
             contact_person: item.contact_person || '',
             contact_number: item.contact_number || ''
@@ -558,7 +564,7 @@ const AdminAccountSettings = () => {
                         <div className="flex flex-col">
                             <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">System Settings & Jurisdiction</h1>
                             <p className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider mt-1 leading-none">
-                                Manage Admin Account, Barangay HQ Location Pinpoint, and Jurisdiction Landmarks
+                                Manage your account, external reference locations and landmarks
                             </p>
                         </div>
                     }
@@ -611,7 +617,7 @@ const AdminAccountSettings = () => {
                                         <p className="text-xl font-black text-white">{landmarks.length}</p>
                                     </div>
                                     <div className="bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 text-center">
-                                        <p className="text-[10px] font-black text-emerald-300 uppercase tracking-widest">Holding Places</p>
+                                        <p className="text-[10px] font-black text-emerald-300 uppercase tracking-widest">Earlier Holding Places</p>
                                         <p className="text-xl font-black text-white">{landmarks.filter(l => l.is_holding_facility).length}</p>
                                     </div>
                                 </div>
@@ -641,7 +647,7 @@ const AdminAccountSettings = () => {
                                 }`}
                             >
                                 <span>🏛️</span>
-                                <span>Barangay HQ Location Pin</span>
+                                <span>Barangay Reference Location</span>
                             </button>
 
                             <button
@@ -653,7 +659,7 @@ const AdminAccountSettings = () => {
                                 }`}
                             >
                                 <span>📍</span>
-                                <span>Landmarks & Holding Places</span>
+                                <span>Landmarks & Earlier Records</span>
                             </button>
 
                             <button
@@ -825,10 +831,10 @@ const AdminAccountSettings = () => {
                                             </span>
                                         </div>
                                         <h3 className="text-base font-black text-gray-900 mt-1">
-                                            Barangay Headquarters & Dispatch Location
+                                            Barangay Reference Location
                                         </h3>
                                         <p className="text-xs text-gray-500 font-medium mt-0.5">
-                                            As Administrator, you have exclusive authority to configure and calibrate the official Barangay Hall / Rescue Headquarters coordinates.
+                                            Maintain the external Barangay contact and reference pin. Rescue and holding work happen outside StraySafe.
                                         </p>
                                     </div>
 
@@ -900,7 +906,7 @@ const AdminAccountSettings = () => {
 
                                     <div className="flex items-center justify-between text-xs bg-gray-50 p-3 rounded-xl border border-gray-200 font-medium text-gray-600">
                                         <span>Selected HQ Pin: <strong className="text-blue-700">{barangayHQ.hq_lat?.toFixed(6)}</strong>, <strong className="text-blue-700">{barangayHQ.hq_lng?.toFixed(6)}</strong></span>
-                                        <span className="text-emerald-700 font-bold">Ready for deployment dispatch</span>
+                                        <span className="text-emerald-700 font-bold">Reference location only</span>
                                     </div>
                                 </div>
 
@@ -988,7 +994,7 @@ const AdminAccountSettings = () => {
                             <div className="bg-white rounded-3xl p-6 md:p-8 border border-gray-100 shadow-sm space-y-6">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                     <div>
-                                        <h3 className="text-base font-black text-gray-900">Jurisdiction Landmarks & Holding Places</h3>
+                                        <h3 className="text-base font-black text-gray-900">Jurisdiction Landmarks & Earlier Records</h3>
                                         <p className="text-xs text-gray-500 font-medium mt-0.5">
                                             Configure reference landmarks and designate holding places where animals can be placed across all subdivisions.
                                         </p>
@@ -1004,7 +1010,7 @@ const AdminAccountSettings = () => {
                                             <option value="all">All Jurisdictions ({landmarks.length})</option>
                                             <option value="subd_1">Selera Homes Only</option>
                                             <option value="brgy_general">Barangay General Only</option>
-                                            <option value="facilities">Holding Places Only ({landmarks.filter(l => l.is_holding_facility).length})</option>
+                                            <option value="facilities">Earlier Holding Places ({landmarks.filter(l => l.is_holding_facility).length})</option>
                                         </select>
                                     </div>
                                 </div>
@@ -1075,10 +1081,10 @@ const AdminAccountSettings = () => {
                                 </div>
 
                                 {/* Add / Edit Landmark Form */}
-                                <form onSubmit={handleSaveLandmark} className="bg-gray-50 rounded-2xl p-5 border border-gray-200/80 space-y-4">
+                                <form data-landmark-form onSubmit={handleSaveLandmark} className="bg-gray-50 rounded-2xl p-5 border border-gray-200/80 space-y-4">
                                     <div className="flex items-center justify-between">
                                         <p className="text-xs font-black text-gray-900 uppercase tracking-wider">
-                                            {editingLandmarkId ? '✏️ Edit Landmark Details' : '➕ Register New Landmark or Facility'}
+                                            {editingLandmarkId ? '✏️ Edit Landmark Details' : '➕ Register Reference Landmark'}
                                         </p>
                                         {editingLandmarkId && (
                                             <button
@@ -1113,9 +1119,10 @@ const AdminAccountSettings = () => {
                                             <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Landmark Name *</label>
                                             <input
                                                 type="text"
+                                                aria-label="Landmark name"
                                                 value={landmarkForm.name}
                                                 onChange={(e) => setLandmarkForm(prev => ({ ...prev, name: e.target.value }))}
-                                                placeholder="e.g. Selera Community Holding Pen"
+                                                placeholder="e.g. Main gate reference"
                                                 required
                                                 className="w-full px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
                                             />
@@ -1124,13 +1131,14 @@ const AdminAccountSettings = () => {
                                         <div>
                                             <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Marker Icon / Category</label>
                                             <select
+                                                aria-label="Landmark category"
                                                 value={landmarkForm.is_holding_facility ? 'facility' : landmarkForm.category}
                                                 disabled={landmarkForm.is_holding_facility}
                                                 onChange={(e) => setLandmarkForm(prev => ({ ...prev, category: e.target.value }))}
                                                 className="w-full px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#F97316] outline-none disabled:bg-gray-100 disabled:text-gray-500"
                                             >
-                                                {LANDMARK_CATEGORIES.map((cat) => (
-                                                    <option key={cat.id} value={cat.id}>
+                                                {LANDMARK_CATEGORIES.filter(cat => cat.id !== 'facility' || (editingLandmarkId != null && (landmarkForm.category === 'facility' || landmarkForm.is_holding_facility))).map((cat) => (
+                                                    <option key={cat.id} value={cat.id} disabled={cat.id === 'facility'}>
                                                         {cat.emoji} {cat.label}
                                                     </option>
                                                 ))}
@@ -1148,7 +1156,7 @@ const AdminAccountSettings = () => {
                                                 className="w-full px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
                                             >
                                                 <option value="1">Selera Homes (Subdivision)</option>
-                                                <option value="brgy">Barangay-wide / Impound Facility</option>
+                                                <option value="brgy">Barangay reference area</option>
                                             </select>
                                         </div>
 
@@ -1164,7 +1172,8 @@ const AdminAccountSettings = () => {
                                         </div>
                                     </div>
 
-                                    {/* Holding Facility Designation Toggle */}
+                                    {/* Earlier classifications remain readable; new facilities cannot be configured here. */}
+                                    {editingLandmarkId != null && landmarkForm.is_holding_facility && (
                                     <div className={`p-4 rounded-xl border transition-all ${
                                         landmarkForm.is_holding_facility
                                             ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
@@ -1174,12 +1183,13 @@ const AdminAccountSettings = () => {
                                             <div className="flex items-center gap-2.5">
                                                 <span className="text-xl">🐾</span>
                                                 <div>
-                                                    <p className="text-xs font-black uppercase tracking-wider">Designate as Animal Holding Place</p>
-                                                    <p className="text-[11px] text-gray-500 font-medium">Allows officers and citizens to designate this location as an animal impound or holding place.</p>
+                                                    <p className="text-xs font-black uppercase tracking-wider">Earlier facility designation (read-only)</p>
+                                                    <p className="text-[11px] text-gray-500 font-medium">Saved historical metadata. New animal holding and impounding happen outside StraySafe.</p>
                                                 </div>
                                             </div>
                                             <input
                                                 type="checkbox"
+                                                disabled aria-label="Earlier facility designation"
                                                 checked={landmarkForm.is_holding_facility}
                                                 onChange={(e) => setLandmarkForm(prev => ({
                                                     ...prev,
@@ -1194,15 +1204,12 @@ const AdminAccountSettings = () => {
                                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4 pt-3 border-t border-emerald-200/60">
                                                 <div>
                                                     <label className="block text-[11px] font-bold text-emerald-900 uppercase tracking-wider mb-1">Facility Type</label>
-                                                    <select
+                                                    <select disabled aria-label="Historical facility type"
                                                         value={landmarkForm.facility_type}
                                                         onChange={(e) => setLandmarkForm(prev => ({ ...prev, facility_type: e.target.value }))}
                                                         className="w-full px-3 py-1.5 bg-white border border-emerald-300 rounded-xl text-xs font-semibold text-gray-800 outline-none"
                                                     >
-                                                        <option value="Temporary Holding Pen">Temporary Holding Pen</option>
-                                                        <option value="Barangay Main Shelter">Barangay Main Shelter</option>
-                                                        <option value="Community Kennel">Community Kennel</option>
-                                                        <option value="Quarantine Cage">Quarantine Cage</option>
+                                                        <option value={landmarkForm.facility_type}>{landmarkForm.facility_type || 'Not recorded'} (historical)</option>
                                                     </select>
                                                 </div>
                                                 <div>
@@ -1276,6 +1283,7 @@ const AdminAccountSettings = () => {
                                             </div>
                                         )}
                                     </div>
+                                    )}
 
                                     <div className="flex justify-end gap-3 pt-2">
                                         <Button
@@ -1333,13 +1341,13 @@ const AdminAccountSettings = () => {
                                                                     : `${cat.badgeBg} ${cat.badgeText}`
                                                             }`}>
                                                                 <span>{cat.emoji}</span>
-                                                                <span className="truncate">{item.is_holding_facility ? 'Holding Place' : cat.label}</span>
+                                                                <span className="truncate">{item.is_holding_facility ? 'Earlier holding place' : cat.label}</span>
                                                             </span>
                                                         </div>
 
                                                         {item.is_holding_facility && (
                                                             <div className="mt-2.5 pt-2 border-t border-emerald-200/50 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-emerald-900 font-semibold">
-                                                                <span>Type: <strong>{item.facility_type || 'Holding Pen'}</strong></span>
+                                                                <span>Type: <strong>{item.facility_type || 'Not recorded'}</strong></span>
                                                                 <span>Capacity: <strong>{item.capacity || 0} animals</strong></span>
                                                                 {item.contact_person && <span>Contact: <strong>{item.contact_person}</strong></span>}
                                                                 {item.contact_number && <span>Phone: <strong>{item.contact_number}</strong></span>}

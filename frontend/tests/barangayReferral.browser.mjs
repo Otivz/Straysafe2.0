@@ -129,7 +129,7 @@ try {
 
     const token = 'test.' + Buffer.from(JSON.stringify({ user_id: LEADER_ID, exp: 4102444800 })).toString('base64') + '.test';
     await command('Page.addScriptToEvaluateOnNewDocument', { source:
-        `try { localStorage.setItem('staff_user', JSON.stringify({ user_id: ${LEADER_ID}, name: 'Leader Santos', role_id: 2, subdivision_id: 1, access_token: '${token}' })); } catch (e) {}` });
+        `try { if (!localStorage.getItem('staff_user')) localStorage.setItem('staff_user', JSON.stringify({ user_id: ${LEADER_ID}, name: 'Leader Santos', role_id: 2, subdivision_id: 1, access_token: '${token}' })); } catch (e) {}` });
     await command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
 
     // 1. Refer a verified case: letter upload, status 4, referral record; no rescue request
@@ -201,6 +201,19 @@ try {
         await waitFor(`location.pathname === '/subd/endorsements'`, `${old} redirect`);
     }
     console.log('PASS /subd/holding-facility and /subd/pet-claims redirect to Barangay Referrals');
+    await command('Page.navigate', { url: base + '/subd/escalated' });
+    await waitFor(`location.pathname === '/subd/reports' && new URLSearchParams(location.search).get('status') === 'Escalated to Barangay'`, 'retired escalation bookmark');
+    for (const old of ['/brgy', '/brgy/manual-matching', '/brgy/reports/5', '/brgy/holding-facility']) {
+        await command('Page.navigate', {url:base+old});
+        await waitFor(`document.body.textContent.includes('The Barangay is handled outside StraySafe')`, `${old} retirement information`);
+    }
+    // A stored retired-role session cannot reach an active Leader/Admin page.
+    await evaluate(`localStorage.setItem('staff_user', JSON.stringify({user_id:42,role_id:3,access_token:${JSON.stringify(token)}}))`);
+    await command('Page.navigate', {url:base+'/subd/dashboard'});
+    await waitFor(`location.pathname === '/brgy' && document.body.textContent.includes('The Barangay is handled outside StraySafe')`, 'retired role session blocked');
+    await evaluate(`localStorage.removeItem('staff_user')`);
+    console.log('PASS escalation bookmark, /brgy retirement information and role-3 session blocking');
+
 
     // 6. Phone width: the card fits
     await command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
