@@ -4,7 +4,7 @@
 - **Source:** `information_schema` of the local `straysafe_db`, 2026-11-05. Structure only: no data.
 - **Regenerate** after any schema change; the SQLAlchemy models in `backend/app/models/` are the source of truth.
 
-74 tables.
+76 tables.
 
 ## Tables
 
@@ -25,6 +25,8 @@
 - `announcement_reactions`
 - `announcements`
 - `audit_logs`
+- `barangay_referral_updates`
+- `barangay_referrals`
 - `barangays`
 - `behavior_tags`
 - `chat_messages`
@@ -448,6 +450,42 @@ Foreign keys: `category_id` → `announcement_categories.category_id`, `subdivis
 | created_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
 Foreign keys: `user_id` → `users.user_id`
+
+## barangay_referral_updates
+
+| Column | Type | Null | Key | Default | Extra |
+|---|---|---|---|---|---|
+| update_id | int | NO | PRI |  | auto_increment |
+| referral_id | int | NO | MUL |  |  |
+| update_type | varchar(20) | NO |  |  |  |
+| source | varchar(20) | NO |  | barangay_reported |  |
+| update_date | date | NO |  |  |  |
+| note | text | YES |  |  |  |
+| evidence_url | varchar(500) | YES |  |  |  |
+| recorded_by | int | YES | MUL |  |  |
+| recorded_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+
+Foreign keys: `recorded_by` → `users.user_id`, `referral_id` → `barangay_referrals.referral_id`
+
+## barangay_referrals
+
+| Column | Type | Null | Key | Default | Extra |
+|---|---|---|---|---|---|
+| referral_id | int | NO | PRI |  | auto_increment |
+| report_id | int | NO | UNI |  |  |
+| barangay_id | int | NO | MUL |  |  |
+| referred_by | int | YES | MUL |  |  |
+| referred_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| reason | text | NO |  |  |  |
+| reference_no | varchar(100) | YES |  |  |  |
+| contact_method | varchar(20) | NO |  |  |  |
+| final_outcome | varchar(20) | YES |  |  |  |
+| outcome_date | date | YES |  |  |  |
+| outcome_note | text | YES |  |  |  |
+| outcome_recorded_by | int | YES | MUL |  |  |
+| outcome_recorded_at | datetime | YES |  |  |  |
+
+Foreign keys: `barangay_id` → `barangays.barangay_id`, `outcome_recorded_by` → `users.user_id`, `referred_by` → `users.user_id`, `report_id` → `reports.report_id`
 
 ## barangays
 
