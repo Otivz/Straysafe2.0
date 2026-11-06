@@ -8,7 +8,8 @@ from sqlalchemy import or_, and_
 from app.models.owner_followup import OwnerFollowUp, FollowUpContactLog, OwnerObservationUpdate
 from app.models.report import Report, HoldingAnimal
 from app.models.pet import Pet
-from app.models.user import User, Subdivision
+from app.models.user import User, Subdivision, Barangay
+from app.models.barangay_referral import BarangayReferral
 from app.models.system_setting import SystemSetting
 from app.models.report_match import ReportMatch
 from app.utils.case_closure import CLOSED_REPORT_STATUS_IDS
@@ -409,6 +410,18 @@ def enrich_and_redact_followup(followup: OwnerFollowUp, user: Optional[User], db
     is_eligible_for_second_warning = workflow_section == "for_second_warning"
     is_eligible_for_endorsement = workflow_section == "second_warning_issued"
 
+    # Display only: prefer the recorded referral recipient, with the subdivision's Barangay for older cases.
+    referral_label = "Referred to the Barangay"
+    if followup.status == "escalated" or (report and report.current_status_id in (4, 13)):
+        recipient = (db.query(Barangay.barangay_name)
+                     .join(BarangayReferral, BarangayReferral.barangay_id == Barangay.barangay_id)
+                     .filter(BarangayReferral.report_id == followup.report_id).first())
+        barangay_name = recipient[0] if recipient else None
+        if not barangay_name and subdivision and subdivision.barangay:
+            barangay_name = subdivision.barangay.barangay_name
+        if barangay_name:
+            referral_label = f"Referred to Barangay {barangay_name}"
+
     # Endorsement record
     from app.models.report import EndorsementLetter
     end_letter = db.query(EndorsementLetter).filter(EndorsementLetter.report_id == followup.report_id).first()
@@ -426,8 +439,8 @@ def enrich_and_redact_followup(followup: OwnerFollowUp, user: Optional[User], db
         rem_display = "Resolved"
         progress_pct = 100.0
     elif workflow_section == "endorsed":
-        day_display = "Endorsed to Barangay San Vicente"
-        rem_display = "Handled by Barangay"
+        day_display = referral_label
+        rem_display = "Handled by Barangay outside StraySafe"
         progress_pct = 100.0
     elif workflow_section == "second_warning_issued":
         day_display = "Second Warning Issued"
@@ -536,7 +549,7 @@ def enrich_and_redact_followup(followup: OwnerFollowUp, user: Optional[User], db
         "resolved_notes": followup.compliance_notes or followup.close_reason,
         "endorsement_date": end_letter.issued_at if end_letter else (followup.closed_at if followup.status == "escalated" else None),
         "endorsement_letter_content": end_letter.letter_content if end_letter else None,
-        "endorsement_status": "Endorsed to Barangay San Vicente" if (followup.status == "escalated" or (report and report.current_status_id in (4, 13))) else None,
+        "endorsement_status": referral_label if (followup.status == "escalated" or (report and report.current_status_id in (4, 13))) else None,
         "current_observation_day": current_obs_day,
         "observation_day_display": day_display,
         "remaining_time_display": rem_display,

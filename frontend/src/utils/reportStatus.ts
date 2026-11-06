@@ -2,7 +2,7 @@ export const REPORT_STATUS_MAP: Record<number, string> = {
     1: 'Reported',
     2: 'Verified',
     3: 'Rejected',
-    4: 'Escalated to Barangay',
+    4: 'Referred to Barangay',
     5: 'Rescue In Progress',
     6: 'Picked Up',
     7: 'Under Observation',
@@ -17,6 +17,18 @@ export const REPORT_STATUS_MAP: Record<number, string> = {
     16: 'Under Investigation',
     17: 'Animal Cannot Be Found',
     18: 'Merged — Duplicate'
+};
+
+/** Retired workflow statuses remain readable in history, but cannot be selected for a new case update. */
+export const isSelectableReportStatus = (statusId: number): boolean =>
+    statusId in REPORT_STATUS_MAP && ![5, 6, 8, 13].includes(statusId);
+
+/** Preserve bookmarked escalation filters after renaming status 4. */
+export const normalizeReportStatusFilter = (value: string | null | undefined): string => {
+    if (/^(escalated|escalated to barangay|referred to (the )?barangay)$/i.test(value?.trim() || '')) {
+        return REPORT_STATUS_MAP[4];
+    }
+    return value || 'all';
 };
 
 /** Statuses that END a case (same list as the backend): Rejected, Claimed by Owner, Released, Resolved,
@@ -54,7 +66,7 @@ export const getReportStatusBadgeStyle = (statusId: number | null | undefined): 
         // Verified, Approved
         return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800/60';
     } else if (id === 4) {
-        // Escalated to Barangay
+        // Referred to Barangay
         return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800/60';
     } else if (id === 5) {
         // Rescue In Progress

@@ -62,6 +62,7 @@ try {
     const calls = [];
     let current = verified;
     let currentReferral = null;
+    let currentHolding = null;
     const json = (body, status = 200) => ({ status, body });
     const answer = (url, method, body) => {
         const path = url.pathname.replace(/^\/api/, '');
@@ -78,6 +79,8 @@ try {
             return json(currentReferral, 201);
         }
         if (path === '/referrals/') return json(currentReferral ? [currentReferral] : []);
+        if (path === '/holding/') return json(currentHolding ? [currentHolding] : []);
+        if (path === '/holding/2') return json(currentHolding);
         if (path.startsWith('/rescue-requests')) return json([]);
         return json([]);
     };
@@ -160,7 +163,7 @@ try {
     await evaluate(`(() => { const s = document.querySelector('form select'); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, 'picked_up'); s.dispatchEvent(new Event('change', { bubbles: true }));
         const t = document.querySelector('form textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(t, 'Team picked it up at 3 PM'); t.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
     await clickText('form button[type=submit]', 'Save');
-    await waitFor(`document.body.innerText.includes('Team picked it up at 3 PM')`, 'update shown');
+    await waitFor(`document.body.textContent.includes('Animal picked up') && document.body.textContent.includes('Reported by Barangay, recorded by Leader Santos') && document.body.textContent.includes('Record outcome')`, 'updated referral card loaded after report refresh');
     const upd = JSON.parse(calls.find(c => c.method === 'POST' && c.path === '/referrals/1/updates').body);
     assert.equal(upd.update_type, 'picked_up');
     assert.equal(upd.source, 'barangay_reported');
@@ -173,7 +176,10 @@ try {
     // 3. Timeline: the referral and the external update, never a holding event
     const page = await text();
     assert.match(page, /REFERRED TO BARANGAY/i, 'timeline: referred entry');
-    assert.match(page, /REPORTED BY BARANGAY .{0,40}Reported by Barangay San Vicente on Nov 5, 2026: picked up the animal\. Team picked it up at 3 PM/i, 'timeline: external update entry');
+    const reportedDay = await evaluate(`new Date(${JSON.stringify(upd.update_date)} + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })`);
+    await waitFor(`document.body.textContent.includes(${JSON.stringify(`Reported by Barangay San Vicente on ${reportedDay}: picked up the animal. Team picked it up at 3 PM`)})`, 'external update in timeline');
+    assert.match(await text(), /REPORTED BY BARANGAY .{0,40}Reported by Barangay San Vicente on .+?: picked up the animal\. Team picked it up at 3 PM/i, 'timeline: external update entry');
+    assert.equal(/Rescue Status|Not Yet Initiated|Escalated to Barangay|VERIFY, ESCALATE/i.test(page), false, 'active report uses case and referral wording');
     assert.equal(/ANIMAL ADMITTED|HOLDING/i.test(page.split('OFFICIAL AUDIT TRAIL')[1]?.split('COMMENTS & NOTES')[0] || ''), false, 'timeline: no holding event from a Barangay "held" update');
     console.log('PASS timeline shows "Referred to Barangay" and "Reported by Barangay" entries');
 
@@ -200,6 +206,24 @@ try {
     await waitFor(`document.body.innerText.includes('Team picked it up at 3 PM')`, 'card at phone width');
     assert.equal(await evaluate(`document.documentElement.scrollWidth <= window.innerWidth + 1`), true, 'no horizontal scroll at 390px');
     console.log('PASS referral card at 390px without horizontal scroll');
+
+    // Status 7, including an empty historical remark, must never invent a move to holding.
+    current = { ...baseReport, status_id: 7, current_status_id: 7, endorsement_letter: null,
+        history: [{ history_id: 7, report_status_id: 7, created_at: '2026-11-05T09:00:00', updater_name: 'Leader Santos', remarks: '', media: [] }] };
+    currentReferral = null;
+    await command('Page.navigate', { url: base + '/subd/reports/5' });
+    await waitFor(`document.body.textContent.includes('Owner observation recorded by the subdivision.')`, 'status 7 observation event');
+    assert.equal(/MOVED TO HOLDING PLACE|ANIMAL ADMITTED/i.test(await text()), false, 'status 7 does not become a holding event');
+    console.log('PASS status 7 without intake: owner observation, no invented holding event');
+
+    currentHolding = { holding_id: 2, report_id: 5, facility_id: 5, facility_name: 'Earlier Shelter',
+        timeline: [{ log_id: 7, event_type: 'intake', title: 'Recorded intake at Earlier Shelter',
+            logged_at: '2026-11-05T09:01:00', staff_name: 'Earlier Officer', media: [] }] };
+    await command('Page.navigate', { url: base + '/subd/reports/5' });
+    await waitFor(`document.body.textContent.includes('Recorded intake at Earlier Shelter') && document.body.textContent.includes('Owner observation recorded by the subdivision.')`, 'separate owner observation and recorded intake');
+    assert.match(await text(), /MOVED TO HOLDING PLACE/i, 'actual recorded intake remains readable');
+    assert.equal(current.history[0].remarks, '', 'rendering does not rewrite stored history remarks');
+    console.log('PASS real historical intake remains separate from owner observation');
 
     const realErrors = browserErrors.filter(e => !/dialog:/.test(e));
     assert.equal(realErrors.length, 0, realErrors.join('\n'));

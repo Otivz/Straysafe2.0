@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { onePerIncident } from '../../utils/incidents';
 import { SIGHTING_TITLE } from '../../utils/sighting';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../utils/api';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import AdminSidebar from '../../components/AdminSidebar';
@@ -9,7 +9,7 @@ import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import Button from '../../components/Button';
 import MapComponent from '../../components/MapComponent';
 import { SELERA_DEFAULT_CENTER, SAN_VICENTE_HQ } from '../../utils/coverageArea';
-import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle, isHoldingHistoryEntry } from '../../utils/reportStatus';
+import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle, isHoldingHistoryEntry, isSelectableReportStatus, normalizeReportStatusFilter } from '../../utils/reportStatus';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { getCachedData, setCachedData, invalidateCache } from '../../utils/cache';
 import { 
@@ -127,7 +127,8 @@ const AdminReport = () => {
     const [adminTab, setAdminTab] = useState<'reports' | 'matches'>('reports');
     const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('all');
+    const [searchParams] = useSearchParams();
+    const [statusFilter, setStatusFilter] = useState(() => normalizeReportStatusFilter(searchParams.get('status')));
     const [priorityFilter, setPriorityFilter] = useState<'all' | 'High' | 'Medium' | 'Low'>('all');
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
     const [sortBy, setSortBy] = useState<'newest' | 'oldest'>('newest');
@@ -137,7 +138,7 @@ const AdminReport = () => {
     const [openMenuId, setOpenMenuId] = useState<number | null>(null);
     const [isDirectActionModalOpen, setIsDirectActionModalOpen] = useState(false);
     const [directActionReportId, setDirectActionReportId] = useState<number | null>(null);
-    const [targetStatusId, setTargetStatusId] = useState<number>(5);
+    const [targetStatusId, setTargetStatusId] = useState<number>(16);
     const [selectedStaffId, setSelectedStaffId] = useState<number | ''>('');
     const [actionRemarks, setActionRemarks] = useState<string>('');
     const [staffList, setStaffList] = useState<Array<{ user_id: number; name: string; email: string; role_id: number }>>([]);
@@ -326,7 +327,7 @@ const AdminReport = () => {
         const pending = reports.filter(r => r.status_id === 1).length;
         const verified = reports.filter(r => r.status_id === 2 || r.status_id === 4 || r.status_id === 13).length;
         const dispatched = reports.filter(r => r.status_id === 5).length;
-        const observation = reports.filter(r => r.status_id === 7 || r.status_id === 8).length;
+        const observation = reports.filter(r => r.status_id === 7).length;
         const resolved = reports.filter(r => RESOLVED_STATUS_IDS.includes(r.status_id)).length;
         return { all, pending, verified, dispatched, observation, resolved };
     }, [reports]);
@@ -337,7 +338,7 @@ const AdminReport = () => {
             if (activeQuickTab === 'pending' && rep.status_id !== 1) return false;
             if (activeQuickTab === 'verified' && !(rep.status_id === 2 || rep.status_id === 4 || rep.status_id === 13)) return false;
             if (activeQuickTab === 'dispatched' && rep.status_id !== 5) return false;
-            if (activeQuickTab === 'observation' && !(rep.status_id === 7 || rep.status_id === 8)) return false;
+            if (activeQuickTab === 'observation' && rep.status_id !== 7) return false;
             if (activeQuickTab === 'resolved' && !RESOLVED_STATUS_IDS.includes(rep.status_id)) return false;
 
             // Search Term (ID, Category, Breed, Landmark, Reporter, Description)
@@ -365,12 +366,14 @@ const AdminReport = () => {
                     if (rep.status_id !== 1) return false;
                 } else if (s === 'verified') {
                     if (![2, 4, 13].includes(rep.status_id)) return false;
-                } else if (s === 'escalated' || s === 'escalated to barangay') {
+                } else if (normalizeReportStatusFilter(s) === REPORT_STATUS_MAP[4]) {
                     if (rep.status_id !== 4) return false;
                 } else if (s === 'dispatched' || s === 'team dispatched' || s === 'rescue in progress') {
                     if (rep.status_id !== 5) return false;
-                } else if (s === 'observation' || s === 'under observation' || s === 'holding') {
-                    if (![6, 7, 8].includes(rep.status_id)) return false;
+                } else if (s === 'observation' || s === 'under observation') {
+                    if (rep.status_id !== 7) return false;
+                } else if (s === 'holding') {
+                    if (![6, 8].includes(rep.status_id)) return false;
                 } else if (s === 'resolved' || s === 'incident resolved') {
                     if (!RESOLVED_STATUS_IDS.includes(rep.status_id) && rep.status_id !== 11) return false;
                 } else if (s === 'rejected' || s === 'dismissed') {
@@ -460,6 +463,7 @@ const AdminReport = () => {
             case 'verified':
             case 'under investigation': return 'bg-sky-50 text-sky-700 border-sky-200/90 font-black shadow-2xs';
             case 'escalated to barangay':
+            case 'referred to barangay':
             case 'forwarded to barangay':
             case 'picked up':
             case 'in holding':
@@ -671,9 +675,11 @@ const AdminReport = () => {
                                                     <option value="all">All Statuses</option>
                                                     <option value="Pending">Pending Verification</option>
                                                     <option value="Verified">Verified</option>
-                                                    <option value="Escalated to Barangay">Escalated to Barangay</option>
+                                                    <option value="Referred to Barangay">Referred to Barangay</option>
                                                     <option value="Team Dispatched">Team Dispatched</option>
-                                                    <option value="Under Observation">In Observation / Holding</option>
+                                                    <option value="Under Observation">Owner Observation</option>
+                                                    <option value="Picked Up">Picked Up (earlier records)</option>
+                                                    <option value="Impounded">Impounded (earlier records)</option>
                                                     <option value="Resolved">Resolved</option>
                                                     <option value="Rejected">Rejected / Dismissed</option>
                                                 </select>
@@ -903,14 +909,14 @@ const AdminReport = () => {
                                                                     <button
                                                                         onClick={() => {
                                                                             setDirectActionReportId(rep.report_id);
-                                                                            setTargetStatusId(rep.status_id < 5 ? 5 : rep.status_id);
+                                                                            setTargetStatusId(16);
                                                                             setIsDirectActionModalOpen(true);
                                                                         }}
                                                                         className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-500 text-amber-700 hover:text-white font-black text-xs transition-colors shadow-2xs"
                                                                         title="Direct Admin Action / Override"
                                                                     >
                                                                         <Zap className="w-3.5 h-3.5" />
-                                                                        <span className="hidden sm:inline">Dispatch</span>
+                                                                        <span className="hidden sm:inline">Review</span>
                                                                     </button>
 
                                                                     {/* Kebab Dropdown */}
@@ -1042,14 +1048,14 @@ const AdminReport = () => {
                                                 )
                                             },
                                             {
-                                                header: "Rescue Status",
+                                                header: "Case Status",
                                                 key: "rescue_status",
                                                 render: (rep) => {
                                                     if ([5, 13].includes(rep.status_id)) {
                                                         return (
                                                             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200/80 text-[10.5px] font-black uppercase tracking-wider shadow-2xs">
                                                                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                                                                <span>Rescue in Progress</span>
+                                                                <span>{statusMap[rep.status_id]}</span>
                                                             </div>
                                                         );
                                                     } else if ([6, 7, 8].includes(rep.status_id)) {
@@ -1155,7 +1161,7 @@ const AdminReport = () => {
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         setDirectActionReportId(rep.report_id);
-                                                                        setTargetStatusId(rep.status_id < 5 ? 5 : rep.status_id);
+                                                                        setTargetStatusId(16);
                                                                         setIsDirectActionModalOpen(true);
                                                                         setOpenMenuId(null);
                                                                     }}
@@ -1306,7 +1312,7 @@ const AdminReport = () => {
                                                 {[
                                                     { id: 1, label: 'Reported' },
                                                     { id: 2, label: 'Verified' },
-                                                    { id: 4, label: 'Escalated' },
+                                                    { id: 4, label: 'Referred' },
                                                     { id: 13, label: 'Approved' },
                                                     { id: 5, label: 'Rescue' },
                                                     { id: 7, label: 'Observation' },
@@ -1373,9 +1379,9 @@ const AdminReport = () => {
                                                      </div>
                                                  )}
                                                  <div>
-                                                     <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Rescue Status</span>
+                                                     <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Case Status</span>
                                                      <span className={`text-sm font-bold ${viewReport.status_id >= 5 ? 'text-blue-600' : 'text-gray-400'}`}>
-                                                         {viewReport.status_id >= 5 ? statusMap[viewReport.status_id] : 'Not Yet Initiated'}
+                                                         {statusMap[viewReport.status_id] || 'Reported'}
                                                      </span>
                                                  </div>
                                                  {(() => {
@@ -1878,7 +1884,7 @@ const AdminReport = () => {
                                                     <button
                                                         onClick={() => {
                                                             setDirectActionReportId(viewReport.report_id);
-                                                            setTargetStatusId(viewReport.status_id < 5 ? 5 : viewReport.status_id);
+                                                            setTargetStatusId(16);
                                                             setIsDirectActionModalOpen(true);
                                                         }}
                                                         className="w-full py-4 bg-[#B35D25] hover:bg-[#964E1F] text-white rounded-2xl text-xs font-bold shadow-lg shadow-orange-900/10 transition-all transform hover:-translate-y-0.5 active:scale-95 flex items-center justify-center gap-2 uppercase tracking-wider"
@@ -1941,7 +1947,7 @@ const AdminReport = () => {
                                         { id: 13, label: 'Approved by Barangay', desc: 'Authorize logistics' },
                                         { id: 16, label: 'Under Investigation', desc: 'Formal inspection inquiry' },
                                         { id: 14, label: 'False Alarm / Dismissed', desc: 'Close without penalty' }
-                                    ].map(action => (
+                                    ].filter(action => isSelectableReportStatus(action.id)).map(action => (
                                         <div
                                             key={action.id}
                                             onClick={() => setTargetStatusId(action.id)}

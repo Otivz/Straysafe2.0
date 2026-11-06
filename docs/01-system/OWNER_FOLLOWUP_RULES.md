@@ -60,5 +60,7 @@ The owner follow-up (observation) workflow allows Subdivision Leaders to place a
 
 ## Lifecycle and case closure integration
 
+- **Referral display (Phase 4):** The observation-day and endorsement-status captions say "Referred to Barangay <name>". The name comes from the recorded referral recipient, falling back to the subdivision's Barangay for an older case without a referral row; if neither is known, the caption says "Referred to the Barangay". Barangay work is labelled as outside StraySafe. This is display enrichment only; observation states, warning rules, deadlines and transitions are unchanged.
+
 - **Centralized Closure Hook:** When a report transitions to a closed status (`CLOSED_REPORT_STATUS_IDS`) or is escalated to Barangay (Status 13), any active follow-up observation is ended consistently with a recorded closure reason.
 - **Deduplicated Due Notices:** The background operations watcher checks approaching deadlines and dispatches 24-hour reminder notices to owners and due notices to leaders without duplicate deliveries.

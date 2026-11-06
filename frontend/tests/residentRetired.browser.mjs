@@ -125,6 +125,12 @@ try {
     const landing = await evaluate(`document.body.innerText`);
     assert.equal(/Adopt a Pet|Browse Adoption Catalog|Public Adoption Catalog|Looking to Adopt/.test(landing), false, 'landing: no adoption entry points'); // descriptive wording is Phase 4
     assert.equal(await evaluate(`[...document.querySelectorAll('a')].some(a => (a.getAttribute('href') || '').startsWith('/adopt'))`), false, 'landing: no /adopt links');
+    for (const stale of [/Barangay Personnel/i, /Barangay Staff/i, /4 Dedicated Roles/i, /adoption catalog/i, /Holding Place Oversight/i, /Adoption Pipeline/i]) {
+        assert.equal(stale.test(landing), false, `landing excludes ${stale}`);
+    }
+    assert.match(landing, /3 Dedicated Roles/i);
+    assert.match(landing, /outside StraySafe/i);
+    assert.equal(await evaluate(`document.querySelectorAll('#roles h3').length`), 3, 'three role cards');
     console.log('PASS landing page has no adoption links, banner or footer link');
 
     // 3. Pet Match Review: "Yes, this is my pet" leads to the leader, not a claim form

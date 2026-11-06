@@ -1,6 +1,7 @@
 // The five stages a resident sees at the top of a report's timeline (RESCUE_TIMELINE_IMPROVEMENT_PLAN.md, section 3).
 // Every one of the 18 report statuses maps to one step. A case does not have to pass every step: an animal found and
 // returned at once never goes to a holding facility, so that step shows as skipped, not done.
+import { isHeldInFacility, isHoldingHistoryEntry } from './reportStatus.ts';
 
 export type StepKey = 'reported' | 'checked' | 'rescue' | 'care' | 'closed';
 export type StepState = 'done' | 'current' | 'upcoming' | 'skipped';
@@ -25,15 +26,15 @@ export interface CaseStages {
 const STEP_ORDER: StepKey[] = ['reported', 'checked', 'rescue', 'care', 'closed'];
 const STEP_STATUSES: Record<StepKey, number[]> = {
     reported: [1],
-    checked: [2, 16, 15],
+    checked: [2, 7, 16, 15],
     rescue: [4, 13, 5, 6],
-    care: [7, 8],
+    care: [8],
     closed: [9, 10, 11, 12, 17, 3, 14, 18],
 };
 const STEP_LABELS: Record<StepKey, string> = {
     reported: 'Reported',
     checked: 'Checked',
-    rescue: 'Rescue',
+    rescue: 'Barangay referral',
     care: 'In safe care',
     closed: 'Closed',
 };
@@ -58,8 +59,8 @@ export function formatObservationDue(iso: string | null | undefined): string | n
 }
 
 /**
- * An owner observation is the subdivision watching an owned pet at home, not physical custody. Status 7 is also used
- * for a bite case observed at a facility, so only an observation summary marks the owner case.
+ * An owner observation is the subdivision watching an owned pet at home. An earlier holding intake remains a
+ * separate record; status 7 alone never establishes physical custody.
  */
 function ownerObservation(report: { observation?: ObservationSummary | null } | null | undefined, custody: string): { open: boolean; due: string | null; ended: boolean } | null {
     const obs = report?.observation;
@@ -90,12 +91,12 @@ const OPEN_LABELS: Record<number, string> = {
     2: 'Checked by the subdivision',
     16: 'Being looked into by the subdivision',
     15: 'Ownership is being reviewed',
-    4: 'Sent to the Barangay for rescue',
-    13: 'Rescue approved by the Barangay',
-    5: 'A rescue team is on the way',
-    6: 'The animal has been picked up',
-    7: 'In safe care at a holding place',
-    8: 'In safe care at the Barangay impound facility',
+    4: 'Referred to the Barangay outside StraySafe',
+    13: 'Earlier Barangay approval recorded',
+    5: 'Earlier rescue dispatch recorded',
+    6: 'Earlier animal pickup recorded',
+    7: 'Under owner observation by the subdivision',
+    8: 'Earlier impoundment recorded',
 };
 
 /**
@@ -106,18 +107,20 @@ export function getCaseStages(report: any, holding?: any | null): CaseStages {
     const statusId = Number(report?.status_id ?? report?.current_status_id) || 1;
     const custody = String(report?.custody_status || holding?.custody_status || '');
     let current = stepOfStatus(statusId);
-    // Still open but already in a facility (custody says so): the animal is in care
-    if (current !== 'closed' && current !== 'care' && IN_FACILITY.test(custody)) current = 'care';
-    // An owner observation (status 7 at home) is the subdivision's check, not safe care at a holding place
-    const observation = ownerObservation(report, custody);
-    if (current === 'care' && statusId === 7 && observation) current = 'checked';
+    // Use recorded intake/server custody evidence, never a report status, to display current care.
+    const recordedHolding = isHeldInFacility(report) || !!(holding?.holding_id && !holding?.discharge_date);
+    if (current !== 'closed' && statusId !== 6 && recordedHolding) current = 'care';
+    else if (current === 'care' && !recordedHolding) current = 'rescue';
+    const observation = recordedHolding ? null : ownerObservation(report, custody);
     const currentIndex = STEP_ORDER.indexOf(current);
 
     // First entry that reached each step (real history entries only, oldest first)
     const history = [...(report?.history || [])]
         .filter((h: any) => h && h.created_at && h.history_id && h.history_id < 100000)
         .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-    const firstOf = (key: StepKey) => history.find((h: any) => STEP_STATUSES[key].includes(Number(h.report_status_id))) || null;
+    const firstOf = (key: StepKey) => history.find((h: any) => key === 'care'
+        ? isHoldingHistoryEntry(h)
+        : STEP_STATUSES[key].includes(Number(h.report_status_id)) && !(Number(h.report_status_id) === 7 && isHoldingHistoryEntry(h))) || null;
 
     const closed = current === 'closed' ? closedOutcome(statusId, custody, report?.duplicate_of_report_id) : null;
 
@@ -142,7 +145,7 @@ export function getCaseStages(report: any, holding?: any | null): CaseStages {
 
     let currentLabel = closed
         ? closed.label
-        : (current === 'care' && ![7, 8].includes(statusId) ? OPEN_LABELS[7] : (OPEN_LABELS[statusId] || OPEN_LABELS[1]));
+        : (current === 'care' ? 'In recorded care at a holding place' : (OPEN_LABELS[statusId] || OPEN_LABELS[1]));
     if (!closed && observation) {
         if (observation.open) currentLabel = observation.due ? `Under observation until ${observation.due}` : 'Under observation by the subdivision';
         else if (statusId === 7) currentLabel = 'Observation ended; the subdivision decides the next step';
@@ -216,10 +219,11 @@ export function getWhereNow(report: any, stages: CaseStages, holding?: any | nul
         };
     }
     if (key === 'rescue') {
-        if (statusId === 6) return { tone: 'rescue', parts: [{ text: 'The animal has been picked up and is on its way to safe care.' }] };
-        if (statusId === 5) return { tone: 'rescue', parts: lastSeen ? seen('A rescue team is on the way to ', 'A rescue team is on the way to the spot ') : [{ text: 'A rescue team is on the way.' }] };
-        if (statusId === 13) return { tone: 'rescue', parts: [{ text: 'The Barangay approved the rescue; a team will be sent.' }, ...near(' Last seen near ')] };
-        return { tone: 'rescue', parts: [{ text: 'Sent to the Barangay for rescue.' }, ...near(' Last seen near ')] };
+        if (statusId === 6) return { tone: 'rescue', parts: [{ text: `${OPEN_LABELS[6]}.` }, ...near(' Last seen near ')] };
+        if (statusId === 5) return { tone: 'rescue', parts: [{ text: `${OPEN_LABELS[5]}.` }, ...near(' Last seen near ')] };
+        if (statusId === 13) return { tone: 'rescue', parts: [{ text: `${OPEN_LABELS[13]}.` }, ...near(' Last seen near ')] };
+        if (statusId === 8) return { tone: 'rescue', parts: [{ text: `${OPEN_LABELS[8]}.` }, ...near(' Last seen near ')] };
+        return { tone: 'rescue', parts: [{ text: 'Referred to the Barangay outside StraySafe. The Subdivision Leader records the updates and outcome it reports.' }, ...near(' Last seen near ')] };
     }
     if (key === 'checked') {
         const observation = ownerObservation(report, String(report?.custody_status || holding?.custody_status || ''));
@@ -234,6 +238,7 @@ export function getWhereNow(report: any, stages: CaseStages, holding?: any | nul
         if (observation && statusId === 7) {
             return { tone: 'progress', parts: [{ text: 'The observation has ended; the subdivision decides the next step.' }] };
         }
+        if (statusId === 7) return { tone: 'progress', parts: [{ text: 'Under owner observation by the subdivision.' }] };
         return { tone: 'progress', parts: [{ text: statusId === 15 ? 'Ownership is being reviewed.' : statusId === 16 ? 'The subdivision is looking into it.' : 'Checked by the subdivision.' }, ...near(' Last seen near ')] };
     }
     return { tone: 'progress', parts: [{ text: 'Waiting for the subdivision to check it.' }, ...near(' Reported near ')] };

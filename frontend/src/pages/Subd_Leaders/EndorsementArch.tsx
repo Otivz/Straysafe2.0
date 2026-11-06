@@ -370,7 +370,7 @@ const EndorsementArch = () => {
                         {/* Heading (phones; desktop shows it in the top bar) */}
                         <div className="md:hidden">
                             <h1 className="text-lg font-black text-gray-900 tracking-tight leading-tight">Endorsements</h1>
-                            <p className="text-xs font-semibold text-gray-500">Letters sent to the Barangay for escalated reports.</p>
+                            <p className="text-xs font-semibold text-gray-500">Referrals to the Barangay outside StraySafe, with earlier letters kept for reference.</p>
                         </div>
 
                         {/* Metrics */}
@@ -556,7 +556,7 @@ const EndorsementArch = () => {
                                     </div>
                                     <h3 className="text-sm font-black text-slate-900">{hasFilters ? 'No letters match these filters' : 'No endorsement letters yet'}</h3>
                                     <p className="text-xs text-slate-500 mt-1">
-                                        {hasFilters ? 'Try another status, format or search word.' : 'No incident reports have been escalated to the Barangay yet.'}
+                                        {hasFilters ? 'Try another status, format or search word.' : 'No Barangay referrals have been recorded yet.'}
                                     </p>
                                     {hasFilters && (
                                         <button
@@ -577,7 +577,7 @@ const EndorsementArch = () => {
 
                         {/* About this page */}
                         <p className="text-[11px] text-slate-500 leading-relaxed px-1">
-                            Each letter is the endorsement sent when a report was escalated to the Barangay. Preview one to see the mission's live status, evidence and resolution proof.
+                            Each letter accompanies a referral to the Barangay outside StraySafe. Preview it to see the recorded referral, supporting evidence and outcome reported by the Barangay.
                         </p>
                     </div>
                 </main>
@@ -721,7 +721,7 @@ const EndorsementArch = () => {
                                                         <FileText className="w-4 h-4 text-slate-400 shrink-0" />
                                                         <div className="min-w-0 flex-1">
                                                             <p className="text-xs font-bold text-slate-800 truncate">
-                                                                {isPdf ? 'Official Endorsement Letter (PDF)' : isImage ? 'Escalation Evidence Image' : 'Endorsement File'}
+                                                                {isPdf ? 'Official Endorsement Letter (PDF)' : isImage ? 'Referral Evidence Image' : 'Endorsement File'}
                                                             </p>
                                                             {file.media_id != null && (
                                                                 <p className="text-[10px] text-slate-400 font-mono">Media ID: {file.media_id}</p>

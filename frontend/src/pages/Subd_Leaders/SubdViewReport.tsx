@@ -1590,9 +1590,9 @@ const SubdViewReport = () => {
                                                     </span>
                                                 </div>
                                                 <div>
-                                                    <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Rescue Status</span>
+                                                    <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Case Status</span>
                                                     <span className={`text-xs font-bold ${report.status_id >= 5 ? 'text-blue-600' : 'text-gray-400'}`}>
-                                                        {report.status_id >= 5 ? statusMap[report.status_id] : 'Not Yet Initiated'}
+                                                        {statusMap[report.status_id] || 'Reported'}
                                                     </span>
                                                 </div>
                                                 <div>
@@ -2558,7 +2558,7 @@ const SubdViewReport = () => {
                                                             </div>
                                                             <div>
                                                                 <p className="text-xs font-black text-gray-900 uppercase tracking-wider">Endorsement Letter</p>
-                                                                <p className="text-[10px] font-bold text-gray-400 mt-0.5">Sent to Barangay for Rescue Request</p>
+                                                                <p className="text-[10px] font-bold text-gray-400 mt-0.5">Referral letter; Barangay contacted outside StraySafe</p>
                                                             </div>
                                                         </div>
                                                         <button
@@ -2577,7 +2577,7 @@ const SubdViewReport = () => {
                                     </div>
 
                                     <div id="sec-rescue" className="step-group space-y-5 scroll-mt-3">
-                                        <SectionStep title="Rescue & Custody" />
+                                        <SectionStep title="Barangay Referral & Earlier Custody Records" />
 
                                         {/* Location & Custody Movement History Card */}
                                         {(report.facility_id || report.custody_status === 'Secured in Facility' || report.facility || custodyProgression.hasMoved) && (
@@ -2923,7 +2923,7 @@ const SubdViewReport = () => {
                                             </div>
                                             <div>
                                                 <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide">Case Actions</h4>
-                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Verify, escalate, resolve & manage this case</p>
+                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Verify, refer, resolve & manage this case</p>
                                             </div>
                                         </div>
                                         {/* ACTION PANEL */}
@@ -3113,7 +3113,7 @@ const SubdViewReport = () => {
                                                                 {/* STEP 2: ESCALATE (Only when Verified or Under Observation / Secured and not yet Escalated) */}
                                                                 {escalateBlockedFor === report.report_id && ([2, 7, 8, 16].includes(report.status_id)) && !report.pet_id && ![7, 8].includes(report.status_id) && (
                                                                     <p role="alert" className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                                                                        🐾 Add a record for this animal first. A report can't be escalated or resolved until the animal is in the records.
+                                                                        🐾 Add a record for this animal first. A report can't be referred or resolved until the animal is in the records.
                                                                     </p>
                                                                 )}
                                                                 {([2, 7, 8, 16].includes(report.status_id)) && (
@@ -3466,7 +3466,7 @@ const SubdViewReport = () => {
                                         <option value="Notice">Notice (Initial Friendly Reminder)</option>
                                         <option value="1st Warning">1st Warning (Official 1st Citation)</option>
                                         <option value="2nd Warning">2nd Warning (Strict 2nd Citation)</option>
-                                        <option value="Final Notice / Escalation">Final Notice / Escalation (Barangay Action)</option>
+                                        <option value="Final Notice / Escalation">Final Notice (Barangay referral)</option>
                                     </select>
                                 </div>
                                 <div className="space-y-1.5">
@@ -4215,7 +4215,7 @@ const SubdViewReport = () => {
                                         <div className="p-3.5 bg-rose-50 rounded-2xl border border-rose-200 text-xs text-rose-900 flex items-start gap-2">
                                             <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                                             <p className="leading-relaxed">
-                                                <strong>Substantiated Threat:</strong> Aggression or bite confirmed. This will be recorded on the animal's permanent profile and may escalate dispatch or rabies observation protocols.
+                                                <strong>Substantiated Threat:</strong> Aggression or bite confirmed. This will be recorded on the animal's permanent profile and may require referral to the Barangay outside StraySafe.
                                             </p>
                                         </div>
                                     );

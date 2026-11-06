@@ -8,6 +8,7 @@ from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import Session, aliased
 
 from app.models.audit_log import AuditLog
+from app.models.barangay_referral import BarangayReferral, OUTCOME_STATUS
 from app.models.pet import Pet
 from app.models.owner_followup import OwnerFollowUp
 from app.models.pet_claim import PetClaim
@@ -25,8 +26,8 @@ STATUS_GROUPS = (
     ('pending', 'Pending', (1,)),
     ('under_review', 'Under review', (15, 16)),
     ('verified', 'Verified', (2,)),
-    ('endorsed', 'Endorsed to Barangay', (4, 13)),
-    ('in_progress', 'Rescue / custody in progress', (5, 6, 7, 8)),
+    ('endorsed', 'Referred to Barangay', (4, 13)),
+    ('in_progress', 'Owner observation / legacy rescue or custody', (5, 6, 7, 8)),
     ('resolved', 'Resolved', (9, 10, 11)),
     ('rejected', 'Rejected / dismissed', (3, 14)),
     ('closed_other', 'Closed (deceased / not found)', (12, 17)),
@@ -195,6 +196,8 @@ def analytics_payload(db: Session, filters: AnalyticsFilters, subdivision_id: Op
     pets_q = registry_query(db, filters, subdivision_id)
     warnings_q = warnings_query(db, filters, subdivision_id, eligible_reports, pets_q)
     holding_q = db.query(HoldingAnimal).filter(HoldingAnimal.report_id.in_(eligible_reports))
+    # Referrals are records of external work, separate from report status and legacy rescue requests.
+    referral_q = db.query(BarangayReferral).filter(BarangayReferral.report_id.in_(eligible_reports))
     rescue_q = db.query(Rescue).filter(Rescue.report_id.in_(eligible_reports), Rescue.status_id == 6, Rescue.started_at.isnot(None), Rescue.completed_at >= Rescue.started_at)
     adoption_q = db.query(Adoption).join(HoldingAnimal, Adoption.holding_id == HoldingAnimal.holding_id).filter(HoldingAnimal.report_id.in_(eligible_reports))
     matches_q = db.query(ReportMatch).filter(ReportMatch.source_report_id.in_(eligible_reports))
@@ -206,7 +209,7 @@ def analytics_payload(db: Session, filters: AnalyticsFilters, subdivision_id: Op
         audit_q = audit_q.filter(AuditLog.user_id.in_(users.with_entities(User.user_id)))
     earliest = base.with_entities(func.min(Report.created_at)).scalar()
     if not filters.days and not filters.start_date:
-        candidates = [earliest, warnings_q.with_entities(func.min(OwnerWarning.created_at)).scalar(), holding_q.with_entities(func.min(HoldingAnimal.intake_date)).scalar()]
+        candidates = [earliest, warnings_q.with_entities(func.min(OwnerWarning.created_at)).scalar(), holding_q.with_entities(func.min(HoldingAnimal.intake_date)).scalar(), referral_q.with_entities(func.min(BarangayReferral.referred_at)).scalar()]
         if admin:
             candidates.extend([rescue_q.with_entities(func.min(Rescue.completed_at)).scalar(), adoption_q.with_entities(func.min(Adoption.created_at)).scalar(), matches_q.with_entities(func.min(ReportMatch.created_at)).scalar(), audit_q.with_entities(func.min(AuditLog.created_at)).scalar()])
         earliest = min((value for value in candidates if value), default=None)
@@ -291,6 +294,15 @@ def analytics_payload(db: Session, filters: AnalyticsFilters, subdivision_id: Op
         'other_endings_in_period': sum(o.status in ('closed', 'escalated', 'cancelled') and o.closed_at is not None and start <= o.closed_at < end for o in obs_rows),
     }
     generated = local_now()
+    # Date filter = referral date, including referrals of older reports. Open/closed is the log's current outcome.
+    referrals = in_window(referral_q, BarangayReferral.referred_at, start, end).with_entities(BarangayReferral.final_outcome).all()
+    referral_outcomes = Counter(row.final_outcome for row in referrals)
+    referral_summary = {
+        'referred': len(referrals),
+        'open': referral_outcomes[None],
+        'closed': len(referrals) - referral_outcomes[None],
+        'outcomes': {outcome: referral_outcomes[outcome] for outcome in OUTCOME_STATUS},
+    }
     result = {
         'metadata': {
             'start_date': start.date().isoformat(), 'end_date': (end - timedelta(days=1)).date().isoformat(),
@@ -320,6 +332,7 @@ def analytics_payload(db: Session, filters: AnalyticsFilters, subdivision_id: Op
         'warnings_breakdown': [{'violation': name, 'count': count} for name, count in violations.most_common()],
         'holding_summary': holding_summary,
         'observations': observations,
+        'referral_summary': referral_summary,
     }
     if not admin:
         result['subdivision'] = {'id': subdivision_id, 'name': subdivision.subdivision_name, 'barangay_name': subdivision.barangay.barangay_name if subdivision.barangay else ''}

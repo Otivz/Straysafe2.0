@@ -205,6 +205,10 @@ const ResiViewReport = () => {
     const isMyPetOnReport = Boolean(
         (report?.owner_id && report.owner_id === currentUserId) || userMatch
     );
+    const canViewOwnerDetails = report?.can_view_owner_details ?? Boolean(
+        report?.viewer_access === 'staff' || report?.viewer_access === 'owner'
+        || (currentUserId != null && report?.owner_id != null && Number(report.owner_id) === Number(currentUserId))
+    );
     const isLostPetReport = Boolean(
         report && (report.category_id === 6 || (report.description && report.description.includes('[LOST PET REPORT]')))
     );
@@ -1160,7 +1164,7 @@ const ResiViewReport = () => {
 
                                 return (
                                     <div className="space-y-4 sm:space-y-6">
-                                        {/* Reporter Profile & Name + Rescue Status + Date */}
+                                        {/* Reporter Profile & Name + Case Status + Date */}
                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-3.5 sm:pb-6 border-b border-gray-100 dark:border-gray-800">
                                             {/* Reporter Profile & Name */}
                                             <div className="flex items-center gap-2.5 sm:gap-3.5">
@@ -1193,10 +1197,10 @@ const ResiViewReport = () => {
                                                 </div>
                                             </div>
 
-                                            {/* Rescue Status & Date Reported */}
+                                            {/* Case Status & Date Reported */}
                                             <div className="flex items-center gap-4 sm:gap-8 shrink-0">
                                                 <div>
-                                                    <p className="text-[8px] sm:text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-0.5">Rescue Status</p>
+                                                    <p className="text-[8px] sm:text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-0.5">Case Status</p>
                                                     <p className="text-[11px] sm:text-sm font-black text-orange-600 dark:text-orange-400 uppercase tracking-tight">
                                                         {reportStatusMap[report.status_id ?? report.current_status_id ?? report.status?.status_id ?? 1] || 'Reported'}
                                                     </p>
@@ -1481,8 +1485,8 @@ const ResiViewReport = () => {
                                         <ReportWarningNotices reportId={report.report_id} />
 
                                         {/* Lost Pet Owner Contact & Digital QR Tag Card */}
-                                        {(report.pet_id || report.owner_phone || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
-                                            <div className="p-3.5 sm:p-5 rounded-xl sm:rounded-3xl bg-gradient-to-br from-amber-50/90 to-orange-50/70 dark:from-amber-950/40 dark:to-orange-950/20 border-2 border-amber-200/80 dark:border-amber-800/60 shadow-sm space-y-3">
+                                        {canViewOwnerDetails && (report.pet_id || report.owner_phone || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
+                                            <div data-owner-information className="p-3.5 sm:p-5 rounded-xl sm:rounded-3xl bg-gradient-to-br from-amber-50/90 to-orange-50/70 dark:from-amber-950/40 dark:to-orange-950/20 border-2 border-amber-200/80 dark:border-amber-800/60 shadow-sm space-y-3">
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
                                                         <span className="px-2 py-0.5 bg-amber-500 text-white rounded text-[8px] sm:text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
@@ -1652,7 +1656,7 @@ const ResiViewReport = () => {
                                           {report.endorsement_letter && (
                                                <div className="pt-4 sm:pt-6 mt-4 sm:mt-6 border-t border-gray-50 dark:border-gray-800 space-y-3">
                                                    <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-100 dark:border-orange-900/40 rounded-2xl sm:rounded-3xl p-4 sm:p-6">
-                                                       <h4 className="text-[9px] sm:text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest mb-2 sm:mb-4">Subdivision Escalation Note</h4>
+                                                       <h4 className="text-[9px] sm:text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest mb-2 sm:mb-4">Subdivision Referral Note</h4>
                                                        
                                                        {report.endorsement_letter.title && (
                                                            <p className="text-[11px] sm:text-xs font-black text-orange-600 dark:text-orange-400 uppercase tracking-wider mb-1.5">

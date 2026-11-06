@@ -23,6 +23,7 @@ export interface AnalyticsData {
     status_distribution: { key: string; label: string; count: number }[];
     top_locations: { location: string; count: number }[];
     observations: { active_now: number; resolved_in_period: number; other_endings_in_period: number };
+    referral_summary?: { referred: number; open: number; closed: number; outcomes: { claimed: number; released: number; resolved: number; deceased: number; not_found: number } };
     rescue_summary?: { total: number; pending: number; active: number; completed: number; cancelled: number; avg_report_to_start_hours: number | null; response_samples: number };
     custody_snapshot?: { in_custody_now: number; available_for_adoption_now: number; returned_to_owner_total: number; adopted_total: number };
     claims_summary?: { submitted: number; approved_pending_handover: number; handed_over: number; rejected: number };
@@ -49,8 +50,8 @@ export const periods = [
 /** Report status groups (same keys as the server; every report is in exactly one). */
 export const statusOptions = [
     ['all', 'All statuses'], ['active', 'Active (not closed)'], ['closed', 'Closed'],
-    ['pending', 'Pending'], ['under_review', 'Under review'], ['verified', 'Verified'], ['endorsed', 'Endorsed to Barangay'],
-    ['in_progress', 'Rescue / custody in progress'], ['resolved', 'Resolved'], ['rejected', 'Rejected / dismissed'],
+    ['pending', 'Pending'], ['under_review', 'Under review'], ['verified', 'Verified'], ['endorsed', 'Referred to Barangay'],
+    ['in_progress', 'Owner observation / legacy rescue or custody'], ['resolved', 'Resolved'], ['rejected', 'Rejected / dismissed'],
     ['closed_other', 'Closed (deceased / not found)'],
 ] as const;
 
@@ -154,6 +155,10 @@ export function exportAnalytics(data: AnalyticsData, scope: string) {
     for (const [key, value] of Object.entries(data.kpis)) rows.push(['Indicators', key.replaceAll('_', ' '), value ?? null]);
     for (const item of data.status_distribution ?? []) rows.push(['Report status', item.label, item.count]);
     for (const item of data.top_locations ?? []) rows.push(['Frequent locations', item.location, item.count]);
+    if (data.referral_summary) {
+        for (const key of ['referred', 'open', 'closed'] as const) rows.push(['Barangay referrals', key, data.referral_summary[key]]);
+        for (const [outcome, value] of Object.entries(data.referral_summary.outcomes)) rows.push(['Outcomes reported by Barangay', outcome.replaceAll('_', ' '), value]);
+    }
     for (const point of data.incident_timeline) rows.push(['Timeline', point.date, point.total, point.resolved, null, point.high_risk]);
     for (const item of data.category_breakdown) rows.push(['Categories', item.category, item.count, null, null, null, item.percentage]);
     for (const item of data.subdivisions_comparison ?? []) rows.push(['Subdivisions', item.subdivision_name, item.total_reports, item.resolved_reports, item.active_reports, null, item.resolution_rate]);
@@ -161,7 +166,13 @@ export function exportAnalytics(data: AnalyticsData, scope: string) {
     for (const item of data.warnings_breakdown) rows.push(['Owner warnings', item.violation, item.count]);
     for (const [key, value] of Object.entries(data.holding_and_adoption ?? data.holding_summary)) rows.push(['Holding / adoption cohort', key.replaceAll('_', ' '), value]);
     for (const [section, values] of [['Animal types', data.animal_distribution], ['Priority levels', data.priority_distribution], ['Response durations', data.sla_metrics], ['Observations', data.observations], ['Rescue requests', data.rescue_summary], ['Custody now', data.custody_snapshot], ['Ownership claims', data.claims_summary], ['AI review outcomes', data.ai_performance], ['Current accounts and audit events', data.security_overview]] as const) {
-        for (const [key, value] of Object.entries(values ?? {})) rows.push([section, key.replaceAll('_', ' '), value]);
+        for (const [key, value] of Object.entries(values ?? {})) {
+            if (section === 'Response durations' && ['avg_rescue_hours', 'total_completed_rescues'].includes(key)
+                && (!(data.sla_metrics?.total_completed_rescues) || data.sla_metrics.avg_rescue_hours == null)) continue;
+            if (section === 'Rescue requests' && ['avg_report_to_start_hours', 'response_samples'].includes(key)
+                && (!(data.rescue_summary?.response_samples) || data.rescue_summary.avg_report_to_start_hours == null)) continue;
+            rows.push([section, key.replaceAll('_', ' '), value]);
+        }
     }
     const csv = rows.map(row => Array.from({ length: 7 }, (_, i) => {
         const cell = row[i];

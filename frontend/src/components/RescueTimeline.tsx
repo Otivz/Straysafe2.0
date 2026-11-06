@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import RelativeTimestamp from './RelativeTimestamp';
 import { sightingLandmark } from '../utils/sighting';
+import { isHoldingHistoryEntry } from '../utils/reportStatus';
 
 /** A place a timeline entry happened at (Phase 3 chips). */
 export interface TimelinePlace {
@@ -195,6 +196,8 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
         const rawRemarks = (hist.remarks || '').trim();
         const remarksLower = rawRemarks.toLowerCase();
         const statusId = hist.report_status_id;
+        const recordedIntake = !hist.external && (isHoldingHistoryEntry(hist)
+            || hist.holding_event_type === 'intake' || hist.holding_event_type === 'transfer');
 
         let actionTitle = 'INCIDENT UPDATE';
         let author = hist.updater_name || hist.user_name || hist.staff_name || '';
@@ -236,7 +239,14 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             [/^referred to (the )?barangay/i, 'REFERRED TO BARANGAY', 'orange'],
             [/^reported by barangay/i, 'REPORTED BY BARANGAY', 'blue'],
         ] as [RegExp, string, 'blue' | 'green' | 'orange' | 'red' | 'gray'][]).find(([re]) => re.test(rawRemarks));
-        if (referralRule) {
+        if (remarksLower.startsWith('potential owner notified.')) {
+            actionTitle = 'POTENTIAL OWNER NOTIFIED';
+            type = 'blue';
+            IconComponent = Eye;
+            description = rawRemarks.replace(/^Potential owner notified\.\s*/i, '');
+            author = 'StraySafe';
+        }
+        else if (referralRule) {
             actionTitle = referralRule[1];
             type = referralRule[2];
             IconComponent = ArrowRightCircle;
@@ -249,6 +259,12 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             type = observationRule[2];
             IconComponent = Eye;
             description = rawRemarks;
+        }
+        else if (statusId === 7 && !recordedIntake) {
+            actionTitle = 'OWNER OBSERVATION';
+            type = 'orange';
+            IconComponent = Eye;
+            description = rawRemarks || 'Owner observation recorded by the subdivision.';
         }
         else if (multiAnimalRule) {
             actionTitle = multiAnimalRule[1];
@@ -284,20 +300,20 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
         }
         // 2. Forwarded to Barangay
         else if (remarksLower.includes('forwarded to barangay') || remarksLower.includes('forwarded for official review')) {
-            actionTitle = 'FORWARDED TO BARANGAY';
+            actionTitle = 'REFERRED TO BARANGAY';
             type = 'orange';
             IconComponent = ArrowRightCircle;
-            description = 'Report forwarded for official review and approval.';
+            description = 'Referred to the Barangay for review outside StraySafe.';
             if (byMatch && (!author || author === 'Officer' || author === 'Barangay Officer' || author === 'Subdivision Officer')) {
                 author = byMatch[1].trim();
             }
         }
         // 3. Escalated
         else if (remarksLower.includes('escalat') || statusId === 4) {
-            actionTitle = 'ESCALATED TO BARANGAY';
+            actionTitle = 'REFERRED TO BARANGAY';
             type = 'orange';
             IconComponent = Rocket;
-            description = 'Incident escalated for priority barangay intervention.';
+            description = 'Referred to the Barangay outside StraySafe. The Subdivision Leader records the updates and outcome reported by the Barangay.';
         }
         // 4. Duplicate Confirmed
         else if (remarksLower.includes('duplicate of case') || remarksLower.includes('confirmed as duplicate') || remarksLower.includes('duplicate confirmed')) {
@@ -401,7 +417,7 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             description = rawRemarks || 'Facility observation recorded.';
         }
         else if (remarksLower.includes('holding') || remarksLower.includes('facility') || remarksLower.includes('shelter')
-            || remarksLower.includes('impound') || remarksLower.includes('admitted') || (statusId === 7 && !rawRemarks)) {
+            || remarksLower.includes('impound') || remarksLower.includes('admitted') || recordedIntake) {
             actionTitle = 'MOVED TO HOLDING PLACE';
             type = 'orange';
             IconComponent = Hospital;
@@ -581,7 +597,7 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
         let lastLabel = '';
         for (const evt of allEvents) {
             // a facility chip only on an entry that is about the facility (moved, held, impounded), not on e.g. a merge
-            const aboutFacility = [7, 8].includes(Number(evt.report_status_id)) || /FACILITY|IMPOUND|HOLDING/.test(evt.actionTitle || '');
+            const aboutFacility = Number(evt.report_status_id) === 8 || /FACILITY|IMPOUND|HOLDING/.test(evt.actionTitle || '');
             if (evt.place?.kind === 'facility' && !aboutFacility) continue;
             const label = (evt.place?.label || '').trim().toLowerCase();
             if (label && label !== lastLabel) {
@@ -677,7 +693,7 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
                                 {evt.isEscalation && endorsementLetter && (
                                     <div className="mt-2.5 p-3 rounded-xl bg-role-soft/70 dark:bg-role-strong/30 border border-role-border/70 dark:border-role-strong/40 text-xs">
                                         <p className="text-[10px] font-black text-role-hover dark:text-role uppercase tracking-wider mb-1">
-                                            Official Endorsement Sighting
+                                            Barangay Referral Letter
                                         </p>
                                         <p className="text-gray-700 dark:text-gray-300 italic text-[11px] leading-relaxed">
                                             "{endorsementLetter.letter_content}"

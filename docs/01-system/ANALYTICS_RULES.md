@@ -1,6 +1,6 @@
 # Analytics rules
 
-**Status:** Current (2026-11-02)
+**Status:** Current (2026-11-06, Subdivision-only Phase 4)
 
 This document describes what each analytics page shows, who can see it, and how every number is counted. All figures come from the database. Nothing is invented or hardcoded.
 
@@ -8,10 +8,10 @@ This document describes what each analytics page shows, who can see it, and how 
 
 | Page | Who | Records counted |
 | --- | --- | --- |
-| `/subd/analytics` (Community analytics) | Subdivision Leader (role 2), only their subdivision; an Admin chooses one | Reports of the subdivision; its pet registry; its warnings and observations |
-| `/admin/analytics` (Municipal analytics) | Admin (role 4) | Everything, optionally one subdivision |
+| `/subd/analytics` (Community analytics) | Subdivision Leader (role 2), only their subdivision; an Admin chooses one | Subdivision reports, pet registry, warnings, observations and Barangay referrals |
+| `/admin/analytics` (System analytics) | Admin (role 4) | Records in scope, optionally one subdivision, including earlier operations and Barangay referrals |
 
-**There is no Barangay analytics page (removed 2026-11-02 at the developer's request).** Barangay staff (role 3) get 403 on both endpoints, and `/analytics/barangay` doesn't exist. The Admin page's operations sections (rescue requests, Barangay custody now, adoptions, ownership claims) cover those figures system-wide.
+**There is no Barangay analytics page (removed 2026-11-02 at the developer's request).** Barangay staff (role 3) get 403 on both endpoints, and `/analytics/barangay` doesn't exist. StraySafe serves Selera Homes; the Barangay is external and has no active account. The Admin page retains metrics from earlier rescue, custody, adoption and claim records. These archive metrics are separate from the new referral log and do not mean StraySafe performs Barangay work.
 
 API endpoints:
 - `GET /analytics/subdivision`
@@ -29,18 +29,27 @@ Both share `analytics_payload()` in `backend/app/services/analytics_service.py`.
   | Pending | 1 Reported, or no status yet |
   | Under review | 15 Disputed, 16 Under Investigation |
   | Verified | 2 Verified |
-  | Endorsed to Barangay | 4 Escalated, 13 Approved by Barangay |
-  | Rescue / custody in progress | 5 In Action, 6 Picked Up, 7 Under Observation, 8 Impounded |
+  | Referred to Barangay | 4 Referred to Barangay, historical 13 Approved by Barangay |
+  | Owner observation / legacy rescue or custody | Historical 5 In Action, 6 Picked Up, 8 Impounded; 7 owner observation |
   | Resolved | 9 Claimed by Owner, 10 Released, 11 Incident Resolved |
   | Rejected / dismissed | 3 Rejected, 14 False Alarm |
   | Closed (deceased / not found) | 12 Deceased, 17 Cannot Be Found |
 
   Resolving an observation sets its report to 11 ([REPORT_STATUS_SYNC_RULES](REPORT_STATUS_SYNC_RULES.md)), so it is counted under Resolved.
+- **Barangay referrals** (`referral_summary`, on both endpoints):
+  - Count actual `barangay_referrals` rows once. A status 4 report, an endorsement letter or an old rescue request without a referral row is not an invented referral.
+  - `referred`: referrals whose `referred_at` is inside the selected date range, including referrals of reports filed earlier. The referral date is also included when finding the all-time start date.
+  - `open`: those referrals with no `final_outcome`; `closed`: those with a recorded final outcome. These describe the log's current state for referrals made in the period, not the number of closures occurring in the period.
+  - `outcomes`: claimed, released, resolved, deceased and not found (`not_found`), zero-filled. Each closed referral contributes to one outcome. The counts are independent of a later manual report-status change.
+  - Animal, priority, category, current report-status group and authorized subdivision filters apply through the associated report. Referral counts are per referral/case; the existing incident chart still counts root report submissions. Multiple external updates do not multiply referral counts.
+  - The UI and CSV label outcomes as reported by the external Barangay and recorded by Subdivision Leaders. A reported held/impounded update never creates StraySafe custody or affects legacy holding/rescue counts.
+  - The API filter key `endorsed` remains supported for existing bookmarks; its displayed label is Referred to Barangay. All historical status IDs and group memberships are preserved.
 - **Rescue requests:**
   - Groups: Pending (1), Active (2 Approved, 4 Started, 5 Dispatched), Completed (6), Rejected (3).
   - Rescue requests have no creation timestamp, so they follow their report's filing date (the incident cohort).
   - "Report → rescue started" uses only requests with a recorded start time at or after the report time.
   - "Rescue duration" uses only completed requests with valid start and end times.
+  - Hide report-to-start and start-to-completion timing rows, including their sample rows and CSV entries, when they have no valid samples. Keep the earlier request counts visible. Zero-hour durations with valid samples remain valid data.
 - **Custody now** (a current snapshot, not limited to the period):
   - **In custody:** animals in treatment, healthy, for adoption or impounded, not discharged, and not returned to an owner.
   - **Available for adoption:** in custody and listed for adoption. An animal returned to its owner is never counted, using the records in [ADOPTION_ELIGIBILITY_RULES](ADOPTION_ELIGIBILITY_RULES.md): the holding status, an owner-return record, a completed claim, or returned custody.
@@ -73,7 +82,7 @@ Every KPI and chart follows the same filters. Snapshot cards (custody now, pet r
 ## Known limits
 
 - Rescue requests have no creation time of their own, as noted above.
-- Average response time is shown only from real timestamps. When there are none it shows N/A, never an estimate.
+- Average verification time is shown only from real timestamps, with N/A when absent. Rescue-duration statistics are hidden when there are no valid samples; they are never estimated.
 - Location statistics depend on the landmark text the reporter entered.
 
 ## Code and tests
@@ -86,5 +95,5 @@ Every KPI and chart follows the same filters. Snapshot cards (custody now, pet r
   - pages `AdminAnalytics.tsx` and `SubdAnalytics.tsx`.
 - Tests:
   - `backend/tests/test_analytics.py` (14, unittest);
-  - `backend/tests/test_analytics_accuracy.py` (26 checks);
-  - `frontend/tests/analytics.browser.mjs` with `frontend/tests/fixtures/analytics.tsx`.
+  - `backend/tests/test_analytics_accuracy.py` (41 checks, including referral counts, all five outcomes, scope/filters, old report dates, no double-counting from updates and preserved historical counts);
+  - `frontend/tests/analytics.browser.mjs` with `frontend/tests/fixtures/analytics.tsx` (10 scenarios at 390 and 1280 px, including referral metrics on both pages and missing rescue timings).

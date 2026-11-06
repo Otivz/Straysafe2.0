@@ -30,10 +30,12 @@ test('after the observation ends, the under-observation state is removed', () =>
     assert.ok(text(getWhereNow(report, stages, null, null)).includes('observation has ended'));
 });
 
-test('status 7 without an owner observation (a bite case observed at a facility) keeps the care step', () => {
-    const stages = getCaseStages({ ...base, status_id: 7 }, null);
-    assert.equal(stages.steps[stages.currentIndex].key, 'care');
-    assert.equal(stages.currentLabel, 'In safe care at a holding place');
+test('status 7 without an observation summary never invents a holding intake', () => {
+    const report = { ...base, status_id: 7 };
+    const stages = getCaseStages(report, null);
+    assert.equal(stages.steps[stages.currentIndex].key, 'checked');
+    assert.equal(stages.currentLabel, 'Under owner observation by the subdivision');
+    assert.equal(text(getWhereNow(report, stages, null, null)), 'Under owner observation by the subdivision.');
 });
 
 test('an animal held in a facility stays in care even if an observation exists', () => {
@@ -53,4 +55,38 @@ test('empty history and a missing due date are handled', () => {
     assert.equal(getCaseStages(report, null).currentLabel, 'Under observation by the subdivision');
     assert.equal(formatObservationDue('not a date'), null);
     assert.equal(formatObservationDue(null), null);
+});
+
+test('owner observation history never completes the holding step of a closed case', () => {
+    const report = { ...base, status_id: 11, history: [
+        { history_id: 7, report_status_id: 7, created_at: '2026-11-01T02:00:00', remarks: '' },
+        { history_id: 8, report_status_id: 11, created_at: '2026-11-02T02:00:00' },
+    ] };
+    const care = getCaseStages(report).steps.find(step => step.key === 'care');
+    assert.equal(care.state, 'skipped');
+    assert.equal(care.date, null);
+    assert.equal(care.targetId, null);
+});
+
+test('recorded historical intake still displays care independently of status 7', () => {
+    const holding = { holding_id: 2, facility_name: 'Earlier facility', intake_date: '2026-11-01T02:00:00' };
+    const report = { ...base, status_id: 7, history: [
+        { history_id: 7, report_status_id: 7, facility_name: 'Earlier facility', created_at: holding.intake_date },
+    ] };
+    const stages = getCaseStages(report, holding);
+    assert.equal(stages.steps[stages.currentIndex].key, 'care');
+    assert.equal(stages.currentLabel, 'In recorded care at a holding place');
+    assert.equal(stages.steps[stages.currentIndex].targetId, 7);
+    assert.match(text(getWhereNow(report, stages, holding)), /Earlier facility/);
+});
+
+test('a referral or external held update never establishes StraySafe holding', () => {
+    const report = { ...base, status_id: 4, history: [
+        { history_id: 'referral-update-1', external: true, remarks: 'Reported by Barangay: held the animal.', created_at: '2026-11-01T02:00:00' },
+    ] };
+    const stages = getCaseStages(report);
+    assert.equal(stages.steps[stages.currentIndex].key, 'rescue');
+    assert.match(stages.currentLabel, /outside StraySafe/);
+    assert.match(text(getWhereNow(report, stages)), /records the updates and outcome it reports/);
+    assert.equal(stages.steps.find(step => step.key === 'care').date, null);
 });

@@ -74,6 +74,7 @@ try {
         if (path === '/adoptions/applications') return json([APPLICATION]);
         if (path === '/adoptions/1/case') return json({ adoption_id: 1, case_owner_id: 42, case_owner_name: 'Head Reyes', is_owner: true, can_claim: true, can_assign: true, assignments: [] });
         if (path === '/reports/5') return json(REPORT);
+        if (path === '/reports/') return json([REPORT]);
         if (path === '/reports/5/referral') return json(REFERRAL);
         return json([]);
     };
@@ -147,10 +148,12 @@ try {
 
         // 3. Admin report view
         await command('Page.navigate', { url: base + '/admin/incidents/5' });
-        await waitFor(`document.body.innerText.toUpperCase().includes('BARANGAY REFERRAL')`, 'referral card on the admin report');
+        await waitFor(`/Record Barangay update/i.test(document.body.innerText)`, 'loaded referral card on the admin report');
         const page = await evaluate(`document.body.innerText`);
         assert.equal(/Admit Animal to Holding/i.test(page), false, `${width}px report: no "Admit to holding"`);
         assert.match(page, /Record Barangay update/i, `${width}px report: admin can record a Barangay update`);
+        assert.equal(/Official Escalation & Custodial Endorsement|Receiving Municipal Authority|transferring custody from/i.test(page), false, 'referral document does not invent a custody transfer');
+        assert.match(page, /outside StraySafe/i, 'Barangay work is labelled external');
         console.log(`PASS ${width}px /admin/incidents/5: referral card shown; no "Admit Animal to Holding"`);
     }
 
@@ -161,6 +164,25 @@ try {
     for (const gone of ['Rescue in Progress / Dispatched', 'Picked Up', 'Impounded']) assert.equal(options.includes(gone), false, `override: no "${gone}"`);
     assert.ok(options.includes('Referred to Barangay'), 'override: status 4 reads "Referred to Barangay"');
     console.log(`PASS Direct Override options: ${options.join(', ')}`);
+
+    // The reports list has its own action picker and accepts old escalation bookmarks.
+    await command('Page.navigate', { url: base + '/admin/incidents?status=Escalated%20to%20Barangay' });
+    await waitFor(`!!document.querySelector('button[title="Direct Admin Action / Override"]')`, 'old status bookmark still finds the referred report');
+    assert.equal(await evaluate(`document.querySelector('select option[value="Referred to Barangay"]').parentElement.value`), 'Referred to Barangay');
+    await evaluate(`document.querySelector('button[title="Direct Admin Action / Override"]').click()`);
+    await waitFor(`document.body.textContent.includes('Target Action & Status')`, 'list action picker');
+    const actions = await evaluate(`document.querySelector('form').textContent`);
+    for (const gone of ['Team Dispatched', 'Approved by Barangay', 'Picked Up', 'Impounded']) assert.equal(actions.includes(gone), false, `list action: no ${gone}`);
+    assert.equal(await evaluate(`document.querySelector('form button[type="submit"]').disabled`), false, 'a permitted action is selected by default');
+    console.log('PASS reports list: old Escalated bookmark works; retired statuses are not offered');
+
+    REPORT.status_id = 7; REPORT.current_status_id = 7; REPORT.endorsement_letter = null;
+    REPORT.history = [{ history_id: 7, report_status_id: 7, created_at: '2026-11-05T09:00:00',
+        updater_name: 'Leader Santos', remarks: 'Owner observed at home; no holding intake recorded.', media: [] }];
+    await command('Page.navigate', { url: base + '/admin/incidents/5' });
+    await waitFor(`/OWNER OBSERVATION UPDATE/i.test(document.body.innerText)`, 'Admin observation audit event');
+    assert.equal(/ADMITTED TO HOLDING PLACE|TRANSFERRED TO OBSERVATION/i.test(await evaluate('document.body.innerText')), false, 'Admin does not show status 7 as a physical transfer');
+    console.log('PASS Admin status 7: owner observation, no invented custody transfer');
 
     assert.deepEqual(writes, [], 'no write requests were sent');
     assert.equal(browserErrors.length, 0, browserErrors.join('\n'));

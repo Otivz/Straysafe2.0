@@ -553,7 +553,7 @@ export default function SubdUnderObservation() {
             setIsSecondWarningModalOpen(false);
             setWarningDescription('');
             setWarningFineAmount('0');
-            setSuccessMsg('Second Warning issued successfully. Case is now eligible for Barangay Endorsement.');
+            setSuccessMsg('Second Warning issued successfully. Case is now eligible for Barangay referral.');
             await fetchDashboard(true);
         } catch (err: any) {
             setNoticeMsg({
@@ -635,7 +635,7 @@ export default function SubdUnderObservation() {
             return (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200 shadow-2xs">
                     <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse" />
-                    Endorsed to Barangay
+                    Referred to Barangay
                 </span>
             );
         }
@@ -882,7 +882,7 @@ export default function SubdUnderObservation() {
                                             </button>
                                         )}
 
-                                        {/* Endorse to Barangay San Vicente */}
+                                        {/* Refer to the Barangay */}
                                         {selectedItem.workflow_section === 'second_warning_issued' && (
                                             <button
                                                 type="button"
@@ -892,7 +892,7 @@ export default function SubdUnderObservation() {
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                                                 </svg>
-                                                <span>Endorse to Barangay San Vicente</span>
+                                                <span>Refer to the Barangay</span>
                                             </button>
                                         )}
 
@@ -1014,7 +1014,7 @@ export default function SubdUnderObservation() {
                                     <div className="flex items-center justify-between font-black text-purple-900 text-sm">
                                         <span className="flex items-center gap-2">
                                             <span className="w-6 h-6 rounded-lg bg-purple-600 text-white flex items-center justify-center text-xs">🏛️</span>
-                                            <span>Formally Endorsed to Barangay San Vicente</span>
+                                            <span>Formally Referred to Barangay San Vicente</span>
                                         </span>
                                         {selectedItem.endorsement_date && (
                                             <span className="text-xs text-purple-700 font-bold">
@@ -1159,7 +1159,7 @@ export default function SubdUnderObservation() {
                                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                                                             </svg>
-                                                            <span>Endorse to Barangay San Vicente</span>
+                                                            <span>Refer to the Barangay</span>
                                                         </button>
                                                     </div>
                                                 )}
@@ -1597,11 +1597,11 @@ export default function SubdUnderObservation() {
                                             <div className="text-3xl font-black text-slate-900 tracking-tight">
                                                 {formatCount(metrics.endorsed_count)}
                                             </div>
-                                            <div className="text-sm font-bold text-slate-800 leading-tight">Barangay Endorsed</div>
+                                            <div className="text-sm font-bold text-slate-800 leading-tight">Referred to Barangay</div>
                                         </div>
                                     </div>
                                     <p className="text-xs text-slate-500 font-medium mt-3">
-                                        Cases transferred to Barangay
+                                        Cases referred to the Barangay outside StraySafe
                                     </p>
                                 </div>
 
@@ -1714,7 +1714,7 @@ export default function SubdUnderObservation() {
                                         </span>
                                     </button>
 
-                                    {/* 5. Endorsed to Barangay */}
+                                    {/* 5. Referred to Barangay */}
                                     <button
                                         type="button"
                                         onClick={() => setActiveTab('endorsed')}
@@ -1724,7 +1724,7 @@ export default function SubdUnderObservation() {
                                                 : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
                                         }`}
                                     >
-                                        <span>Endorsed to Barangay</span>
+                                        <span>Referred to Barangay</span>
                                         <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
                                             activeTab === 'endorsed' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
                                         }`}>
@@ -1869,7 +1869,7 @@ export default function SubdUnderObservation() {
                                             : activeTab === 'warning_escalation'
                                             ? 'No Warning or Escalation Cases'
                                             : activeTab === 'endorsed'
-                                            ? 'No Cases Endorsed to Barangay'
+                                            ? 'No Cases Referred to Barangay'
                                             : activeTab === 'resolved'
                                             ? 'No Resolved Cases Yet'
                                             : 'No Cases Found'}
@@ -1880,11 +1880,11 @@ export default function SubdUnderObservation() {
                                             : activeTab === 'for_second_warning'
                                             ? 'Cases that exceed 3 days without verified compliance will appear here for Second Warning review.'
                                             : activeTab === 'second_warning_issued'
-                                            ? 'Cases with an issued Second Warning will appear here, eligible for Barangay San Vicente endorsement.'
+                                            ? 'Cases with an issued Second Warning will appear here, eligible for referral to the Barangay.'
                                             : activeTab === 'warning_escalation'
-                                            ? 'Cases requiring Second Warning review or eligible for Barangay endorsement.'
+                                            ? 'Cases requiring Second Warning review or eligible for Barangay referral.'
                                             : activeTab === 'endorsed'
-                                            ? 'Cases escalated to Barangay San Vicente are listed here.'
+                                            ? 'Cases referred to the Barangay outside StraySafe are listed here.'
                                             : 'Resolved cases with verified compliance are archived here.'}
                                     </p>
                                     {(searchQuery || dayFilter !== 'all' || activeTab !== 'all') && (
@@ -1944,7 +1944,7 @@ export default function SubdUnderObservation() {
                                                             </span>
                                                         ) : item.workflow_section === 'endorsed' ? (
                                                             <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300 text-[11px] font-bold">
-                                                                Barangay Endorsed
+                                                                Referred to Barangay
                                                             </span>
                                                         ) : item.workflow_section === 'second_warning_issued' ? (
                                                             <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300 text-[11px] font-bold">
@@ -1973,7 +1973,7 @@ export default function SubdUnderObservation() {
                                                         )}
                                                         {item.workflow_section === 'second_warning_issued' && (
                                                             <span className="px-2.5 py-0.5 rounded-full bg-sky-500 text-white text-[11px] font-bold">
-                                                                Endorse to Barangay
+                                                                Refer to Barangay
                                                             </span>
                                                         )}
                                                     </div>
@@ -2020,7 +2020,7 @@ export default function SubdUnderObservation() {
                                                             ) : item.workflow_section === 'endorsed' ? (
                                                                 <div className="space-y-0.5">
                                                                     <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                                                                        Endorsed
+                                                                        Referred
                                                                     </div>
                                                                     <div className="text-xs font-bold text-slate-800">
                                                                         {formatCardDate(item.endorsement_date)}
@@ -2134,7 +2134,7 @@ export default function SubdUnderObservation() {
                                                                 }}
                                                                 className="px-4 py-2 bg-[#4C1D95] hover:bg-[#3B0764] text-white rounded-xl text-xs font-bold shadow-2xs transition-colors cursor-pointer"
                                                             >
-                                                                Endorse to Barangay
+                                                                Refer to Barangay
                                                             </button>
                                                         )}
                                                     </div>
@@ -2211,9 +2211,9 @@ export default function SubdUnderObservation() {
                                                                     {item.workflow_section === 'resolved'
                                                                         ? 'Compliance verified'
                                                                         : item.workflow_section === 'endorsed'
-                                                                        ? 'Handled by Barangay'
+                                                                        ? 'Handled by Barangay outside StraySafe'
                                                                         : item.workflow_section === 'second_warning_issued'
-                                                                        ? 'Eligible for Endorsement'
+                                                                        ? 'Eligible for Referral'
                                                                         : item.workflow_section === 'for_second_warning'
                                                                         ? 'Eligible for Second Warning'
                                                                         : item.remaining_time_display}
@@ -2246,7 +2246,7 @@ export default function SubdUnderObservation() {
                                                                         }}
                                                                         className="h-8 px-3 inline-flex items-center justify-center bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-2xs shadow-purple-600/20 active:scale-95 transition-all cursor-pointer"
                                                                     >
-                                                                        Endorse
+                                                                        Refer
                                                                     </button>
                                                                 )}
                                                                 <button
@@ -2514,7 +2514,7 @@ export default function SubdUnderObservation() {
                         </div>
 
                         <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-200 text-xs text-rose-900 leading-relaxed">
-                            <strong>Notice:</strong> The 3-day observation period has expired without verified compliance. Authorized personnel review is required before issuing the Second Warning. Issuing this warning makes the case eligible for Barangay Endorsement.
+                            <strong>Notice:</strong> The 3-day observation period has expired without verified compliance. Authorized personnel review is required before issuing the Second Warning. Issuing this warning makes the case eligible for Barangay referral.
                         </div>
 
                         <div className="space-y-3">
@@ -2597,25 +2597,25 @@ export default function SubdUnderObservation() {
                                 ⚖️
                             </div>
                             <div>
-                                <h3 className="text-base font-black text-gray-900">Endorse to Barangay San Vicente</h3>
-                                <p className="text-xs text-gray-500 mt-0.5">Formal escalation following First and Second Warnings</p>
+                                <h3 className="text-base font-black text-gray-900">Refer to the Barangay</h3>
+                                <p className="text-xs text-gray-500 mt-0.5">Referral following First and Second Warnings</p>
                             </div>
                         </div>
 
                         <div className="p-3.5 rounded-xl bg-purple-50/70 border border-purple-200 text-xs text-purple-900 leading-relaxed">
-                            <strong>Scope Notice:</strong> Subdivision personnel do NOT handle animal custody, rescue operations, or physical handover. Endorsement forwards Report #{selectedItem.report_id}, First Warning, 3-Day Observation logs, and Second Warning records to Barangay San Vicente for next-level intervention.
+                            <strong>Scope Notice:</strong> Subdivision personnel do NOT handle animal custody, rescue operations, or physical handover. The referral records Report #{selectedItem.report_id}, First Warning, 3-Day Observation logs, and Second Warning records. Contact the Barangay outside StraySafe; record any updates as reported by the Barangay.
                         </div>
 
                         <div className="space-y-3">
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                                    Reason for Barangay Endorsement <span className="text-rose-500">*</span>
+                                    Reason for Barangay Referral <span className="text-rose-500">*</span>
                                 </label>
                                 <textarea
                                     value={endorseReason}
                                     onChange={(e) => setEndorseReason(e.target.value)}
                                     rows={3}
-                                    placeholder="Explain escalation reason (e.g., Owner uncooperative following Second Warning, animal remains unleashed, repeated resident complaints)..."
+                                    placeholder="Explain referral reason (e.g., Owner uncooperative following Second Warning, animal remains unleashed, repeated resident complaints)..."
                                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 placeholder-gray-400 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
                                 />
                             </div>
@@ -2652,7 +2652,7 @@ export default function SubdUnderObservation() {
                                 disabled={isSubmittingEndorse || !endorseReason.trim()}
                                 className="px-5 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-xs transition-all cursor-pointer"
                             >
-                                {isSubmittingEndorse ? 'Endorsing...' : 'Confirm Endorsement'}
+                                {isSubmittingEndorse ? 'Recording...' : 'Confirm Referral'}
                             </button>
                         </div>
                     </div>

@@ -102,7 +102,7 @@ try {
         const v2 = await section('verified', 'verification');
         assert.match(v2, /Verified by Leader Reyes .* Notes Two dogs near the gate, one limping\./);
         assert.doesNotMatch(v2, /Taken from the case history/);
-        assert.match(await section('verified', 'outcome'), /Current status Status Escalated to Barangay Since Nov 1, 2026/);
+        assert.match(await section('verified', 'outcome'), /Current status Status Referred to Barangay Since Nov 1, 2026/);
         assert.match(await caseText('verified'), /Case Summary Open/);
         const a2 = await section('verified', 'animal');
         assert.match(a2, /Count 2 animals Condition Injured Breed Aspin · Labrador Mix AI Color Black · Dark Brown AI Size Large/);

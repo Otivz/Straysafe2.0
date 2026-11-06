@@ -1,6 +1,6 @@
 # Subdivision-only restructuring: guide and checklist
 
-- **Status:** Approved direction. **Phases 1 (backend gate), 2 (referral log) and 3 (screens, parts 3a to 3d) implemented 2026-11-05**; later phases need the developer's go-ahead one at a time.
+- **Status:** Approved direction. **Phases 1 (backend gate), 2 (referral log) and 3 (screens, parts 3a to 3d) implemented 2026-11-05; Phase 4 (statuses, analytics and wording) implemented 2026-11-06.** Phases 5 and 6 are not started and need the developer's go-ahead one at a time.
 - **Written:** 2026-11-05. File and line references are as of commit `73f0ebf` on branch `subdivision-only` (`main` after PR #102). Function and route names are stable; re-grep a line number before editing.
 - **Deadline:** 2026-11-16. Estimated effort: 5 to 6 working days (approximate, from the line and test counts below).
 - **How to use this file:** each phase lists exact files and a checklist. Do one phase, test it, write the change record, stop for review.
@@ -120,11 +120,20 @@ Reuse: `EndorsementLetter` (`models/report.py`, one per report: `letter_content`
 
 ## 8. Phase 4: Statuses, analytics and wording (about 1 day)
 
-- [ ] Relabel `REPORT_STATUS_MAP` (`frontend/src/utils/reportStatus.ts`): 4 "Referred to Barangay". Keep 5, 6, 8, 13 defined and readable for old reports; stop offering them for new cases.
-- [ ] `backend/app/services/analytics_service.py:44,122-198`: keep counting old statuses; add referral counts and outcomes; hide rescue-duration stats if empty.
-- [ ] Heatmap and legends: `frontend/src/pages/Admin/AdminHeatMap.tsx`, `utils/heatmap.ts`.
-- [ ] `backend/app/utils/owner_followups.py:429,539` ("Endorsed to Barangay San Vicente"): use the referral's Barangay name.
-- [ ] Status 7 means the owner observation only (already true after the location fix).
+- [X] Relabel `REPORT_STATUS_MAP` (`frontend/src/utils/reportStatus.ts`): 4 "Referred to Barangay". Keep 5, 6, 8, 13 defined and readable for old reports; stop offering them for new cases.
+  - Phase 4: shared label and historical status definitions retained; both Admin pickers exclude retired choices, and legacy escalation URLs still work. Type check, 13 unit checks and Admin archive browser checks pass.
+- [X] Update active leader, resident and Admin wording for referrals to the external Barangay.
+  - Phase 4: case-status captions, referral document, observation page and dashboard/referral links updated; stored history and letter text preserved. Type check and referral, Admin archive and history/print browser checks pass.
+- [X] Update the landing page for the three active roles and the subdivision-only workflow.
+  - Phase 4: Barangay card hidden; retired adoption, holding and dispatch descriptions replaced by referrals and owner follow-ups. Type check and resident browser checks pass.
+- [X] `backend/app/services/analytics_service.py:44,122-198`: keep counting old statuses; add referral counts and outcomes; hide rescue-duration stats if empty.
+  - Phase 4: referral-date counts and all five outcomes added on both pages and CSV; old counts retained, missing rescue timings hidden. Type check, 41 accuracy checks, 14 analytics tests and 10 browser scenarios pass. See ANALYTICS_RULES.md for the date/outcome contract.
+- [X] Heatmap and legends: `frontend/src/pages/Admin/AdminHeatMap.tsx`, `utils/heatmap.ts`.
+  - Phase 4: referral label and observation/legacy-custody legend updated, including old server status text. Counting, colors, positions and thresholds unchanged; type check and all 16 heatmap rules pass.
+- [X] `backend/app/utils/owner_followups.py:429,539` ("Endorsed to Barangay San Vicente"): use the referral's Barangay name.
+  - Phase 4: display uses the recorded referral recipient, falling back to the subdivision's Barangay or a generic label. Observation/warning behavior unchanged; type check and 44 follow-up, 33 observation-flow and 33 status-sync checks pass.
+- [X] Status 7 means the owner observation only; recorded historical holding intakes remain separate.
+  - Phase 4: corrected progress/timeline fallbacks, Admin captions and observation/impound filters. Ten observation unit checks and dedicated leader/Admin browser assertions pass, including preserved actual intakes. Full backend remains 123/124 before and after; all 12 frontend scripts pass. The docs audit retains 12 pre-existing failures (8 links plus 4 intentional pointer deletions).
 
 ## 9. Phase 5: Tests, documents and defense (about 1 to 2 days)
 

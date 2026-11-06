@@ -19,7 +19,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 from sqlalchemy import and_, desc, or_, func
 from sqlalchemy.orm import Session, aliased, joinedload, selectinload
 
-from app.schemas.report import effective_priority
+from app.schemas.report import effective_priority, OwnerNotificationEvent
 from app.database import SessionLocal, get_db
 from app.models.chat import ChatThread
 from app.models.coverage import CoverageSetting
@@ -3085,6 +3085,8 @@ def get_report(report_id: int, db: Session = Depends(get_db), current_user: User
         populate_warning_info(rep_data, report, db)
         from app.utils.owner_followups import observation_summary
         rep_data.observation = observation_summary(db, report, staff_details=current_user.role_id in (2, 3, 4))
+        rep_data.owner_notification_events = [OwnerNotificationEvent(**event) for event in
+                                              report_visibility.owner_notification_activity(db, report.report_id)]
 
         return report_visibility.redact_response(rep_data, current_user, access, report)
     except Exception as e:

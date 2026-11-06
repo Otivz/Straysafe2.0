@@ -26,7 +26,7 @@ import SubdReportModal from '../../components/Modals/SubdReportModal';
 import AddPetModal from '../../components/PetRecords/AddPetModal';
 import WarningDetailsModal from '../../components/Modals/WarningDetailsModal';
 import { getCachedData, setCachedData } from '../../utils/cache';
-import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
+import { REPORT_STATUS_MAP, normalizeReportStatusFilter } from '../../utils/reportStatus';
 
 import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
 import ReportDescription from '../../components/ReportDescription';
@@ -119,7 +119,7 @@ const SubdReports = () => {
     const [loading, setLoading] = useState<boolean>(() => !getCachedData<Report[]>('subd_reports_list'));
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'all');
+    const [statusFilter, setStatusFilter] = useState(() => normalizeReportStatusFilter(searchParams.get('status')));
     const [reportQueue, setReportQueue] = useState<'all' | 'unassigned' | 'my_reports'>('my_reports');
     const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
     const [takeoverTarget, setTakeoverTarget] = useState<{ id: number; currentHandlerName: string } | null>(null);
@@ -706,7 +706,7 @@ const SubdReports = () => {
                 return 'bg-amber-50 text-amber-600 border-amber-100';
             case 'verified':
                 return 'bg-blue-50 text-blue-600 border-blue-100';
-            case 'escalated to barangay':
+            case 'referred to barangay':
                 return 'bg-purple-50 text-purple-600 border-purple-100';
             case 'approved':
                 return 'bg-indigo-50 text-indigo-600 border-indigo-100';
@@ -833,7 +833,7 @@ const SubdReports = () => {
                                                 { value: 'Reported', label: 'Reported' },
                                                 { value: 'Verified', label: 'Verified' },
                                                 { value: 'Under Observation', label: 'Under Observation' },
-                                                { value: 'Escalated to Barangay', label: 'Escalated' },
+                                                { value: 'Referred to Barangay', label: 'Referred to Barangay' },
                                                 { value: 'Approved', label: 'Approved' },
                                                 { value: 'Rescue In Progress', label: 'In Progress' }
                                             ]}
@@ -1327,7 +1327,7 @@ const SubdReports = () => {
                                                 )
                                             },
                                             {
-                                                header: "Rescue Status",
+                                                header: "Case Status",
                                                 key: "rescue_status",
                                                 render: (rep) => (
                                                     <div className="flex items-center space-x-2">
@@ -1611,9 +1611,9 @@ const SubdReports = () => {
                                                         </span>
                                                     </div>
                                                     <div>
-                                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Rescue Status</span>
+                                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Case Status</span>
                                                         <span className={`text-sm font-bold ${viewReport.status_id >= 5 ? 'text-blue-600' : 'text-gray-400'}`}>
-                                                            {viewReport.status_id >= 5 ? statusMap[viewReport.status_id] : 'Not Yet Initiated'}
+                                                            {statusMap[viewReport.status_id] || 'Reported'}
                                                         </span>
                                                     </div>
                                                     <div>
@@ -1831,7 +1831,7 @@ const SubdReports = () => {
                                                                 </div>
                                                                 <div>
                                                                     <p className="text-xs font-black text-gray-900 uppercase tracking-widest">Endorsement Letter</p>
-                                                                    <p className="text-[10px] font-bold text-gray-400 mt-0.5">Sent to Barangay for Rescue Request</p>
+                                                                    <p className="text-[10px] font-bold text-gray-400 mt-0.5">Referral letter; Barangay contacted outside StraySafe</p>
                                                                 </div>
                                                             </div>
                                                             <button
@@ -2222,7 +2222,7 @@ const SubdReports = () => {
                                                         {/* STEP 2: ESCALATE (When Verified or Under Observation / Secured and not yet Escalated) */}
                                                         {escalateBlockedFor === viewReport.report_id && ([2, 16].includes(viewReport.status_id)) && !(viewReport as any).pet_id && !Boolean(viewReport.endorsement_letter || (viewReport as any).rescue) && (
                                                             <p role="alert" className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                                                                🐾 Add a record for this animal first. A report can't be escalated or resolved until the animal is in the records.
+                                                                🐾 Add a record for this animal first. A report can't be referred or resolved until the animal is in the records.
                                                             </p>
                                                         )}
                                                         {([2, 7, 8, 16].includes(viewReport.status_id)) && !Boolean(viewReport.status_id === 4 || viewReport.status_id === 13 || viewReport.endorsement_letter || (viewReport as any).rescue) && (
@@ -2361,7 +2361,7 @@ const SubdReports = () => {
                                         <option value="Notice">Notice (Initial Friendly Reminder)</option>
                                         <option value="1st Warning">1st Warning (Official 1st Citation)</option>
                                         <option value="2nd Warning">2nd Warning (Strict 2nd Citation)</option>
-                                        <option value="Final Notice / Escalation">Final Notice / Escalation (Barangay Action)</option>
+                                        <option value="Final Notice / Escalation">Final Notice (Barangay referral)</option>
                                     </select>
                                 </div>
                                 <div className="space-y-2">

@@ -1,4 +1,4 @@
-// Incident rules shared by the Admin, Barangay and Subdivision Leader maps.
+// Incident rules shared by the active Admin and Subdivision Leader maps and retained legacy Barangay maps.
 // Restored from 3bbb263; see the restoration checklist under docs/06-future-proposals/.
 // Pins show what needs action now (active reports, at the animal's current place);
 // the heat layer and hotspots show where incidents happen (valid incidents, at the original sighting).
@@ -51,7 +51,7 @@ export function reportStatusId(report: IncidentReport): number {
     return Number(report?.status_id ?? report?.current_status_id ?? 1);
 }
 
-/** Active = not closed (the backend's definition). Picked Up (6) is active: the case is still open. */
+/** Active = not closed (the backend's definition). Referred (4) and historical Picked Up (6) remain active. */
 export function isActiveReport(report: IncidentReport): boolean {
     return !report.duplicate_of_report_id && !CLOSED_STATUS_IDS.includes(reportStatusId(report));
 }

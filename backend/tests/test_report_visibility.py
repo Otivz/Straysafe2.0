@@ -318,5 +318,42 @@ check("V5 a resident's edit can't change visibility", row(mine).visibility == rv
 client.patch(f"/reports/{mine}", headers=H(leader), json={"visibility": "Public"})
 check("V5 the general edit route never changes visibility, even for staff", row(mine).visibility == rv.PENDING)
 
+# Owner information and notification activity on the resident report detail.
+check("owner card: unrelated resident cannot view it", get(other, linked).json()["can_view_owner_details"] is False)
+check("owner card: reporter is not automatically the pet owner", get(reporter, linked).json()["can_view_owner_details"] is False)
+check("owner card: actual owner retains it", get(owner, linked).json()["can_view_owner_details"] is True)
+check("owner card: leader retains it", get(leader, linked).json()["can_view_owner_details"] is True)
+check("owner card: Admin retains it", get(admin, linked).json()["can_view_owner_details"] is True)
+hidden = get(other, linked).json()
+check("owner card: stray-report pet name and QR stay private", all(hidden.get(key) is None for key in
+      ("pet_name", "case_pet_name", "pet_qr_code_url", "pet_qr_code_hash")))
+
+activity_report = report(status=2)
+verify(activity_report, "Public")
+activity_match = ReportMatch(source_report_id=activity_report, matched_pet_id=pet.pet_id, similarity_score=80,
+                             status="AI_SUGGESTED", owner_confirmation_status="PENDING")
+db.add(activity_match)
+db.commit()
+check("notification timeline: suggestion alone is not a notification", get(other, activity_report).json()["owner_notification_events"] == [])
+db.add(Notification(user_id=leader.user_id, type="potential_match", related_id=activity_report, title="Review candidate", message="Synthetic staff notice"))
+db.commit()
+check("notification timeline: staff-only notice does not count", get(other, activity_report).json()["owner_notification_events"] == [])
+notified_at = datetime(2026, 11, 1, 9, 15)
+db.add_all([Notification(user_id=owner.user_id, type="potential_match", related_id=activity_report,
+                         title="Possible pet sighting", message="Synthetic owner notice", created_at=notified_at),
+            Notification(user_id=owner.user_id, type="potential_match", related_id=activity_report,
+                         title="Reminder", message="Synthetic reminder", created_at=notified_at + timedelta(hours=1))])
+db.commit()
+events = get(other, activity_report).json()["owner_notification_events"]
+check("notification timeline: actual owner notice is counted once at its recorded date",
+      events == [{"notified_at": notified_at.isoformat(), "response": "pending"}], events)
+check("notification timeline: no owner/pet identity in activity", all(set(e) == {"notified_at", "response"} for e in events))
+for state, label in [("OWNER_CONFIRMED", "confirmed"), ("OWNER_REJECTED", "declined"), ("UNSURE", "unsure"), ("NO_RESPONSE", "pending")]:
+    activity_match.owner_confirmation_status = state
+    db.commit()
+    check("notification timeline: response " + state, get(other, activity_report).json()["owner_notification_events"][0]["response"] == label)
+check("notification timeline: no status-history rows created by reads", db.query(reports.StatusHistory).filter(
+    reports.StatusHistory.report_id == activity_report).count() == 1)
+
 print(f"\n{sum(results)}/{len(results)} checks passed")
 sys.exit(0 if all(results) else 1)
