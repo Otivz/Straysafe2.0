@@ -67,8 +67,10 @@ try {
     const answer = (url, method, body) => {
         const path = url.pathname.replace(/^\/api/, '');
         calls.push({ method, path, body });
+        if (path === '/chat/threads') return json([{ thread_id: 1, thread_type: 'Report', thread_mode: 'report', report_id: 5, title: 'Case discussion', is_closed: false, created_at: verified.created_at, updated_at: verified.updated_at, report: verified, unread_count: 12 }]);
         if (path === '/auth/verify-session') return json({ status: 'valid', role_id: 2, is_verified: true });
         if (path === '/reports/5' && method === 'GET') return json(current);
+        if (path === '/reports/' && method === 'GET') return json(Array.from({ length: 20 }, (_, i) => ({ ...verified, report_id: 5 + i })));
         if (path === '/reports/5/media' && method === 'POST') return json({ media_id: 9, file_url: 'https://res.cloudinary.com/demo/image/upload/v1/letters/letter.jpg' });
         if (path === '/reports/5/status' && method === 'PATCH') { current = { ...referred, endorsement_letter: null }; return json(current); }
         if (path === '/reports/5/referral' && method === 'POST') { currentReferral = { ...referral, updates: [] }; current = referred; return json(currentReferral, 201); }
@@ -224,6 +226,58 @@ try {
     assert.match(await text(), /MOVED TO HOLDING PLACE/i, 'actual recorded intake remains readable');
     assert.equal(current.history[0].remarks, '', 'rendering does not rewrite stored history remarks');
     console.log('PASS real historical intake remains separate from owner observation');
+
+    // Mobile report creation floats above the nav; desktop keeps the existing toolbar action.
+    for (const width of [320, 390, 640, 767, 768, 1280]) {
+        await command('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 1, mobile: width < 768 });
+        await command('Page.navigate', { url: base + '/subd/reports' });
+        await waitFor(`!!document.querySelector('[data-desktop-report-action]')`, 'report actions mounted');
+        const layout = await evaluate(`(() => {
+            const mobile = document.querySelector('[data-mobile-report-action]');
+            const desktop = document.querySelector('[data-desktop-report-action]');
+            const visible = el => !!el && el.getClientRects().length > 0;
+            const rect = mobile?.getBoundingClientRect();
+            const nav = [...document.querySelectorAll('nav')].find(el => getComputedStyle(el).position === 'fixed' && el.getBoundingClientRect().bottom >= innerHeight - 1);
+            return { mobile: visible(mobile), desktop: visible(desktop), x: rect?.x, right: rect?.right, top: rect?.top, bottom: rect?.bottom, height: rect?.height,
+                navTop: nav?.getBoundingClientRect().top, position: mobile && getComputedStyle(mobile).position,
+                padding: parseFloat(getComputedStyle(document.querySelector('main')).paddingBottom), overflow: document.documentElement.scrollWidth > innerWidth + 1 };
+        })()`);
+        assert.equal(layout.mobile, width < 768, `${width}px floating action visibility`);
+        assert.equal(layout.desktop, width >= 768, `${width}px original desktop action visibility`);
+        assert.equal(layout.overflow, false, `${width}px no horizontal overflow`);
+        const messagesSelector = 'nav button[title="Messages"]';
+        await waitFor(`document.querySelector('${messagesSelector}')?.getAttribute('aria-label') === 'Messages, 12 unread'`, 'tab unread count loads');
+        const messagesLayout = await evaluate(`(() => {
+            const button = document.querySelector('${messagesSelector}');
+            return { visible: !!button.getClientRects().length, badge: button.textContent.includes('9+'),
+                headerCopies: [...document.querySelectorAll('button[aria-label="Messages"]')].filter(el => el.getClientRects().length).length };
+        })()`);
+        assert.equal(messagesLayout.visible, width < 768, `${width}px Messages tab visibility`);
+        assert.equal(messagesLayout.badge, true, 'Messages unread badge is capped at 9+');
+        assert.equal(messagesLayout.headerCopies, 0, 'mobile header no longer duplicates Messages');
+
+        if (width < 768) {
+            assert.equal(layout.position, 'fixed');
+            assert.ok(layout.height >= 56 && layout.x >= 12 && layout.right <= width - 12, `${width}px touch target fits`);
+            assert.ok(layout.bottom <= layout.navTop - 12, `${width}px clears bottom navigation`);
+            assert.ok(layout.padding >= 192, `${width}px reserves scroll space below reports`);
+            await evaluate(`document.querySelector('main').scrollTop = document.querySelector('main').scrollHeight`);
+            assert.equal(await evaluate(`document.querySelector('[data-mobile-report-action]').getBoundingClientRect().top`), layout.top, 'action stays visible while scrolling');
+        }
+        await evaluate(`document.querySelector(${JSON.stringify(width < 768 ? '[data-mobile-report-action]' : '[data-desktop-report-action]')}).click()`);
+        await waitFor(`[...document.querySelectorAll('h2')].some(el => el.textContent.trim() === 'Report Stray Animal')`, 'existing report form opens');
+        assert.equal(await evaluate(`!!document.querySelector('[data-mobile-report-action]')`), false, 'floating action hidden while form is open');
+        await evaluate(`[...document.querySelectorAll('h2')].find(el => el.textContent.trim() === 'Report Stray Animal').parentElement.parentElement.parentElement.querySelector('button[aria-label="Close"]').click()`);
+        await waitFor(`![...document.querySelectorAll('h2')].some(el => el.textContent.trim() === 'Report Stray Animal')`, 'report form closes');
+        console.log(`PASS ${width}px report action: mobile-only floating pill, original desktop action and existing form`);
+    }
+
+    await command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+    await command('Page.navigate', { url: base + '/subd/reports' });
+    await waitFor(`!!document.querySelector('nav button[title="Messages"]')`, 'Messages tab mounted');
+    await evaluate(`document.querySelector('nav button[title="Messages"]').click()`);
+    await waitFor(`location.pathname === '/subd/messages' && document.querySelector('nav button[title="Messages"]')?.getAttribute('aria-current') === 'page'`, 'Messages tab opens inbox and becomes active');
+    console.log('PASS Messages tab: opens inbox, active state, unread badge and no duplicate header shortcut');
 
     const realErrors = browserErrors.filter(e => !/dialog:/.test(e));
     assert.equal(realErrors.length, 0, realErrors.join('\n'));

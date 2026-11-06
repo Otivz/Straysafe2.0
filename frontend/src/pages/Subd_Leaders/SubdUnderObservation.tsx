@@ -553,7 +553,7 @@ export default function SubdUnderObservation() {
             setIsSecondWarningModalOpen(false);
             setWarningDescription('');
             setWarningFineAmount('0');
-            setSuccessMsg('Second Warning issued successfully. Case is now eligible for Barangay referral.');
+            setSuccessMsg('Second Warning issued successfully. Case is now eligible for Barangay Endorsement.');
             await fetchDashboard(true);
         } catch (err: any) {
             setNoticeMsg({
@@ -635,7 +635,7 @@ export default function SubdUnderObservation() {
             return (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200 shadow-2xs">
                     <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse" />
-                    Referred to Barangay
+                    Endorsed to Barangay
                 </span>
             );
         }
@@ -882,7 +882,7 @@ export default function SubdUnderObservation() {
                                             </button>
                                         )}
 
-                                        {/* Refer to the Barangay */}
+                                        {/* Endorse to Barangay San Vicente */}
                                         {selectedItem.workflow_section === 'second_warning_issued' && (
                                             <button
                                                 type="button"
@@ -892,7 +892,7 @@ export default function SubdUnderObservation() {
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                                                 </svg>
-                                                <span>Refer to the Barangay</span>
+                                                <span>Endorse to Barangay San Vicente</span>
                                             </button>
                                         )}
 
@@ -957,15 +957,14 @@ export default function SubdUnderObservation() {
                                     </div>
                                     <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden p-0.5 border border-gray-200/60 shadow-inner relative">
                                         <div
-                                            className={`h-full rounded-full transition-all duration-700 shadow-2xs relative overflow-hidden ${
-                                                selectedItem.workflow_section === 'resolved'
-                                                    ? 'bg-emerald-500'
-                                                    : selectedItem.workflow_section === 'for_second_warning'
+                                            className={`h-full rounded-full transition-all duration-700 shadow-2xs relative overflow-hidden ${selectedItem.workflow_section === 'resolved'
+                                                ? 'bg-emerald-500'
+                                                : selectedItem.workflow_section === 'for_second_warning'
                                                     ? 'bg-rose-500'
                                                     : selectedItem.workflow_section === 'second_warning_issued'
-                                                    ? 'bg-orange-500'
-                                                    : 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600'
-                                            }`}
+                                                        ? 'bg-orange-500'
+                                                        : 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600'
+                                                }`}
                                             style={{ width: `${Math.min(100, Math.max(5, selectedItem.progress_percent))}%` }}
                                         >
                                             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse pointer-events-none" />
@@ -1014,7 +1013,7 @@ export default function SubdUnderObservation() {
                                     <div className="flex items-center justify-between font-black text-purple-900 text-sm">
                                         <span className="flex items-center gap-2">
                                             <span className="w-6 h-6 rounded-lg bg-purple-600 text-white flex items-center justify-center text-xs">🏛️</span>
-                                            <span>Formally Referred to Barangay San Vicente</span>
+                                            <span>Formally Endorsed to Barangay San Vicente</span>
                                         </span>
                                         {selectedItem.endorsement_date && (
                                             <span className="text-xs text-purple-700 font-bold">
@@ -1159,7 +1158,7 @@ export default function SubdUnderObservation() {
                                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                                                             </svg>
-                                                            <span>Refer to the Barangay</span>
+                                                            <span>Endorse to Barangay San Vicente</span>
                                                         </button>
                                                     </div>
                                                 )}
@@ -1509,11 +1508,10 @@ export default function SubdUnderObservation() {
                                 {/* KPI 1 — ACTIVE OBSERVATION */}
                                 <div
                                     onClick={() => setActiveTab('active')}
-                                    className={`relative p-5 rounded-2xl bg-white border cursor-pointer transition-all duration-200 hover:shadow-md overflow-hidden ${
-                                        activeTab === 'active'
-                                            ? 'border-amber-400 ring-2 ring-amber-400/20 shadow-xs'
-                                            : 'border-amber-100/80 hover:border-amber-300 shadow-2xs'
-                                    }`}
+                                    className={`relative p-5 rounded-2xl bg-white border cursor-pointer transition-all duration-200 hover:shadow-md overflow-hidden ${activeTab === 'active'
+                                        ? 'border-amber-400 ring-2 ring-amber-400/20 shadow-xs'
+                                        : 'border-amber-100/80 hover:border-amber-300 shadow-2xs'
+                                        }`}
                                 >
                                     {/* Paw Watermark */}
                                     <div className="absolute top-2.5 right-3 pointer-events-none select-none text-amber-200/50">
@@ -1542,11 +1540,10 @@ export default function SubdUnderObservation() {
                                 {/* KPI 2 — WARNING & ESCALATION */}
                                 <div
                                     onClick={() => setActiveTab('warning_escalation')}
-                                    className={`relative p-5 rounded-2xl bg-white border cursor-pointer transition-all duration-200 hover:shadow-md overflow-hidden ${
-                                        activeTab === 'warning_escalation' || activeTab === 'for_second_warning' || activeTab === 'second_warning_issued'
-                                            ? 'border-rose-400 ring-2 ring-rose-400/20 shadow-xs'
-                                            : 'border-rose-100/80 hover:border-rose-300 shadow-2xs'
-                                    }`}
+                                    className={`relative p-5 rounded-2xl bg-white border cursor-pointer transition-all duration-200 hover:shadow-md overflow-hidden ${activeTab === 'warning_escalation' || activeTab === 'for_second_warning' || activeTab === 'second_warning_issued'
+                                        ? 'border-rose-400 ring-2 ring-rose-400/20 shadow-xs'
+                                        : 'border-rose-100/80 hover:border-rose-300 shadow-2xs'
+                                        }`}
                                 >
                                     {/* Paw Watermark */}
                                     <div className="absolute top-2.5 right-3 pointer-events-none select-none text-rose-200/50">
@@ -1575,11 +1572,10 @@ export default function SubdUnderObservation() {
                                 {/* KPI 3 — BARANGAY ENDORSED */}
                                 <div
                                     onClick={() => setActiveTab('endorsed')}
-                                    className={`relative p-5 rounded-2xl bg-white border cursor-pointer transition-all duration-200 hover:shadow-md overflow-hidden ${
-                                        activeTab === 'endorsed'
-                                            ? 'border-purple-400 ring-2 ring-purple-400/20 shadow-xs'
-                                            : 'border-purple-100/80 hover:border-purple-300 shadow-2xs'
-                                    }`}
+                                    className={`relative p-5 rounded-2xl bg-white border cursor-pointer transition-all duration-200 hover:shadow-md overflow-hidden ${activeTab === 'endorsed'
+                                        ? 'border-purple-400 ring-2 ring-purple-400/20 shadow-xs'
+                                        : 'border-purple-100/80 hover:border-purple-300 shadow-2xs'
+                                        }`}
                                 >
                                     {/* Paw Watermark */}
                                     <div className="absolute top-2.5 right-3 pointer-events-none select-none text-purple-200/50">
@@ -1597,22 +1593,21 @@ export default function SubdUnderObservation() {
                                             <div className="text-3xl font-black text-slate-900 tracking-tight">
                                                 {formatCount(metrics.endorsed_count)}
                                             </div>
-                                            <div className="text-sm font-bold text-slate-800 leading-tight">Referred to Barangay</div>
+                                            <div className="text-sm font-bold text-slate-800 leading-tight">Barangay Endorsed</div>
                                         </div>
                                     </div>
                                     <p className="text-xs text-slate-500 font-medium mt-3">
-                                        Cases referred to the Barangay outside StraySafe
+                                        Cases transferred to Barangay
                                     </p>
                                 </div>
 
                                 {/* KPI 4 — RESOLVED CASES */}
                                 <div
                                     onClick={() => setActiveTab('resolved')}
-                                    className={`relative p-5 rounded-2xl bg-white border cursor-pointer transition-all duration-200 hover:shadow-md overflow-hidden ${
-                                        activeTab === 'resolved'
-                                            ? 'border-emerald-400 ring-2 ring-emerald-400/20 shadow-xs'
-                                            : 'border-emerald-100/80 hover:border-emerald-300 shadow-2xs'
-                                    }`}
+                                    className={`relative p-5 rounded-2xl bg-white border cursor-pointer transition-all duration-200 hover:shadow-md overflow-hidden ${activeTab === 'resolved'
+                                        ? 'border-emerald-400 ring-2 ring-emerald-400/20 shadow-xs'
+                                        : 'border-emerald-100/80 hover:border-emerald-300 shadow-2xs'
+                                        }`}
                                 >
                                     {/* Paw Watermark */}
                                     <div className="absolute top-2.5 right-3 pointer-events-none select-none text-emerald-200/50">
@@ -1646,16 +1641,14 @@ export default function SubdUnderObservation() {
                                     <button
                                         type="button"
                                         onClick={() => setActiveTab('all')}
-                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                                            activeTab === 'all'
-                                                ? 'bg-[#EA580C] text-white shadow-xs'
-                                                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
-                                        }`}
+                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'all'
+                                            ? 'bg-[#EA580C] text-white shadow-xs'
+                                            : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
+                                            }`}
                                     >
                                         <span>All Cases</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                                            activeTab === 'all' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
-                                        }`}>
+                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${activeTab === 'all' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
+                                            }`}>
                                             {formatCount(items.length)}
                                         </span>
                                     </button>
@@ -1664,16 +1657,14 @@ export default function SubdUnderObservation() {
                                     <button
                                         type="button"
                                         onClick={() => setActiveTab('active')}
-                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                                            activeTab === 'active'
-                                                ? 'bg-[#EA580C] text-white shadow-xs'
-                                                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
-                                        }`}
+                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'active'
+                                            ? 'bg-[#EA580C] text-white shadow-xs'
+                                            : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
+                                            }`}
                                     >
                                         <span>Active Observation</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                                            activeTab === 'active' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
-                                        }`}>
+                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${activeTab === 'active' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
+                                            }`}>
                                             {formatCount(metrics.active_observation_count)}
                                         </span>
                                     </button>
@@ -1682,16 +1673,14 @@ export default function SubdUnderObservation() {
                                     <button
                                         type="button"
                                         onClick={() => setActiveTab('for_second_warning')}
-                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                                            activeTab === 'for_second_warning'
-                                                ? 'bg-[#EA580C] text-white shadow-xs'
-                                                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
-                                        }`}
+                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'for_second_warning'
+                                            ? 'bg-[#EA580C] text-white shadow-xs'
+                                            : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
+                                            }`}
                                     >
                                         <span>For Second Warning</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                                            activeTab === 'for_second_warning' ? 'bg-orange-700 text-white' : 'bg-rose-100 text-rose-800'
-                                        }`}>
+                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${activeTab === 'for_second_warning' ? 'bg-orange-700 text-white' : 'bg-rose-100 text-rose-800'
+                                            }`}>
                                             {formatCount(metrics.for_second_warning_count)}
                                         </span>
                                     </button>
@@ -1700,34 +1689,30 @@ export default function SubdUnderObservation() {
                                     <button
                                         type="button"
                                         onClick={() => setActiveTab('second_warning_issued')}
-                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                                            activeTab === 'second_warning_issued'
-                                                ? 'bg-[#EA580C] text-white shadow-xs'
-                                                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
-                                        }`}
+                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'second_warning_issued'
+                                            ? 'bg-[#EA580C] text-white shadow-xs'
+                                            : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
+                                            }`}
                                     >
                                         <span>Second Warning Issued</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                                            activeTab === 'second_warning_issued' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
-                                        }`}>
+                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${activeTab === 'second_warning_issued' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
+                                            }`}>
                                             {formatCount(metrics.second_warning_issued_count)}
                                         </span>
                                     </button>
 
-                                    {/* 5. Referred to Barangay */}
+                                    {/* 5. Endorsed to Barangay */}
                                     <button
                                         type="button"
                                         onClick={() => setActiveTab('endorsed')}
-                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                                            activeTab === 'endorsed'
-                                                ? 'bg-[#EA580C] text-white shadow-xs'
-                                                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
-                                        }`}
+                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'endorsed'
+                                            ? 'bg-[#EA580C] text-white shadow-xs'
+                                            : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
+                                            }`}
                                     >
-                                        <span>Referred to Barangay</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                                            activeTab === 'endorsed' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
-                                        }`}>
+                                        <span>Endorsed to Barangay</span>
+                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${activeTab === 'endorsed' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
+                                            }`}>
                                             {formatCount(metrics.endorsed_count)}
                                         </span>
                                     </button>
@@ -1736,16 +1721,14 @@ export default function SubdUnderObservation() {
                                     <button
                                         type="button"
                                         onClick={() => setActiveTab('resolved')}
-                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                                            activeTab === 'resolved'
-                                                ? 'bg-[#EA580C] text-white shadow-xs'
-                                                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
-                                        }`}
+                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'resolved'
+                                            ? 'bg-[#EA580C] text-white shadow-xs'
+                                            : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
+                                            }`}
                                     >
                                         <span>Resolved</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                                            activeTab === 'resolved' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
-                                        }`}>
+                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${activeTab === 'resolved' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
+                                            }`}>
                                             {formatCount(metrics.resolved_count)}
                                         </span>
                                     </button>
@@ -1799,22 +1782,20 @@ export default function SubdUnderObservation() {
                                         <button
                                             type="button"
                                             onClick={() => setViewMode('cards')}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                                viewMode === 'cards'
-                                                    ? 'bg-[#1E293B] text-white shadow-2xs'
-                                                    : 'text-slate-600 hover:text-slate-900'
-                                            }`}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${viewMode === 'cards'
+                                                ? 'bg-[#1E293B] text-white shadow-2xs'
+                                                : 'text-slate-600 hover:text-slate-900'
+                                                }`}
                                         >
                                             Cards
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setViewMode('table')}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                                viewMode === 'table'
-                                                    ? 'bg-[#1E293B] text-white shadow-2xs'
-                                                    : 'text-slate-600 hover:text-slate-900'
-                                            }`}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${viewMode === 'table'
+                                                ? 'bg-[#1E293B] text-white shadow-2xs'
+                                                : 'text-slate-600 hover:text-slate-900'
+                                                }`}
                                         >
                                             Table
                                         </button>
@@ -1863,29 +1844,29 @@ export default function SubdUnderObservation() {
                                         {activeTab === 'active'
                                             ? 'No Active Observation Cases'
                                             : activeTab === 'for_second_warning'
-                                            ? 'No Cases Awaiting Second Warning'
-                                            : activeTab === 'second_warning_issued'
-                                            ? 'No Cases with Second Warning Issued'
-                                            : activeTab === 'warning_escalation'
-                                            ? 'No Warning or Escalation Cases'
-                                            : activeTab === 'endorsed'
-                                            ? 'No Cases Referred to Barangay'
-                                            : activeTab === 'resolved'
-                                            ? 'No Resolved Cases Yet'
-                                            : 'No Cases Found'}
+                                                ? 'No Cases Awaiting Second Warning'
+                                                : activeTab === 'second_warning_issued'
+                                                    ? 'No Cases with Second Warning Issued'
+                                                    : activeTab === 'warning_escalation'
+                                                        ? 'No Warning or Escalation Cases'
+                                                        : activeTab === 'endorsed'
+                                                            ? 'No Cases Endorsed to Barangay'
+                                                            : activeTab === 'resolved'
+                                                                ? 'No Resolved Cases Yet'
+                                                                : 'No Cases Found'}
                                     </h3>
                                     <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 leading-relaxed">
                                         {activeTab === 'active'
                                             ? 'Reports automatically start the 3-day observation period immediately when subdivision personnel issue a First Warning.'
                                             : activeTab === 'for_second_warning'
-                                            ? 'Cases that exceed 3 days without verified compliance will appear here for Second Warning review.'
-                                            : activeTab === 'second_warning_issued'
-                                            ? 'Cases with an issued Second Warning will appear here, eligible for referral to the Barangay.'
-                                            : activeTab === 'warning_escalation'
-                                            ? 'Cases requiring Second Warning review or eligible for Barangay referral.'
-                                            : activeTab === 'endorsed'
-                                            ? 'Cases referred to the Barangay outside StraySafe are listed here.'
-                                            : 'Resolved cases with verified compliance are archived here.'}
+                                                ? 'Cases that exceed 3 days without verified compliance will appear here for Second Warning review.'
+                                                : activeTab === 'second_warning_issued'
+                                                    ? 'Cases with an issued Second Warning will appear here, eligible for Barangay San Vicente endorsement.'
+                                                    : activeTab === 'warning_escalation'
+                                                        ? 'Cases requiring Second Warning review or eligible for Barangay endorsement.'
+                                                        : activeTab === 'endorsed'
+                                                            ? 'Cases escalated to Barangay San Vicente are listed here.'
+                                                            : 'Resolved cases with verified compliance are archived here.'}
                                     </p>
                                     {(searchQuery || dayFilter !== 'all' || activeTab !== 'all') && (
                                         <button
@@ -1944,7 +1925,7 @@ export default function SubdUnderObservation() {
                                                             </span>
                                                         ) : item.workflow_section === 'endorsed' ? (
                                                             <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300 text-[11px] font-bold">
-                                                                Referred to Barangay
+                                                                Barangay Endorsed
                                                             </span>
                                                         ) : item.workflow_section === 'second_warning_issued' ? (
                                                             <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300 text-[11px] font-bold">
@@ -1973,7 +1954,7 @@ export default function SubdUnderObservation() {
                                                         )}
                                                         {item.workflow_section === 'second_warning_issued' && (
                                                             <span className="px-2.5 py-0.5 rounded-full bg-sky-500 text-white text-[11px] font-bold">
-                                                                Refer to Barangay
+                                                                Endorse to Barangay
                                                             </span>
                                                         )}
                                                     </div>
@@ -2020,7 +2001,7 @@ export default function SubdUnderObservation() {
                                                             ) : item.workflow_section === 'endorsed' ? (
                                                                 <div className="space-y-0.5">
                                                                     <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                                                                        Referred
+                                                                        Endorsed
                                                                     </div>
                                                                     <div className="text-xs font-bold text-slate-800">
                                                                         {formatCardDate(item.endorsement_date)}
@@ -2078,17 +2059,16 @@ export default function SubdUnderObservation() {
                                                     {/* Progress / Accent Bar */}
                                                     <div className="w-full pt-1">
                                                         <div
-                                                            className={`h-1 w-full rounded-full ${
-                                                                item.workflow_section === 'resolved'
-                                                                    ? 'bg-emerald-500'
-                                                                    : item.workflow_section === 'endorsed'
+                                                            className={`h-1 w-full rounded-full ${item.workflow_section === 'resolved'
+                                                                ? 'bg-emerald-500'
+                                                                : item.workflow_section === 'endorsed'
                                                                     ? 'bg-purple-500'
                                                                     : item.workflow_section === 'second_warning_issued'
-                                                                    ? 'bg-purple-500'
-                                                                    : item.workflow_section === 'for_second_warning'
-                                                                    ? 'bg-red-500'
-                                                                    : 'bg-emerald-500'
-                                                            }`}
+                                                                        ? 'bg-purple-500'
+                                                                        : item.workflow_section === 'for_second_warning'
+                                                                            ? 'bg-red-500'
+                                                                            : 'bg-emerald-500'
+                                                                }`}
                                                         />
                                                     </div>
 
@@ -2134,7 +2114,7 @@ export default function SubdUnderObservation() {
                                                                 }}
                                                                 className="px-4 py-2 bg-[#4C1D95] hover:bg-[#3B0764] text-white rounded-xl text-xs font-bold shadow-2xs transition-colors cursor-pointer"
                                                             >
-                                                                Refer to Barangay
+                                                                Endorse to Barangay
                                                             </button>
                                                         )}
                                                     </div>
@@ -2143,129 +2123,129 @@ export default function SubdUnderObservation() {
                                         );
                                     })}
                                 </div>
-                        ) : (
-                            /* TABLE VIEW */
-                            <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-2xs overflow-hidden">
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left border-collapse min-w-[960px]">
-                                        <thead>
-                                            <tr className="border-b border-slate-200/80 bg-slate-50/80 text-[11px] font-black text-slate-500 uppercase tracking-wider">
-                                                <th className="py-4 px-4 w-[24%]">Animal / Photo</th>
-                                                <th className="py-4 px-4 w-[16%]">Report & Location</th>
-                                                <th className="py-4 px-4 w-[15%]">Owner Info</th>
-                                                <th className="py-4 px-4 w-[15%]">First Warning</th>
-                                                <th className="py-4 px-4 w-[16%]">Observation Countdown</th>
-                                                <th className="py-4 px-4 w-[14%]">Stage / Status</th>
-                                                <th className="py-4 px-4 text-right">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100 text-xs">
-                                            {filteredItems.map((item) => {
-                                                const photoSrc = item.animal_photo || item.report_photo;
-                                                const animalTitle = getAnimalDisplayName(item);
-                                                return (
-                                                    <tr key={item.followup_id} className="hover:bg-amber-50/30 transition-colors">
-                                                        <td className="py-3.5 px-4 align-middle">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="w-11 h-11 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200/80 shadow-2xs">
-                                                                    {photoSrc ? (
-                                                                        <img
-                                                                            src={cloudinaryResized(photoSrc, 100)}
-                                                                            alt={animalTitle}
-                                                                            className="w-full h-full object-cover"
-                                                                        />
-                                                                    ) : (
-                                                                        <div className="w-full h-full flex items-center justify-center text-base">🐾</div>
-                                                                    )}
-                                                                </div>
-                                                                <div className="min-w-0">
-                                                                    <div className="font-black text-slate-900 leading-snug">{animalTitle}</div>
-                                                                    <div className="text-[11px] text-slate-500 truncate mt-0.5">
-                                                                        {item.report_animal_type || 'Animal'} · {item.report_breed || 'Mixed'}
+                            ) : (
+                                /* TABLE VIEW */
+                                <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-2xs overflow-hidden">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse min-w-[960px]">
+                                            <thead>
+                                                <tr className="border-b border-slate-200/80 bg-slate-50/80 text-[11px] font-black text-slate-500 uppercase tracking-wider">
+                                                    <th className="py-4 px-4 w-[24%]">Animal / Photo</th>
+                                                    <th className="py-4 px-4 w-[16%]">Report & Location</th>
+                                                    <th className="py-4 px-4 w-[15%]">Owner Info</th>
+                                                    <th className="py-4 px-4 w-[15%]">First Warning</th>
+                                                    <th className="py-4 px-4 w-[16%]">Observation Countdown</th>
+                                                    <th className="py-4 px-4 w-[14%]">Stage / Status</th>
+                                                    <th className="py-4 px-4 text-right">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 text-xs">
+                                                {filteredItems.map((item) => {
+                                                    const photoSrc = item.animal_photo || item.report_photo;
+                                                    const animalTitle = getAnimalDisplayName(item);
+                                                    return (
+                                                        <tr key={item.followup_id} className="hover:bg-amber-50/30 transition-colors">
+                                                            <td className="py-3.5 px-4 align-middle">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="w-11 h-11 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200/80 shadow-2xs">
+                                                                        {photoSrc ? (
+                                                                            <img
+                                                                                src={cloudinaryResized(photoSrc, 100)}
+                                                                                alt={animalTitle}
+                                                                                className="w-full h-full object-cover"
+                                                                            />
+                                                                        ) : (
+                                                                            <div className="w-full h-full flex items-center justify-center text-base">🐾</div>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="min-w-0">
+                                                                        <div className="font-black text-slate-900 leading-snug">{animalTitle}</div>
+                                                                        <div className="text-[11px] text-slate-500 truncate mt-0.5">
+                                                                            {item.report_animal_type || 'Animal'} · {item.report_breed || 'Mixed'}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
-                                                            </div>
-                                                        </td>
-                                                        <td className="py-3.5 px-4 align-middle">
-                                                            <div className="font-bold text-slate-800">Report #{item.report_id}</div>
-                                                            <div className="text-[11px] text-slate-500 max-w-[180px] truncate mt-0.5" title={item.report_landmark || 'Subdivision'}>
-                                                                {item.report_landmark || 'Subdivision'}
-                                                            </div>
-                                                        </td>
-                                                        <td className="py-3.5 px-4 align-middle">
-                                                            <div className="font-bold text-slate-800">{item.owner_name || 'Resident'}</div>
-                                                            <div className="text-[11px] text-slate-500 mt-0.5">{item.owner_phone || 'No phone recorded'}</div>
-                                                        </td>
-                                                        <td className="py-3.5 px-4 align-middle">
-                                                            <div className="font-bold text-amber-700">
-                                                                {formatDateOnly(item.first_warning_date)}
-                                                            </div>
-                                                            <div className="text-[11px] text-slate-500 max-w-[200px] leading-snug mt-0.5" title={item.first_warning_violation || 'First Warning'}>
-                                                                {item.first_warning_violation || 'First Warning'}
-                                                            </div>
-                                                        </td>
-                                                        <td className="py-3.5 px-4 align-middle">
-                                                            <div className="flex flex-col items-start gap-1">
-                                                                <div>{renderDayBadge(item)}</div>
-                                                                <div className="text-[11px] text-slate-500 font-medium pl-1">
-                                                                    {item.workflow_section === 'resolved'
-                                                                        ? 'Compliance verified'
-                                                                        : item.workflow_section === 'endorsed'
-                                                                        ? 'Handled by Barangay outside StraySafe'
-                                                                        : item.workflow_section === 'second_warning_issued'
-                                                                        ? 'Eligible for Referral'
-                                                                        : item.workflow_section === 'for_second_warning'
-                                                                        ? 'Eligible for Second Warning'
-                                                                        : item.remaining_time_display}
+                                                            </td>
+                                                            <td className="py-3.5 px-4 align-middle">
+                                                                <div className="font-bold text-slate-800">Report #{item.report_id}</div>
+                                                                <div className="text-[11px] text-slate-500 max-w-[180px] truncate mt-0.5" title={item.report_landmark || 'Subdivision'}>
+                                                                    {item.report_landmark || 'Subdivision'}
                                                                 </div>
-                                                            </div>
-                                                        </td>
-                                                        <td className="py-3.5 px-4 align-middle whitespace-nowrap">
-                                                            {renderStatusBadge(item)}
-                                                        </td>
-                                                        <td className="py-3.5 px-4 align-middle text-right whitespace-nowrap">
-                                                            <div className="flex items-center justify-end gap-2">
-                                                                {item.workflow_section === 'for_second_warning' && (
+                                                            </td>
+                                                            <td className="py-3.5 px-4 align-middle">
+                                                                <div className="font-bold text-slate-800">{item.owner_name || 'Resident'}</div>
+                                                                <div className="text-[11px] text-slate-500 mt-0.5">{item.owner_phone || 'No phone recorded'}</div>
+                                                            </td>
+                                                            <td className="py-3.5 px-4 align-middle">
+                                                                <div className="font-bold text-amber-700">
+                                                                    {formatDateOnly(item.first_warning_date)}
+                                                                </div>
+                                                                <div className="text-[11px] text-slate-500 max-w-[200px] leading-snug mt-0.5" title={item.first_warning_violation || 'First Warning'}>
+                                                                    {item.first_warning_violation || 'First Warning'}
+                                                                </div>
+                                                            </td>
+                                                            <td className="py-3.5 px-4 align-middle">
+                                                                <div className="flex flex-col items-start gap-1">
+                                                                    <div>{renderDayBadge(item)}</div>
+                                                                    <div className="text-[11px] text-slate-500 font-medium pl-1">
+                                                                        {item.workflow_section === 'resolved'
+                                                                            ? 'Compliance verified'
+                                                                            : item.workflow_section === 'endorsed'
+                                                                                ? 'Handled by Barangay'
+                                                                                : item.workflow_section === 'second_warning_issued'
+                                                                                    ? 'Eligible for Endorsement'
+                                                                                    : item.workflow_section === 'for_second_warning'
+                                                                                        ? 'Eligible for Second Warning'
+                                                                                        : item.remaining_time_display}
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="py-3.5 px-4 align-middle whitespace-nowrap">
+                                                                {renderStatusBadge(item)}
+                                                            </td>
+                                                            <td className="py-3.5 px-4 align-middle text-right whitespace-nowrap">
+                                                                <div className="flex items-center justify-end gap-2">
+                                                                    {item.workflow_section === 'for_second_warning' && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setSelectedItem(item);
+                                                                                setIsSecondWarningModalOpen(true);
+                                                                            }}
+                                                                            className="h-8 px-3 inline-flex items-center justify-center bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-2xs shadow-rose-600/20 active:scale-95 transition-all cursor-pointer"
+                                                                        >
+                                                                            2nd Warning
+                                                                        </button>
+                                                                    )}
+                                                                    {item.workflow_section === 'second_warning_issued' && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setSelectedItem(item);
+                                                                                setIsEndorseModalOpen(true);
+                                                                            }}
+                                                                            className="h-8 px-3 inline-flex items-center justify-center bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-2xs shadow-purple-600/20 active:scale-95 transition-all cursor-pointer"
+                                                                        >
+                                                                            Endorse
+                                                                        </button>
+                                                                    )}
                                                                     <button
                                                                         type="button"
-                                                                        onClick={() => {
-                                                                            setSelectedItem(item);
-                                                                            setIsSecondWarningModalOpen(true);
-                                                                        }}
-                                                                        className="h-8 px-3 inline-flex items-center justify-center bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-2xs shadow-rose-600/20 active:scale-95 transition-all cursor-pointer"
+                                                                        onClick={() => handleViewDetails(item)}
+                                                                        className="h-8 px-3.5 inline-flex items-center justify-center bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-2xs shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
                                                                     >
-                                                                        2nd Warning
+                                                                        Details
                                                                     </button>
-                                                                )}
-                                                                {item.workflow_section === 'second_warning_issued' && (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            setSelectedItem(item);
-                                                                            setIsEndorseModalOpen(true);
-                                                                        }}
-                                                                        className="h-8 px-3 inline-flex items-center justify-center bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-2xs shadow-purple-600/20 active:scale-95 transition-all cursor-pointer"
-                                                                    >
-                                                                        Refer
-                                                                    </button>
-                                                                )}
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleViewDetails(item)}
-                                                                    className="h-8 px-3.5 inline-flex items-center justify-center bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-2xs shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
-                                                                >
-                                                                    Details
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
                         </div>
                     )}
                 </main>
@@ -2514,7 +2494,7 @@ export default function SubdUnderObservation() {
                         </div>
 
                         <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-200 text-xs text-rose-900 leading-relaxed">
-                            <strong>Notice:</strong> The 3-day observation period has expired without verified compliance. Authorized personnel review is required before issuing the Second Warning. Issuing this warning makes the case eligible for Barangay referral.
+                            <strong>Notice:</strong> The 3-day observation period has expired without verified compliance. Authorized personnel review is required before issuing the Second Warning. Issuing this warning makes the case eligible for Barangay Endorsement.
                         </div>
 
                         <div className="space-y-3">
@@ -2597,25 +2577,25 @@ export default function SubdUnderObservation() {
                                 ⚖️
                             </div>
                             <div>
-                                <h3 className="text-base font-black text-gray-900">Refer to the Barangay</h3>
-                                <p className="text-xs text-gray-500 mt-0.5">Referral following First and Second Warnings</p>
+                                <h3 className="text-base font-black text-gray-900">Endorse to Barangay San Vicente</h3>
+                                <p className="text-xs text-gray-500 mt-0.5">Formal escalation following First and Second Warnings</p>
                             </div>
                         </div>
 
                         <div className="p-3.5 rounded-xl bg-purple-50/70 border border-purple-200 text-xs text-purple-900 leading-relaxed">
-                            <strong>Scope Notice:</strong> Subdivision personnel do NOT handle animal custody, rescue operations, or physical handover. The referral records Report #{selectedItem.report_id}, First Warning, 3-Day Observation logs, and Second Warning records. Contact the Barangay outside StraySafe; record any updates as reported by the Barangay.
+                            <strong>Scope Notice:</strong> Subdivision personnel do NOT handle animal custody, rescue operations, or physical handover. Endorsement forwards Report #{selectedItem.report_id}, First Warning, 3-Day Observation logs, and Second Warning records to Barangay San Vicente for next-level intervention.
                         </div>
 
                         <div className="space-y-3">
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                                    Reason for Barangay Referral <span className="text-rose-500">*</span>
+                                    Reason for Barangay Endorsement <span className="text-rose-500">*</span>
                                 </label>
                                 <textarea
                                     value={endorseReason}
                                     onChange={(e) => setEndorseReason(e.target.value)}
                                     rows={3}
-                                    placeholder="Explain referral reason (e.g., Owner uncooperative following Second Warning, animal remains unleashed, repeated resident complaints)..."
+                                    placeholder="Explain escalation reason (e.g., Owner uncooperative following Second Warning, animal remains unleashed, repeated resident complaints)..."
                                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 placeholder-gray-400 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
                                 />
                             </div>
@@ -2652,7 +2632,7 @@ export default function SubdUnderObservation() {
                                 disabled={isSubmittingEndorse || !endorseReason.trim()}
                                 className="px-5 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-xs transition-all cursor-pointer"
                             >
-                                {isSubmittingEndorse ? 'Recording...' : 'Confirm Referral'}
+                                {isSubmittingEndorse ? 'Endorsing...' : 'Confirm Endorsement'}
                             </button>
                         </div>
                     </div>

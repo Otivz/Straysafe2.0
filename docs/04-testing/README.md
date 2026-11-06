@@ -192,3 +192,16 @@ Current behavior: [Claim fee assessment rules](../01-system/CLAIM_FEE_ASSESSMENT
   - the batched adoption-eligibility check gives the same answers and reasons as the per-animal check for every kind of evidence;
   - `GET /holding/` uses a constant number of queries (10, measured) as the list grows.
 - `npm --prefix frontend run build` (type check, then bundle) passes again.
+
+## Compact subdivision observation interface - 2026-11-06
+
+`frontend/tests/underObservation.browser.mjs` runs the existing `/subd/under-observation` page against mocked APIs in an isolated Chrome profile. Start a local Vite server, then run from the repository root:
+
+```powershell
+$env:OBSERVATION_TEST_URL='http://127.0.0.1:5180'
+node frontend/tests/underObservation.browser.mjs
+```
+
+The runner checks 320, 375, 390, 430, 640, 767, 768, 1024, 1280 and 1536px layouts: compact equal-height summary cards, a full-width status dropdown below 768px, wrapping desktop status tabs, responsive controls, small photos, elapsed observation progress, and card-only case presentation without a Table toggle. It exercises all summary and category filters through the mobile dropdown and desktop tabs, verifies that summary selections stay synchronized with the dropdown (including combined Warning & Escalation), and checks search and reset, the existing observation-day filter, refresh, case navigation, warning/referral dialog opening, and empty/error states. API mutations are prohibited in this regression; it does not issue warnings, refer cases, or change real records. Mobile and desktop previews are saved to uniquely named files in the system temporary directory.
+
+The list reuses the existing status/day badges, shared subdivision navigation, colors, fonts and rounded card/button styles. All four summary categories and stage-specific actions remain available. Backend workflow rules and persistence are unchanged.

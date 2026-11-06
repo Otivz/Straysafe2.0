@@ -743,31 +743,20 @@ const SubdReports = () => {
                     }
                 />
 
-                <main className="flex-1 overflow-y-auto px-3 py-4 sm:p-8 pb-32 md:pb-8 custom-scrollbar">
+                <main className="flex-1 overflow-y-auto px-3 py-4 sm:p-8 pb-52 sm:pb-52 md:pb-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto">
                         {viewingReportId === null ? (
                             <>
                                 {/* Closed cases where the owner later said a merged sighting wasn't their pet */}
                                 <NeedsReviewSightings className="mb-6" />
 
-                                {/* Action Toolbar: icon Refresh + prominent Report Incident (one row on phones) */}
-                                <div className="flex items-center gap-2 mb-3 sm:mb-5 md:justify-end">
+                                {/* Desktop report action; mobile uses the floating action above the bottom navigation. */}
+                                <div className="hidden md:flex justify-end mb-4">
                                     <button
                                         type="button"
-                                        onClick={() => fetchReports(true)}
-                                        className="h-11 w-11 md:w-auto md:px-4 shrink-0 inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white text-gray-600 text-sm font-bold shadow-2xs hover:border-role-border hover:text-role active:scale-95 transition-all cursor-pointer"
-                                        title="Refresh reports"
-                                        aria-label="Refresh reports"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                        </svg>
-                                        <span className="hidden md:inline">Refresh</span>
-                                    </button>
-                                    <button
-                                        type="button"
+                                        data-desktop-report-action
                                         onClick={() => setIsModalOpen(true)}
-                                        className="h-11 flex-1 md:flex-none px-5 inline-flex items-center justify-center gap-2 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-sm font-black shadow-md shadow-orange-500/25 active:scale-95 transition-all cursor-pointer"
+                                        className="h-11 px-5 inline-flex items-center justify-center gap-2 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-sm font-black shadow-md shadow-orange-500/25 active:scale-95 transition-all cursor-pointer"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                             <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
@@ -810,19 +799,34 @@ const SubdReports = () => {
 
                                 {/* Search & Filters */}
                                 <div className="bg-white rounded-2xl shadow-2xs border border-gray-100 p-2.5 sm:p-3 mb-4 sm:mb-5 flex flex-col md:flex-row md:items-center justify-between gap-2 sm:gap-3">
-                                    <div className="relative flex-1 md:max-w-md">
-                                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    <div className="flex items-center gap-2 flex-1 md:max-w-md">
+                                        <div className="relative flex-1 min-w-0">
+                                            <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400 pointer-events-none">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                                </svg>
+                                            </span>
+                                            <input
+                                                type="text"
+                                                placeholder="Search category, location or landmark"
+                                                className="w-full h-10 pl-10 pr-4 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder:text-gray-400 focus:ring-2 focus:ring-role focus:bg-white outline-none transition-all"
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                            />
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => fetchReports(true)}
+                                            disabled={loading}
+                                            className="h-10 px-3 sm:px-3.5 shrink-0 inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white text-gray-600 text-xs font-bold shadow-2xs hover:border-role-border hover:text-role active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                                            title="Refresh reports"
+                                            aria-label="Refresh reports"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${loading ? 'animate-spin text-role' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                             </svg>
-                                        </span>
-                                        <input
-                                            type="text"
-                                            placeholder="Search category, location or landmark"
-                                            className="w-full h-10 pl-10 pr-4 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder:text-gray-400 focus:ring-2 focus:ring-role focus:bg-white outline-none transition-all"
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                        />
+                                            <span className="hidden sm:inline">Refresh</span>
+                                        </button>
                                     </div>
                                     <div className="grid grid-cols-2 gap-2 md:flex md:items-center md:gap-2.5">
                                         <Select
@@ -2811,6 +2815,21 @@ const SubdReports = () => {
                     navigate(`/subd/reports/${reportId}`);
                 }}
             />
+
+            {viewingReportId === null && !isModalOpen && (
+                <button
+                    type="button"
+                    data-mobile-report-action
+                    aria-label="Report incident"
+                    onClick={() => setIsModalOpen(true)}
+                    className="md:hidden fixed right-4 bottom-[calc(env(safe-area-inset-bottom,0px)+6rem)] z-40 h-14 min-w-28 px-5 inline-flex items-center justify-center gap-2 rounded-full bg-[#F97316] hover:bg-[#EA580C] text-white text-sm font-black shadow-lg shadow-orange-500/30 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-600 active:scale-95 transition-transform cursor-pointer"
+                >
+                    <svg aria-hidden="true" className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" d="M12 5v14M5 12h14" />
+                    </svg>
+                    <span>Report</span>
+                </button>
+            )}
 
             {/* Reusable Mobile Bottom Navigation */}
             <SubdBottomNav activeTab="reports" />

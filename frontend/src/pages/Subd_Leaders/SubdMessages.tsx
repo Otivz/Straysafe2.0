@@ -1202,7 +1202,7 @@ const SubdMessages: React.FC = () => {
                 {/* Bottom Navigation on Mobile: Only shown when in thread list screen */}
                 {!selectedThread && (
                     <div className="md:hidden">
-                        <SubdBottomNav />
+                        <SubdBottomNav activeTab="messages" />
                     </div>
                 )}
             </div>

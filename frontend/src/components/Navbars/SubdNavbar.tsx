@@ -3,10 +3,6 @@ import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
-import { useUnreadMessageCount } from '../../utils/useUnreadMessageCount';
-import type { ChatThreadSummary } from '../../utils/useUnreadMessageCount';
-import MessagesDropdown from '../Chat/MessagesDropdown';
-import ReportChatDrawer from '../Chat/ReportChatDrawer';
 import QRScannerModal from '../Modals/QRScannerModal';
 import NotificationPanel from '../Notifications/NotificationPanel';
 import { whenVisible } from '../../utils/visibleInterval';
@@ -73,17 +69,13 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
     const [localNotifications, setLocalNotifications] = useState<NotificationItem[]>([]);
     const [isNotifOpen, setIsNotifOpen] = useState(false);
     const [selectedNotifForDetail, setSelectedNotifForDetail] = useState<NotificationItem | null>(null);
-    const [isMessagesOpen, setIsMessagesOpen] = useState(false);
-    const [activeChatThread, setActiveChatThread] = useState<ChatThreadSummary | null>(null);
     const [notifFilter, setNotifFilter] = useState<'all' | 'unread'>('all');
     const [isLoadingNotifs, setIsLoadingNotifs] = useState(false);
     const [isMarkingAll, setIsMarkingAll] = useState(false);
     const [notificationError, setNotificationError] = useState('');
     const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
     const notifRef = useRef<HTMLDivElement>(null);
-    const messagesRef = useRef<HTMLDivElement>(null);
 
-    const { unreadCount: unreadMessageCount, threads: messageThreads, loading: isMessagesLoading, refreshThreads } = useUnreadMessageCount(user?.user_id);
 
     const isMessageNotif = (notif: NotificationItem) => {
         const t = (notif.type || '').toLowerCase();
@@ -127,31 +119,6 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
             return () => clearInterval(interval);
         }
     }, [user?.user_id, propNotifications]);
-
-    // Handle outside clicks and Escape key to close dropdowns
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            const target = event.target as Element | null;
-            const isInsideMessages = (messagesRef.current && messagesRef.current.contains(event.target as Node)) ||
-                                     Boolean(target?.closest?.('[data-messages-dropdown="true"]'));
-            if (!isInsideMessages) {
-                setIsMessagesOpen(false);
-            }
-        };
-
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') {
-                setIsMessagesOpen(false);
-            }
-        };
-
-        document.addEventListener('mousedown', handleClickOutside);
-        document.addEventListener('keydown', handleKeyDown);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-            document.removeEventListener('keydown', handleKeyDown);
-        };
-    }, []);
 
     // Mark all notifications as read
     const handleMarkAllRead = async () => {
@@ -438,58 +405,11 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                     </svg>
                 </button>
 
-                {/* Messages Dropdown Container (Mobile Only) */}
-                <div className="relative md:hidden" ref={messagesRef}>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            if (window.innerWidth < 768) {
-                                navigate('/subd/messages');
-                                return;
-                            }
-                            setIsMessagesOpen(!isMessagesOpen);
-                            if (isNotifOpen) setIsNotifOpen(false);
-                        }}
-                        className={`relative w-10 h-10 sm:w-11 sm:h-11 rounded-xl transition-all flex items-center justify-center group cursor-pointer border ${isMessagesOpen
-                                ? 'text-role bg-role-soft border-role-border/80 shadow-xs'
-                                : 'text-[#4a3b28] border-transparent sm:text-slate-500 hover:text-role hover:bg-role-soft/70 hover:border-role-muted/70'
-                            }`}
-                        title="Case Messages & Look-Alike Inquiries"
-                        aria-label="Messages"
-                    >
-                        <svg className="w-5 h-5 transition-transform group-hover:scale-105" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                        </svg>
-
-                        {/* Unread message badge */}
-                        {unreadMessageCount > 0 && (
-                            <span className="absolute top-0.5 right-0.5 sm:-top-1 sm:-right-1 min-w-[18px] sm:min-w-[20px] h-[18px] sm:h-[20px] px-1 bg-role text-white text-[9px] sm:text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-white shadow-xs animate-pulse">
-                                {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
-                            </span>
-                        )}
-                    </button>
-
-                    {/* Messages Dropdown Panel */}
-                    <MessagesDropdown
-                        isOpen={isMessagesOpen}
-                        onClose={() => setIsMessagesOpen(false)}
-                        threads={messageThreads}
-                        loading={isMessagesLoading}
-                        onRefresh={refreshThreads}
-                        onSelectThread={(thread) => {
-                            setIsMessagesOpen(false);
-                            setActiveChatThread(thread);
-                        }}
-                        currentRole="subd"
-                    />
-                </div>
-
                 {/* Notifications Dropdown Container */}
                 <div className="relative" ref={notifRef}>
                     <button
                         onClick={() => {
                             setIsNotifOpen(!isNotifOpen);
-                            if (isMessagesOpen) setIsMessagesOpen(false);
                         }}
                         className={`relative w-10 h-10 sm:w-11 sm:h-11 rounded-xl transition-all flex items-center justify-center group cursor-pointer border ${isNotifOpen
                                 ? 'text-role bg-role-soft border-role-border/80 shadow-xs'
@@ -777,42 +697,6 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                     </button>
                 )}
             </div>
-
-            {/* DIRECT CHAT DRAWER */}
-            {activeChatThread && (
-                <ReportChatDrawer
-                    isOpen={!!activeChatThread}
-                    onClose={() => setActiveChatThread(null)}
-                    report={{
-                        report_id: activeChatThread.report_id || 0,
-                        user_id: activeChatThread.report?.user_id || 0,
-                        reporter_name: activeChatThread.report?.reporter_name || undefined,
-                        reporter_photo: activeChatThread.report?.reporter_photo || undefined,
-                        animal_type: activeChatThread.report?.animal_type || undefined,
-                        animal_breed: activeChatThread.report?.animal_breed || undefined,
-                        animal_color: activeChatThread.report?.animal_color || undefined,
-                        category_id: activeChatThread.report?.category_id || undefined,
-                        status_id: activeChatThread.report?.status_id || undefined,
-                        landmark: activeChatThread.report?.landmark || undefined,
-                        street_address: activeChatThread.report?.street_address || undefined,
-                        subdivision_name: activeChatThread.report?.subdivision_name || undefined,
-                        media_url: activeChatThread.report?.media_url || undefined,
-                        photo_url: activeChatThread.report?.media_url || undefined
-                    }}
-                    currentUser={user ? {
-                        user_id: user.user_id,
-                        name: user.name || 'Staff User',
-                        role_id: user.role_id || 2,
-                        profile_picture: user.profile_picture
-                    } : null}
-                    customCounterpartName={activeChatThread.counterpart?.name}
-                    customCounterpartRole={activeChatThread.counterpart?.role}
-                    customCounterpartAvatar={activeChatThread.counterpart?.avatar}
-                    matchedPet={activeChatThread.matched_pet ? (activeChatThread.matched_pet as any) : undefined}
-                    matchId={activeChatThread.match_id || undefined}
-                    threadMode={activeChatThread.thread_mode === 'adoption' ? undefined : activeChatThread.thread_mode}
-                />
-            )}
 
             {/* NOTIFICATION FULL DETAIL MODAL */}
             {selectedNotifForDetail && (() => {

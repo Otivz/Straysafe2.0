@@ -341,7 +341,6 @@ const ResiHomePage = () => {
     const [announcements, setAnnouncements] = useState<any[]>([]);
     const [notifications, setNotifications] = useState<any[]>([]);
     const [isMarkingAllNotifications, setIsMarkingAllNotifications] = useState(false);
-    const [notificationActionError, setNotificationActionError] = useState('');
     const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Set<number>>(new Set());
     const [announcementsLimit, setAnnouncementsLimit] = useState(10);
     const [annCommentInputs, setAnnCommentInputs] = useState<Record<number, string>>({});
@@ -1087,13 +1086,11 @@ const ResiHomePage = () => {
     const handleMarkAllNotificationsRead = async () => {
         if (!currentUserId || isMarkingAllNotifications) return;
         setIsMarkingAllNotifications(true);
-        setNotificationActionError('');
         try {
             await api.post(`/notifications/mark-all-read/${currentUserId}`);
             setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
         } catch (error) {
             console.error('Failed to mark all notifications as read:', error);
-            setNotificationActionError('Could not mark notifications as read. Please try again.');
             throw error;
         } finally {
             setIsMarkingAllNotifications(false);
@@ -3682,127 +3679,8 @@ const ResiHomePage = () => {
                         ))}
                     </div>
 
-                    {/* Right Column: Sidebar (Notifications & Announcements Summary) */}
+                    {/* Right Column: Announcements Summary */}
                     <div className="lg:col-span-4 space-y-6 hidden lg:block">
-                        {/* Notifications Card */}
-                        <div className="bg-white rounded-[2rem] border border-gray-100 shadow-xl overflow-hidden p-6 sm:p-8 animate-in fade-in slide-in-from-bottom-5 duration-500 h-[450px] flex flex-col">
-                            <div className="flex items-center justify-between border-b border-gray-50 pb-4 mb-4">
-                                <div className="flex items-center gap-2.5">
-                                    <div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center text-[#F97316]">
-                                        <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <h3 className="text-sm font-black uppercase tracking-widest text-[#1a1208]">
-                                            Notifications
-                                        </h3>
-                                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
-                                            {activeNotifications.filter(n => !n.is_read).length} unread
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div data-notification-list className="space-y-3 overflow-y-auto overflow-x-hidden overscroll-y-contain custom-scrollbar pr-1 flex-1 min-h-0">
-                                {(() => {
-                                    const displayedNotifications = activeNotifications;
-
-                                    if (displayedNotifications.length === 0) {
-                                        return (
-                                            <div className="text-center py-8">
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic">
-                                                    No notifications
-                                                </p>
-                                            </div>
-                                        );
-                                    }
-
-                                    return displayedNotifications.map((notif) => {
-                                        const typeStr = (notif.type || '').toLowerCase();
-                                        const titleStr = (notif.title || '').toLowerCase();
-                                        const msgStr = (notif.message || '').toLowerCase();
-                                        const isStatusUpdate = typeStr === 'status_update';
-                                        const isMatchInquiry = !isStatusUpdate && (
-                                            typeStr === 'match_message' ||
-                                            titleStr.includes('match inquiry') ||
-                                            (titleStr.includes('💬') && (titleStr.includes('look-alike') || msgStr.includes('look-alike')))
-                                        );
-                                        return (
-                                            <div
-                                                key={notif.notification_id}
-                                                onClick={() => handleNotificationClick(notif)}
-                                                className={`relative p-4 rounded-2xl border transition-all duration-300 cursor-pointer hover:border-orange-300 dark:hover:border-orange-500/50 active:scale-[0.99] ${notif.is_read
-                                                    ? 'bg-[#FAFAF9]/80 dark:bg-[#1A2338]/80 border-gray-100 dark:border-gray-800/80 hover:dark:bg-[#202C45]'
-                                                    : 'bg-orange-50/40 dark:bg-orange-950/30 border-orange-200/60 dark:border-orange-900/50 shadow-sm hover:dark:bg-orange-950/40'
-                                                    }`}
-                                            >
-                                                {/* Unread indicator */}
-                                                {!notif.is_read && (
-                                                    <span className="absolute top-4 left-4 w-2 h-2 bg-[#F97316] rounded-full ring-2 ring-white dark:ring-[#1A2338]" />
-                                                )}
-
-                                                <div className={!notif.is_read ? 'pl-4' : ''}>
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <div className="flex-1 min-w-0 [overflow-wrap:anywhere]">
-                                                            <h4 className="text-xs font-black text-gray-900 dark:text-white leading-snug">
-                                                                {(notif.title || '').replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]+\s*/u, '')}
-                                                            </h4>
-                                                            <p className="text-[11px] font-medium text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">
-                                                                {notif.message}
-                                                            </p>
-                                                            <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                                                <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-400 block tracking-wide">
-                                                                    {formatTimestamp(notif.created_at)}
-                                                                </span>
-                                                                {(isMatchInquiry || typeStr.includes('message') || titleStr.includes('message') || titleStr.includes('💬') || titleStr.includes('inquiry')) && notif.related_id && (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            handleNotificationClick(notif);
-                                                                        }}
-                                                                        className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
-                                                                    >
-                                                                        <MessageCircle className="w-3 h-3" /> Open Chat
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="flex items-center gap-1 shrink-0">
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); handleDismissNotification(notif.notification_id); }}
-                                                                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700/80 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-                                                                title="Dismiss"
-                                                            >
-                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                                                </svg>
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    });
-                                })()}
-                            </div>
-
-                            {/* Mark All Read remains outside the scrollable list. */}
-                            <div className="pt-3.5 mt-2 border-t border-gray-100/80 dark:border-gray-800 flex items-center justify-between shrink-0">
-                                <button
-                                    onClick={() => { void handleMarkAllNotificationsRead().catch(() => {}); }}
-                                    disabled={isMarkingAllNotifications || !activeNotifications.some(n => !n.is_read)}
-                                    className="text-xs font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white underline underline-offset-2 transition-colors cursor-pointer"
-                                >
-                                    {isMarkingAllNotifications ? 'Marking read…' : 'Mark All Read'}
-                                </button>
-
-                            </div>
-                            {notificationActionError && <p role="alert" className="text-xs text-red-600 mt-2">{notificationActionError}</p>}
-                        </div>
-
                         {/* Announcements Card */}
                         <div className="bg-white rounded-[2rem] border border-gray-100 shadow-xl overflow-hidden p-6 sm:p-8 animate-in fade-in slide-in-from-bottom-5 duration-500 delay-75 h-[450px] flex flex-col">
                             <div className="flex items-center justify-between border-b border-gray-50 pb-4 mb-4">

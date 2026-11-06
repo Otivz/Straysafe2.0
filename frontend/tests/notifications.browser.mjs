@@ -134,7 +134,7 @@ try {
         if (mode !== 'empty') await waitFor(`document.querySelector('[data-notification-panel]')?.textContent.includes('Notice 14')`, `${role} fetches all notifications`);
     };
 
-    const cases = [['resident', 'navbar', 320], ['resident', 'home', 390], ['resident', 'settings', 390], ['resident', 'navbar', 768], ['resident', 'navbar', 1280], ['subd', 'navbar', 320], ['subd', 'navbar', 640], ['subd', 'navbar', 1280], ['brgy', 'navbar', 390], ['brgy', 'navbar', 768], ['brgy', 'navbar', 1280], ['admin', 'navbar', 320], ['admin', 'navbar', 1280]];
+    const cases = [['resident', 'navbar', 320], ['resident', 'home', 390], ['resident', 'home', 1280], ['resident', 'settings', 390], ['resident', 'navbar', 768], ['resident', 'navbar', 1280], ['subd', 'navbar', 320], ['subd', 'navbar', 640], ['subd', 'navbar', 1280], ['brgy', 'navbar', 390], ['brgy', 'navbar', 768], ['brgy', 'navbar', 1280], ['admin', 'navbar', 320], ['admin', 'navbar', 1280]];
     for (const [role, mode, width] of cases) {
         await load(role, mode, width);
         await openPanel();
@@ -220,11 +220,13 @@ try {
     assert.equal(await evaluate(`document.querySelector('[data-notification-panel]').textContent.includes('No notifications yet')`), true);
 
     await load('resident', 'home', 1280);
-    await waitFor(`Array.from(document.querySelectorAll('h3')).some(h=>h.textContent.trim()==='Notifications')`, 'desktop resident sidebar');
-    const sidebar = await evaluate(`(() => {const h=Array.from(document.querySelectorAll('h3')).find(h=>h.textContent.trim()==='Notifications'); const p=h.closest('[class*="h-[450px]"]'); const l=p.querySelector('[data-notification-list]'); return {text:p.textContent,scrollable:l.scrollHeight>l.clientHeight};})()`);
-    assert(sidebar.text.includes('Notice 14') && !sidebar.text.includes('View All Notifications') && sidebar.scrollable, 'resident desktop sidebar shows complete scrollable list');
+    assert.equal(await evaluate(`Array.from(document.querySelectorAll('h3')).some(h => h.textContent.trim() === 'Notifications' && !h.closest('[data-notification-panel]'))`), false, 'desktop home has no duplicate sidebar notification card');
+    assert.equal(await evaluate(`Array.from(document.querySelectorAll('button[aria-label="Open notifications"]')).filter(b => b.getClientRects().length > 0).length`), 1, 'desktop has one visible navbar notification bell');
+    assert.equal(await evaluate(`document.body.textContent.includes('Announcements')`), true, 'announcements sidebar remains');
+    await openPanel();
+    assert.equal(await evaluate(`document.querySelector('[data-notification-panel]').textContent.includes('Notice 14')`), true, 'navbar still provides the complete notification list');
     assert.equal(browserErrors.length, 0, browserErrors.join('\n'));
-    console.log('PASS resident controlled empty list and desktop sidebar; no browser runtime errors');
+    console.log('PASS resident controlled empty list and single desktop notification entry point; no browser runtime errors');
 } finally {
     if (command) { try { await command('Browser.close'); } catch {} }
     socket?.close();
