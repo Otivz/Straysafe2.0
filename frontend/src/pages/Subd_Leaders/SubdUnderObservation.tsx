@@ -230,7 +230,6 @@ export default function SubdUnderObservation() {
     // Search and Day Filters
     const [searchQuery, setSearchQuery] = useState('');
     const [dayFilter, setDayFilter] = useState<string>('all');
-    const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
     // Selected item for full-page observation details
     const [selectedItem, setSelectedItem] = useState<UnderObservationItem | null>(null);
@@ -662,53 +661,6 @@ export default function SubdUnderObservation() {
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200 shadow-2xs">
                 <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
                 Under Observation
-            </span>
-        );
-    };
-
-    // Helper for Day Badge styling
-    const renderDayBadge = (item: UnderObservationItem) => {
-        if (item.workflow_section === 'resolved') {
-            return (
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/80">
-                    <span className="text-xs">✓</span>
-                    Resolution Verified
-                </span>
-            );
-        }
-        if (item.workflow_section === 'endorsed') {
-            return (
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-800 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200/80">
-                    <span className="text-xs">🏛️</span>
-                    Barangay San Vicente
-                </span>
-            );
-        }
-        if (item.workflow_section === 'second_warning_issued') {
-            return (
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-orange-800 bg-orange-50 px-2.5 py-1 rounded-full border border-orange-200/80">
-                    <span className="text-xs">⚠️</span>
-                    2nd Warning Issued
-                </span>
-            );
-        }
-        if (item.workflow_section === 'for_second_warning') {
-            return (
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-rose-800 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200/80">
-                    <span className="text-xs">🚨</span>
-                    3-Day Period Expired
-                </span>
-            );
-        }
-
-        const dayNum = item.current_observation_day || 1;
-        const totalDays = item.duration_days || 3;
-        return (
-            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-900 bg-amber-50 px-3 py-1 rounded-full border border-amber-200/90 leading-normal">
-                <svg className="w-3.5 h-3.5 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>Day {dayNum} of {totalDays}</span>
             </span>
         );
     };
@@ -1504,18 +1456,19 @@ export default function SubdUnderObservation() {
                             )}
 
                             {/* 3. FOUR KPI SUMMARY CARDS */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+                            <div data-observation-summary className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                                 {/* KPI 1 — ACTIVE OBSERVATION */}
-                                <div
+                                <button
+                                    type="button"
                                     onClick={() => setActiveTab('active')}
-                                    className={`relative p-5 rounded-2xl bg-white border cursor-pointer transition-all duration-200 hover:shadow-md overflow-hidden ${activeTab === 'active'
-                                        ? 'border-amber-400 ring-2 ring-amber-400/20 shadow-xs'
-                                        : 'border-amber-100/80 hover:border-amber-300 shadow-2xs'
-                                        }`}
+                                    className={`text-left w-full relative p-3 sm:p-5 rounded-2xl bg-white border cursor-pointer transition-all duration-200 hover:shadow-md overflow-hidden min-h-[96px] sm:min-h-[110px] flex flex-col justify-between ${
+                                        activeTab === 'active'
+                                            ? 'border-amber-400 ring-2 ring-amber-400/20 shadow-xs'
+                                            : 'border-amber-100/80 hover:border-amber-300 shadow-2xs'
+                                    }`}
                                 >
-                                    {/* Paw Watermark */}
-                                    <div className="absolute top-2.5 right-3 pointer-events-none select-none text-amber-200/50">
-                                        <svg className="w-12 h-12 fill-current" viewBox="0 0 24 24">
+                                    <div className="absolute top-2 right-2.5 pointer-events-none select-none text-amber-200/50">
+                                        <svg className="w-8 h-8 sm:w-10 sm:h-10 fill-current" viewBox="0 0 24 24">
                                             <ellipse cx="12" cy="15.5" rx="4.5" ry="3.5" />
                                             <circle cx="6.5" cy="10.5" r="2.2" />
                                             <circle cx="10" cy="6.8" r="2" />
@@ -1523,31 +1476,29 @@ export default function SubdUnderObservation() {
                                             <circle cx="17.5" cy="10.5" r="2.2" />
                                         </svg>
                                     </div>
-
-                                    <div className="flex items-center gap-3.5">
-                                        <div>
-                                            <div className="text-3xl font-black text-slate-900 tracking-tight">
-                                                {formatCount(metrics.active_observation_count)}
-                                            </div>
-                                            <div className="text-sm font-bold text-slate-800 leading-tight">Active Observation</div>
+                                    <div>
+                                        <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-none">
+                                            {formatCount(metrics.active_observation_count)}
                                         </div>
+                                        <div className="text-xs sm:text-sm font-bold text-slate-800 leading-tight mt-1">Active Observation</div>
                                     </div>
-                                    <p className="text-xs text-slate-500 font-medium mt-3">
-                                        Cases within the 3-day observation period
+                                    <p className="hidden sm:block text-[11px] text-slate-500 font-medium truncate">
+                                        Within 3-day window
                                     </p>
-                                </div>
+                                </button>
 
                                 {/* KPI 2 — WARNING & ESCALATION */}
-                                <div
+                                <button
+                                    type="button"
                                     onClick={() => setActiveTab('warning_escalation')}
-                                    className={`relative p-5 rounded-2xl bg-white border cursor-pointer transition-all duration-200 hover:shadow-md overflow-hidden ${activeTab === 'warning_escalation' || activeTab === 'for_second_warning' || activeTab === 'second_warning_issued'
-                                        ? 'border-rose-400 ring-2 ring-rose-400/20 shadow-xs'
-                                        : 'border-rose-100/80 hover:border-rose-300 shadow-2xs'
-                                        }`}
+                                    className={`text-left w-full relative p-3 sm:p-5 rounded-2xl bg-white border cursor-pointer transition-all duration-200 hover:shadow-md overflow-hidden min-h-[96px] sm:min-h-[110px] flex flex-col justify-between ${
+                                        activeTab === 'warning_escalation' || activeTab === 'for_second_warning' || activeTab === 'second_warning_issued'
+                                            ? 'border-rose-400 ring-2 ring-rose-400/20 shadow-xs'
+                                            : 'border-rose-100/80 hover:border-rose-300 shadow-2xs'
+                                    }`}
                                 >
-                                    {/* Paw Watermark */}
-                                    <div className="absolute top-2.5 right-3 pointer-events-none select-none text-rose-200/50">
-                                        <svg className="w-12 h-12 fill-current" viewBox="0 0 24 24">
+                                    <div className="absolute top-2 right-2.5 pointer-events-none select-none text-rose-200/50">
+                                        <svg className="w-8 h-8 sm:w-10 sm:h-10 fill-current" viewBox="0 0 24 24">
                                             <ellipse cx="12" cy="15.5" rx="4.5" ry="3.5" />
                                             <circle cx="6.5" cy="10.5" r="2.2" />
                                             <circle cx="10" cy="6.8" r="2" />
@@ -1555,31 +1506,29 @@ export default function SubdUnderObservation() {
                                             <circle cx="17.5" cy="10.5" r="2.2" />
                                         </svg>
                                     </div>
-
-                                    <div className="flex items-center gap-3.5">
-                                        <div>
-                                            <div className="text-3xl font-black text-slate-900 tracking-tight">
-                                                {formatCount(metrics.for_second_warning_count + metrics.second_warning_issued_count)}
-                                            </div>
-                                            <div className="text-sm font-bold text-slate-800 leading-tight">Warning & Escalation</div>
+                                    <div>
+                                        <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-none">
+                                            {formatCount(metrics.for_second_warning_count + metrics.second_warning_issued_count)}
                                         </div>
+                                        <div className="text-xs sm:text-sm font-bold text-slate-800 leading-tight mt-1">Warning & Escalation</div>
                                     </div>
-                                    <p className="text-xs text-slate-500 font-medium mt-3">
-                                        For Second Warning + Second Warning Issued
+                                    <p className="hidden sm:block text-[11px] text-slate-500 font-medium truncate">
+                                        2nd Warning & Escalated
                                     </p>
-                                </div>
+                                </button>
 
                                 {/* KPI 3 — BARANGAY ENDORSED */}
-                                <div
+                                <button
+                                    type="button"
                                     onClick={() => setActiveTab('endorsed')}
-                                    className={`relative p-5 rounded-2xl bg-white border cursor-pointer transition-all duration-200 hover:shadow-md overflow-hidden ${activeTab === 'endorsed'
-                                        ? 'border-purple-400 ring-2 ring-purple-400/20 shadow-xs'
-                                        : 'border-purple-100/80 hover:border-purple-300 shadow-2xs'
-                                        }`}
+                                    className={`text-left w-full relative p-3 sm:p-5 rounded-2xl bg-white border cursor-pointer transition-all duration-200 hover:shadow-md overflow-hidden min-h-[96px] sm:min-h-[110px] flex flex-col justify-between ${
+                                        activeTab === 'endorsed'
+                                            ? 'border-purple-400 ring-2 ring-purple-400/20 shadow-xs'
+                                            : 'border-purple-100/80 hover:border-purple-300 shadow-2xs'
+                                    }`}
                                 >
-                                    {/* Paw Watermark */}
-                                    <div className="absolute top-2.5 right-3 pointer-events-none select-none text-purple-200/50">
-                                        <svg className="w-12 h-12 fill-current" viewBox="0 0 24 24">
+                                    <div className="absolute top-2 right-2.5 pointer-events-none select-none text-purple-200/50">
+                                        <svg className="w-8 h-8 sm:w-10 sm:h-10 fill-current" viewBox="0 0 24 24">
                                             <ellipse cx="12" cy="15.5" rx="4.5" ry="3.5" />
                                             <circle cx="6.5" cy="10.5" r="2.2" />
                                             <circle cx="10" cy="6.8" r="2" />
@@ -1587,31 +1536,29 @@ export default function SubdUnderObservation() {
                                             <circle cx="17.5" cy="10.5" r="2.2" />
                                         </svg>
                                     </div>
-
-                                    <div className="flex items-center gap-3.5">
-                                        <div>
-                                            <div className="text-3xl font-black text-slate-900 tracking-tight">
-                                                {formatCount(metrics.endorsed_count)}
-                                            </div>
-                                            <div className="text-sm font-bold text-slate-800 leading-tight">Barangay Endorsed</div>
+                                    <div>
+                                        <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-none">
+                                            {formatCount(metrics.endorsed_count)}
                                         </div>
+                                        <div className="text-xs sm:text-sm font-bold text-slate-800 leading-tight mt-1">Referred to Barangay</div>
                                     </div>
-                                    <p className="text-xs text-slate-500 font-medium mt-3">
-                                        Cases transferred to Barangay
+                                    <p className="hidden sm:block text-[11px] text-slate-500 font-medium truncate">
+                                        Referred to Barangay
                                     </p>
-                                </div>
+                                </button>
 
                                 {/* KPI 4 — RESOLVED CASES */}
-                                <div
+                                <button
+                                    type="button"
                                     onClick={() => setActiveTab('resolved')}
-                                    className={`relative p-5 rounded-2xl bg-white border cursor-pointer transition-all duration-200 hover:shadow-md overflow-hidden ${activeTab === 'resolved'
-                                        ? 'border-emerald-400 ring-2 ring-emerald-400/20 shadow-xs'
-                                        : 'border-emerald-100/80 hover:border-emerald-300 shadow-2xs'
-                                        }`}
+                                    className={`text-left w-full relative p-3 sm:p-5 rounded-2xl bg-white border cursor-pointer transition-all duration-200 hover:shadow-md overflow-hidden min-h-[96px] sm:min-h-[110px] flex flex-col justify-between ${
+                                        activeTab === 'resolved'
+                                            ? 'border-emerald-400 ring-2 ring-emerald-400/20 shadow-xs'
+                                            : 'border-emerald-100/80 hover:border-emerald-300 shadow-2xs'
+                                    }`}
                                 >
-                                    {/* Paw Watermark */}
-                                    <div className="absolute top-2.5 right-3 pointer-events-none select-none text-emerald-200/50">
-                                        <svg className="w-12 h-12 fill-current" viewBox="0 0 24 24">
+                                    <div className="absolute top-2 right-2.5 pointer-events-none select-none text-emerald-200/50">
+                                        <svg className="w-8 h-8 sm:w-10 sm:h-10 fill-current" viewBox="0 0 24 24">
                                             <ellipse cx="12" cy="15.5" rx="4.5" ry="3.5" />
                                             <circle cx="6.5" cy="10.5" r="2.2" />
                                             <circle cx="10" cy="6.8" r="2" />
@@ -1619,116 +1566,139 @@ export default function SubdUnderObservation() {
                                             <circle cx="17.5" cy="10.5" r="2.2" />
                                         </svg>
                                     </div>
-
-                                    <div className="flex items-center gap-3.5">
-                                        <div>
-                                            <div className="text-3xl font-black text-slate-900 tracking-tight">
-                                                {formatCount(metrics.resolved_count)}
-                                            </div>
-                                            <div className="text-sm font-bold text-slate-800 leading-tight">Resolved Cases</div>
+                                    <div>
+                                        <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-none">
+                                            {formatCount(metrics.resolved_count)}
                                         </div>
+                                        <div className="text-xs sm:text-sm font-bold text-slate-800 leading-tight mt-1">Resolved Cases</div>
                                     </div>
-                                    <p className="text-xs text-slate-500 font-medium mt-3">
-                                        Cases verified as resolved
+                                    <p className="hidden sm:block text-[11px] text-slate-500 font-medium truncate">
+                                        Verified compliance
                                     </p>
-                                </div>
+                                </button>
                             </div>
 
-                            {/* 4. WORKFLOW STATUS TABS */}
-                            <div className="overflow-x-auto pb-1">
-                                <div className="flex items-center gap-2 min-w-max">
-                                    {/* 1. All Cases */}
+                            {/* 4. WORKFLOW STATUS CONTROLS (Mobile dropdown & Desktop wrapping tabs) */}
+                            <div>
+                                {/* Mobile Status Dropdown (below 768px, no horizontal swiping) */}
+                                <div className="md:hidden w-full">
+                                    <label htmlFor="observation-status" className="sr-only">Status</label>
+                                    <select
+                                        id="observation-status"
+                                        value={activeTab}
+                                        onChange={(e) => setActiveTab(e.target.value as any)}
+                                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-2xs focus:outline-hidden focus:ring-2 focus:ring-amber-500/20"
+                                    >
+                                        <option value="all">All Cases ({items.length})</option>
+                                        <option value="active">Active Observation ({metrics.active_observation_count})</option>
+                                        <option value="warning_escalation">Warning & Escalation ({metrics.for_second_warning_count + metrics.second_warning_issued_count})</option>
+                                        <option value="for_second_warning">For Second Warning ({metrics.for_second_warning_count})</option>
+                                        <option value="second_warning_issued">Second Warning Issued ({metrics.second_warning_issued_count})</option>
+                                        <option value="endorsed">Referred to Barangay ({metrics.endorsed_count})</option>
+                                        <option value="resolved">Resolved ({metrics.resolved_count})</option>
+                                    </select>
+                                </div>
+
+                                {/* Desktop Status Tabs (768px and above, wrapping pills without sideways scroll) */}
+                                <div data-observation-tabs className="hidden md:flex flex-wrap items-center gap-2">
                                     <button
                                         type="button"
                                         onClick={() => setActiveTab('all')}
-                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'all'
-                                            ? 'bg-[#EA580C] text-white shadow-xs'
-                                            : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
-                                            }`}
+                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                                            activeTab === 'all'
+                                                ? 'bg-[#EA580C] text-white shadow-xs'
+                                                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
+                                        }`}
                                     >
                                         <span>All Cases</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${activeTab === 'all' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
-                                            }`}>
+                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                                            activeTab === 'all' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
+                                        }`}>
                                             {formatCount(items.length)}
                                         </span>
                                     </button>
 
-                                    {/* 2. Active Observation */}
                                     <button
                                         type="button"
                                         onClick={() => setActiveTab('active')}
-                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'active'
-                                            ? 'bg-[#EA580C] text-white shadow-xs'
-                                            : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
-                                            }`}
+                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                                            activeTab === 'active'
+                                                ? 'bg-[#EA580C] text-white shadow-xs'
+                                                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
+                                        }`}
                                     >
                                         <span>Active Observation</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${activeTab === 'active' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
-                                            }`}>
+                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                                            activeTab === 'active' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
+                                        }`}>
                                             {formatCount(metrics.active_observation_count)}
                                         </span>
                                     </button>
 
-                                    {/* 3. For Second Warning */}
                                     <button
                                         type="button"
                                         onClick={() => setActiveTab('for_second_warning')}
-                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'for_second_warning'
-                                            ? 'bg-[#EA580C] text-white shadow-xs'
-                                            : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
-                                            }`}
+                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                                            activeTab === 'for_second_warning'
+                                                ? 'bg-[#EA580C] text-white shadow-xs'
+                                                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
+                                        }`}
                                     >
                                         <span>For Second Warning</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${activeTab === 'for_second_warning' ? 'bg-orange-700 text-white' : 'bg-rose-100 text-rose-800'
-                                            }`}>
+                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                                            activeTab === 'for_second_warning' ? 'bg-orange-700 text-white' : 'bg-rose-100 text-rose-800'
+                                        }`}>
                                             {formatCount(metrics.for_second_warning_count)}
                                         </span>
                                     </button>
 
-                                    {/* 4. Second Warning Issued */}
                                     <button
                                         type="button"
                                         onClick={() => setActiveTab('second_warning_issued')}
-                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'second_warning_issued'
-                                            ? 'bg-[#EA580C] text-white shadow-xs'
-                                            : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
-                                            }`}
+                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                                            activeTab === 'second_warning_issued'
+                                                ? 'bg-[#EA580C] text-white shadow-xs'
+                                                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
+                                        }`}
                                     >
                                         <span>Second Warning Issued</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${activeTab === 'second_warning_issued' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
-                                            }`}>
+                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                                            activeTab === 'second_warning_issued' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
+                                        }`}>
                                             {formatCount(metrics.second_warning_issued_count)}
                                         </span>
                                     </button>
 
-                                    {/* 5. Endorsed to Barangay */}
                                     <button
                                         type="button"
                                         onClick={() => setActiveTab('endorsed')}
-                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'endorsed'
-                                            ? 'bg-[#EA580C] text-white shadow-xs'
-                                            : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
-                                            }`}
+                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                                            activeTab === 'endorsed'
+                                                ? 'bg-[#EA580C] text-white shadow-xs'
+                                                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
+                                        }`}
                                     >
-                                        <span>Endorsed to Barangay</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${activeTab === 'endorsed' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
-                                            }`}>
+                                        <span>Referred to Barangay</span>
+                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                                            activeTab === 'endorsed' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
+                                        }`}>
                                             {formatCount(metrics.endorsed_count)}
                                         </span>
                                     </button>
 
-                                    {/* 6. Resolved */}
                                     <button
                                         type="button"
                                         onClick={() => setActiveTab('resolved')}
-                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'resolved'
-                                            ? 'bg-[#EA580C] text-white shadow-xs'
-                                            : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
-                                            }`}
+                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                                            activeTab === 'resolved'
+                                                ? 'bg-[#EA580C] text-white shadow-xs'
+                                                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
+                                        }`}
                                     >
                                         <span>Resolved</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${activeTab === 'resolved' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
-                                            }`}>
+                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                                            activeTab === 'resolved' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-700'
+                                        }`}>
                                             {formatCount(metrics.resolved_count)}
                                         </span>
                                     </button>
@@ -1736,7 +1706,7 @@ export default function SubdUnderObservation() {
                             </div>
 
                             {/* 5. SEARCH AND FILTER TOOLBAR */}
-                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                            <div data-observation-controls className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                                 {/* Search Box */}
                                 <div className="relative flex-1">
                                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -1746,14 +1716,16 @@ export default function SubdUnderObservation() {
                                     </div>
                                     <input
                                         type="text"
+                                        aria-label="Search observation cases"
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
                                         placeholder="Search by animal name, owner, Report ID, or location..."
-                                        className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-2xs"
+                                        className="w-full pl-10 pr-9 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-2xs"
                                     />
                                     {searchQuery && (
                                         <button
                                             type="button"
+                                            aria-label="Clear search"
                                             onClick={() => setSearchQuery('')}
                                             className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
                                         >
@@ -1777,36 +1749,13 @@ export default function SubdUnderObservation() {
                                         <option value="3">Day 3 of 3</option>
                                     </select>
 
-                                    {/* View Mode Toggle */}
-                                    <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
-                                        <button
-                                            type="button"
-                                            onClick={() => setViewMode('cards')}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${viewMode === 'cards'
-                                                ? 'bg-[#1E293B] text-white shadow-2xs'
-                                                : 'text-slate-600 hover:text-slate-900'
-                                                }`}
-                                        >
-                                            Cards
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setViewMode('table')}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${viewMode === 'table'
-                                                ? 'bg-[#1E293B] text-white shadow-2xs'
-                                                : 'text-slate-600 hover:text-slate-900'
-                                                }`}
-                                        >
-                                            Table
-                                        </button>
-                                    </div>
-
                                     {/* Refresh Button */}
                                     <button
                                         type="button"
                                         onClick={() => fetchDashboard(true)}
                                         disabled={refreshing}
-                                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-2xs hover:text-amber-600 transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                                        aria-label="Refresh records"
+                                        className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-2xs hover:text-amber-600 transition-all cursor-pointer disabled:opacity-50 shrink-0"
                                         title="Refresh records"
                                     >
                                         <svg
@@ -1828,7 +1777,7 @@ export default function SubdUnderObservation() {
                                 </div>
                             </div>
 
-                            {/* 6. ANIMAL OBSERVATION CASES LIST */}
+                            {/* 6. ANIMAL OBSERVATION CASES LIST (CARD-ONLY PRESENTATION) */}
                             {loading ? (
                                 <div className="bg-white rounded-3xl p-12 text-center border border-slate-100 shadow-2xs">
                                     <div className="inline-block animate-spin text-amber-500 text-3xl mb-3">⏳</div>
@@ -1882,43 +1831,42 @@ export default function SubdUnderObservation() {
                                         </button>
                                     )}
                                 </div>
-                            ) : viewMode === 'cards' ? (
-                                /* CARDS VIEW: 2-COLUMN DESKTOP GRID */
-                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                            ) : (
+                                /* CARDS VIEW: RESPONSIVE GRID (NO TABLE) */
+                                <div data-observation-cases className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-5">
                                     {filteredItems.map((item) => {
                                         const photoSrc = item.animal_photo || item.report_photo;
                                         const animalTitle = getAnimalDisplayName(item);
                                         return (
                                             <div
                                                 key={item.followup_id}
-                                                className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md transition-all p-4 sm:p-5 flex flex-col sm:flex-row gap-4 sm:gap-5 group"
+                                                data-observation-case={item.followup_id}
+                                                className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md transition-all p-3.5 sm:p-5 flex flex-col sm:flex-row gap-3.5 sm:gap-4 group"
                                             >
-                                                {/* LEFT SECTION — ANIMAL PHOTO */}
-                                                <div className="w-full sm:w-48 h-48 sm:h-auto rounded-2xl bg-slate-100 overflow-hidden shrink-0 relative flex items-center justify-center">
+                                                {/* LEFT SECTION — COMPACT ANIMAL PHOTO */}
+                                                <div data-case-photo className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-slate-100 overflow-hidden shrink-0 relative flex items-center justify-center self-start">
                                                     {photoSrc ? (
                                                         <img
-                                                            src={cloudinaryResized(photoSrc, 400)}
+                                                            src={cloudinaryResized(photoSrc, 300)}
                                                             alt={animalTitle}
-                                                            className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-300 rounded-2xl"
+                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 rounded-2xl"
                                                         />
                                                     ) : (
-                                                        <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 bg-slate-50 min-h-[160px] rounded-2xl">
-                                                            <span className="text-4xl">🐾</span>
-                                                            <span className="text-[11px] font-bold mt-1 text-slate-400">No Photo</span>
+                                                        <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-2xl">
+                                                            <span className="text-2xl sm:text-3xl">🐾</span>
+                                                            <span className="text-[10px] font-bold text-slate-400">No Photo</span>
                                                         </div>
                                                     )}
                                                 </div>
 
                                                 {/* RIGHT SECTION — ANIMAL INFORMATION & ACTIONS */}
-                                                <div className="flex-1 flex flex-col justify-between min-w-0 space-y-3">
+                                                <div className="flex-1 flex flex-col justify-between min-w-0 space-y-2.5">
                                                     {/* Top Row: Badges */}
                                                     <div className="flex flex-wrap items-center gap-1.5">
-                                                        {/* Report ID */}
                                                         <span className="px-2.5 py-0.5 rounded-full bg-[#1E293B] text-white text-[11px] font-black">
                                                             Report #{item.report_id}
                                                         </span>
 
-                                                        {/* Status Badge */}
                                                         {item.workflow_section === 'resolved' ? (
                                                             <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[11px] font-bold">
                                                                 Resolved
@@ -1941,7 +1889,6 @@ export default function SubdUnderObservation() {
                                                             </span>
                                                         )}
 
-                                                        {/* Stage Pill */}
                                                         {item.workflow_section === 'active' && (
                                                             <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-white text-[11px] font-bold">
                                                                 Day {item.current_observation_day || 1} of 3
@@ -1959,125 +1906,71 @@ export default function SubdUnderObservation() {
                                                         )}
                                                     </div>
 
-                                                    {/* Middle: 2-Column Info */}
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                                                        {/* Animal Info Column */}
-                                                        <div className="space-y-2 flex flex-col justify-center">
-                                                            <div>
-                                                                <h3 className="text-base font-black text-slate-900 leading-snug truncate">
-                                                                    {animalTitle}
-                                                                </h3>
-                                                                <p className="text-xs font-semibold text-slate-500 mt-0.5">
-                                                                    {item.subdivision_name || 'Selera Homes'}
-                                                                </p>
+                                                    {/* Middle: Info */}
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                                        <div className="space-y-1">
+                                                            <h3 className="text-sm font-black text-slate-900 leading-snug truncate">
+                                                                {animalTitle}
+                                                            </h3>
+                                                            <div className="text-[11px] text-slate-600 truncate">
+                                                                <span className="text-slate-400 font-medium">Owner: </span>
+                                                                <span className="font-bold text-slate-800">{item.owner_name || 'Resident / Pet Owner'}</span>
                                                             </div>
-
-                                                            <div className="space-y-1">
-                                                                <div className="text-xs text-slate-600 truncate">
-                                                                    <span className="text-slate-400 font-medium">Owner: </span>
-                                                                    <span className="font-bold text-slate-800">{item.owner_name || 'Resident / Pet Owner'}</span>
-                                                                </div>
-                                                                <div className="text-xs text-slate-600 truncate">
-                                                                    <span className="text-slate-400 font-medium">Contact #: </span>
-                                                                    <span className="font-semibold text-slate-800">{item.owner_phone || 'No phone recorded'}</span>
-                                                                </div>
+                                                            <div className="text-[11px] text-slate-600 truncate">
+                                                                <span className="text-slate-400 font-medium">Contact: </span>
+                                                                <span className="font-semibold text-slate-800">{item.owner_phone || 'No phone recorded'}</span>
                                                             </div>
                                                         </div>
 
-                                                        {/* Date and Observation Timing Column */}
-                                                        <div className="space-y-1 sm:pl-3 sm:border-l sm:border-slate-100 flex flex-col justify-center">
-                                                            {item.workflow_section === 'resolved' ? (
-                                                                <div className="space-y-0.5">
-                                                                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                                                                        Resolved
-                                                                    </div>
-                                                                    <div className="text-xs font-bold text-slate-800">
-                                                                        {formatCardDate(item.resolved_at)}
-                                                                    </div>
-                                                                    <div className="text-[11px] text-slate-500 font-medium">
-                                                                        {formatCardTime(item.resolved_at)}
-                                                                    </div>
-                                                                </div>
-                                                            ) : item.workflow_section === 'endorsed' ? (
-                                                                <div className="space-y-0.5">
-                                                                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                                                                        Endorsed
-                                                                    </div>
-                                                                    <div className="text-xs font-bold text-slate-800">
-                                                                        {formatCardDate(item.endorsement_date)}
-                                                                    </div>
-                                                                    <div className="text-[11px] text-slate-500 font-medium">
-                                                                        {formatCardTime(item.endorsement_date)}
-                                                                    </div>
-                                                                </div>
-                                                            ) : item.workflow_section === 'second_warning_issued' ? (
-                                                                <div className="space-y-0.5">
-                                                                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                                                                        Second Warning
-                                                                    </div>
-                                                                    <div className="text-xs font-bold text-slate-800">
-                                                                        {formatCardDate(item.second_warning_date)}
-                                                                    </div>
-                                                                    <div className="text-[11px] text-slate-500 font-medium">
-                                                                        {formatCardTime(item.second_warning_date)}
-                                                                    </div>
-                                                                </div>
-                                                            ) : item.workflow_section === 'for_second_warning' ? (
-                                                                <div className="space-y-0.5">
-                                                                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                                                                        First Warning
-                                                                    </div>
-                                                                    <div className="text-xs font-bold text-slate-800">
-                                                                        {formatCardDate(item.first_warning_date)}
-                                                                    </div>
-                                                                    <div className="text-[11px] text-slate-500 font-medium">
-                                                                        {formatCardTime(item.first_warning_date)}
-                                                                    </div>
-                                                                    <div className="text-xs font-black text-rose-600 pt-1.5">
-                                                                        Expired
-                                                                    </div>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="space-y-0.5">
-                                                                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                                                                        First Warning
-                                                                    </div>
-                                                                    <div className="text-xs font-bold text-slate-800">
-                                                                        {formatCardDate(item.first_warning_date)}
-                                                                    </div>
-                                                                    <div className="text-[11px] text-slate-500 font-medium">
-                                                                        {formatCardTime(item.first_warning_date)}
-                                                                    </div>
-                                                                    <div className="text-xs font-black text-amber-600 pt-1.5">
-                                                                        {item.remaining_time_display}
-                                                                    </div>
-                                                                </div>
-                                                            )}
+                                                        <div className="space-y-1 sm:pl-3 sm:border-l sm:border-slate-100">
+                                                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                                                {item.workflow_section === 'resolved'
+                                                                    ? 'Resolved Date'
+                                                                    : item.workflow_section === 'endorsed'
+                                                                        ? 'Endorsed Date'
+                                                                        : item.workflow_section === 'second_warning_issued'
+                                                                            ? 'Second Warning'
+                                                                            : 'Observation Period'}
+                                                            </div>
+                                                            <div className="text-xs font-bold text-slate-800">
+                                                                {formatCardDate(item.resolved_at || item.endorsement_date || item.second_warning_date || item.first_warning_date)}
+                                                            </div>
+                                                            <div className="text-[11px] font-bold text-amber-600">
+                                                                {item.remaining_time_display || item.observation_day_display || ''}
+                                                            </div>
                                                         </div>
                                                     </div>
 
                                                     {/* Progress / Accent Bar */}
                                                     <div className="w-full pt-1">
                                                         <div
-                                                            className={`h-1 w-full rounded-full ${item.workflow_section === 'resolved'
-                                                                ? 'bg-emerald-500'
-                                                                : item.workflow_section === 'endorsed'
-                                                                    ? 'bg-purple-500'
-                                                                    : item.workflow_section === 'second_warning_issued'
-                                                                        ? 'bg-purple-500'
-                                                                        : item.workflow_section === 'for_second_warning'
-                                                                            ? 'bg-red-500'
-                                                                            : 'bg-emerald-500'
+                                                            role="progressbar"
+                                                            aria-valuenow={item.progress_percent || 0}
+                                                            aria-valuemin={0}
+                                                            aria-valuemax={100}
+                                                            className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden"
+                                                        >
+                                                            <div
+                                                                className={`h-full rounded-full transition-all duration-500 ${
+                                                                    item.workflow_section === 'resolved'
+                                                                        ? 'bg-emerald-500'
+                                                                        : item.workflow_section === 'endorsed' || item.workflow_section === 'second_warning_issued'
+                                                                            ? 'bg-purple-500'
+                                                                            : item.workflow_section === 'for_second_warning'
+                                                                                ? 'bg-red-500'
+                                                                                : 'bg-amber-500'
                                                                 }`}
-                                                        />
+                                                                style={{ width: `${Math.min(100, Math.max(5, item.progress_percent || 0))}%` }}
+                                                            />
+                                                        </div>
                                                     </div>
 
                                                     {/* Action Buttons */}
-                                                    <div className="flex items-center justify-end gap-2.5 pt-1">
+                                                    <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
                                                         <button
                                                             type="button"
                                                             onClick={() => handleViewDetails(item)}
-                                                            className="px-4 py-2 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 transition-colors cursor-pointer shadow-2xs"
+                                                            className="px-3.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 transition-colors cursor-pointer shadow-2xs"
                                                         >
                                                             View Details
                                                         </button>
@@ -2086,7 +1979,7 @@ export default function SubdUnderObservation() {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleViewDetails(item)}
-                                                                className="px-4 py-2 bg-[#004B87] hover:bg-[#003865] text-white rounded-xl text-xs font-bold shadow-2xs transition-colors cursor-pointer"
+                                                                className="px-3.5 py-1.5 bg-[#004B87] hover:bg-[#003865] text-white rounded-xl text-xs font-bold shadow-2xs transition-colors cursor-pointer"
                                                             >
                                                                 Review Owner Update
                                                             </button>
@@ -2099,7 +1992,7 @@ export default function SubdUnderObservation() {
                                                                     setSelectedItem(item);
                                                                     setIsSecondWarningModalOpen(true);
                                                                 }}
-                                                                className="px-4 py-2 bg-[#D9531E] hover:bg-[#B84214] text-white rounded-xl text-xs font-bold shadow-2xs transition-colors cursor-pointer"
+                                                                className="px-3.5 py-1.5 bg-[#D9531E] hover:bg-[#B84214] text-white rounded-xl text-xs font-bold shadow-2xs transition-colors cursor-pointer"
                                                             >
                                                                 Issue Second Warning
                                                             </button>
@@ -2112,9 +2005,9 @@ export default function SubdUnderObservation() {
                                                                     setSelectedItem(item);
                                                                     setIsEndorseModalOpen(true);
                                                                 }}
-                                                                className="px-4 py-2 bg-[#4C1D95] hover:bg-[#3B0764] text-white rounded-xl text-xs font-bold shadow-2xs transition-colors cursor-pointer"
+                                                                className="px-3.5 py-1.5 bg-[#4C1D95] hover:bg-[#3B0764] text-white rounded-xl text-xs font-bold shadow-2xs transition-colors cursor-pointer"
                                                             >
-                                                                Endorse to Barangay
+                                                                Refer to Barangay
                                                             </button>
                                                         )}
                                                     </div>
@@ -2122,128 +2015,6 @@ export default function SubdUnderObservation() {
                                             </div>
                                         );
                                     })}
-                                </div>
-                            ) : (
-                                /* TABLE VIEW */
-                                <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-2xs overflow-hidden">
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left border-collapse min-w-[960px]">
-                                            <thead>
-                                                <tr className="border-b border-slate-200/80 bg-slate-50/80 text-[11px] font-black text-slate-500 uppercase tracking-wider">
-                                                    <th className="py-4 px-4 w-[24%]">Animal / Photo</th>
-                                                    <th className="py-4 px-4 w-[16%]">Report & Location</th>
-                                                    <th className="py-4 px-4 w-[15%]">Owner Info</th>
-                                                    <th className="py-4 px-4 w-[15%]">First Warning</th>
-                                                    <th className="py-4 px-4 w-[16%]">Observation Countdown</th>
-                                                    <th className="py-4 px-4 w-[14%]">Stage / Status</th>
-                                                    <th className="py-4 px-4 text-right">Actions</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100 text-xs">
-                                                {filteredItems.map((item) => {
-                                                    const photoSrc = item.animal_photo || item.report_photo;
-                                                    const animalTitle = getAnimalDisplayName(item);
-                                                    return (
-                                                        <tr key={item.followup_id} className="hover:bg-amber-50/30 transition-colors">
-                                                            <td className="py-3.5 px-4 align-middle">
-                                                                <div className="flex items-center gap-3">
-                                                                    <div className="w-11 h-11 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200/80 shadow-2xs">
-                                                                        {photoSrc ? (
-                                                                            <img
-                                                                                src={cloudinaryResized(photoSrc, 100)}
-                                                                                alt={animalTitle}
-                                                                                className="w-full h-full object-cover"
-                                                                            />
-                                                                        ) : (
-                                                                            <div className="w-full h-full flex items-center justify-center text-base">🐾</div>
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="min-w-0">
-                                                                        <div className="font-black text-slate-900 leading-snug">{animalTitle}</div>
-                                                                        <div className="text-[11px] text-slate-500 truncate mt-0.5">
-                                                                            {item.report_animal_type || 'Animal'} · {item.report_breed || 'Mixed'}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            </td>
-                                                            <td className="py-3.5 px-4 align-middle">
-                                                                <div className="font-bold text-slate-800">Report #{item.report_id}</div>
-                                                                <div className="text-[11px] text-slate-500 max-w-[180px] truncate mt-0.5" title={item.report_landmark || 'Subdivision'}>
-                                                                    {item.report_landmark || 'Subdivision'}
-                                                                </div>
-                                                            </td>
-                                                            <td className="py-3.5 px-4 align-middle">
-                                                                <div className="font-bold text-slate-800">{item.owner_name || 'Resident'}</div>
-                                                                <div className="text-[11px] text-slate-500 mt-0.5">{item.owner_phone || 'No phone recorded'}</div>
-                                                            </td>
-                                                            <td className="py-3.5 px-4 align-middle">
-                                                                <div className="font-bold text-amber-700">
-                                                                    {formatDateOnly(item.first_warning_date)}
-                                                                </div>
-                                                                <div className="text-[11px] text-slate-500 max-w-[200px] leading-snug mt-0.5" title={item.first_warning_violation || 'First Warning'}>
-                                                                    {item.first_warning_violation || 'First Warning'}
-                                                                </div>
-                                                            </td>
-                                                            <td className="py-3.5 px-4 align-middle">
-                                                                <div className="flex flex-col items-start gap-1">
-                                                                    <div>{renderDayBadge(item)}</div>
-                                                                    <div className="text-[11px] text-slate-500 font-medium pl-1">
-                                                                        {item.workflow_section === 'resolved'
-                                                                            ? 'Compliance verified'
-                                                                            : item.workflow_section === 'endorsed'
-                                                                                ? 'Handled by Barangay'
-                                                                                : item.workflow_section === 'second_warning_issued'
-                                                                                    ? 'Eligible for Endorsement'
-                                                                                    : item.workflow_section === 'for_second_warning'
-                                                                                        ? 'Eligible for Second Warning'
-                                                                                        : item.remaining_time_display}
-                                                                    </div>
-                                                                </div>
-                                                            </td>
-                                                            <td className="py-3.5 px-4 align-middle whitespace-nowrap">
-                                                                {renderStatusBadge(item)}
-                                                            </td>
-                                                            <td className="py-3.5 px-4 align-middle text-right whitespace-nowrap">
-                                                                <div className="flex items-center justify-end gap-2">
-                                                                    {item.workflow_section === 'for_second_warning' && (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                setSelectedItem(item);
-                                                                                setIsSecondWarningModalOpen(true);
-                                                                            }}
-                                                                            className="h-8 px-3 inline-flex items-center justify-center bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-2xs shadow-rose-600/20 active:scale-95 transition-all cursor-pointer"
-                                                                        >
-                                                                            2nd Warning
-                                                                        </button>
-                                                                    )}
-                                                                    {item.workflow_section === 'second_warning_issued' && (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                setSelectedItem(item);
-                                                                                setIsEndorseModalOpen(true);
-                                                                            }}
-                                                                            className="h-8 px-3 inline-flex items-center justify-center bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-2xs shadow-purple-600/20 active:scale-95 transition-all cursor-pointer"
-                                                                        >
-                                                                            Endorse
-                                                                        </button>
-                                                                    )}
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleViewDetails(item)}
-                                                                        className="h-8 px-3.5 inline-flex items-center justify-center bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-2xs shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
-                                                                    >
-                                                                        Details
-                                                                    </button>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
                                 </div>
                             )}
                         </div>
