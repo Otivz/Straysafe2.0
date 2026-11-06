@@ -7,16 +7,16 @@ How staff search, compare and decide whether a report matches another report or 
 | Role | Page | Reports in scope |
 | --- | --- | --- |
 | Subdivision Leader (2) | `/subd/manual-matching` | Own subdivision's reports and registered pets |
-| Barangay Staff (3) | `/brgy/manual-matching` | Barangay-managed records only (see [Data scope](#data-scope)) |
+| Barangay Staff (3) | Retired portal; no matching page | Legacy API compatibility only when the retirement switch is explicitly enabled |
 | Admin (4) | API only | All |
 
-Staff can also open it from a report: **Find matches manually** / **Check registered pets** on the Barangay report view header, and **Match with reports** / **Check registered pets** above the AI match list on the Subdivision report view. These open `/…/manual-matching?report=ID` (add `&kind=pet` for pets) with that report already selected.
+Leaders can open it from **Match with reports** / **Check registered pets** on the Subdivision report view. These open `/subd/manual-matching?report=ID` (add `&kind=pet` for pets) with that report selected. The unused Barangay matching page and its wording-only scope prop were removed during cleanup Phase 3; every `/brgy/*` URL still opens retirement information. Owner confirmation and server-side scope checks are unchanged.
 
-Residents get `403`. Deciding a pair follows the same rules as AI suggestions (`app/utils/case_review.py`): a pair across two subdivisions is decided by Barangay staff or an Admin, and a Barangay staff member can decide a subdivision's pair only when the barangay handles that report or the subdivision has no active leader.
+Residents get `403`. Role-3 sessions are refused by default. The following cross-subdivision rules describe retained API compatibility: deciding a pair follows the same rules as AI suggestions (`app/utils/case_review.py`): a pair across two subdivisions is decided by Barangay staff or an Admin, and a Barangay staff member can decide a subdivision's pair only when the barangay handles that report or the subdivision has no active leader.
 
 ## Data scope
 
-The server enforces the scope in SQL in `backend/app/utils/matching_scope.py`; the frontend only describes it.
+The server enforces the scope in SQL in `backend/app/utils/matching_scope.py`. The active workspace describes subdivision records only. The Barangay scope rules below remain backend compatibility rules, not an active portal: role-3 access is blocked unless the legacy switch is explicitly enabled.
 
 **Barangay Staff: reports** (search, report-to-report candidates, source reports, pairs, decisions). The pool covers reports in their barangay that are one of:
 - **Barangay-managed:** the case, or a report merged into it, has a Barangay-handled status (4, 5, 6, 7, 8, 13), a rescue, an endorsement letter, an escalation in its status history (4 or 13) or a holding intake.
@@ -204,6 +204,6 @@ AI rescans keep human decisions: they only update or remove `AI_SUGGESTED` rows 
 ## Code and tests
 
 - Backend: `backend/app/routes/manual_matching.py`, `backend/app/utils/matching_scope.py` (data scope), `backend/app/routes/pet_match_confirmations.py` (owner side), `backend/app/models/manual_match.py`, `backend/app/models/pet_match_confirmation.py`, `backend/app/utils/pet_match_confirmation.py` (owner-first rules), `gemini_status()` in `backend/app/utils/ai_suggestions.py`
-- Frontend: `frontend/src/components/ManualMatching/ManualMatchingWorkspace.tsx` (`scope` prop for wording), `frontend/src/utils/matchingScope.ts`, `BrgyManualMatching.tsx`, `SubdManualMatching.tsx`; entry buttons in `BrgyReportView.tsx` and `SubdViewReport.tsx`; owner panel `frontend/src/components/PetMatchConfirmationRequests.tsx` on My Pets
+- Frontend: `frontend/src/components/ManualMatching/ManualMatchingWorkspace.tsx`, `frontend/src/pages/Subd_Leaders/SubdManualMatching.tsx`; entry buttons in `SubdViewReport.tsx`; owner panel `frontend/src/components/PetMatchConfirmationRequests.tsx` on My Pets. The retained shared Potential Match Review modal opens from candidate cards. Phase 3 browser evidence: `frontend/tests/phase6to8.browser.mjs` (current review, pending/YES/NO gates, owner response and observation).
 - Tests: `python tests/test_manual_matching.py` from `backend/` (isolated SQLite); `node --test frontend/tests/manualMatchFields.test.mjs`
 - Table: `manual_match_decisions` is created at startup by `Base.metadata.create_all`. If an earlier version of the table already exists, `ensure_manual_match_pet_column()` in `main.py` adds `pet_id` and makes `report_b_id` nullable. `pet_match_confirmation_requests` (report, pet, owner, requesting staff and time, owner response and time, cancellation, final decision, staff and time, match) is also created by `create_all`. Rows are never deleted. All are non-destructive, with no manual migration step.

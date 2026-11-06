@@ -46,7 +46,8 @@ api.defaults.adapter = async config => {
     const body = typeof config.data === 'string' ? JSON.parse(config.data) : config.data;
     requests.push({ path, method: String(config.method), body });
     let data: unknown = [];
-    if (path === '/reports/analyze-media') {
+    if (path === '/auth/verify-session') data = { status: 'valid', role_id: role, is_verified: true };
+    else if (path === '/reports/analyze-media') {
         if (state.verdict === 'error') throw new Error('Synthetic detector unavailable');
         data = { animal_detected: state.verdict === 'offline' ? null : state.verdict !== 'none', animal_type: 'Cat',
             primary_color: 'Black', secondary_color: 'White', tertiary_color: 'None',
@@ -72,9 +73,9 @@ export function GuardHarness() {
 }
 export function LocationProbe() { const route = useLocation(); return <output id="route">{route.pathname + route.search}</output>; }
 const [{ default: AddPetModal }, { default: ResidentPet }, { default: AIMatchReviewModal },
-    { default: SubdPetClaims }, { default: BrgyPetClaims }, { default: PetDetailPanel }] = await Promise.all([
+    { default: AppRoutes }, { default: BrgyPetClaims }, { default: PetDetailPanel }] = await Promise.all([
     import('../../src/components/PetRecords/AddPetModal'), import('../../src/pages/citizen/ResidentPet'),
-    import('../../src/components/Modals/AIMatchReviewModal'), import('../../src/pages/Subd_Leaders/SubdPetClaims'),
+    import('../../src/components/Modals/AIMatchReviewModal'), import('../../src/routes/AppRoutes'),
     import('../../src/pages/Barangay_Staff/BrgyPetClaims'), import('../../src/components/PetRecords/PetDetailPanel'),
 ]);
 export function Fixture() {
@@ -83,7 +84,7 @@ export function Fixture() {
         : mode === 'staff' ? <AddPetModal isOpen editPetData={params.has('edit') ? pet : undefined} onClose={() => {}} />
         : mode === 'resident' ? <ResidentPet />
         : mode === 'match' ? <AIMatchReviewModal isOpen={open} match={match} isStaff onClose={() => { state.closed = true; setOpen(false); }} />
-        : mode === 'claims' ? role === 3 ? <BrgyPetClaims /> : <SubdPetClaims />
+        : mode === 'claims' ? role === 3 ? <BrgyPetClaims /> : <AppRoutes />
         : <PetDetailPanel pet={mapRawPetToPetRecord(pet)} onClose={() => {}} />}</>;
 }
 const route = role === 3 ? '/brgy' : role === 1 ? '/resident' : '/subd';

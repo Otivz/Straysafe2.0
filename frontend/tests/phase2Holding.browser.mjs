@@ -15,6 +15,7 @@ const browser = spawn(chrome, ['--headless=new', '--remote-debugging-port=0', `-
 { windowsHide: true, stdio: 'ignore' });
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 let socket;
+let command;
 try {
     let port;
     for (let i = 0; i < 100; i++) {
@@ -29,7 +30,7 @@ try {
     const pending = new Map();
     const errors = [];
     const backendAttempts = [];
-    const command = (method, params = {}) => new Promise((resolve, reject) => {
+    command = (method, params = {}) => new Promise((resolve, reject) => {
         const requestId = ++id;
         const timer = setTimeout(() => { pending.delete(requestId); reject(new Error(`${method} timed out`)); }, 20000);
         pending.set(requestId, { resolve, reject, timer });
@@ -85,22 +86,8 @@ try {
         for (const label of ['Municipal Holding Facility', 'Municipal Holding Place']) {
             assert.equal(await evaluate(`window.phase2SightingLabel(${JSON.stringify(label)})`), null, 'both holding wordings remain recognized');
         }
-        await waitFor('document.body.textContent.includes("Neighbor synthetic animal")', 'same-Barangay neighboring animal');
-        assert.equal(await evaluate('document.querySelector("[aria-label=\\"Stay limit in days\\"]") !== null'), false);
-        assert.equal(await evaluate('document.body.textContent.includes("Earlier Community Care Records")'), false);
-        await click(`[...document.querySelectorAll('button')].find(e => e.textContent.trim() === 'Manage')`);
-        await waitFor('document.body.textContent.includes("At the Barangay holding place (view only)")', 'read-only detail');
-        assert.equal(await evaluate(`[...document.querySelectorAll('button')].some(e => /Update condition|Save changes|Add care/i.test(e.textContent))`), false);
-        scenarios++;
-        await navigate('mode=holding&legacy');
-        await waitFor('document.body.textContent.includes("Earlier Community Care Records")', 'earlier pen retained');
-        await click(`[...document.querySelectorAll('button')].find(e => e.textContent.includes('Earlier Community Care Records'))`);
-        await waitFor('document.body.textContent.includes("Earlier pen animal")', 'earlier pen animals accessible');
-        scenarios++;
-        await navigate('mode=dashboard');
-        await waitFor(`[...document.querySelectorAll('button')].some(e => e.textContent.includes('Your animals held'))`, 'Barangay dashboard card');
-        const countCard = await evaluate(`[...document.querySelectorAll('button')].find(e => e.textContent.includes('Your animals held')).querySelector('span').textContent`);
-        assert.equal(countCard, '2', 'holding count includes healthy/impounded Barangay cases and excludes earlier pens/discharges');
+        await waitFor('document.querySelector("#route").textContent === "/subd/endorsements"', 'retired holding route redirects to referrals');
+        assert.equal(await evaluate('window.phase2Requests.some(r => r.path.startsWith("/holding"))'), false, 'redirect does not mount the retired holding page');
         scenarios++;
         await navigate('mode=modal');
         await waitFor(`[...document.querySelectorAll('h5')].some(e => e.textContent.includes('Secured by Resident'))`, 'resident custody choice');
@@ -122,35 +109,17 @@ try {
         await navigate('mode=animals&count=2');
         await waitFor('document.body.textContent.includes("Animals in this report")', 'multi-animal controls retained');
         scenarios++;
-        await navigate('mode=settings');
-        await click(`[...document.querySelectorAll('button')].find(e => e.textContent.includes('Landmarks'))`);
-        await waitFor('document.body.textContent.includes("New animal admissions are managed by the Barangay")', 'landmark settings');
-        assert.equal(await evaluate('document.body.textContent.includes("Designate as Animal Holding Place")'), false);
-        scenarios++;
-        await navigate('mode=barangay');
-        await waitFor('document.body.textContent.includes("Own synthetic animal")', 'Barangay holding');
-        const promote = await evaluate(`[...document.querySelectorAll('button')].some(e => /adopt/i.test(e.title) && !e.disabled)`);
-        assert(promote, 'Barangay adoption promotion retained');
-        await click(`[...document.querySelectorAll('button')].find(e => /adopt/i.test(e.title) && !e.disabled)`);
-        await waitFor('document.body.textContent.includes("Adoption")', 'adoption promotion screen opens');
-        scenarios++;
-        // Returned to its owner: no adoption action, a clear label, and For Adoption / Adopted unavailable
-        await navigate('mode=barangay&returned');
-        await waitFor('document.body.textContent.includes("Own synthetic animal")', 'Barangay holding (returned)');
-        assert(await evaluate('document.body.textContent.includes("Returned to Owner")'), 'Returned to Owner label');
-        assert.equal(await evaluate(`[...document.querySelectorAll('button')].some(e => /adopt/i.test(e.title) && !e.disabled)`), false,
-            'no adoption action for an animal returned to its owner');
-        await click(`[...document.querySelectorAll('button')].find(e => e.textContent.trim() === 'Manage')`);
-        await waitFor('document.body.textContent.includes("no longer eligible for adoption")', 'returned notice in the detail');
-        assert.equal(await evaluate(`[...document.querySelectorAll('button')].some(e => /promote to adoption/i.test(e.textContent))`), false, 'no promote button');
-        assert.equal(await evaluate(`[...document.querySelectorAll('option')].filter(o => o.value === '6' || o.value === '7').every(o => o.disabled || o.closest('select')?.querySelector('option[value="0"]'))`), true,
-            'For Adoption / Adopted disabled in the status form');
+        await navigate('mode=retired-admin');
+        await waitFor('document.querySelector("#route").textContent === "/admin/incidents"', 'removed Admin holding archive redirects to incidents');
+        assert.equal(await evaluate(`!!document.querySelector('a[href="/admin/holding-facility"]')`), false, 'no Holding Archive navigation');
+        assert.equal(await evaluate('window.phase2Requests.some(r => r.path.startsWith("/holding"))'), false, 'removed archive does not fetch holding records');
         scenarios++;
     }
     assert.deepEqual(backendAttempts, [], 'no backend requests');
     console.log(JSON.stringify({ result: 'PASS', scenarios, widths: [390,1280], backendRequests: 0 }));
 } finally {
+    if (command) { try { await command('Browser.close'); } catch {} }
     socket?.close();browser.kill();await pause(500);
     assert(profile.startsWith(profilePrefix));
-    await rm(profile,{recursive:true,force:true,maxRetries:3,retryDelay:200});
+    await rm(profile,{recursive:true,force:true,maxRetries:8,retryDelay:300});
 }

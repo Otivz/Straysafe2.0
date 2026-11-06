@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { api } from '../../src/utils/api';
 import { sightingLandmark } from '../../src/utils/sighting';
 import { ThemeProvider } from '../../src/context/ThemeContext';
@@ -12,8 +12,8 @@ const mode = params.get('mode') || 'holding';
 const count = Number(params.get('count') || 1);
 const held = params.has('held');
 localStorage.clear(); sessionStorage.clear();
-const role = mode === 'barangay' ? 3 : 2;
-localStorage.setItem('staff_user', JSON.stringify({ user_id: 42, name: 'Synthetic officer', role_id: role,
+const role = mode === 'retired-admin' ? 4 : 2;
+localStorage.setItem(role === 4 ? 'admin_user' : 'staff_user', JSON.stringify({ user_id: 42, name: 'Synthetic officer', role_id: role,
     is_head_officer: true, barangay_id: 1, subdivision_id: 1, is_verified: true, status: 'Active',
     access_token: `test.${btoa(JSON.stringify({ user_id: 42, role_id: role, exp: 4102444800 }))}.test` }));
 const brgy = { landmark_id: 9, name: 'Synthetic Municipal Holding', subdivision_id: null, barangay_id: 1,
@@ -48,11 +48,8 @@ api.defaults.adapter = async config => {
     const body = typeof config.data === 'string' ? JSON.parse(config.data) : config.data;
     requests.push({ method: String(config.method), path, body });
     let data: unknown = [];
-    if (path === '/holding') data = mode === 'dashboard'
-        ? [rows[0], rows[2], { ...rows[0], holding_id: 4, facility_status: 8, report_status_id: 8 },
-            { ...rows[0], holding_id: 5, facility_status: 7, discharge_date: new Date().toISOString() }]
-        : mode === 'barangay' || config.params?.barangay_only
-            ? rows.slice(0, 2) : params.has('legacy') ? [rows[0], rows[2]] : [rows[0]];
+    if (path === '/auth/verify-session') data = { status: 'valid', role_id: role, is_verified: true };
+    else if (path === '/holding') data = rows;
     else if (/^\/holding\/\d+$/.test(path)) data = rows.find(a => a.holding_id === Number(path.split('/').pop()));
     else if (path === '/holding/metrics') data = { total: 2, healthy: 2, need_treatment: 0, for_adoption: 0, nearing_expiry: 0, overdue: 2, resolved_today: 0 };
     else if (path === '/landmarks') data = mode === 'settings' ? [pen] : config.params?.subdivision_id || url.searchParams.has('subdivision_id') ? [pen] : [brgy];
@@ -76,19 +73,14 @@ if (mode === 'modal') {
 } else if (mode === 'animals') {
     const { default: Panel } = await import('../../src/components/AnimalRecordsPanel');
     content = <Panel reportId={1} basePath="/subd/reports" animalCount={count} />;
-} else if (mode === 'dashboard') {
-    const { default: Dashboard } = await import('../../src/pages/Subd_Leaders/SubdDashboard');
-    content = <Dashboard />;
-} else if (mode === 'settings') {
-    const { default: Settings } = await import('../../src/pages/Subd_Leaders/SubdSettings');
-    content = <Settings />;
-} else if (mode === 'barangay') {
-    const { default: Holding } = await import('../../src/pages/Barangay_Staff/BrgyHoldingFacility');
-    content = <Holding />;
 } else {
-    const { default: Holding } = await import('../../src/pages/Subd_Leaders/SubdHoldingFacility');
-    content = <Holding />;
+    const { default: AppRoutes } = await import('../../src/routes/AppRoutes');
+    content = <AppRoutes />;
 }
+function LocationProbe() { const route = useLocation(); return <output id="route">{route.pathname + route.search}</output>; }
 const root = createRoot(document.getElementById('fixture')!);
-root.render(<MemoryRouter><ThemeProvider><ToastProvider>{content}</ToastProvider></ThemeProvider></MemoryRouter>);
+const initialRoute = mode === 'retired-admin' ? '/admin/holding-facility' : '/subd/holding-facility';
+root.render(<MemoryRouter initialEntries={[initialRoute]}><ThemeProvider><ToastProvider>
+    <p role="note">Synthetic test data only</p><LocationProbe />{content}
+</ToastProvider></ThemeProvider></MemoryRouter>);
 if (import.meta.hot) import.meta.hot.dispose(() => root.unmount());

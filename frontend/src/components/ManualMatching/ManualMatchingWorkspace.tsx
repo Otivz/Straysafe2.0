@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
-import { BARANGAY_EMPTY_PETS_TEXT, BARANGAY_SCOPE_TEXT } from '../../utils/matchingScope';
 import type { ChangeEvent, ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, MessageSquare, Shield, FileText, ArrowRight, ExternalLink, ZoomIn, ChevronDown } from 'lucide-react';
@@ -947,9 +946,8 @@ const ComparePanel = ({ a, target, distanceKm, pairStatus, reportPath, onClose, 
         );
     };
 
-    const isBrgy = reportPath(1).startsWith('/brgy');
-    const messagesBase = isBrgy ? '/brgy/messages' : '/subd/messages';
-    const claimsBase = isBrgy ? '/brgy/pet-claims' : '/subd/pet-claims';
+    const messagesBase = '/subd/messages';
+    const claimsBase = '/subd/pet-claims';
     const chatPath = isPet
         ? `${messagesBase}?reportId=${a.report_id}${confirmedGuidance?.matchId ? `&matchId=${confirmedGuidance.matchId}&mode=match` : ''}`
         : `${messagesBase}?reportId=${a.report_id}`;
@@ -1517,8 +1515,8 @@ const HistoryTable = ({ rows, loading, filter, onFilter, reportPath }: {
 );
 
 // ─── Workspace ──────────────────────────────────────────────────────────────
-// scope: whose records the server searches (backend/app/utils/matching_scope.py). Only the wording depends on it here.
-const ManualMatchingWorkspace = ({ reportPath, scope = 'subdivision' }: { reportPath: (id: number) => string; scope?: 'barangay' | 'subdivision' }) => {
+// The server enforces the subdivision search boundary (backend/app/utils/matching_scope.py).
+const ManualMatchingWorkspace = ({ reportPath }: { reportPath: (id: number) => string }) => {
     const toast = useToast();
     const [searchParams, setSearchParams] = useSearchParams();
     const [tab, setTab] = useState<'find' | 'history'>('find');
@@ -1755,11 +1753,6 @@ const ManualMatchingWorkspace = ({ reportPath, scope = 'subdivision' }: { report
                         />
                     ) : (
                         <>
-                        {scope === 'barangay' && (
-                            <p className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-[11px] font-bold text-orange-900" data-testid="pet-scope-note">
-                                🔒 {BARANGAY_SCOPE_TEXT}
-                            </p>
-                        )}
                         <FilterToolbar
                             mode="pet"
                             value={petFilters}
@@ -1778,12 +1771,12 @@ const ManualMatchingWorkspace = ({ reportPath, scope = 'subdivision' }: { report
                             <p className="rounded-2xl border border-violet-200 bg-violet-50 py-6 text-center text-xs font-bold text-violet-800">{petBlocked}</p>
                         ) : petCandidates.length === 0 ? (
                             <p className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-xs font-semibold text-slate-500" data-testid="pet-candidates-empty">
-                                {scope === 'barangay' ? BARANGAY_EMPTY_PETS_TEXT : 'No eligible registered pets from your subdivision match these filters.'}
+                                No eligible registered pets from your subdivision match these filters.
                             </p>
                         ) : (
                             <>
                                 <p className="text-[11px] font-semibold text-slate-500">
-                                    {petCandidates.length} registered pet{petCandidates.length === 1 ? '' : 's'} (eligible for matching, {scope === 'barangay' ? 'Barangay-managed, facility intakes and endorsed cases' : 'registered in your subdivision'}). Not ranked: compare each one before deciding.
+                                    {petCandidates.length} registered pet{petCandidates.length === 1 ? '' : 's'} (eligible for matching, registered in your subdivision). Not ranked: compare each one before deciding.
                                 </p>
                                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                                     {petCandidates.map((p) => (

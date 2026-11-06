@@ -19,6 +19,7 @@ from app.utils.password_codes import INVITE_CODE_HOURS, INVITE_PURPOSE, create_p
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.uploads import read_and_validate_upload
 from app.utils.audit import log_activity
+from app.utils.retired import refuse_barangay_account, refuse_barangay_provisioning
 from app.limiter import limiter
 
 router = APIRouter(
@@ -139,6 +140,8 @@ def assign_barangay_head(
             detail="Access denied: Only System Administrators can designate Barangay Heads"
         )
     
+    refuse_barangay_provisioning(role_id=3, is_head_officer=True)
+
     barangay = db.query(Barangay).filter(Barangay.barangay_id == barangay_id).first()
     if not barangay:
         raise HTTPException(status_code=404, detail="Barangay not found")
@@ -263,6 +266,8 @@ def create_user(
         user_data["is_verified"] = False
         user_data["status"] = "Active"
     
+    refuse_barangay_provisioning(user_data["role_id"], user_data["is_head_officer"])
+
     # Resolve position string if provided (only an administrator or Head Officer assigns positions; a public
     # sign-up has none and can't add titles to the official list)
     pos_input = user_data.pop("position", None) or user_data.pop("position_name", None)
@@ -318,6 +323,8 @@ def admin_create_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Barangay Head Officers can only provision Barangay Staff accounts (role_id=3)"
         )
+
+    refuse_barangay_provisioning(user_in.role_id, user_in.is_head_officer)
 
     # Check if email exists
     if db.query(User).filter(func.lower(User.email) == user_in.email.strip().lower()).first():
@@ -397,6 +404,7 @@ def resend_invite(
     target = db.query(User).filter(User.user_id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    refuse_barangay_account(target)
     if user_id not in pending_invite_user_ids(db):
         raise HTTPException(
             status_code=400,
@@ -483,6 +491,13 @@ def update_user(
                     "barangay_id": db_user.barangay_id, "subdivision_id": db_user.subdivision_id}
     update_data = user_in.model_dump(exclude_unset=True)
     
+    # Validate changes to authority before resolving positions or mutating any fields. Echoing
+    # an unchanged historical role/head flag does not create a new designation.
+    next_role = update_data.get("role_id", db_user.role_id)
+    next_head = update_data.get("is_head_officer", db_user.is_head_officer)
+    if next_role != db_user.role_id or bool(next_head) != bool(db_user.is_head_officer):
+        refuse_barangay_provisioning(next_role, next_head)
+
     if "password" in update_data:
         if not update_data["password"]:
             update_data.pop("password")

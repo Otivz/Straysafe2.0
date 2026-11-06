@@ -1,4 +1,3 @@
-import { getPersonnelAvailability } from '../../utils/personnelAvailability';
 import React, { useState, useEffect } from 'react';
 import { sightingLandmark } from '../../utils/sighting';
 import { useNavigate, useParams, Link } from 'react-router-dom';
@@ -372,9 +371,7 @@ export const AdminReportView: React.FC = () => {
     // Direct Action / Override Modal state
     const [isActionModalOpen, setIsActionModalOpen] = useState<boolean>(false);
     const [targetStatusId, setTargetStatusId] = useState<number>(2);
-    const [selectedStaffId, setSelectedStaffId] = useState<number | ''>('');
     const [actionRemarks, setActionRemarks] = useState<string>('');
-    const [staffList, setStaffList] = useState<Array<{ user_id: number; name: string; email: string; role_id: number }>>([]);
     const [isSubmittingAction, setIsSubmittingAction] = useState<boolean>(false);
 
     const userStr = localStorage.getItem('admin_user') || localStorage.getItem('user');
@@ -434,18 +431,6 @@ export const AdminReportView: React.FC = () => {
         }
     };
 
-    const fetchStaffList = async () => {
-        try {
-            const res = await api.get('/users/');
-            const users = Array.isArray(res.data) ? res.data : [];
-            const staff = users.filter((u: any) => (u.role_id === 3 || u.role_id === 2) && getPersonnelAvailability(u, false) === 'available');
-            setStaffList(staff);
-            setSelectedStaffId(current => staff.some((s: any) => s.user_id === current) ? current : (staff[0]?.user_id ?? ''));
-        } catch (e) {
-            console.error('Error fetching staff list:', e);
-        }
-    };
-
     useEffect(() => {
         if (id) {
             try {
@@ -461,7 +446,6 @@ export const AdminReportView: React.FC = () => {
             }
         }
         fetchReport();
-        fetchStaffList();
     }, [id]);
 
     const handleSaveCareLog = async (e: React.FormEvent) => {
@@ -497,10 +481,6 @@ export const AdminReportView: React.FC = () => {
                 status_id: targetStatusId,
                 remarks: actionRemarks.trim() || undefined
             };
-
-            if (selectedStaffId) {
-                payload.assigned_staff_id = Number(selectedStaffId);
-            }
 
             await api.put(`/reports/${report.report_id}/status`, payload);
             invalidateCache('admin_reports_list');
@@ -604,6 +584,15 @@ export const AdminReportView: React.FC = () => {
 
     const animalCondition = report.condition || report.animal_condition || 'Healthy';
     const effectivePriority = report.priority_level || 'Medium';
+    // Screen and print share the same text. Stored letters remain verbatim; missing text
+    // describes only the external referral, never an unrecorded custody transfer.
+    const storedReferralLetter = typeof report.endorsement_letter === 'string'
+        ? report.endorsement_letter : report.endorsement_letter?.letter_content;
+    const referralLetterText = storedReferralLetter?.trim() ? storedReferralLetter
+        : `Referred by ${report.subdivision_name || 'the subdivision'} to ${report.barangay_name ? `Barangay ${report.barangay_name}` : 'the Barangay'}. The Barangay handles its work outside StraySafe; the Subdivision Leader records the updates and final outcome it reports.`;
+    const referralRecorder = (typeof report.endorsement_letter === 'object' && report.endorsement_letter?.leader_name)
+        || 'Not recorded';
+
     const isTerminalStatus = [3, 9, 10, 11, 12, 14, 17, 18].includes(report.status_id);
 
     // Active stage index in progress tracker
@@ -1269,11 +1258,9 @@ export const AdminReportView: React.FC = () => {
                                         <div className="space-y-3">
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                 <div className="p-3 bg-slate-50/80 rounded-2xl border border-slate-100">
-                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Referring Subdivision Leader</span>
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Recorded by</span>
                                                     <p className="text-xs font-black text-slate-800 mt-1">
-                                                        {typeof report.endorsement_letter === 'object' && report.endorsement_letter?.leader_name
-                                                            ? report.endorsement_letter.leader_name
-                                                            : (report.assigned_leader_name || 'Subdivision Leader')}
+                                                        {referralRecorder}
                                                     </p>
                                                     <span className="text-[10.5px] font-semibold text-slate-500">
                                                         {typeof report.endorsement_letter === 'object' && report.endorsement_letter?.leader_position
@@ -1300,15 +1287,11 @@ export const AdminReportView: React.FC = () => {
                                                         Referral Letter Excerpt
                                                     </span>
                                                     <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">
-                                                        Recorded Letter
+                                                        {storedReferralLetter?.trim() ? 'Recorded Letter' : 'Referral Summary'}
                                                     </span>
                                                 </div>
                                                 <p className="text-xs text-slate-700 font-medium leading-relaxed italic bg-white/70 p-2.5 rounded-xl border border-indigo-200/50">
-                                                    "{typeof report.endorsement_letter === 'object' && report.endorsement_letter?.letter_content
-                                                        ? (report.endorsement_letter.letter_content.length > 180 ? report.endorsement_letter.letter_content.substring(0, 180) + '...' : report.endorsement_letter.letter_content)
-                                                        : (typeof report.endorsement_letter === 'string' && report.endorsement_letter
-                                                            ? (report.endorsement_letter.length > 180 ? report.endorsement_letter.substring(0, 180) + '...' : report.endorsement_letter)
-                                                            : `Referred by ${report.subdivision_name || 'the subdivision'} to ${report.barangay_name ? `Barangay ${report.barangay_name}` : 'the Barangay'}. The Barangay handles its work outside StraySafe; the Subdivision Leader records the updates and final outcome it reports.`)}"
+                                                    "{referralLetterText.length > 180 ? referralLetterText.substring(0, 180) + '...' : referralLetterText}"
                                                 </p>
                                             </div>
                                         </div>
@@ -1816,7 +1799,7 @@ export const AdminReportView: React.FC = () => {
                         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                             <div>
                                 <h3 className="text-base font-black text-slate-900">Direct Admin Action Override</h3>
-                                <p className="text-xs text-slate-400 mt-0.5">Override status and dispatch responders for Case #{report.report_id}</p>
+                                <p className="text-xs text-slate-400 mt-0.5">Update the status and record administrative remarks for Case #{report.report_id}</p>
                             </div>
                             <button
                                 onClick={() => setIsActionModalOpen(false)}
@@ -1844,26 +1827,6 @@ export const AdminReportView: React.FC = () => {
                                     <option value={14}>False Alarm / Dismissed</option>
                                 </select>
                             </div>
-
-                            {targetStatusId === 5 && (
-                                <div>
-                                    <label className="block text-xs font-black uppercase tracking-wider text-slate-700 mb-1.5">
-                                        Dispatch Responder / Officer
-                                    </label>
-                                    <select
-                                        value={selectedStaffId}
-                                        onChange={(e) => setSelectedStaffId(Number(e.target.value))}
-                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-[#F97316]"
-                                    >
-                                        <option value="">-- Select Personnel to Dispatch --</option>
-                                        {staffList.map(st => (
-                                            <option key={st.user_id} value={st.user_id}>
-                                                {st.name} ({st.role_id === 3 ? 'Barangay Staff' : st.role_id === 2 ? 'Subdivision Leader' : 'Officer'})
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
 
                             <div>
                                 <label className="block text-xs font-black uppercase tracking-wider text-slate-700 mb-1.5">
@@ -2042,8 +2005,8 @@ export const AdminReportView: React.FC = () => {
                                     <FileCheck className="w-5 h-5" />
                                 </div>
                                 <div>
-                                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Official Endorsement & Transfer Certificate</h3>
-                                    <p className="text-[11px] text-slate-400 font-medium">Inter-jurisdictional municipal legal documentation under RA 9482</p>
+                                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Barangay Referral Letter</h3>
+                                    <p className="text-[11px] text-slate-400 font-medium">External referral recorded by the subdivision</p>
                                 </div>
                             </div>
                             <button
@@ -2065,19 +2028,19 @@ export const AdminReportView: React.FC = () => {
                                 <h4 className="text-sm font-black font-sans uppercase tracking-tight text-slate-900 mt-1">
                                     {[report.barangay_name && `Barangay ${report.barangay_name}`, report.subdivision_name].filter(Boolean).join(' • ') || '—'}
                                 </h4>
-                                <p className="text-[10px] font-sans font-semibold text-slate-400 mt-0.5">Joint Stray Animal Management & Rabies Prevention Taskforce</p>
+                                <p className="text-[10px] font-sans font-semibold text-slate-400 mt-0.5">Subdivision Case Referral Record</p>
                             </div>
 
                             <div className="text-center py-1">
                                 <h5 className="text-xs font-sans font-black uppercase tracking-wider text-slate-900 bg-white py-1 px-4 rounded-xl border border-slate-200 inline-block">
-                                    OFFICIAL ENDORSEMENT AND CUSTODIAL TRANSFER CERTIFICATE
+                                    BARANGAY REFERRAL LETTER
                                 </h5>
                             </div>
 
                             <div className="font-sans text-xs space-y-2 text-slate-700">
                                 <div className="grid grid-cols-2 gap-2 p-3 bg-white rounded-xl border border-slate-200 font-mono text-[11px]">
                                     <div><strong>Incident Reference:</strong> #{report.report_id.toString().padStart(4, '0')}</div>
-                                    <div><strong>Date Issued:</strong> {typeof report.endorsement_letter === 'object' && report.endorsement_letter?.issued_at ? formatDateTime(report.endorsement_letter.issued_at) : formatDateTime(report.created_at)}</div>
+                                    <div><strong>{typeof report.endorsement_letter === 'object' && report.endorsement_letter?.issued_at ? 'Date Issued:' : 'Report Date:'}</strong> {typeof report.endorsement_letter === 'object' && report.endorsement_letter?.issued_at ? formatDateTime(report.endorsement_letter.issued_at) : formatDateTime(report.created_at)}</div>
                                     <div><strong>Animal Type:</strong> {report.animal_type || 'Canine / Stray'}</div>
                                     <div><strong>Category:</strong> {categoryMap[report.category_id] || 'Stray Report'}</div>
                                 </div>
@@ -2086,21 +2049,15 @@ export const AdminReportView: React.FC = () => {
                                     <strong>MEMORANDUM FOR:</strong> Office of the Barangay Animal Control Officer{report.barangay_name ? `, Barangay ${report.barangay_name}` : ''}
                                 </p>
                                 <p className="leading-relaxed">
-                                    <strong>FROM:</strong> {report.subdivision_name ? `Executive Board, ${report.subdivision_name}` : 'Subdivision Executive Board'}
+                                    <strong>FROM:</strong> {report.subdivision_name || 'The subdivision'}
                                 </p>
                                 <p className="leading-relaxed">
-                                    <strong>SUBJECT:</strong> Formal Custodial Endorsement of Impounded Animal for Rabies Watch & Quarantine
+                                    <strong>SUBJECT:</strong> Referral of Incident Report for Barangay Assistance
                                 </p>
 
                                 <div className="mt-3 p-3.5 bg-white rounded-xl border border-slate-200 leading-relaxed space-y-2 text-slate-800 text-xs">
                                     <p>
-                                        {typeof report.endorsement_letter === 'object' && report.endorsement_letter?.letter_content
-                                            ? report.endorsement_letter.letter_content
-                                            : (typeof report.endorsement_letter === 'string' && report.endorsement_letter
-                                                ? report.endorsement_letter
-                                                : `In strict accordance with Republic Act No. 9482 (Anti-Rabies Act of 2007) and the memorandum of agreement between ${report.subdivision_name || 'the subdivision'} and the ${report.barangay_name ? `Barangay ${report.barangay_name}` : 'Barangay'} Animal Care Unit, the animal documented under Incident #${report.report_id.toString().padStart(4, '0')} has undergone initial temporary holding within subdivision facilities and is hereby officially endorsed and transferred to the custody of ${report.barangay_name ? `Barangay ${report.barangay_name}` : 'the Barangay'} for mandatory observation, medical assessment, and appropriate municipal disposition.`
-                                            )
-                                        }
+                                        {referralLetterText}
                                     </p>
                                     {report.verification_notes && (
                                         <p className="text-[11px] text-slate-600 pt-1 border-t border-slate-100">
@@ -2109,48 +2066,26 @@ export const AdminReportView: React.FC = () => {
                                     )}
                                 </div>
 
-                                {/* Signatures block */}
-                                <div className="pt-4 grid grid-cols-2 gap-4 font-sans">
-                                    <div className="p-3 bg-white rounded-xl border border-slate-200 text-center">
-                                        <div className="h-8 flex items-center justify-center">
-                                            <span className="font-serif italic text-xs text-indigo-800 font-bold">~ Digitally Certified ~</span>
-                                        </div>
-                                        <p className="text-xs font-black text-slate-900 border-t border-slate-200 pt-1">
-                                            {typeof report.endorsement_letter === 'object' && report.endorsement_letter?.leader_name
-                                                ? report.endorsement_letter.leader_name
-                                                : (report.assigned_leader_name || 'Subdivision HOA Executive')}
-                                        </p>
-                                        <p className="text-[10px] text-slate-500 font-semibold">
-                                            {typeof report.endorsement_letter === 'object' && report.endorsement_letter?.leader_position
-                                                ? report.endorsement_letter.leader_position
-                                                : 'HOA Executive Committee Officer'}
-                                        </p>
-                                        <p className="text-[9.5px] text-emerald-600 font-bold mt-1">✓ Endorsement Certified</p>
+                                <dl className="pt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 font-sans">
+                                    <div className="p-3 bg-white rounded-xl border border-slate-200">
+                                        <dt className="text-[10px] text-slate-500 font-semibold">Recorded by</dt>
+                                        <dd className="text-xs font-bold text-slate-900 mt-1">{referralRecorder}</dd>
                                     </div>
-
-                                    <div className="p-3 bg-white rounded-xl border border-slate-200 text-center">
-                                        <div className="h-8 flex items-center justify-center">
-                                            <span className="font-serif italic text-xs text-blue-800 font-bold">~ Custody Acknowledged ~</span>
-                                        </div>
-                                        <p className="text-xs font-black text-slate-900 border-t border-slate-200 pt-1">
-                                            {report.barangay_name ? `Barangay ${report.barangay_name}` : 'Barangay Office'}
-                                        </p>
-                                        <p className="text-[10px] text-slate-500 font-semibold">
-                                            Animal Care & Control Section
-                                        </p>
-                                        <p className="text-[9.5px] text-blue-600 font-bold mt-1">✓ Formal Municipal Record</p>
+                                    <div className="p-3 bg-white rounded-xl border border-slate-200">
+                                        <dt className="text-[10px] text-slate-500 font-semibold">Referred to (outside StraySafe)</dt>
+                                        <dd className="text-xs font-bold text-slate-900 mt-1">{report.barangay_name ? `Barangay ${report.barangay_name}` : 'Barangay Office'}</dd>
                                     </div>
-                                </div>
+                                </dl>
                             </div>
                         </div>
 
                         <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                             <button
-                                onClick={() => printElementById('admin-endorsement-certificate', `Endorsement Certificate #${report.report_id}`)}
+                                onClick={() => printElementById('admin-endorsement-certificate', `Barangay Referral #${report.report_id}`)}
                                 className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 flex items-center gap-1.5"
                             >
                                 <FileText className="w-3.5 h-3.5" />
-                                Print Certificate
+                                Print Referral
                             </button>
                             <button
                                 onClick={() => setIsEndorsementModalOpen(false)}
