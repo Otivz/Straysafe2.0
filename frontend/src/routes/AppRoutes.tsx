@@ -61,7 +61,6 @@ const PetScanSuccessPage = lazy(() => import('../pages/citizen/PetScanSuccessPag
 const PetQrCardPage = lazy(() => import('../pages/citizen/PetQrCardPage'));
 const PetScanHistoryPage = lazy(() => import('../pages/citizen/PetScanHistoryPage'));
 
-const BrgyHoldingFacility = lazy(() => import('../pages/Barangay_Staff/BrgyHoldingFacility'));
 const BrgyAdoptions = lazy(() => import('../pages/Barangay_Staff/BrgyAdoptions'));
 const PetMatchReview = lazy(() => import('../pages/citizen/PetMatchReview'));
 const ReportStrayPage = lazy(() => import('../pages/citizen/ReportStrayPage'));
@@ -178,7 +177,7 @@ const AppRoutes = () => {
                 <Route path="/admin/citations" element={<Navigate to="/admin/warnings" replace />} />
                 <Route path="/admin/logs" element={<AdminLogs />} />
                 <Route path="/admin/pets" element={<Navigate to="/admin/pet-records" replace />} />
-                <Route path="/admin/holding-facility" element={<BrgyHoldingFacility />} />
+                <Route path="/admin/holding-facility" element={<Navigate to="/admin/incidents" replace />} />
                 <Route path="/admin/adoptions" element={<BrgyAdoptions />} />
             </Route>
 

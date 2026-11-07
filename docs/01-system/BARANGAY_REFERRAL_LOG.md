@@ -38,3 +38,15 @@ Only the Subdivision Leader of the report's subdivision and the Administrator. R
 - No updates after the outcome.
 - Every write adds an audit entry (`Create Barangay Referral`, `Record Barangay Update`, `Record Barangay Outcome`).
 - The three endorsement letters and rescues that existed before are left as they are; a leader or the Administrator can open a referral record for an older status-4 case to log its updates.
+
+## Admin letter preview and print
+
+The Admin report view uses the same referral-letter text for its on-screen excerpt, full preview and generated print document. Actual stored object/string letter content is preserved verbatim. Missing or whitespace-only content uses a neutral description of the external referral; it does not assert impounding, physical transfer, quarantine, a Barangay acknowledgement or digital certification.
+
+The wrapper is labelled Barangay Referral Letter. Recorded-by attribution uses the stored letter leader name, or Not recorded when absent; an assigned case handler is not inferred to be the recorder. A stored letter issuance date is labelled Date Issued; otherwise the report creation date is labelled Report Date. This presentation does not create or modify referral, custody, letter or acknowledgement records.
+
+## Current subdivision dashboard and earlier endorsements
+
+The subdivision dashboard counts current status-4 referrals separately from legacy dispatch/approval statuses 5 and 13. It no longer fetches or promotes retired claims, holding or rescue-request queues, and its remaining shortcuts point to current reports/pet records. Referral counts do not establish physical custody.
+
+The endorsement archive still opens current external-referral records and saved earlier rescue endorsements. Earlier assignment names, timestamps and recorded rescue status remain readable, labelled as historical. Opening an earlier record performs a read; its mission is not polled every five seconds and no Live/awaiting-dispatch claim is made. Timeline entries are built only from the report, saved endorsement date, actual recorded assignment and stored rescue status; a closed report does not invent a deployed team or a secured animal. Current referral updates remain labelled as reported by the Barangay and recorded by the Subdivision Leader.

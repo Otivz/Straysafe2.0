@@ -15,6 +15,7 @@ from app.schemas.landmark import (
 )
 from app.utils.auth import get_current_user
 from app.utils.audit import log_activity
+from app.utils.retired import retired_workflow
 from app.utils.landmark_cache import invalidate_landmarks_cache
 
 router = APIRouter(
@@ -190,6 +191,9 @@ def create_landmark(
             detail="Access denied: Only Barangay Head Officers, Subdivision Leaders, and Administrators can register landmarks & holding places."
         )
 
+    # Ordinary reference landmarks remain editable; creating a holding designation is a retired workflow.
+    if data.is_holding_facility or data.category == 'facility':
+        retired_workflow(req)
     if current_user.role_id == 2 and data.is_holding_facility:
         raise HTTPException(status_code=403, detail="New subdivision holding places cannot be designated. Register an ordinary landmark or coordinate with the Barangay.")
 
@@ -263,6 +267,11 @@ def update_landmark(
         if ("subdivision_id" in update_dict and update_dict["subdivision_id"] != current_user.subdivision_id
                 or "barangay_id" in update_dict and (not own or update_dict["barangay_id"] != own.barangay_id)):
             raise HTTPException(status_code=403, detail="Subdivision Leaders cannot change a landmark's jurisdiction.")
+    adds_holding = bool(update_dict.get("is_holding_facility")) and not landmark.is_holding_facility
+    adds_facility_category = (update_dict.get("category") == 'facility' and landmark.category != 'facility'
+                              and not landmark.is_holding_facility)
+    if adds_holding or adds_facility_category:
+        retired_workflow(req)
     if current_user.role_id == 2 and update_dict.get("is_holding_facility") and not landmark.is_holding_facility:
         raise HTTPException(status_code=403, detail="New subdivision holding places cannot be designated. Existing designations may be retained or switched off.")
 

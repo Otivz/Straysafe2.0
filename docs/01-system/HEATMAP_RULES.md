@@ -6,7 +6,7 @@ Status: Current. Verified against source, isolated tests and synthetic browser f
 
 Pins show cases needing action at the animal's current location. Heat shows where valid incidents were originally sighted, including incidents whose cases have since ended. These are different views of recorded incidents, not an estimate of the stray population or a validated risk prediction.
 
-The Admin has pins/heat views, date/category/untouched filters, resolved-pin and lost-pet controls, and clickable hotspots. The Subdivision dashboard retains pins/heat/both with its priority filter and a trailing 30-day heat window. The Barangay dashboard uses actionable pins, including its expanded views, without a heat-layer toggle.
+The Admin has pins/heat views, date/category/untouched filters, resolved-pin and lost-pet controls, and clickable hotspots. The Subdivision dashboard retains pins/heat/both with its priority filter and a trailing 30-day heat window. Retained legacy Barangay dashboard code uses actionable pins without a heat-layer toggle; the active Barangay portal is retired.
 
 ## Shared rules
 
@@ -15,7 +15,7 @@ Implementation: [heatmap.ts](../../frontend/src/utils/heatmap.ts). Closure autho
 | Topic | Rule |
 | --- | --- |
 | Active cases | All report statuses except `3, 9, 10, 11, 12, 14, 17, 18`; merged report links are also inactive. Picked Up (`6`), Disputed (`15`) and Under Investigation (`16`) remain active. |
-| Adoption compatibility | Existing terminal outcomes such as claimed/returned/released cases remain closed. No adoption routes, models, stage transitions or holding actions were removed. |
+| Adoption compatibility | Earlier terminal outcomes such as claimed/returned/released cases remain closed. Historical data/models remain readable; retired adoption and holding writes are gated off by default. |
 | Valid heat incidents | Exclude rejected, false-alarm and merged statuses (`3, 14, 18`), reports linked as duplicates, split child records and repeated rows with the same report ID. A group incident contributes through its root record. |
 | Heat location | Use saved original coordinates. A legacy current pin may be used only while still at the sighting; a relocated animal without a saved origin contributes no heat point. Missing/invalid coordinates are not fabricated. |
 | Pin location | Use the report's current coordinates; moving an animal does not move the historical heat location. |
@@ -43,3 +43,11 @@ The resident report page hides directions from a viewer whose server-provided ac
 - The browser fixture answers API requests in memory and blocks backend/external network requests. It does not validate tile-provider availability, real GPS, native Android gestures or live data correctness.
 
 See [Testing](../04-testing/README.md) for commands and the [restoration checklist](../06-future-proposals/RESTORE_UI_AND_WORKFLOW_IMPROVEMENTS_2026-10-30.md) for remaining phases.
+
+## Subdivision report maps after Barangay retirement - 2026-11-06
+
+The inline and expanded subdivision report maps no longer subscribe to responder-location updates or offer directions starting from a response team or the Barangay hall. Directions use the viewer's validated current GPS location. Unreliable, unavailable or denied GPS stops navigation with feedback instead of silently substituting another origin. The hall pin is retained as a geographic reference.
+
+For an earlier status-5 report, the page may read its last recorded dispatch location once and display a Historical Dispatch marker. A saved active flag does not enable polling or a live/en-route claim. This marker is a historical reference, not the animal's current location or a response instruction. Actual sighting and custody coordinates remain independent. A historical holding marker requires recorded facility coordinates; the hall is not substituted when those coordinates are unknown.
+
+Verification combines the targeted Phase 2 map-prop/route regression with the existing 14 real-Leaflet synthetic map scenarios. Real GPS/network routes and external responder systems were not exercised.

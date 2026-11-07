@@ -14,8 +14,6 @@ import { getCachedData, setCachedData } from '../../utils/cache';
 import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
 import ReportDescription from '../../components/ReportDescription';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
-import { petName } from '../../utils/petName';
-import { DEFAULT_PET_AVATAR } from '../../utils/avatar';
 import { DEFAULT_DATE_PRESET, heatPoints, isActiveReport, isInDateRange, isLostPetReport } from '../../utils/heatmap';
 interface Report {
     report_id: number;
@@ -34,21 +32,10 @@ interface Report {
     [key: string]: any;
 }
 
-interface RescueRequest {
-    rescue_id: number;
-    status_id: number;
-    report_id?: number;
-    staff_id?: number | null;
-    [key: string]: any;
-}
-
 const SubdDashboard = () => {
     const navigate = useNavigate();
 
     const [reports, setReports] = useState<Report[]>(() => getCachedData<Report[]>('subd_dashboard_reports') || []);
-    const [rescues, setRescues] = useState<RescueRequest[]>(() => getCachedData<RescueRequest[]>('subd_dashboard_rescues') || []);
-    const [claims, setClaims] = useState<any[]>(() => getCachedData<any[]>('subd_dashboard_claims') || []);
-    const [holdingAnimals, setHoldingAnimals] = useState<any[]>(() => getCachedData<any[]>('subd_dashboard_holding') || []);
     const [petsList, setPetsList] = useState<any[]>(() => getCachedData<any[]>('subd_dashboard_pets') || []);
     const [petCount, setPetCount] = useState<number>(() => getCachedData<number>('subd_dashboard_pets_count') || 0);
     const [announcements, setAnnouncements] = useState<any[]>(() => getCachedData<any[]>('subd_dashboard_announcements') || []);
@@ -154,18 +141,12 @@ const SubdDashboard = () => {
             }
             try {
                 const reportsUrl = subId ? `/reports/?subdivision_id=${subId}` : '/reports/';
-                const rescuesUrl = subId ? `/rescue-requests/?subdivision_id=${subId}` : '/rescue-requests/';
                 const petsUrl = subId ? `/pets/subdivision/${subId}` : '/pets/';
-                const claimsUrl = subId ? `/claims/?subdivision_id=${subId}` : '/claims/';
-                const holdingUrl = subId ? `/holding/?subdivision_id=${subId}` : '/holding/';
                 const announcementsUrl = subId ? `/announcements/subdivision/${subId}` : '/announcements/';
 
-                const [reportsRes, rescuesRes, petsRes, claimsRes, holdingRes, announcementsRes] = await Promise.allSettled([
+                const [reportsRes, petsRes, announcementsRes] = await Promise.allSettled([
                     api.get(reportsUrl),
-                    api.get(rescuesUrl),
                     api.get(petsUrl),
-                    api.get(claimsUrl),
-                    api.get(holdingUrl),
                     api.get(announcementsUrl),
                 ]);
                 if (reportsRes.status === 'fulfilled') {
@@ -174,27 +155,12 @@ const SubdDashboard = () => {
                     setReports(repData);
                     setCachedData('subd_dashboard_reports', repData);
                 }
-                if (rescuesRes.status === 'fulfilled') {
-                    const rescData = rescuesRes.value.data || [];
-                    setRescues(rescData);
-                    setCachedData('subd_dashboard_rescues', rescData);
-                }
                 if (petsRes.status === 'fulfilled') {
                     const pData = petsRes.value.data || [];
                     setPetsList(pData);
                     setPetCount(pData.length);
                     setCachedData('subd_dashboard_pets', pData);
                     setCachedData('subd_dashboard_pets_count', pData.length);
-                }
-                if (claimsRes.status === 'fulfilled') {
-                    const claimsData = claimsRes.value.data || [];
-                    setClaims(claimsData);
-                    setCachedData('subd_dashboard_claims', claimsData);
-                }
-                if (holdingRes.status === 'fulfilled') {
-                    const hData = holdingRes.value.data || [];
-                    setHoldingAnimals(hData);
-                    setCachedData('subd_dashboard_holding', hData);
                 }
                 if (announcementsRes.status === 'fulfilled') {
                     const annData = announcementsRes.value.data || [];
@@ -225,25 +191,13 @@ const SubdDashboard = () => {
     );
     const pendingReviewCount = pendingReviewReports.length;
 
-    const underBrgyCount = reports.filter(r => [4, 5, 13].includes(r.status_id)).length;
+    const currentReferralCount = reports.filter(r => r.status_id === 4).length;
     const displayPetCount = petCount;
 
     // Subtitle for Registered Pets: calculate pets registered in the current month (or last 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const petsRegisteredThisMonth = petsList.filter(p => p.created_at && new Date(p.created_at) >= thirtyDaysAgo).length;
-
-    const pendingClaimsList = claims.filter(c => {
-        const s = (c.status || '').toLowerCase();
-        return s.includes('pending') || s.includes('review') || s.includes('evidence') || s.includes('potential') || s.includes('match');
-    });
-    const pendingClaimsCount = pendingClaimsList.length;
-
-    const activeHoldingAnimals = holdingAnimals.filter(a => !a.discharge_date
-        && [1, 2, 6, 8].includes(a.facility_status)
-        && (a.facility_type === 'barangay_facility' || /barangay/i.test(a.facility_name || ''))
-        && ![3, 9, 10, 11, 12, 14, 17, 18].includes(a.report_status_id));
-    const holdingCount = activeHoldingAnimals.length;
 
     // Helper functions for consistent priority categorization
     const isReportHighPriority = (r: Report) => {
@@ -390,10 +344,9 @@ const SubdDashboard = () => {
         return Math.max(0, (now - past) / (1000 * 60 * 60));
     };
 
-    // Priority Response Queue Items: High priority incidents, Unassigned rescues, and Reports awaiting verification
+    // Current subdivision report queue: priority, verification and leader assignment.
     const priorityQueueItems = useMemo(() => {
         const items: any[] = [];
-        const seenReportIds = new Set<number>();
 
         // 1. Process active reports
         reports.forEach((r) => {
@@ -404,13 +357,7 @@ const SubdDashboard = () => {
             const isAwaitingVerification = r.status_id === 1 || r.status_id === 2 || !r.is_verified || r.verification_status === 'unverified';
             const isMyCase = r.assigned_leader_id === currentUserId;
 
-            const linkedRescue = rescues.find(res => (res.report_id === r.report_id || res.rescue_id === r.rescue_id));
-            const isUnassignedRescue = Boolean(
-                linkedRescue && (!linkedRescue.assigned_personnel || linkedRescue.assigned_personnel.length === 0)
-            );
-
-            if (isHigh || isUnassigned || isAwaitingVerification || isUnassignedRescue || isMyCase) {
-                seenReportIds.add(r.report_id);
+            if (isHigh || isUnassigned || isAwaitingVerification || isMyCase) {
 
                 const waitHours = getWaitHours(r.created_at);
                 const waitTimeText = formatWaitTime(r.created_at);
@@ -439,7 +386,7 @@ const SubdDashboard = () => {
                         border: 'border-role-border',
                         icon: '👤'
                     };
-                } else if (isUnassignedRescue || isUnassigned) {
+                } else if (isUnassigned) {
                     catBadge = {
                         label: 'Unassigned Queue',
                         bg: 'bg-indigo-50',
@@ -459,7 +406,6 @@ const SubdDashboard = () => {
                     id: `rep-${r.report_id}`,
                     reportId: r.report_id,
                     rawReport: r,
-                    rescueId: linkedRescue?.rescue_id,
                     title: r.title || `${r.animal_type || 'Stray Animal'} Incident`,
                     animal_type: r.animal_type || 'Animal',
                     breed: r.breed,
@@ -472,7 +418,7 @@ const SubdDashboard = () => {
                     waitHours,
                     categoryBadge: catBadge,
                     isHighPriority: isHigh,
-                    isUnassignedRescue: isUnassignedRescue || isUnassigned,
+                    isUnassigned: isUnassigned,
                     isAwaitingVerification,
                     isMyCase,
                     thumbnailUrl: firstImg
@@ -480,57 +426,12 @@ const SubdDashboard = () => {
             }
         });
 
-        // 2. Unassigned rescue requests from rescues table
-        rescues.forEach((res) => {
-            if ([6, 11, 12, 3, 9, 10, 14, 17, 18].includes(res.status_id)) return;
-            if (res.report_id && seenReportIds.has(res.report_id)) return;
-
-            const isUnassignedRescue = !res.assigned_personnel || res.assigned_personnel.length === 0;
-            if (!isUnassignedRescue) return;
-
-            const waitHours = getWaitHours(res.created_at);
-            const waitTimeText = formatWaitTime(res.created_at);
-
-            const resPriorityRaw = res.report?.priority_level || res.priority_level || res.priority || 'Medium';
-            const resPriorityLower = (resPriorityRaw || '').toLowerCase();
-            const isResHigh = resPriorityLower.includes('high') || resPriorityLower.includes('critical') || resPriorityLower.includes('emergency') ||
-                (res.report ? isReportHighPriority(res.report) : false);
-
-            items.push({
-                id: `rescue-${res.rescue_id}`,
-                reportId: res.report_id || res.rescue_id,
-                rawReport: res.report || res,
-                rescueId: res.rescue_id,
-                title: res.title || `Rescue Request #${res.rescue_id}`,
-                animal_type: res.report?.animal_type || 'Animal',
-                breed: res.report?.breed,
-                landmark: res.report?.landmark || 'Subdivision Vicinity',
-                priority: isResHigh ? 'High Priority' : resPriorityRaw,
-                statusLabel: 'Unassigned Rescue',
-                statusId: res.status_id,
-                createdAt: res.created_at || new Date().toISOString(),
-                waitTimeText,
-                waitHours,
-                categoryBadge: {
-                    label: 'Unassigned Rescue',
-                    bg: 'bg-indigo-50',
-                    text: 'text-indigo-700',
-                    border: 'border-indigo-200',
-                    icon: '📋'
-                },
-                isHighPriority: isResHigh,
-                isUnassignedRescue: true,
-                isAwaitingVerification: false,
-                isMyCase: false
-            });
-        });
-
         return items.sort((a, b) => {
-            const aScore = (a.isHighPriority ? 100 : 0) + (a.isMyCase ? 60 : 0) + (a.isUnassignedRescue ? 50 : 0) + (a.isAwaitingVerification ? 30 : 0) + Math.min(a.waitHours * 2, 50);
-            const bScore = (b.isHighPriority ? 100 : 0) + (b.isMyCase ? 60 : 0) + (b.isUnassignedRescue ? 50 : 0) + (b.isAwaitingVerification ? 30 : 0) + Math.min(b.waitHours * 2, 50);
+            const aScore = (a.isHighPriority ? 100 : 0) + (a.isMyCase ? 60 : 0) + (a.isUnassigned ? 50 : 0) + (a.isAwaitingVerification ? 30 : 0) + Math.min(a.waitHours * 2, 50);
+            const bScore = (b.isHighPriority ? 100 : 0) + (b.isMyCase ? 60 : 0) + (b.isUnassigned ? 50 : 0) + (b.isAwaitingVerification ? 30 : 0) + Math.min(b.waitHours * 2, 50);
             return bScore - aScore;
         });
-    }, [reports, rescues, currentUserId]);
+    }, [reports, currentUserId]);
 
     const isQueueItemHigh = (item: any) => {
         if (item.isHighPriority) return true;
@@ -539,12 +440,12 @@ const SubdDashboard = () => {
     };
 
     const queueHighPriorityCount = priorityQueueItems.filter(isQueueItemHigh).length;
-    const queueUnassignedCount = priorityQueueItems.filter(i => i.isUnassignedRescue).length;
+    const queueUnassignedCount = priorityQueueItems.filter(i => i.isUnassigned).length;
     const queueMyCasesCount = priorityQueueItems.filter(i => i.isMyCase).length;
 
     const displayedPriorityQueueItems = priorityQueueItems.filter(item => {
         if (priorityQueueFilter === 'high') return isQueueItemHigh(item);
-        if (priorityQueueFilter === 'unassigned') return item.isUnassignedRescue;
+        if (priorityQueueFilter === 'unassigned') return item.isUnassigned;
         if (priorityQueueFilter === 'my_cases') return item.isMyCase;
         return true;
     });
@@ -571,45 +472,6 @@ const SubdDashboard = () => {
         return 'bg-slate-100 text-slate-700 border-slate-200';
     };
 
-    const getClaimStatusBadge = (status: string) => {
-        const s = (status || '').toLowerCase();
-        if (s.includes('handover') || s.includes('received') || s.includes('complete')) {
-            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">Handover Done</span>;
-        }
-        if (s.includes('approved')) {
-            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-green-50 text-green-700 border border-green-200">Approved</span>;
-        }
-        if (s.includes('rejected')) {
-            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-red-50 text-red-600 border border-red-200">Rejected</span>;
-        }
-        if (s.includes('evidence')) {
-            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-200">Evidence Req</span>;
-        }
-        return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">Under Review</span>;
-    };
-
-    const getMobileClaimStatusBadge = (status: string) => {
-        const s = (status || '').toLowerCase();
-        if (s.includes('approved') || s.includes('claimed') || s.includes('resolved') || s.includes('complete') || s.includes('handover') || s.includes('verified')) {
-            return (
-                <span className="px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black tracking-wider uppercase bg-[#E8F8EE] text-[#059669] border border-emerald-200/80 shadow-2xs">
-                    APPROVED
-                </span>
-            );
-        }
-        if (s.includes('reject') || s.includes('declin') || s.includes('denied')) {
-            return (
-                <span className="px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black tracking-wider uppercase bg-[#FEECEC] text-[#E11D48] border border-rose-200/80 shadow-2xs">
-                    REJECTED
-                </span>
-            );
-        }
-        return (
-            <span className="px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black tracking-wider uppercase bg-[#FFF4E5] text-[#D97706] border border-amber-200/80 shadow-2xs">
-                PENDING
-            </span>
-        );
-    };
 
     const getMarkerColor = (r: Report) => {
         const p = (r.priority_level || '').toLowerCase();
@@ -731,66 +593,6 @@ const SubdDashboard = () => {
         };
     };
 
-    const formatRelativeTime = (dateStr?: string) => {
-        if (!dateStr) return '3 days ago';
-        const now = new Date();
-        const past = new Date(dateStr);
-        const diffMs = now.getTime() - past.getTime();
-        if (isNaN(diffMs) || diffMs < 0) return 'Just now';
-        const diffMins = Math.floor(diffMs / 60000);
-        if (diffMins < 60) return `${Math.max(diffMins, 1)}m ago`;
-        const diffHours = Math.floor(diffMins / 60);
-        if (diffHours < 24) return `${diffHours}h ago`;
-        const diffDays = Math.floor(diffHours / 24);
-        if (diffDays === 1) return 'Yesterday';
-        if (diffDays < 7) return `${diffDays} days ago`;
-        const diffWeeks = Math.floor(diffDays / 7);
-        if (diffWeeks === 1) return '1 week ago';
-        if (diffWeeks < 4) return `${diffWeeks} weeks ago`;
-        return past.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    };
-
-    const mappedClaims = claims.map((c, idx) => ({
-        claim_id: c.claim_id || (idx + 101),
-        pet_name: c.pet?.pet_name || c.pet_name || 'Pet',
-        breed: c.pet?.breed || c.breed || 'Dog/Cat',
-        claimant_name: c.pet?.owner?.name || c.claimant?.name || c.claimant_name || 'Resident',
-        landmark: c.report?.landmark || c.sighting_location || c.landmark || '',
-        similarity_score: (() => {
-            if (c.match_score !== undefined && c.match_score !== null) return c.match_score;
-            if (c.similarity_score !== undefined && c.similarity_score !== null) return c.similarity_score;
-            const match = c.remarks?.match(/AI detected a (\d+)% potential match/i);
-            return match ? parseInt(match[1]) : null;
-        })(),
-        status: c.status || 'Under Review',
-        photo_url: c.pet?.photo_url || (c.report?.media && c.report.media[0]?.file_url) || '',
-        time_ago: formatRelativeTime(c.created_at || c.report?.created_at)
-    }));
-
-    // Only real claims (no sample rows when there are none)
-    const recentClaimsData = mappedClaims.slice(0, 5);
-
-    const summaryPendingClaims = claims.length > 0
-        ? claims.filter(c => {
-            const s = (c.status || '').toLowerCase();
-            return s.includes('pending') || s.includes('review') || s.includes('match') || s.includes('potential') || s.includes('evidence');
-        }).length
-        : 0;
-
-    const summaryApprovedClaims = claims.length > 0
-        ? claims.filter(c => {
-            const s = (c.status || '').toLowerCase();
-            return s.includes('approved') || s.includes('claimed') || s.includes('resolved') || s.includes('verified');
-        }).length
-        : 0;
-
-    const summaryRejectedClaims = claims.length > 0
-        ? claims.filter(c => {
-            const s = (c.status || '').toLowerCase();
-            return s.includes('reject') || s.includes('declin') || s.includes('denied');
-        }).length
-        : 0;
-
     const leaderName = currentUser?.name || currentUser?.full_name || 'Leader';
     const greetHour = new Date().getHours();
     const greeting = greetHour < 12 ? 'Good morning' : greetHour < 18 ? 'Good afternoon' : 'Good evening';
@@ -854,19 +656,17 @@ const SubdDashboard = () => {
                     </div>
 
                     {/* 2. Quick overview */}
-                    <section aria-label="Quick overview" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
+                    <section aria-label="Quick overview" className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
                         {[
                             { label: 'Pending Review', sub: 'Awaiting verification', value: pendingReviewCount, to: '/subd/reports', tone: 'text-role-hover', note: null as string | null },
-                            { label: 'Barangay Referrals', sub: 'Outside StraySafe', value: underBrgyCount, to: '/subd/reports?status=Referred%20to%20Barangay', tone: 'text-blue-600', note: null },
+                            { label: 'Barangay Referrals', sub: 'Outside StraySafe', value: currentReferralCount, to: '/subd/reports?status=Referred%20to%20Barangay', tone: 'text-blue-600', note: null },
                             { label: 'Registered Pets', sub: 'Subdivision pets', value: displayPetCount, to: '/subd/pet-records', tone: 'text-emerald-600', note: `↑ ${petsRegisteredThisMonth} this month` },
-                            { label: 'Pending Claims', sub: 'Owner confirmation', value: pendingClaimsCount, to: '/subd/pet-claims', tone: 'text-purple-600', note: null },
-                            { label: 'At Barangay', sub: 'Your animals held', value: holdingCount, to: '/subd/holding-facility', tone: 'text-teal-600', note: null },
                         ].map((c, i) => (
                             <button
                                 key={c.label}
                                 type="button"
                                 onClick={() => navigate(c.to)}
-                                className={`text-left bg-white rounded-2xl border border-gray-200/80 p-3 sm:p-4 flex flex-col gap-1 min-w-0 hover:border-role-border hover:shadow-sm active:scale-[0.99] transition-all cursor-pointer ${i === 4 ? 'col-span-2 sm:col-span-1' : ''}`}
+                                className={`text-left bg-white rounded-2xl border border-gray-200/80 p-3 sm:p-4 flex flex-col gap-1 min-w-0 hover:border-role-border hover:shadow-sm active:scale-[0.99] transition-all cursor-pointer ${i === 2 ? 'col-span-2 sm:col-span-1' : ''}`}
                             >
                                 <span className={`text-2xl sm:text-3xl font-black leading-none ${c.tone}`}>{loading ? '…' : c.value}</span>
                                 <span className="text-xs font-bold text-slate-800 leading-tight mt-1">{c.label}</span>
@@ -1136,7 +936,7 @@ const SubdDashboard = () => {
                         {/* RIGHT COLUMN: Quick Actions, Cases Tab Section, Active Hazard Notices, Recent Incident Queue (4 cols) */}
                         <div className="contents lg:flex lg:col-span-4 lg:flex-col lg:gap-5">
 
-                            {/* 1. Rescue Insights */}
+                            {/* 1. Case Insights */}
                             <div className="order-4 lg:order-2 bg-white rounded-2xl p-3 sm:p-5 border border-gray-200/80 flex flex-col gap-2 min-w-0">
                                 {/* Header */}
                                 <div className="flex items-center gap-3">
@@ -1148,10 +948,10 @@ const SubdDashboard = () => {
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <h3 className="text-sm font-black text-slate-900 leading-tight">
-                                                Rescue Insights
+                                                Case Insights
                                             </h3>
                                             <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
-                                                Live summary
+                                                Current summary
                                             </span>
                                         </div>
                                         <p className="text-[11px] font-medium text-slate-400 mt-0.5">
@@ -1190,28 +990,15 @@ const SubdDashboard = () => {
                                             <p className="text-xs font-bold text-emerald-700 leading-none">Triage progress</p>
                                             <p className="text-xs font-medium text-slate-700 leading-snug mt-1">
                                                 {pendingReviewCount > 0 ? (
-                                                    <span><strong className="text-slate-900 font-bold">{pendingReviewCount} report{pendingReviewCount > 1 ? 's' : ''}</strong> awaiting review • <strong className="text-[#059669] font-bold">{underBrgyCount} cases</strong> with Barangay HQ.</span>
+                                                    <span><strong className="text-slate-900 font-bold">{pendingReviewCount} report{pendingReviewCount > 1 ? 's' : ''}</strong> awaiting review • <strong className="text-[#059669] font-bold">{currentReferralCount} cases</strong> referred to the Barangay outside StraySafe.</span>
                                                 ) : (
-                                                    <span>All resident reports verified • <strong className="text-[#059669] font-bold">{underBrgyCount} cases</strong> with Barangay HQ.</span>
+                                                    <span>All resident reports verified • <strong className="text-[#059669] font-bold">{currentReferralCount} cases</strong> referred to the Barangay outside StraySafe.</span>
                                                 )}
                                             </p>
                                         </div>
                                     </div>
 
-                                    {/* 3. FACILITY & CLAIMS */}
-                                    <div className="flex items-start gap-3 py-2.5">
-                                        <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-xs font-bold text-blue-700 leading-none">Facility & claims</p>
-                                            <p className="text-xs font-medium text-slate-700 leading-snug mt-1">
-                                                <strong className="text-slate-900 font-bold">{holdingCount} animal{holdingCount !== 1 ? 's' : ''}</strong> held at the Barangay • <strong className="text-[#2563EB] font-bold">{pendingClaimsCount} claim{pendingClaimsCount !== 1 ? 's' : ''}</strong> pending.
-                                            </p>
-                                        </div>
-                                    </div>
+
                                 </div>
                             </div>
 
@@ -1288,7 +1075,7 @@ const SubdDashboard = () => {
                                                 >
                                                     <span
                                                         aria-hidden="true"
-                                                        className={`absolute left-0 top-0 bottom-0 w-1 ${item.isHighPriority ? 'bg-rose-500' : item.isMyCase ? 'bg-role' : item.isUnassignedRescue ? 'bg-indigo-500' : 'bg-amber-400'}`}
+                                                        className={`absolute left-0 top-0 bottom-0 w-1 ${item.isHighPriority ? 'bg-rose-500' : item.isMyCase ? 'bg-role' : item.isUnassigned ? 'bg-indigo-500' : 'bg-amber-400'}`}
                                                     />
                                                     <div className="min-w-0 flex-1">
                                                         <p className="text-sm font-black text-slate-900 leading-snug line-clamp-2 break-words">
@@ -1339,8 +1126,8 @@ const SubdDashboard = () => {
 
 
 
-                    {/* 4. Secondary Row: Active Hazard Notices (Left) & Recent Pet Claims (Right) */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-5 items-start">
+                    {/* 4. Secondary Row: Active Hazard Notices */}
+                    <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:gap-5 items-start">
 
                         {/* A. Active Hazard Notices */}
                         <div className="bg-white rounded-2xl p-3 sm:p-5 border border-gray-200/80 flex flex-col gap-2 min-w-0">
@@ -1433,170 +1220,6 @@ const SubdDashboard = () => {
                             </div>
                         </div>
 
-                        {/* B. Recent Pet Claims Queue */}
-                        <div className="bg-white rounded-2xl p-3 sm:p-5 border border-gray-200/80 flex flex-col gap-3 min-w-0">
-                            {/* MOBILE VIEW (Matching Provided Design Mockup) */}
-                            <div className="md:hidden flex flex-col gap-3">
-                                {/* Header with Paw Icon and View All */}
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <svg className="w-5 h-5 text-role fill-current shrink-0" viewBox="0 0 24 24">
-                                            <ellipse cx="6.5" cy="7" rx="2" ry="3" />
-                                            <ellipse cx="17.5" cy="7" rx="2" ry="3" />
-                                            <ellipse cx="10" cy="4" rx="2" ry="3" />
-                                            <ellipse cx="14" cy="4" rx="2" ry="3" />
-                                            <path d="M12 9c-3 0-5.5 2.5-5.5 6 0 2.5 2 4.5 5.5 4.5s5.5-2 5.5-4.5c0-3.5-2.5-6-5.5-6z" />
-                                        </svg>
-                                        <h3 className="text-slate-900 font-black text-sm">
-                                            Recent Pet Claims
-                                        </h3>
-                                    </div>
-                                    <button
-                                        onClick={() => navigate('/subd/pet-claims')}
-                                        className="h-8 px-2 -mr-2 text-xs font-bold text-role-hover hover:underline cursor-pointer"
-                                    >
-                                        View All
-                                    </button>
-                                </div>
-
-                                {/* 3 Status Summary Stat Cards */}
-                                <div className="grid grid-cols-3 gap-2">
-                                    {[
-                                        { label: 'Pending', value: summaryPendingClaims, tone: 'text-role-hover' },
-                                        { label: 'Approved', value: summaryApprovedClaims, tone: 'text-emerald-600' },
-                                        { label: 'Rejected', value: summaryRejectedClaims, tone: 'text-rose-600' },
-                                    ].map((c) => (
-                                        <div key={c.label} className="bg-slate-50 rounded-xl px-2 py-2 text-center">
-                                            <span className={`block text-lg font-black leading-tight ${c.tone}`}>{c.value}</span>
-                                            <span className="block text-[11px] font-bold text-slate-600">{c.label}</span>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                {/* Mobile Pet Claim rows */}
-                                {recentClaimsData.length === 0 ? (
-                                    <p className="py-4 text-center text-xs text-slate-500">No pet claims at this time.</p>
-                                ) : (
-                                    <ul className="flex flex-col divide-y divide-slate-100">
-                                        {recentClaimsData.slice(0, 3).map((item, idx) => (
-                                            <li key={item.claim_id || idx} className="py-2.5 flex items-center gap-3 min-w-0">
-                                                <img
-                                                    src={item.photo_url || DEFAULT_PET_AVATAR}
-                                                    alt=""
-                                                    onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
-                                                    className="w-12 h-12 rounded-xl object-cover border border-slate-100 shrink-0 bg-slate-100"
-                                                />
-                                                <div className="min-w-0 flex-1">
-                                                    <p className="text-sm font-black text-slate-900 leading-snug truncate">{petName(item) || 'Unnamed pet'}</p>
-                                                    <p className="text-xs text-slate-500 truncate">#{String(item.claim_id).padStart(4, '0')} · {item.claimant_name}</p>
-                                                    <div className="flex items-center gap-2 mt-0.5">
-                                                        {getMobileClaimStatusBadge(item.status)}
-                                                        <span className="text-[11px] text-slate-400 truncate">{item.time_ago}</span>
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => navigate(`/subd/pet-claims?claim_id=${item.claim_id}`, { state: { claimId: item.claim_id } })}
-                                                    className="h-9 px-3 shrink-0 rounded-xl bg-role-soft hover:bg-role-muted text-role-hover font-bold text-xs border border-role-border transition-colors cursor-pointer"
-                                                >
-                                                    View
-                                                </button>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </div>
-
-                            {/* DESKTOP VIEW (Preserved Desktop Table Layout) */}
-                            <div className="hidden md:flex flex-col gap-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        <h3 className="text-slate-900 font-black text-sm">
-                                            Recent Pet Claims
-                                        </h3>
-                                    </div>
-                                    <button
-                                        onClick={() => navigate('/subd/pet-claims')}
-                                        className="text-[11px] font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
-                                    >
-                                        View All
-                                    </button>
-                                </div>
-
-                                {/* Table Container with safe scrollbar for desktop */}
-                                <div className="overflow-x-auto -mx-1 px-1 custom-scrollbar">
-                                    <div className="min-w-[360px] sm:min-w-0">
-                                        {/* Table Header */}
-                                        <div className="grid grid-cols-12 gap-2 text-[10px] font-black text-slate-400 uppercase tracking-wider pb-1.5 border-b border-slate-100">
-                                            <div className="col-span-4">PET & OWNER</div>
-                                            <div className="col-span-2 text-center">AI MATCH</div>
-                                            <div className="col-span-4">CLAIM STATUS</div>
-                                            <div className="col-span-2 text-right">ACTION</div>
-                                        </div>
-
-                                        {/* Table Rows */}
-                                        <div className="flex flex-col gap-1.5">
-                                            {recentClaimsData && recentClaimsData.length > 0 ? (
-                                                recentClaimsData.map((item, idx) => {
-                                                    const matchVal = item.similarity_score;
-                                                    return (
-                                                        <div
-                                                            key={item.claim_id || idx}
-                                                            className="grid grid-cols-12 gap-2 items-center text-xs py-2 px-2 border-b border-slate-50 last:border-0 hover:bg-role-soft/50 hover:shadow-2xs rounded-xl transition-all duration-200 group"
-                                                        >
-                                                            {/* Pet & Owner Info */}
-                                                            <div className="col-span-4 min-w-0">
-                                                                <p className="font-black text-slate-900 text-xs truncate group-hover:text-role-hover transition-colors">
-                                                                    {petName(item)}
-                                                                </p>
-                                                                <p className="text-[10px] text-slate-400 font-medium truncate">
-                                                                    {item.claimant_name}{item.landmark ? ` • ${item.landmark}` : ''}
-                                                                </p>
-                                                            </div>
-
-                                                            {/* AI Match Badge */}
-                                                            <div className="col-span-2 flex justify-center">
-                                                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-black tracking-tight ${matchVal == null ? 'bg-slate-100 text-slate-500 border border-slate-200' : matchVal >= 90
-                                                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                                                        : matchVal >= 80
-                                                                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                                                            : 'bg-slate-100 text-slate-700 border border-slate-200'
-                                                                    }`}>
-                                                                    {matchVal == null ? 'N/A' : `${matchVal}%`}
-                                                                </span>
-                                                            </div>
-
-                                                            {/* Claim Status Badge */}
-                                                            <div className="col-span-4 flex items-center">
-                                                                {getClaimStatusBadge(item.status)}
-                                                            </div>
-
-                                                            {/* Action Button */}
-                                                            <div className="col-span-2 text-right">
-                                                                <button
-                                                                    onClick={() => navigate('/subd/pet-claims')}
-                                                                    className="px-3 py-1 bg-role hover:bg-role-hover active:scale-95 text-white font-black text-[10px] rounded-lg transition-all shadow-xs hover:shadow-sm cursor-pointer"
-                                                                >
-                                                                    Review
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })
-                                            ) : (
-                                                <div className="p-6 text-center text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-                                                    <p className="text-xs font-bold text-slate-600">No pet claims pending</p>
-                                                    <p className="text-[11px] text-slate-400 mt-1">No community claims at this time.</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
 
                     </div>
 

@@ -235,6 +235,12 @@ const SubdSettings: React.FC = () => {
             showToast('error', 'Landmark name is required.');
             return;
         }
+        const originalLandmark = landmarks.find(item => item.landmark_id === editingLandmarkId);
+        if ((landmarkForm.is_holding_facility && !originalLandmark?.is_holding_facility) ||
+            (landmarkForm.category === 'facility' && originalLandmark?.category !== 'facility' && !originalLandmark?.is_holding_facility)) {
+            showToast('error', 'New holding places are handled outside StraySafe. Register a reference landmark instead.');
+            return;
+        }
         setIsSavingLandmark(true);
         try {
             const payload = {
@@ -246,7 +252,7 @@ const SubdSettings: React.FC = () => {
                 latitude: parseFloat(landmarkForm.latitude.toString()),
                 longitude: parseFloat(landmarkForm.longitude.toString()),
                 is_holding_facility: landmarkForm.is_holding_facility,
-                facility_type: landmarkForm.is_holding_facility ? (landmarkForm.facility_type || 'Temporary Holding Pen') : null,
+                facility_type: landmarkForm.is_holding_facility ? (landmarkForm.facility_type || null) : null,
                 capacity: landmarkForm.is_holding_facility ? (Number(landmarkForm.capacity) || 5) : null,
                 contact_person: landmarkForm.contact_person.trim() || null,
                 contact_number: landmarkForm.contact_number.trim() || null,
@@ -308,7 +314,7 @@ const SubdSettings: React.FC = () => {
             latitude: item.latitude,
             longitude: item.longitude,
             is_holding_facility: item.is_holding_facility,
-            facility_type: item.facility_type || 'Temporary Holding Pen',
+            facility_type: item.facility_type || '',
             capacity: item.capacity || 6,
             contact_person: item.contact_person || '',
             contact_number: item.contact_number || ''
@@ -508,7 +514,7 @@ const SubdSettings: React.FC = () => {
         },
         {
             id: 'landmarks' as SettingsTab,
-            label: 'Landmarks & Facility',
+            label: 'Reference Landmarks',
             icon: (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -519,7 +525,7 @@ const SubdSettings: React.FC = () => {
         },
         {
             id: 'dispatch' as SettingsTab,
-            label: 'Case Dispatch & Takeover',
+            label: 'Case Assignment & Takeover',
             icon: (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -585,7 +591,7 @@ const SubdSettings: React.FC = () => {
                         <div className="flex flex-col">
                             <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Leader Settings</h1>
                             <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">
-                                Configure Subdivision Operations, Dispatch Rules, and Security
+                                Configure subdivision case handling and security
                             </p>
                         </div>
                     }
@@ -712,7 +718,7 @@ const SubdSettings: React.FC = () => {
                                 </nav>
 
                                 <p className="hidden lg:block text-xs text-gray-500 leading-relaxed px-1">
-                                    <span className="font-bold text-gray-700">Leader guidance:</span> Subdivision Leaders oversee local resident strays, issue violation warnings, and endorse critical cases to the Barangay Operations team.
+                                    <span className="font-bold text-gray-700">Leader guidance:</span> Subdivision Leaders oversee local resident strays, issue violation warnings, and record external referrals when outside assistance is needed.
                                 </p>
                             </div>
 
@@ -783,7 +789,7 @@ const SubdSettings: React.FC = () => {
                                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                                 <div>
                                                     <label className="block text-xs font-bold text-gray-900 uppercase tracking-wider">Subdivision / Home Pinpoint</label>
-                                                    <p className="text-[11px] text-gray-500 font-medium">Click on the map to place your dispatch pinpoint or use GPS.</p>
+                                                    <p className="text-[11px] text-gray-500 font-medium">Click on the map to place your subdivision reference pin or use GPS.</p>
                                                 </div>
                                                 <Button
                                                     type="button"
@@ -844,7 +850,7 @@ const SubdSettings: React.FC = () => {
                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                             <div>
                                                 <h3 className="text-base font-black text-gray-900">Subdivision Landmarks & Holding Places</h3>
-                                                <p className="text-xs text-gray-500 font-medium mt-0.5">Register reference landmarks and maintain earlier holding-place records. New animal admissions are managed by the Barangay.</p>
+                                                <p className="text-xs text-gray-500 font-medium mt-0.5">Register reference landmarks and maintain earlier holding-place records. Animal holding is handled outside StraySafe.</p>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <span className="px-3 py-1 bg-role-soft border border-role-border text-role-strong rounded-xl text-xs font-bold">
@@ -942,7 +948,7 @@ const SubdSettings: React.FC = () => {
                                         </div>
 
                                         {/* Landmark Form */}
-                                        <form onSubmit={handleSaveLandmark} className="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-4">
+                                        <form data-landmark-form onSubmit={handleSaveLandmark} className="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-4">
                                             <div className="flex items-center justify-between">
                                                 <h4 className="text-xs font-black text-gray-900 uppercase tracking-wider">
                                                     {editingLandmarkId ? '✏️ Edit Landmark / Facility' : '➕ Register New Landmark / Facility'}
@@ -978,7 +984,8 @@ const SubdSettings: React.FC = () => {
                                                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Landmark Name *</label>
                                                     <input
                                                         type="text"
-                                                        value={landmarkForm.name}
+                                                        aria-label="Landmark name"
+                                                value={landmarkForm.name}
                                                         onChange={(e) => setLandmarkForm(prev => ({ ...prev, name: e.target.value }))}
                                                         placeholder="e.g. Phase 1 Guardhouse, Main Court"
                                                         required
@@ -989,13 +996,14 @@ const SubdSettings: React.FC = () => {
                                                 <div>
                                                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Marker Icon / Category</label>
                                                     <select
-                                                        value={landmarkForm.is_holding_facility ? 'facility' : landmarkForm.category}
+                                                        aria-label="Landmark category"
+                                                value={landmarkForm.is_holding_facility ? 'facility' : landmarkForm.category}
                                                         disabled={landmarkForm.is_holding_facility}
                                                         onChange={(e) => setLandmarkForm(prev => ({ ...prev, category: e.target.value }))}
                                                         className="w-full px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-role outline-none disabled:bg-gray-100 disabled:text-gray-500"
                                                     >
-                                                        {LANDMARK_CATEGORIES.map((cat) => (
-                                                            <option key={cat.id} value={cat.id}>
+                                                        {LANDMARK_CATEGORIES.filter(cat => cat.id !== 'facility' || (editingLandmarkId != null && (landmarkForm.category === 'facility' || landmarkForm.is_holding_facility))).map((cat) => (
+                                                            <option key={cat.id} value={cat.id} disabled={cat.id === 'facility'}>
                                                                 {cat.emoji} {cat.label}
                                                             </option>
                                                         ))}
@@ -1046,15 +1054,13 @@ const SubdSettings: React.FC = () => {
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4 pt-3 border-t border-emerald-200/60">
                                                         <div>
                                                             <label className="block text-[11px] font-bold text-emerald-900 uppercase tracking-wider mb-1">Care Spot Type</label>
-                                                            <select
+                                                            <select disabled aria-label="Historical facility type"
                                                                 value={landmarkForm.facility_type}
                                                                 onChange={(e) => setLandmarkForm(prev => ({ ...prev, facility_type: e.target.value }))}
                                                                 className="w-full px-3 py-1.5 bg-white border border-emerald-300 rounded-xl text-xs font-semibold text-gray-800 outline-none"
                                                             >
-                                                                <option value="Temporary Holding Pen">{careSpotLabel('Temporary Holding Pen')}</option>
-                                                                <option value="Community Kennel">{careSpotLabel('Community Kennel')}</option>
-                                                                <option value="Quarantine Cage">{careSpotLabel('Quarantine Cage')}</option>
-                                                            </select>
+                                                        <option value={landmarkForm.facility_type}>{landmarkForm.facility_type || 'Not recorded'} (historical)</option>
+                                                    </select>
                                                         </div>
                                                         <div>
                                                             <label className="block text-[11px] font-bold text-emerald-900 uppercase tracking-wider mb-1">Space For (Animals)</label>
@@ -1226,7 +1232,7 @@ const SubdSettings: React.FC = () => {
                                 {activeTab === 'dispatch' && (
                                     <div className="space-y-6">
                                         <div>
-                                            <h3 className="text-base font-black text-gray-900">Case Dispatch & Takeover Policies</h3>
+                                            <h3 className="text-base font-black text-gray-900">Case Assignment & Takeover Policies</h3>
                                             <p className="text-xs text-gray-500 font-medium mt-0.5">Control how incident cases are assigned, claimed, and made available for backup takeover.</p>
                                         </div>
 
@@ -1275,8 +1281,8 @@ const SubdSettings: React.FC = () => {
                                             {/* Require Confirm on Escalate */}
                                             <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between">
                                                 <div>
-                                                    <p className="text-xs font-bold text-gray-900 uppercase tracking-wider">Barangay Escalation Verification</p>
-                                                    <p className="text-xs text-gray-500 font-medium mt-0.5">Prompt confirmation dialog before submitting official barangay endorsement letters.</p>
+                                                    <p className="text-xs font-bold text-gray-900 uppercase tracking-wider">External Referral Confirmation</p>
+                                                    <p className="text-xs text-gray-500 font-medium mt-0.5">Confirm before recording an external Barangay referral and its letter.</p>
                                                 </div>
                                                 <input
                                                     type="checkbox"
@@ -1294,7 +1300,7 @@ const SubdSettings: React.FC = () => {
                                                 onClick={handleSavePreferences}
                                                 className="px-8 !bg-[#F97316] hover:!bg-[#EA580C] !border-[#F97316]"
                                             >
-                                                Save Dispatch Policies
+                                                Save Case Policies
                                             </Button>
                                         </div>
                                     </div>
@@ -1331,7 +1337,7 @@ const SubdSettings: React.FC = () => {
                                                     <li><strong>Notice:</strong> Friendly advisory to leash or register pet.</li>
                                                     <li><strong>1st Warning:</strong> Formal community notice with evidence logs.</li>
                                                     <li><strong>2nd Warning:</strong> Final local warning with scheduled inspection.</li>
-                                                    <li><strong>Final Escalation:</strong> Case forwarded to Barangay for official municipal fine citation.</li>
+                                                    <li><strong>Final Escalation:</strong> Case referred to the Barangay outside StraySafe; record only the updates it reports.</li>
                                                 </ul>
                                             </div>
                                         </div>
@@ -1354,7 +1360,7 @@ const SubdSettings: React.FC = () => {
                                     <div className="space-y-6">
                                         <div>
                                             <h3 className="text-base font-black text-gray-900">Notification Channels & Real-time Alerts</h3>
-                                            <p className="text-xs text-gray-500 font-medium mt-0.5">Enable audio chimes and dispatch alerts for high-risk animal reports.</p>
+                                            <p className="text-xs text-gray-500 font-medium mt-0.5">Enable audio chimes and case alerts for high-risk animal reports.</p>
                                         </div>
 
                                         <div className="space-y-4">
@@ -1386,7 +1392,7 @@ const SubdSettings: React.FC = () => {
 
                                             <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between">
                                                 <div>
-                                                    <p className="text-xs font-bold text-gray-900 uppercase tracking-wider">Email Dispatch Digest</p>
+                                                    <p className="text-xs font-bold text-gray-900 uppercase tracking-wider">Case Update Emails</p>
                                                     <p className="text-xs text-gray-500 font-medium mt-0.5">Receive daily summary reports and urgent case links via email.</p>
                                                 </div>
                                                 <input

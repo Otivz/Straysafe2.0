@@ -1,7 +1,8 @@
 // Run with Vite on port 5173: node frontend/tests/adminArchive.browser.mjs
-// Subdivision-only Phase 3c: the Administrator's Holding and Adoptions pages are a read-only archive (banner, no action
+// Holding Archive has been removed; its old URL redirects to incidents. Adoption Archive stays read only (banner, no action
 // buttons), and the Admin report view shows the Barangay Referral instead of "Admit to holding", with no dispatch, pick-up
-// or impound override. Isolated Chrome profile and a mocked API; no live data.
+// or impound override. Phase 3 also checks supported status-only writes and historical status reads.
+// Isolated Chrome profile and a mocked API; no live data.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -60,10 +61,22 @@ try {
 
     const browserErrors = [];
     const writes = [];
+    const staffReads = [];
+    const holdingReads = [];
     const json = (body, status = 200) => ({ status, body });
-    const answer = (url, method) => {
+    const answer = (url, method, postData) => {
         const path = url.pathname.replace(/^\/api/, '');
-        if (method !== 'GET' && method !== 'OPTIONS') writes.push(`${method} ${path}`);
+        if (path === '/users/') staffReads.push(path);
+        if (path.startsWith('/holding/')) holdingReads.push(path);
+        if (method !== 'GET' && method !== 'OPTIONS') {
+            const body = JSON.parse(postData || '{}');
+            writes.push({ method, path, body });
+            if (method === 'PUT' && path === '/reports/5/status') {
+                REPORT.status_id = body.status_id; REPORT.current_status_id = body.status_id;
+                return json(REPORT);
+            }
+            throw new Error(`Unexpected mocked write: ${method} ${path}`);
+        }
         if (path === '/auth/verify-session') return json({ status: 'valid', role_id: 4, is_verified: true });
         if (path === '/landmarks/jurisdictions') return json({ barangays: [{ barangay_id: 1, barangay_name: 'San Vicente' }], subdivisions: [{ subdivision_id: 1, subdivision_name: 'Selera Homes', barangay_id: 1 }] });
         if (path === '/holding/stay-limit') return json({ days: 7, default_days: 7, max_days: 90, is_default: true, can_edit: false });
@@ -81,7 +94,7 @@ try {
     const intercept = async ({ requestId, request }) => {
         const url = new URL(request.url);
         const external = !url.pathname.startsWith('/api/');
-        const { status, body } = external ? json({}) : answer(url, request.method);
+        const { status, body } = external ? json({}) : answer(url, request.method, request.postData);
         await command('Fetch.fulfillRequest', { requestId, responseCode: status, responseHeaders: [{ name: 'Content-Type', value: 'application/json' }],
             body: Buffer.from(JSON.stringify(body)).toString('base64') });
     };
@@ -112,29 +125,20 @@ try {
     const visibleButtons = () => evaluate(`[...document.querySelectorAll('button')].filter(b => b.offsetParent !== null && b.getClientRects().length).map(b => b.textContent.replace(/\\s+/g, ' ').trim())`);
     const token = 'test.' + Buffer.from(JSON.stringify({ user_id: 9, exp: 4102444800 })).toString('base64') + '.test';
     await command('Page.addScriptToEvaluateOnNewDocument', { source:
-        `try { localStorage.setItem('admin_user', JSON.stringify({ user_id: 9, name: 'Admin Reyes', role_id: 4, access_token: '${token}' })); } catch (e) {}` });
+        `window.alert = () => {}; try { localStorage.setItem('admin_user', JSON.stringify({ user_id: 9, name: 'Admin Reyes', role_id: 4, access_token: '${token}' })); } catch (e) {}` });
 
     for (const width of [1280, 390]) {
         await command('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width < 640 });
 
-        // 1. Holding archive
+        // Holding Archive is removed; old bookmarks open incident reports without loading a holding list.
+        const holdingBefore = holdingReads.length;
         await command('Page.navigate', { url: base + '/admin/holding-facility' });
-        await waitFor(`!!document.querySelector('[data-archive-banner]') && document.body.innerText.includes('Brownie')`, 'holding archive');
-        let buttons = await visibleButtons();
-        for (const gone of ['Adopt Out', 'Adopt', 'Impound', 'Manage Facilities'])
-            assert.equal(buttons.some(b => b === gone || b.endsWith(' ' + gone)), false, `${width}px holding: "${gone}" hidden (${buttons.join(' | ')})`);
-        assert.equal(/past the \d+-day stay limit/i.test(await evaluate('document.body.innerText')), false, `${width}px holding: no stay-limit action panel`);
-        await evaluate(`[...document.querySelectorAll('button')].find(b => /Manage|View/i.test(b.textContent) && b.offsetParent !== null).click()`);
-        await waitFor(`document.body.innerText.includes('K1') || document.body.innerText.includes('Timeline')`, 'holding detail');
-        await delay(400);
-        buttons = await visibleButtons();
-        for (const gone of ['Update condition', 'Withdraw', 'Promote', 'Impound'])
-            assert.equal(buttons.some(b => b.includes(gone)), false, `${width}px holding detail: "${gone}" hidden`);
-        await evaluate(`([...document.querySelectorAll('[role=tab], button')].find(b => b.textContent.trim().toLowerCase() === 'timeline') || {}).click?.()`);
-        await delay(300);
-        assert.equal(await evaluate(`document.body.innerText.includes('Add timeline entry')`), false, `${width}px holding: no timeline entry form`);
-        assert.equal(await evaluate(`document.documentElement.scrollWidth <= window.innerWidth + 1`), true, `${width}px holding: no horizontal scroll`);
-        console.log(`PASS ${width}px /admin/holding-facility: archive banner; no Adopt, Impound, Manage Facilities, condition or timeline actions`);
+        await waitFor(`location.pathname === '/admin/incidents' && !!document.querySelector('button[title="Direct Admin Action / Override"]')`, 'removed holding archive redirects');
+        assert.equal(await evaluate(`!!document.querySelector('a[href="/admin/holding-facility"]')`), false, 'Holding Archive removed from desktop/mobile navigation');
+        assert.equal(await evaluate(`!!document.querySelector('[data-archive-banner]')`), false, 'holding archive not mounted');
+        assert.equal(holdingReads.length, holdingBefore, 'no holding page list/metrics loaded');
+        console.log(`PASS ${width}px Holding Archive removed; old URL redirects to incidents; no holding fetch`);
+        let buttons;
 
         // 2. Adoption archive
         await command('Page.navigate', { url: base + '/admin/adoptions' });
@@ -154,6 +158,7 @@ try {
         assert.match(page, /Record Barangay update/i, `${width}px report: admin can record a Barangay update`);
         assert.equal(/Official Escalation & Custodial Endorsement|Receiving Municipal Authority|transferring custody from/i.test(page), false, 'referral document does not invent a custody transfer');
         assert.match(page, /outside StraySafe/i, 'Barangay work is labelled external');
+        assert.match(page, /K1/, 'recorded holding enclosure remains visible within the report');
         console.log(`PASS ${width}px /admin/incidents/5: referral card shown; no "Admit Animal to Holding"`);
     }
 
@@ -185,8 +190,57 @@ try {
     console.log('PASS Admin status 7: owner observation, no invented custody transfer');
 
     assert.deepEqual(writes, [], 'no write requests were sent');
+    // Each current action still submits status and remarks; none assigns an arbitrary responder.
+    const fieldValue = (selector, value) => evaluate(`(() => {
+        const e = document.querySelector(${JSON.stringify(selector)});
+        Object.getOwnPropertyDescriptor(e.tagName === 'SELECT' ? HTMLSelectElement.prototype : HTMLTextAreaElement.prototype, 'value').set.call(e, ${JSON.stringify(value)});
+        e.dispatchEvent(new Event(e.tagName === 'SELECT' ? 'change' : 'input', {bubbles:true}));
+    })()`);
+    for (const width of [390, 1280]) {
+        await command('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width < 640 });
+        for (const status of [2, 4, 7, 11, 3, 14]) {
+            await command('Page.navigate', { url: base + '/admin/incidents/5' });
+            await waitFor(`!![...document.querySelectorAll('button')].find(b => b.textContent.includes('Direct Override'))`, 'report override');
+            await evaluate(`[...document.querySelectorAll('button')].find(b => b.textContent.includes('Direct Override')).click()`);
+            await waitFor(`!!document.querySelector('form select option[value="11"]')`, 'detail status picker');
+            const ids = await evaluate(`[...document.querySelector('form select').options].map(o => Number(o.value))`);
+            assert.deepEqual(ids, [2, 4, 7, 11, 3, 14]);
+            assert.equal(await evaluate(`document.querySelectorAll('form select').length`), 1, 'no dispatch personnel selector');
+            await fieldValue('form select', String(status));
+            await fieldValue('form textarea', 'Synthetic administrative reason');
+            const before = writes.length;
+            await evaluate(`document.querySelector('form button[type="submit"]').click()`);
+            await waitFor(`!document.querySelector('form select option[value="11"]')`, 'override saved');
+            assert.equal(writes.length, before + 1);
+            assert.deepEqual(writes.at(-1), {method:'PUT',path:'/reports/5/status',body:{status_id:status,remarks:'Synthetic administrative reason'}});
+        }
+        for (const [label, status] of [['Under Investigation',16],['False Alarm / Dismissed',14]]) {
+            await command('Page.navigate', { url: base + '/admin/incidents' });
+            await waitFor(`!!document.querySelector('button[title="Direct Admin Action / Override"]')`, 'report list action');
+            await evaluate(`document.querySelector('button[title="Direct Admin Action / Override"]').click()`);
+            await waitFor(`!!document.querySelector('form textarea')`, 'list status picker');
+            assert.equal(await evaluate(`document.querySelector('form').textContent.includes('Assign Rescue')`), false);
+            await evaluate(`[...document.querySelectorAll('form div.cursor-pointer')].find(e => e.textContent.includes(${JSON.stringify(label)})).click()`);
+            await fieldValue('form textarea', 'Synthetic list reason');
+            const before = writes.length;
+            await evaluate(`document.querySelector('form button[type="submit"]').click()`);
+            await waitFor(`!document.querySelector('form textarea')`, 'list override saved');
+            assert.equal(writes.length, before + 1);
+            assert.deepEqual(writes.at(-1), {method:'PUT',path:'/reports/5/status',body:{status_id:status,remarks:'Synthetic list reason'}});
+        }
+    }
+    for (const status of [5,6,8,13]) {
+        REPORT.status_id = status; REPORT.current_status_id = status;
+        REPORT.history = [{history_id:status,report_status_id:status,created_at:'2026-11-05T09:00:00',updater_name:'Synthetic historic recorder',remarks:'Synthetic saved history',media:[]}];
+        await command('Page.navigate', {url:base+'/admin/incidents/5'});
+        await waitFor(`document.body.textContent.includes('Synthetic saved history')`, `historical status ${status}`);
+        await evaluate(`[...document.querySelectorAll('button')].find(b => b.textContent.includes('Direct Override')).click()`);
+        await waitFor(`!!document.querySelector('form select option[value="11"]')`, 'current picker on historical report');
+        assert.equal(await evaluate(`[...document.querySelector('form select').options].some(o => [5,6,8,13].includes(Number(o.value)))`), false);
+    }
+    assert.deepEqual(staffReads, [], 'no unused responder directory requests');
     assert.equal(browserErrors.length, 0, browserErrors.join('\n'));
-    console.log('PASS no write requests; no uncaught browser errors; all API calls mocked');
+    console.log('PASS 16 supported status-only writes mocked at 390/1280px; four historical status reads; no responder fetch/assignment; retired holding route and adoption archive sent no writes');
 } finally {
     if (command) { try { await command('Browser.close'); } catch {} }
     socket?.close();

@@ -1,5 +1,7 @@
 # Claim eligibility and lost-pet labels
 
+Current subdivision-only boundary: the standalone Subdivision claim-review page was removed in cleanup Phase 3. `/subd/pet-claims` still redirects to referrals; `/brgy/*` shows retirement information. Supported owner-return endpoints and resident claim components remain. The rules below describe retained server eligibility and legacy compatibility, not restored Barangay portal access.
+
 Phase 7 of the restore plan. A pet claim exists so an owner can get back an animal that someone is holding. The server enforces these rules; the screens show only what applies.
 
 ## Is the animal held?
@@ -54,5 +56,5 @@ A **lost-pet report** is category Lost Pet (6), or a report filed through the lo
 
 - Backend: `app/utils/claim_custody.py`, `app/routes/claims.py`, `app/routes/reports.py` (`confirm-reunited`), `app/models/pet_claim.py`, `app/schemas/pet_claim.py`
 - Schema: `pet_claims` gains the status **Not Needed** and the columns `status_before_approval`, `owner_whereabouts`, `owner_whereabouts_note`, `owner_whereabouts_at`, `closed_reason`, `closed_by` and `closed_at`. Startup adds them when missing (non-destructive).
-- Frontend: `ClaimNotNeededPanel.tsx`, `BrgyPetClaims.tsx`, `SubdPetClaims.tsx`, `PetClaimsDashboard.tsx`, `ResiViewReport.tsx`, `ResidentPet.tsx`
+- Frontend: `ClaimNotNeededPanel.tsx`, `BrgyPetClaims.tsx` (unmounted legacy compatibility component), `PetClaimsDashboard.tsx`, `ResiViewReport.tsx`, `ResidentPet.tsx`
 - Tests: `python tests/test_claim_eligibility.py` from `backend/` (isolated SQLite)

@@ -402,7 +402,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
         else if (report.custody_status && report.custody_status !== 'Sighting') ongoingDetail = report.custody_status;
         else if (reportStatusId === 1 || reportStatusLower === 'reported') ongoingDetail = 'Sighting Reported';
         else if (reportStatusId === 2 || reportStatusLower === 'verified') ongoingDetail = 'Verified Sighting';
-        else if (reportStatusId === 4) ongoingDetail = 'Escalated to Barangay';
+        else if (reportStatusId === 4) ongoingDetail = 'Referred to Barangay';
         else if (reportStatusId === 5) ongoingDetail = 'Rescue In Progress';
         else if (reportStatusId === 6) ongoingDetail = 'Picked Up';
         else if (reportStatusId === 7) ongoingDetail = 'Under Observation';
@@ -1294,7 +1294,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 {userRoleId === 4 && adoptionInfo?.adoption_id && (
                                     <button
                                         type="button"
-                                        onClick={() => navigate(userRoleId === 4 ? '/admin/adoptions' : `/brgy/adoptions?view=${adoptionInfo.adoption_id}`)}
+                                        onClick={() => navigate('/admin/adoptions')}
                                         className="px-4 py-2 bg-role hover:bg-role-hover text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer"
                                     >
                                         View adoption
@@ -1311,7 +1311,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                         <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide">Community Animal / Unassigned Pet</h4>
                                         <p className="text-xs text-amber-800 font-medium">
                                             {userRoleId === 2
-                                                ? 'This pet has no registered owner. Subdivision Leaders can assign a verified resident owner. (Adoptions are managed exclusively by Barangay).'
+                                                ? 'This pet has no registered owner. Subdivision Leaders can assign a verified resident owner. (Barangay adoption work is handled outside StraySafe).'
                                                 : 'This pet currently has no registered owner profile associated with it.'}
                                         </p>
                                         {adoptionInfo?.state === 'applications' && (
@@ -1843,7 +1843,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                     <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs">
                                                                         <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Issued By:</span>
                                                                         <p className="font-black text-gray-800 text-xs">
-                                                                            {warning.issuer_name || 'Barangay Staff'} <span className="text-gray-500 font-bold">({warning.issuer_role || 'Staff'})</span>
+                                                                            {warning.issuer_name || 'Not recorded'} <span className="text-gray-500 font-bold">({warning.issuer_role || 'Staff'})</span>
                                                                         </p>
                                                                     </div>
                                                                     <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs">
@@ -1954,7 +1954,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                                 </div>
                                                                                 <div className="bg-white p-3.5 rounded-2xl border border-gray-100 shadow-2xs">
                                                                                     <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Issued By:</span>
-                                                                                    <p className="font-black text-gray-800 text-xs">{w.issuer_name || 'Barangay Staff'} <span className="text-gray-500 font-bold">({w.issuer_role || 'Staff'})</span></p>
+                                                                                    <p className="font-black text-gray-800 text-xs">{w.issuer_name || 'Not recorded'} <span className="text-gray-500 font-bold">({w.issuer_role || 'Staff'})</span></p>
                                                                                 </div>
                                                                                 <div className="bg-white p-3.5 rounded-2xl border border-gray-100 shadow-2xs">
                                                                                     <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Status:</span>

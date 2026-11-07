@@ -129,7 +129,12 @@ try {
         await click(`[...document.querySelectorAll('button')].find(e=>e.textContent.includes('Open Pet Claim #17'))`);
         await waitFor('document.querySelector("#route").textContent==="/subd/pet-claims?claim_id=17"','claim navigation');
         assert(await evaluate('window.phase5.closed'));scenarios++;
-        for (const suffix of ['', '&brgy']) {
+        await navigate('mode=claims');
+        await waitFor('document.querySelector("#route").textContent==="/subd/endorsements"', 'retired Subdivision claims route redirects to referrals');
+        assert.equal(await evaluate('document.querySelector("textarea") !== null'), false, 'retired claim review is not mounted');
+        scenarios++;
+        // Explicit legacy-component regression; this role-3 page is never mounted by AppRoutes.
+        for (const suffix of ['&brgy']) {
             await navigate(`mode=claims${suffix}`);
             await waitFor('document.querySelector("textarea") !== null','linked claim review');
             assert.equal(await evaluate('document.querySelector("textarea").value'),'');
