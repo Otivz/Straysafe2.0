@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { usePetPhotoGuard, PetPhotoGuardPanel, RegisterAnotherPrompt } from '../../components/PetPhotoGuard';
 import PhoneInput from '../../components/PhoneInput';
 import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
@@ -39,110 +38,6 @@ const metersBetween = (aLat: number, aLng: number, bLat: number, bLng: number) =
     const dy = (aLat - bLat) * 111320;
     const dx = (aLng - bLng) * 111320 * Math.cos((aLat * Math.PI) / 180);
     return Math.sqrt(dx * dx + dy * dy);
-};
-// Real client-side image color analyzer using HTML5 Canvas
-const analyzeImageColors = (file: File): Promise<string> => {
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-
-        img.onload = () => {
-            try {
-                const canvas = document.createElement('canvas');
-                // Downscale to 40x40 for fast processing and soft average noise smoothing
-                canvas.width = 40;
-                canvas.height = 40;
-                const ctx = canvas.getContext('2d');
-                if (!ctx) {
-                    resolve("Brown");
-                    return;
-                }
-
-                ctx.drawImage(img, 0, 0, 40, 40);
-                const imgData = ctx.getImageData(0, 0, 40, 40);
-                const data = imgData.data;
-
-                let blackCount = 0;
-                let whiteCount = 0;
-                let goldenCount = 0;
-                let brownCount = 0;
-                let grayCount = 0;
-                let totalPixels = 0;
-
-                for (let i = 0; i < data.length; i += 4) {
-                    const r = data[i];
-                    const g = data[i + 1];
-                    const b = data[i + 2];
-                    const a = data[i + 3];
-
-                    // Skip transparent/extremely dark alpha values
-                    if (a < 128) continue;
-                    totalPixels++;
-
-                    const max = Math.max(r, g, b);
-                    const min = Math.min(r, g, b);
-                    const diff = max - min;
-
-                    // 1. Black: very low RGB values
-                    if (r < 65 && g < 65 && b < 65) {
-                        blackCount++;
-                    }
-                    // 2. White: very high RGB values and low color saturation difference
-                    else if (r > 190 && g > 190 && b > 185 && diff < 30) {
-                        whiteCount++;
-                    }
-                    // 3. Golden/Yellow: High red and green, low blue
-                    else if (r > 160 && g > 125 && b < 130 && r > g && g > b && diff > 30) {
-                        goldenCount++;
-                    }
-                    // 4. Brown/Tan: Moderate red/green, low blue, reddish hue
-                    else if (r > 60 && g > 40 && b < r - 15 && diff > 15) {
-                        if (r > 130 && g > 100 && b < 70) {
-                            goldenCount++;
-                        } else {
-                            brownCount++;
-                        }
-                    }
-                    // 5. Gray: neutral middle-range colors
-                    else if (max > 65 && max < 190 && diff < 20) {
-                        grayCount++;
-                    }
-                }
-
-                const colorFrequencies = [
-                    { name: "Black", count: blackCount },
-                    { name: "White", count: whiteCount },
-                    { name: "Golden", count: goldenCount },
-                    { name: "Brown", count: brownCount },
-                    { name: "Gray", count: grayCount }
-                ];
-
-                // Sort by pixel frequency descending
-                colorFrequencies.sort((a, b) => b.count - a.count);
-
-                const threshold = totalPixels * 0.15; // requires at least 15% of pixels
-
-                const primary = colorFrequencies[0];
-                const secondary = colorFrequencies[1];
-
-                const primaryName = primary.count > 0 ? primary.name : "Brown";
-                const secondaryName = (secondary && secondary.count > threshold) ? secondary.name : "None";
-
-                let formatResult = primaryName;
-                if (secondaryName !== "None") {
-                    formatResult += `, ${secondaryName}`;
-                }
-                resolve(formatResult);
-            } catch (err) {
-                console.error("Image analysis failed, falling back to default:", err);
-                resolve("Brown");
-            }
-        };
-
-        img.onerror = () => {
-            resolve("Brown");
-        };
-    });
 };
 
 interface PetFormData {
@@ -228,24 +123,11 @@ const INITIAL_PET_FORM_DATA: PetFormData = {
     existingVaccineCardUrl: null
 };
 
-
-const PRESET_PRIMARY_COLORS = ['Brown', 'Black', 'White', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream', 'Red'];
-const PRESET_SECONDARY_COLORS = ['White', 'Black', 'Brown', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream'];
-const PRESET_TERTIARY_COLORS = ['White', 'Black', 'Brown', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream'];
-
-const matchColorOption = (raw: string, presets: string[]): { selected: string; custom: string } => {
-    if (!raw || ['none', 'unknown', 'null', ''].includes(raw.toLowerCase())) {
-        return { selected: '', custom: '' };
-    }
-    const matched = presets.find(p => p.toLowerCase() === raw.toLowerCase());
-    if (matched) {
-        return { selected: matched, custom: '' };
-    }
-    return { selected: 'Other', custom: raw };
-};
-
 const ResidentPet = () => {
     const navigate = useNavigate();
+    const userStr = localStorage.getItem('resident_user');
+    const currentUser = userStr ? JSON.parse(userStr) : null;
+
     const [isAddPetModalOpen, setIsAddPetModalOpen] = useState(false);
     const [isNavbarMenuOpen, setIsNavbarMenuOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -370,85 +252,14 @@ const ResidentPet = () => {
     const [breedImageUrl, setBreedImageUrl] = useState<string | null>(null);
     const [isFetchingBreedImage, setIsFetchingBreedImage] = useState(false);
 
-    const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
-    // One animal per pet record: a photo of several animals is cropped (or confirmed) before saving
-    const photoGuard = usePetPhotoGuard();
-    const [registerAnother, setRegisterAnother] = useState<{ petId: number; petName: string; count: number } | null>(null);
-    const [fromPhotoOfPetId, setFromPhotoOfPetId] = useState<number | null>(null);
     const [formErrors, setFormErrors] = useState<Record<string, boolean>>({});
     const [submitErrorMessage, setSubmitErrorMessage] = useState<string | null>(null);
 
-    const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>, fromCrop: boolean = false) => {
+    const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files ? Array.from(e.target.files) : [];
         setFormData((prev) => ({ ...prev, mediaFiles: files }));
         setFormErrors((prev) => ({ ...prev, photo: false }));
-        if (files.length === 0) photoGuard.reset(fromCrop);
-
-        if (files.length > 0) {
-            setIsAnalyzingPhoto(true);
-            const file = files[0];
-
-            // Pet registration: only the local YOLO model checks the photo (purpose=pet, no Gemini). The resident sees
-            // no check result; a photo with no dog or cat is refused when saving, and an unavailable check is accepted.
-            const fillPrimaryFromClient = async () => {
-                const suggestedColor = await analyzeImageColors(file);
-                const p1Match = matchColorOption(suggestedColor, PRESET_PRIMARY_COLORS);
-                const finalPrimary = p1Match.selected || 'Brown';
-                setFormData(prev => ({
-                    ...prev,
-                    primaryColor: finalPrimary,
-                    customPrimaryColor: finalPrimary === 'Other' ? (p1Match.custom || suggestedColor) : ''
-                }));
-            };
-
-            try {
-                const mediaData = new FormData();
-                mediaData.append("file", file);
-                mediaData.append("purpose", "pet");
-                const res = await api.post('/reports/analyze-media', mediaData);
-                const ai = res.status === 200 ? res.data : null;
-                photoGuard.noteResult(file, ai, fromCrop);
-
-                if (ai?.animal_detected === true && ['Dog', 'Cat'].includes(ai.animal_type)) {
-                    const p1Match = matchColorOption(ai.primary_color, PRESET_PRIMARY_COLORS);
-                    const p2Match = matchColorOption(ai.secondary_color, PRESET_SECONDARY_COLORS);
-                    const p3Match = matchColorOption(ai.tertiary_color, PRESET_TERTIARY_COLORS);
-                    const found = [ai.primary_color, ai.secondary_color, ai.tertiary_color]
-                        .filter((c: string | undefined) => c && !['none', 'unknown', ''].includes(c.toLowerCase()));
-                    const coatPattern = found.length >= 3 ? 'Tricolor' : found.length === 2 ? 'Bicolor' : '';
-                    const parsedPattern = parseCoatPattern(coatPattern);
-                    setFormData(prev => ({
-                        ...prev,
-                        species: ai.animal_type,
-                        ...(p1Match.selected ? {
-                            primaryColor: p1Match.selected,
-                            customPrimaryColor: p1Match.selected === 'Other' ? (p1Match.custom || ai.primary_color) : '',
-                        } : {}),
-                        secondaryColor: p2Match.selected,
-                        customSecondaryColor: p2Match.custom,
-                        tertiaryColor: p3Match.selected,
-                        customTertiaryColor: p3Match.custom,
-                        pattern: parsedPattern.pattern || (coatPattern ? 'Other' : prev.pattern)
-                    }));
-                } else if (ai?.animal_detected !== false) {
-                    await fillPrimaryFromClient();   // check not available: a colour guess from the browser only
-                }
-            } catch (err) {
-                photoGuard.noteResult(file, null, fromCrop);
-                console.warn("Pet photo check unavailable, using the browser colour guess:", err);
-                try {
-                    await fillPrimaryFromClient();
-                } catch (fallbackErr) {
-                    console.error("Failed to analyze uploaded photo:", fallbackErr);
-                }
-            } finally {
-                setIsAnalyzingPhoto(false);
-            }
-        }
     };
-
-    const userStr = localStorage.getItem('resident_user');
-    const currentUser = userStr ? JSON.parse(userStr) : null;
 
     useEffect(() => {
         if (currentUser) {
@@ -596,15 +407,9 @@ const ResidentPet = () => {
     };
 
     // Required info for registering a pet, checked live so the form shows what is still missing before submitting
-    const photoProblem: string | null = formData.mediaFiles.length === 0
-        ? (editingPetId ? null : 'Add a photo')
-        : isAnalyzingPhoto
-            ? 'Checking photo…'
-            : photoGuard.noAnimal
-                ? 'Use a clear photo of your dog or cat'
-                : photoGuard.blocked
-                    ? `Photo shows ${photoGuard.count} animals: crop your pet`
-                    : null;
+    const photoProblem: string | null = (editingPetId || formData.mediaFiles.length > 0)
+        ? null
+        : 'Add a photo';
     const requiredItems: Array<{ key: string; label: string; done: boolean; hint?: string }> = [
         { key: 'photo', label: 'Pet Photo', done: photoProblem === null, hint: photoProblem || undefined },
         { key: 'name', label: 'Pet Name', done: !!formData.name.trim() },
@@ -635,21 +440,6 @@ const ResidentPet = () => {
         const hasPhoto = formData.mediaFiles.length > 0;
         if (!editingPetId && !hasPhoto) {
             errors.photo = true;
-        }
-
-        if (hasPhoto && (isAnalyzingPhoto || photoGuard.checking || photoGuard.blocked)) {
-            setFormErrors({ ...errors, photo: true });
-            setSubmitErrorMessage(isAnalyzingPhoto || photoGuard.checking
-                ? 'Still checking the photo. Wait a moment.'
-                : `The photo shows ${photoGuard.count} animals. Crop your pet or confirm the count with a reason.`);
-            return;
-        }
-
-        // The pet photo is what look-alike matching compares against: never save a photo with no dog or cat
-        if (hasPhoto && photoGuard.noAnimal) {
-            setFormErrors({ ...errors, photo: true });
-            setSubmitErrorMessage('Please upload a clear photo of your dog or cat.');
-            return;
         }
 
         if (Object.keys(errors).length > 0) {
@@ -763,18 +553,15 @@ const ResidentPet = () => {
             }
 
             if (photoUrl) petData.photo_url = photoUrl;
-            if (photoUrl && photoGuard.overridePayload) petData.photo_override = photoGuard.overridePayload;
-            if (!editingPetId && fromPhotoOfPetId) petData.registered_from_photo_of_pet_id = fromPhotoOfPetId;
             if (photoFrontUrl) petData.photo_front_url = photoFrontUrl;
             if (photoLeftUrl) petData.photo_left_url = photoLeftUrl;
             if (photoRightUrl) petData.photo_right_url = photoRightUrl;
             if (vaccineCardUrl) petData.vaccine_card_url = vaccineCardUrl;
 
-            let createdPet: any = null;
             if (editingPetId) {
                 await api.put(`/pets/${editingPetId}`, petData);
             } else {
-                createdPet = (await api.post('/pets/', petData)).data;
+                await api.post('/pets/', petData);
             }
 
             fetchPets();
@@ -783,14 +570,6 @@ const ResidentPet = () => {
             setFormData(INITIAL_PET_FORM_DATA);
             setFormErrors({});
             setSubmitErrorMessage(null);
-            setFromPhotoOfPetId(null);
-            // The photo showed several animals: offer the next registration from the same (unchanged) photo
-            if (createdPet?.pet_id && photoGuard.hasSession && photoGuard.original) {
-                setRegisterAnother({ petId: createdPet.pet_id, petName: createdPet.pet_name, count: photoGuard.original.count });
-                photoGuard.reset(true);
-            } else {
-                photoGuard.reset();
-            }
         } catch (error: any) {
             // The server found a record held for this resident (the check above may have been skipped)
             const detail = error?.response?.data?.detail;
@@ -879,9 +658,6 @@ const ResidentPet = () => {
         if (!petObj) return;
 
         setSelectedPet(null);
-
-        const userStr = localStorage.getItem('resident_user');
-        const currentUser = userStr ? JSON.parse(userStr) : null;
 
         // Default to local datetime
         const now = new Date();
@@ -977,8 +753,6 @@ const ResidentPet = () => {
 
             // 2. Build report payload with rich details
             const storedUserId = localStorage.getItem('user_id');
-            const userStr = localStorage.getItem('resident_user');
-            const currentUser = userStr ? JSON.parse(userStr) : null;
             const userId = storedUserId ? parseInt(storedUserId) : (petObj.owner_id || 1);
             const storedSubdId = localStorage.getItem('subdivision_id');
             const subdId = storedSubdId ? parseInt(storedSubdId) : (petObj.subdivision_id || 1);
@@ -1227,8 +1001,6 @@ const ResidentPet = () => {
                                 setFormData(INITIAL_PET_FORM_DATA);
                                 setFormErrors({});
                                 setSubmitErrorMessage(null);
-                                photoGuard.reset();
-                                setFromPhotoOfPetId(null);
                                 setIsAddPetModalOpen(true);
                             }}
                             className="bg-[#F97316] text-white px-3 py-2 sm:px-6 sm:py-3 rounded-xl sm:rounded-2xl font-black uppercase tracking-wider sm:tracking-widest text-[10px] sm:text-xs shadow-md shadow-orange-200 hover:scale-105 transition-all flex items-center gap-1.5 sm:gap-2.5 cursor-pointer whitespace-nowrap"
@@ -1598,7 +1370,6 @@ const ResidentPet = () => {
                                                 type="button"
                                                 onClick={() => {
                                                     setFormData(prev => ({ ...prev, mediaFiles: [] }));
-                                                    photoGuard.reset();
                                                 }}
                                                 className="text-[10px] font-black text-red-500 uppercase tracking-widest bg-red-50 hover:bg-red-100 px-3.5 py-2 rounded-xl transition-colors cursor-pointer"
                                             >
@@ -1619,12 +1390,6 @@ const ResidentPet = () => {
                                             accept="image/*"
                                         />
                                     )}
-
-                                    {/* Several animals in the photo: crop the pet being registered (or confirm), then re-checked */}
-                                    <PetPhotoGuardPanel guard={photoGuard}
-                                        onCropped={(file) => handlePhotoChange({ target: { files: [file] } } as any, true)} />
-
-
                                 </div>
 
                                 {/* Multi-Angle Identification Photos */}
@@ -2734,22 +2499,6 @@ const ResidentPet = () => {
                 }}
             />
 
-            {/* "Register another animal from this photo": a new, empty pet form; the same photo is cropped again */}
-            {registerAnother && (
-                <RegisterAnotherPrompt petName={registerAnother.petName} count={registerAnother.count}
-                    onNo={() => { setRegisterAnother(null); photoGuard.reset(); }}
-                    onYes={() => {
-                        const previous = registerAnother.petId;
-                        setRegisterAnother(null);
-                        setEditingPetId(null);
-                        setFormData(INITIAL_PET_FORM_DATA);
-                        setFormErrors({});
-                        setSubmitErrorMessage(null);
-                        setFromPhotoOfPetId(previous);
-                        setIsAddPetModalOpen(true);
-                        photoGuard.setCropping(true);
-                    }} />
-            )}
         </div>
     );
 };
