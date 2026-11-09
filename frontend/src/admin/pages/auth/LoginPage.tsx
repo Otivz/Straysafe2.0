@@ -64,7 +64,7 @@ export default function LoginPage() {
           <PasswordInput name="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </Field>
         <div className="flex justify-end">
-          <Link to={adminPath('/forgot-password')} className="sa-small font-semibold">Forgot password?</Link>
+          <Link to={adminPath('/forgot-password')} className="sa-auth__link sa-small font-semibold">Forgot password?</Link>
         </div>
         <Button type="submit" variant="primary" block loading={pending}>Sign in</Button>
       </form>

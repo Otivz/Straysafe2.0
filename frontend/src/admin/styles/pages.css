@@ -54,13 +54,60 @@
     .sa-page { padding: 20px 16px 56px; }
   }
 
-  /* ----------------------------------------------------------------------------------------- auth screens */
-  .sa-auth { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; min-height: 100vh; min-height: 100dvh; padding: 32px 16px; }
-  .sa-auth__brand { display: flex; align-items: center; gap: 10px; }
-  .sa-auth__brand img { width: 40px; height: 40px; }
-  .sa-auth__card { width: min(420px, 100%); padding: 30px 30px 28px; }
-  .sa-auth__title { font-family: var(--sa-font-display); font-size: 22px; line-height: 30px; font-weight: 700; letter-spacing: -0.02em; }
-  .sa-auth__form { display: flex; flex-direction: column; gap: 16px; margin-top: 22px; }
+  /* ----------------------------------------------------------------------------------------- auth screens
+     Sign-in keeps the shape of the original Subdivision Leader login: an orange brand half (logo, "Operations Portal",
+     "Subdivision Leaders") beside a light half with the form. Below 1024px the brand half is a band across the top.
+     Text on the brand fill is white on --sa-brand (4.3:1), so it is only ever "large text" (>= 24px, or >= 18.7px bold). */
+  .sa-auth { --auth-fill: color-mix(in srgb, var(--sa-brand) 93%, black); /* same orange, 4.9:1 with white, for the filled button */ display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; background: var(--sa-bg); }
+  .sa-auth__brand { position: relative; overflow: hidden; display: grid; place-items: center; padding: 20px 16px; background: var(--sa-brand); color: #fff; text-align: center; }
+  .sa-auth__watermark { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.1; transform: scale(1.5) rotate(12deg); pointer-events: none; }
+  .sa-auth__brandbody { position: relative; display: flex; flex-direction: column; align-items: center; }
+  .sa-auth__logo { width: 52px; height: auto; filter: brightness(0) invert(1) drop-shadow(0 6px 12px rgb(0 0 0 / 0.22)); }
+  .sa-auth__product { margin-top: 8px; font-family: var(--sa-font-display); font-size: 24px; line-height: 1.1; font-weight: 800; letter-spacing: -0.01em; text-transform: uppercase; color: #fff; }
+  .sa-auth__br, .sa-auth__rule, .sa-auth__audience { display: none; }
+  .sa-auth__side { flex: 1; display: flex; justify-content: center; padding: 28px 16px 44px; }
+  .sa-auth__column { width: min(420px, 100%); display: flex; flex-direction: column; gap: 18px; }
+  .sa-auth__mark { display: none; }
+  .sa-auth__card { min-width: 0; }
+  .sa-auth__title { font-family: var(--sa-font-display); font-size: 26px; line-height: 1.2; font-weight: 800; letter-spacing: -0.02em; text-align: center; }
+  .sa-auth__title::after { content: ''; display: block; width: 48px; height: 4px; margin: 12px auto; border-radius: 999px; background: var(--sa-brand); }
+  .sa-auth__title + p { text-align: center; }
+  .sa-auth__card .sa-empty__icon { align-self: center; }
+  .sa-auth__form { display: flex; flex-direction: column; gap: 16px; margin-top: 24px; }
+  .sa-auth__link { display: inline-block; padding: 10px 0; }
+  .sa-auth__notice { font-size: 12px; line-height: 1.5; color: var(--sa-ink-3); text-align: center; }
+  /* the form controls: the system components, with the original's roomier, rounder proportions (16px text stops phones zooming in) */
+  .sa-auth .sa-input { height: 48px; padding: 0 14px; border-radius: var(--sa-radius-lg); font-size: 16px; box-shadow: 0 1px 2px rgb(41 37 36 / 0.06); }
+  .sa-auth .sa-input:focus { box-shadow: var(--sa-ring); }
+  .sa-auth .sa-pwd .sa-input { padding-right: 54px; }
+  .sa-auth .sa-pwd__toggle { top: 4px; right: 4px; width: 40px; height: 40px; border-radius: 9px; }
+  .sa-auth .sa-btn--block { height: 48px; border-radius: var(--sa-radius-lg); font-size: 13px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+  .sa-auth .sa-btn--primary { background: var(--auth-fill); box-shadow: 0 1px 2px rgb(41 37 36 / 0.14), 0 6px 14px color-mix(in srgb, var(--sa-brand) 28%, transparent); }
+  .sa-auth .sa-btn--primary:hover:not(:disabled) { background: color-mix(in srgb, var(--auth-fill) 86%, black); }
+  @media (min-width: 640px) {
+    .sa-auth__brand { padding: 28px 24px; }
+    .sa-auth__logo { width: 64px; }
+    .sa-auth__product { font-size: 30px; }
+    .sa-auth__audience { display: block; margin-top: 6px; font-size: 19px; line-height: 1.2; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #fff; }
+    .sa-auth__side { padding-top: 40px; }
+  }
+  @media (min-width: 1024px) {
+    .sa-auth { display: grid; grid-template-columns: 1fr 1fr; }
+    .sa-auth__brand { z-index: 1; padding: 56px 48px; box-shadow: 10px 0 40px rgb(41 37 36 / 0.18); }
+    .sa-auth__logo { width: min(280px, 72%); opacity: 0.96; filter: brightness(0) invert(1) drop-shadow(0 14px 24px rgb(0 0 0 / 0.24)); }
+    .sa-auth__br { display: inline; }
+    .sa-auth__product { margin-top: 36px; font-size: clamp(40px, 4vw, 56px); line-height: 1.04; }
+    .sa-auth__rule { display: block; width: 64px; height: 6px; margin: 20px 0 18px; border-radius: 999px; background: rgb(255 255 255 / 0.45); }
+    .sa-auth__audience { margin-top: 0; }
+    .sa-auth__side { align-items: center; padding: 56px 40px; }
+    .sa-auth__mark { display: block; align-self: center; width: 64px; height: auto; }
+  }
+  /* when the form column is taller than the window (the sample-account note adds height), the orange half stays in view while it scrolls */
+  @media (min-width: 1024px) and (min-height: 700px) {
+    .sa-auth { align-items: start; }
+    .sa-auth__brand { position: sticky; top: 0; min-height: 100vh; min-height: 100dvh; }
+    .sa-auth__side { min-height: 100vh; min-height: 100dvh; }
+  }
   .sa-flow { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 6px; max-width: 420px; font-size: 12.5px; color: var(--sa-ink-3); }
   .sa-flow li { display: inline-flex; align-items: center; gap: 6px; }
   .sa-flow li + li::before { content: ''; width: 14px; height: 1px; background: var(--sa-line-control); }
