@@ -58,6 +58,8 @@ coverage.xml
 *.tsbuildinfo
 .eslintcache
 build/
+# Vite's dependency cache (it was committed once by accident; it is regenerated and never needed in Git)
+.vite/
 
 # Project specific / Temporary
 purpose_of_files.txt
@@ -66,6 +68,8 @@ purpose_of_files.txt
 backend/uploads/
 database_query.md
 setup.md
+# Local database dump (contains data from 38 tables, including users). Keep it on disk; never commit it.
+/straysafe_subdivision.sql
 # Temporary photo copies for queued AI jobs
 backend/ai_job_files/
 backend/ai_cache/

@@ -1,0 +1,225 @@
+/*
+ * StraySafe Admin — design tokens.
+ * Everything visual in the admin UI reads from these variables; no component hard-codes a colour.
+ * Same layer order as Tailwind so utilities (layout glue in the TSX) still override component classes.
+ */
+@layer theme, base, components, utilities;
+
+:root {
+  /* ---- Official StraySafe palette (exact) ---------------------------------------------------------------- */
+  --sa-brand: #C65A17;     /* Burnt Orange  — primary brand / action            */
+  --sa-accent: #E87830;    /* Warm Orange   — primary hover / accent            */
+  --sa-amber: #F5C65D;     /* Soft Amber    — highlight / attention             */
+  --sa-sage: #3D8B68;      /* Deep Sage     — success / recovery                */
+  --sa-red: #DC4545;       /* Soft Red      — urgent / danger                   */
+  --sa-bg: #FAFAF9;        /* Off White     — main background                   */
+  --sa-surface: #FFFFFF;   /* White         — card surface                      */
+  --sa-sand: #F3F0EB;      /* Warm Gray     — subtle surface                    */
+  --sa-line: #DCD6CE;      /* Warm Stone    — border                            */
+  --sa-ink: #292524;       /* Charcoal      — primary text                      */
+
+  /* ---- Derived from the palette (contrast-checked; see change record) -------------------------------------- */
+  --sa-ink-2: #57514C;     /* secondary text  7.5:1 on bg                                   */
+  --sa-ink-3: #6B645F;     /* muted text      5.6:1 on bg, 5.1:1 on sand                    */
+  --sa-line-soft: color-mix(in srgb, var(--sa-line) 55%, var(--sa-bg));   /* row dividers            */
+  --sa-line-control: color-mix(in srgb, var(--sa-line) 60%, var(--sa-ink)); /* form-control borders, >=3:1 */
+  --sa-hover: color-mix(in srgb, var(--sa-sand) 60%, transparent);
+
+  --sa-brand-strong: #A94A12;                                              /* primary hover fill  5.7:1 w/ white */
+  --sa-brand-ink: #9F4410;                                                 /* brand-coloured text 6.1:1 on bg    */
+  --sa-brand-soft: color-mix(in srgb, var(--sa-brand) 9%, white);
+  --sa-brand-tint: color-mix(in srgb, var(--sa-brand) 16%, white);
+
+  --sa-amber-soft: color-mix(in srgb, var(--sa-amber) 24%, white);
+  --sa-amber-tint: color-mix(in srgb, var(--sa-amber) 42%, white);
+  --sa-amber-ink: color-mix(in srgb, var(--sa-amber) 50%, black);
+
+  --sa-sage-soft: color-mix(in srgb, var(--sa-sage) 13%, white);
+  --sa-sage-ink: color-mix(in srgb, var(--sa-sage) 70%, black);
+
+  --sa-red-soft: color-mix(in srgb, var(--sa-red) 12%, white);
+  --sa-red-ink: color-mix(in srgb, var(--sa-red) 70%, black);
+  --sa-red-strong: color-mix(in srgb, var(--sa-red) 90%, black);           /* solid destructive fill 5:1 w/ white */
+
+  /* ---- Chart marks (validated with the dataviz palette checker; see the change record) --------------------- */
+  --sa-chart-1: var(--sa-brand);       /* reports received / single-series bars       */
+  --sa-chart-2: #57534E;               /* de-emphasis series (cases closed)           */
+  --sa-chart-resolved: var(--sa-sage);
+  --sa-chart-unresolved: #D99B1F;      /* Soft Amber deepened so the mark has contrast */
+  --sa-chart-neutral: #78716C;
+
+  /* ---- Typography ---------------------------------------------------------------------------------------- */
+  --sa-font: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --sa-font-display: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  /* ---- Shape & depth ------------------------------------------------------------------------------------- */
+  --sa-radius-sm: 6px;
+  --sa-radius: 8px;
+  --sa-radius-lg: 12px;
+  --sa-shadow-pop: 0 1px 2px rgb(41 37 36 / 0.06), 0 10px 28px rgb(41 37 36 / 0.14);
+  --sa-shadow-dialog: 0 2px 6px rgb(41 37 36 / 0.08), 0 24px 64px rgb(41 37 36 / 0.22);
+  --sa-ring: 0 0 0 4px color-mix(in srgb, var(--sa-accent) 26%, transparent);
+
+  /* ---- Layout -------------------------------------------------------------------------------------------- */
+  --sa-sidebar-w: 248px;
+  --sa-content-w: 1180px;
+}
+
+@layer base {
+  .sa-root {
+    font-family: var(--sa-font);
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--sa-ink);
+    background: var(--sa-bg);
+    min-height: 100vh;
+    min-height: 100dvh;
+    color-scheme: light;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  .sa-root *,
+  .sa-root *::before,
+  .sa-root *::after {
+    box-sizing: border-box;
+  }
+
+  .sa-root h1,
+  .sa-root h2,
+  .sa-root h3,
+  .sa-root h4 {
+    color: var(--sa-ink);
+    margin: 0;
+  }
+
+  .sa-root p {
+    margin: 0;
+  }
+
+  .sa-root a {
+    color: var(--sa-brand-ink);
+    text-underline-offset: 3px;
+  }
+
+  .sa-root a:hover {
+    color: var(--sa-brand-strong);
+    text-decoration: underline;
+  }
+
+  .sa-root :focus-visible {
+    outline: 2px solid var(--sa-brand);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  .sa-root ::selection {
+    background: color-mix(in srgb, var(--sa-amber) 55%, white);
+    color: var(--sa-ink);
+  }
+
+  .sa-root button:not(:disabled) {
+    cursor: pointer;
+  }
+
+  .sa-root table {
+    border-collapse: collapse;
+  }
+
+  /* the legacy global stylesheet forces dark colours on these tags when <html class="dark">; this UI is light-only */
+  html:has(.sa-root) {
+    color-scheme: light;
+  }
+
+  body:has(dialog[open].sa-dialog) {
+    overflow: hidden;
+  }
+}
+
+/* ---- Type roles -------------------------------------------------------------------------------------------- */
+@layer components {
+  .sa-h1 {
+    font-family: var(--sa-font-display);
+    font-size: 24px;
+    line-height: 32px;
+    font-weight: 700;
+    letter-spacing: -0.018em;
+  }
+
+  .sa-h2 {
+    font-size: 15px;
+    line-height: 22px;
+    font-weight: 600;
+    letter-spacing: -0.006em;
+  }
+
+  .sa-h3 {
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 600;
+  }
+
+  .sa-text-2 { color: var(--sa-ink-2); }
+  .sa-text-3 { color: var(--sa-ink-3); }
+  .sa-text-brand { color: var(--sa-brand-ink); }
+  .sa-text-red { color: var(--sa-red-ink); }
+  .sa-text-sage { color: var(--sa-sage-ink); }
+  .sa-text-amber { color: var(--sa-amber-ink); }
+
+  .sa-small { font-size: 13px; line-height: 20px; }
+  .sa-meta { font-size: 12px; line-height: 16px; color: var(--sa-ink-3); }
+  .sa-num { font-variant-numeric: tabular-nums; }
+  .sa-semibold { font-weight: 600; }
+  .sa-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .sa-clamp-1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* case reference: SS-2026-0158 */
+  .sa-ref {
+    font-variant-numeric: tabular-nums;
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--sa-ink-2);
+    white-space: nowrap;
+  }
+
+  .sa-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .sa-skip {
+    position: absolute;
+    left: 12px;
+    top: -48px;
+    z-index: 100;
+    background: var(--sa-surface);
+    border: 1px solid var(--sa-line);
+    border-radius: var(--sa-radius-sm);
+    padding: 8px 12px;
+    font-weight: 600;
+    transition: top 0.12s;
+  }
+
+  .sa-skip:focus {
+    top: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sa-root *,
+  .sa-root *::before,
+  .sa-root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

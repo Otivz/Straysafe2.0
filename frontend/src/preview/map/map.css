@@ -1,0 +1,56 @@
+/*
+ * Map pieces shared by the two UI previews (development only). Every colour comes from the design tokens (--sa-*), which
+ * both previews load, so the maps follow the same palette as the rest of the interface.
+ */
+@layer theme, base, components, utilities;
+
+@layer components {
+  .pv-map {
+    position: relative; z-index: 0; isolation: isolate; width: 100%; overflow: hidden;
+    border: 1px solid var(--sa-line); border-radius: var(--pv-radius, var(--sa-radius)); background: var(--sa-sand);
+  }
+  .pv-map--loading {
+    background: linear-gradient(90deg, var(--sa-sand) 25%, color-mix(in srgb, var(--sa-sand) 35%, white) 50%, var(--sa-sand) 75%);
+    background-size: 200% 100%; animation: pv-shimmer 1.5s linear infinite;
+  }
+  .pv-note { margin-top: 6px; font-size: 13px; line-height: 18px; color: var(--sa-ink-3); }
+
+  /* Overlays. A CSS rule beats the SVG attributes Leaflet writes, so the tokens decide the colours. */
+  .pv-outline { stroke: var(--sa-brand); fill: var(--sa-brand); fill-opacity: 0.06; }
+  .pv-radius { stroke: var(--sa-sage); fill: none; }
+  .pv-area { stroke: var(--sa-brand); fill: var(--sa-brand); fill-opacity: 0.14; }
+
+  /* Markers */
+  .pv-pin { background: none; border: 0; }
+  .pv-pin span {
+    display: block; width: 28px; height: 28px; margin: 3px 0 0 1px; border: 3px solid #fff; border-radius: 50% 50% 50% 0;
+    background: var(--sa-brand); box-shadow: 0 2px 6px rgb(0 0 0 / 0.4); transform: rotate(-45deg);
+  }
+  .pv-dot { background: none; border: 0; }
+  .pv-dot span {
+    display: grid; place-items: center; width: 26px; height: 26px; border: 2px solid #fff; border-radius: 50%;
+    background: var(--sa-ink); color: #fff; font: 700 12px/1 var(--sa-font); box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+  }
+  .pv-dot--latest span { box-shadow: 0 0 0 3px var(--sa-brand), 0 1px 4px rgb(0 0 0 / 0.4); }
+
+  /* Key under a map */
+  .pv-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 12.5px; line-height: 18px; color: var(--sa-ink-3); }
+  .pv-legend li { display: inline-flex; align-items: center; gap: 6px; }
+  .pv-key { display: inline-block; flex-shrink: 0; }
+  .pv-key--outline { width: 20px; height: 10px; border: 2px dashed var(--sa-brand); border-radius: 2px; background: color-mix(in srgb, var(--sa-brand) 6%, transparent); }
+  .pv-key--radius { width: 12px; height: 12px; border: 1.5px dashed var(--sa-sage); border-radius: 50%; }
+  .pv-key--area { width: 13px; height: 13px; border: 1.5px solid var(--sa-brand); border-radius: 50%; background: color-mix(in srgb, var(--sa-brand) 16%, transparent); }
+  .pv-key--pin { width: 10px; height: 10px; border-radius: 50% 50% 50% 0; background: var(--sa-brand); transform: rotate(-45deg); }
+  .pv-key--dot { width: 14px; height: 14px; border-radius: 50%; background: var(--sa-ink); }
+  .pv-key--latest { width: 14px; height: 14px; border-radius: 50%; background: var(--sa-ink); box-shadow: 0 0 0 2px var(--sa-brand); }
+}
+
+@keyframes pv-shimmer { to { background-position: -200% 0; } }
+
+/*
+ * Outside the layer on purpose: leaflet.css is not layered, so only an unlayered rule can override it.
+ * The zoom buttons are 44px so they are comfortable to tap.
+ */
+.pv-map .leaflet-container { background: var(--sa-sand); font-family: inherit; }
+.pv-map .leaflet-bar a { width: 44px; height: 44px; font-size: 22px; line-height: 44px; }
+.pv-map .leaflet-control-attribution { font-size: 11px; }
