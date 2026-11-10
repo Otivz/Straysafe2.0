@@ -1,21 +1,34 @@
-# Builds the StraySafe Android app (debug APK) with Capacitor, on GitHub's servers: no Android Studio needed.
-# Run it: GitHub → Actions → "Build Android APK" → Run workflow (it also runs on every push that changes frontend/).
-# Download: open the finished run → Artifacts → "StraySafe-apk" (a zip with app-debug.apk inside).
+# Builds the StraySafe Android app (the live Resident interface, as a DEBUG APK) with Capacitor, on GitHub's servers: no Android Studio,
+# Android SDK or Gradle on your computer. Details: docs/05-operations/ANDROID_RESIDENT_APP.md
 #
-# Settings the app is built with (GitHub → Settings → Secrets and variables → Actions):
-#   Variables tab: VITE_API_BASE_URL   the backend address the phone calls, e.g. http://192.168.131.140:8000
-#   Secrets tab:   VITE_GOOGLE_CLIENT_ID, VITE_CLOUDINARY_CLOUD_NAME, VITE_CLOUDINARY_UPLOAD_PRESET,
-#                  VITE_DOG_API_KEY, VITE_CAT_API_KEY   (same values as in your .env)
+# Run it (it never runs by itself):  GitHub -> Actions -> "Build Android APK" -> Run workflow.
+# Download:  open the finished run -> Artifacts -> "StraySafe-Resident-debug-apk" (a zip with app-debug.apk inside).
+# Nothing is published or deployed: the APK is only a downloadable file attached to the run.
+#
+# This APK is for developers: it has a Connection Settings screen (bar on every screen, row in Settings) where the backend address is
+# typed ON THE PHONE, so it never needs rebuilding when the address changes. That address can be a computer on the same Wi-Fi
+# (http://192.168.1.10:8000) or an https tunnel. Only this debug build allows plain http, and only for the address you type; a release
+# build (not made by this workflow) refuses it and is fixed to one HTTPS address. Nothing here is a private or LAN address.
+#
+# Optional settings (GitHub -> Settings -> Secrets and variables -> Actions):
+#   Variables tab: VITE_API_BASE_URL   an HTTPS address the app starts with, e.g. https://api.example.org (no trailing slash; not
+#                                      localhost). Leave it unset to have the app ask for an address the first time it opens.
+#   Secrets tab:   VITE_CLOUDINARY_CLOUD_NAME, VITE_CLOUDINARY_UPLOAD_PRESET   (photos added to a report's case chat and to ownership
+#                  claims go straight to Cloudinary; same values as in your .env; without them the app builds but those uploads fail)
 # These are browser-side values (they end up inside the app anyway); keeping them in GitHub settings keeps .env out of git.
+# The build stops with a message if VITE_API_BASE_URL is set but unusable (scripts/androidApiUrl.ts).
 
 name: Build Android APK
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - "frontend/**"
-      - ".github/workflows/build-apk.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-android-apk
+  cancel-in-progress: true
 
 jobs:
   apk:
@@ -26,22 +39,28 @@ jobs:
         working-directory: frontend
     env:
       VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
-      VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
       VITE_CLOUDINARY_CLOUD_NAME: ${{ secrets.VITE_CLOUDINARY_CLOUD_NAME }}
       VITE_CLOUDINARY_UPLOAD_PRESET: ${{ secrets.VITE_CLOUDINARY_UPLOAD_PRESET }}
-      VITE_DOG_API_KEY: ${{ secrets.VITE_DOG_API_KEY }}
-      VITE_CAT_API_KEY: ${{ secrets.VITE_CAT_API_KEY }}
+      STRAYSAFE_ANDROID_DEBUG: "true"      # read by capacitor.config.ts (the app's page is served as http://localhost so it may call an http LAN address)
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check the backend address is set
+      - name: Check the settings
         run: |
           if [ -z "$VITE_API_BASE_URL" ]; then
-            echo "::error::Add the repository variable VITE_API_BASE_URL (Settings → Secrets and variables → Actions → Variables), e.g. http://192.168.131.140:8000"
-            exit 1
+            echo "No VITE_API_BASE_URL variable: the app will open Connection Settings the first time, and the address is typed on the phone."
+          else
+            case "$VITE_API_BASE_URL" in
+              https://*) echo "The app will start with: $VITE_API_BASE_URL (changeable on the phone)" ;;
+              *)
+                echo "::error::VITE_API_BASE_URL must start with https:// (or be removed: a plain-http address for your own network is typed into the app, not built in)."
+                exit 1 ;;
+            esac
           fi
-          echo "The app will call: $VITE_API_BASE_URL"
+          if [ -z "$VITE_CLOUDINARY_CLOUD_NAME" ] || [ -z "$VITE_CLOUDINARY_UPLOAD_PRESET" ]; then
+            echo "::warning::VITE_CLOUDINARY_CLOUD_NAME / VITE_CLOUDINARY_UPLOAD_PRESET are not set: photos in a report's case chat and in ownership claims will fail to upload."
+          fi
 
       - uses: actions/setup-node@v4
         with:
@@ -49,28 +68,43 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install packages
+      - name: Install packages (from the lockfile)
         run: npm ci
 
-      - name: Build the web app
-        run: npm run build
+      - name: Build the web app for the Android debug app (Resident interface + Connection Settings)
+        run: npm run build:android:debug
 
       - name: Copy it into the Android project
         run: npx cap sync android
+
+      - name: Show the native configuration the app was given
+        run: |
+          echo "--- capacitor.config.json"
+          cat android/app/src/main/assets/capacitor.config.json
+          echo
+          test -f dist/index.html
+          # this is the debug app: it must contain Connection Settings, and its page must be http://localhost (an https page cannot call an http LAN address)
+          ls dist/assets | grep -q '^ConnectionPage-' || { echo "::error::Connection Settings is missing from this build (expected vite --mode android-debug)"; exit 1; }
+          grep -Eq '"androidScheme": *"http"' android/app/src/main/assets/capacitor.config.json || { echo "::error::The app's page is not http://localhost (STRAYSAFE_ANDROID_DEBUG was not applied)"; exit 1; }
 
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21          # Capacitor 8 needs Java 21
+          cache: gradle
 
-      - name: Build the APK
+      - name: Build the debug APK
         working-directory: frontend/android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
+      - name: Show the APK
+        run: ls -l android/app/build/outputs/apk/debug/
+
       - uses: actions/upload-artifact@v4
         with:
-          name: StraySafe-apk
+          name: StraySafe-Resident-debug-apk
           path: frontend/android/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 30
+          if-no-files-found: error
+          retention-days: 14

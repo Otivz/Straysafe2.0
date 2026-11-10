@@ -1,51 +1,36 @@
 # Database schema
 
-- **Status:** Current (generated)
+- **Status:** Current (generated, then edited by hand)
 - **Source:** `information_schema` of the local `straysafe_db`, 2026-11-05. Structure only: no data.
+- **Edited 2026-11-09 (case workflow alignment):** the sections of `reports`, `barangay_referrals`, `barangay_referral_updates`, `owner_warnings` and `lost_pet_alerts` were changed, and `case_followups`, `case_contact_logs`, `case_links` and `ownership_claims` were added, by hand from the models and `backend/app/db_migrations/case_alignment.py` (a MySQL server was not available to regenerate it). Rows marked **new** are those changes. See [CASE_WORKFLOW_BACKEND.md](CASE_WORKFLOW_BACKEND.md).
+- **Edited 2026-11-09 (legacy cleanup, batch 1):** the sections of `report_verifications`, `pet_vaccinations`, `behavior_tags`, `comments`, `announcement_comments`, `announcement_reactions`, `pet_qr_codes` and `pet_qr_scans` were removed (80 to 72 tables), and the columns `announcements.allow_comments` and `pet_history.scan_id` (with its foreign key).
+- **Edited 2026-11-10 (legacy retirement, batch 2):** the sections of the 21 tables of the retired endorsement-letter, adoption, holding, rescue and legacy claim and fee subsystems were removed (72 to 51 tables), and `report_media.holding_log_id`, `report_returns.holding_id`, `status_history.rescue_id` and `status_history.rescue_status_id` were dropped. `chat_threads.thread_type` is now `('Report','Direct')`. The list is in [DATABASE_FILES_AND_MIGRATIONS](../05-operations/database/DATABASE_FILES_AND_MIGRATIONS.md).
 - **Regenerate** after any schema change; the SQLAlchemy models in `backend/app/models/` are the source of truth.
 
-76 tables.
+51 tables.
 
 ## Tables
 
-- `adoption_assignments`
-- `adoption_certificates`
-- `adoption_home_visits`
-- `adoption_interviews`
-- `adoption_monitoring_logs`
-- `adoption_ownership_history`
-- `adoption_timeline_logs`
-- `adoption_verifications`
-- `adoptions`
 - `ai_jobs`
 - `ai_vision_comparisons`
 - `announcement_categories`
-- `announcement_comments`
 - `announcement_media`
-- `announcement_reactions`
 - `announcements`
 - `audit_logs`
 - `barangay_referral_updates`
 - `barangay_referrals`
 - `barangays`
-- `behavior_tags`
+- `case_contact_logs`
+- `case_followups`
+- `case_links`
 - `chat_messages`
 - `chat_threads`
-- `claim_assessment_changes`
-- `claim_assessments`
-- `claim_fee_schedules`
-- `comments`
 - `coverage_settings`
 - `email_logs`
-- `endorsement_letters`
-- `facility_status`
 - `followup_contact_logs`
 - `followup_repeated_incidents`
-- `holding_animals`
-- `holding_timeline`
 - `landmarks`
 - `leader_identity_verifications`
-- `letter_status`
 - `lost_pet_alerts`
 - `lost_pet_sightings`
 - `manual_match_decisions`
@@ -55,13 +40,10 @@
 - `owner_observation_update_photos`
 - `owner_observation_updates`
 - `owner_warnings`
-- `pet_claims`
+- `ownership_claims`
 - `pet_history`
 - `pet_match_confirmation_requests`
 - `pet_owner_confirmations`
-- `pet_qr_codes`
-- `pet_qr_scans`
-- `pet_vaccinations`
 - `pets`
 - `positions`
 - `push_deliveries`
@@ -72,11 +54,7 @@
 - `report_media`
 - `report_returns`
 - `report_status`
-- `report_verifications`
 - `reports`
-- `rescue_assignments`
-- `rescue_status`
-- `rescues`
 - `revoked_tokens`
 - `roles`
 - `status_history`
@@ -84,254 +62,6 @@
 - `system_settings`
 - `user_notification_preferences`
 - `users`
-
-## adoption_assignments
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| assignment_id | int | NO | PRI |  | auto_increment |
-| adoption_id | int | NO | MUL |  |  |
-| task_type | enum('Verification','Interview','Home_Visit','Handover','Monitoring','Other') | NO |  |  |  |
-| monitoring_log_id | int | YES | MUL |  |  |
-| assigned_to | int | YES | MUL |  |  |
-| assigned_to_name | varchar(100) | YES |  |  |  |
-| assigned_by | int | YES | MUL |  |  |
-| status | enum('Assigned','Accepted','Declined','In_Progress','Completed','Cancelled','Reassigned') | NO |  | Assigned |  |
-| scheduled_at | datetime | YES |  |  |  |
-| due_at | datetime | YES |  |  |  |
-| assigned_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-| accepted_at | datetime | YES |  |  |  |
-| declined_at | datetime | YES |  |  |  |
-| decline_reason | text | YES |  |  |  |
-| completed_at | datetime | YES |  |  |  |
-| cancelled_at | datetime | YES |  |  |  |
-| remarks | text | YES |  |  |  |
-| updated_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
-
-Foreign keys: `adoption_id` → `adoptions.adoption_id`, `assigned_by` → `users.user_id`, `monitoring_log_id` → `adoption_monitoring_logs.log_id`, `assigned_to` → `users.user_id`
-
-## adoption_certificates
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| certificate_id | int | NO | PRI |  | auto_increment |
-| adoption_id | int | NO | UNI |  |  |
-| certificate_number | varchar(100) | NO | UNI |  |  |
-| verification_hash | varchar(64) | NO | UNI |  |  |
-| pdf_url | varchar(500) | NO |  |  |  |
-| qr_code_url | text | NO |  |  |  |
-| issued_by | int | YES | MUL |  |  |
-| issued_at | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-| certificate_status | enum('Valid','Revoked') | NO |  | Valid |  |
-| revoked_at | datetime | YES |  |  |  |
-| revoked_by | int | YES | MUL |  |  |
-| revoked_reason | text | YES |  |  |  |
-| signatory_id | int | YES | MUL |  |  |
-| signatory_name | varchar(150) | YES |  |  |  |
-| signatory_position | varchar(150) | YES |  |  |  |
-| snapshot | json | YES |  |  |  |
-
-Foreign keys: `adoption_id` → `adoptions.adoption_id`, `revoked_by` → `users.user_id`, `signatory_id` → `users.user_id`, `issued_by` → `users.user_id`
-
-## adoption_home_visits
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| visit_id | int | NO | PRI |  | auto_increment |
-| adoption_id | int | NO | MUL |  |  |
-| inspector_id | int | YES | MUL |  |  |
-| visit_type | varchar(50) | NO |  | Physical |  |
-| scheduled_date | datetime | YES |  |  |  |
-| is_fencing_secure | tinyint(1) | NO |  | 0 |  |
-| is_shelter_adequate | tinyint(1) | NO |  | 0 |  |
-| hazard_free | tinyint(1) | NO |  | 0 |  |
-| checklist_notes | text | YES |  |  |  |
-| gps_latitude | decimal(10,8) | YES |  |  |  |
-| gps_longitude | decimal(11,8) | YES |  |  |  |
-| visit_photos | json | YES |  |  |  |
-| inspection_result | varchar(50) | NO |  | Pending |  |
-| conducted_at | datetime | YES |  |  |  |
-| assignment_id | int | YES | MUL |  |  |
-| evaluated_by | int | YES | MUL |  |  |
-| reschedule_count | int | NO |  | 0 |  |
-| last_rescheduled_at | datetime | YES |  |  |  |
-| reschedule_reason | text | YES |  |  |  |
-| residence_condition | varchar(100) | YES |  |  |  |
-| available_living_space | varchar(100) | YES |  |  |  |
-| environment_safety | varchar(100) | YES |  |  |  |
-| cleanliness_sanitation | varchar(100) | YES |  |  |  |
-| presence_of_hazards | varchar(255) | YES |  |  |  |
-| existing_pets | varchar(255) | YES |  |  |  |
-| overall_suitability | varchar(50) | YES |  |  |  |
-| recommendations | text | YES |  |  |  |
-| additional_observations | text | YES |  |  |  |
-
-Foreign keys: `adoption_id` → `adoptions.adoption_id`, `assignment_id` → `adoption_assignments.assignment_id`, `evaluated_by` → `users.user_id`, `inspector_id` → `users.user_id`
-
-## adoption_interviews
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| interview_id | int | NO | PRI |  | auto_increment |
-| adoption_id | int | NO | MUL |  |  |
-| interviewer_id | int | YES | MUL |  |  |
-| scheduled_at | datetime | YES |  |  |  |
-| interview_mode | varchar(50) | NO |  | In-Person |  |
-| meeting_link | varchar(500) | YES |  |  |  |
-| score_care_knowledge | int | YES |  |  |  |
-| score_financial_readiness | int | YES |  |  |  |
-| score_environment_suitability | int | YES |  |  |  |
-| total_score | decimal(5,2) | YES |  |  |  |
-| recommendation | varchar(50) | NO |  | Pending |  |
-| interview_notes | text | YES |  |  |  |
-| conducted_at | datetime | YES |  |  |  |
-| assignment_id | int | YES | MUL |  |  |
-| evaluated_by | int | YES | MUL |  |  |
-| interview_result | varchar(50) | YES |  |  |  |
-| questions_discussed | text | YES |  |  |  |
-| applicant_responses | text | YES |  |  |  |
-| additional_observations | text | YES |  |  |  |
-
-Foreign keys: `adoption_id` → `adoptions.adoption_id`, `assignment_id` → `adoption_assignments.assignment_id`, `evaluated_by` → `users.user_id`, `interviewer_id` → `users.user_id`
-
-## adoption_monitoring_logs
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| log_id | int | NO | PRI |  | auto_increment |
-| adoption_id | int | NO | MUL |  |  |
-| milestone_name | varchar(50) | NO |  |  |  |
-| due_date | date | NO |  |  |  |
-| submitted_at | datetime | YES |  |  |  |
-| status | varchar(50) | NO |  | Pending |  |
-| health_status | varchar(100) | YES |  |  |  |
-| photos | json | YES |  |  |  |
-| vet_record_url | varchar(500) | YES |  |  |  |
-| adopter_notes | text | YES |  |  |  |
-| reviewed_by | int | YES | MUL |  |  |
-| review_notes | text | YES |  |  |  |
-| reviewed_at | datetime | YES |  |  |  |
-| entry_type | varchar(30) | NO |  | Adopter_Checkin |  |
-| assignment_id | int | YES | MUL |  |  |
-| assessed_by | int | YES | MUL |  |  |
-| assessed_at | datetime | YES |  |  |  |
-| assessment_result | varchar(50) | YES |  |  |  |
-| animal_condition | varchar(100) | YES |  |  |  |
-| living_condition | varchar(100) | YES |  |  |  |
-| food_and_water | varchar(100) | YES |  |  |  |
-| shelter_condition | varchar(100) | YES |  |  |  |
-| vaccination_status | varchar(100) | YES |  |  |  |
-| assessment_notes | text | YES |  |  |  |
-| assessment_photos | json | YES |  |  |  |
-
-Foreign keys: `adoption_id` → `adoptions.adoption_id`, `assessed_by` → `users.user_id`, `assignment_id` → `adoption_assignments.assignment_id`, `reviewed_by` → `users.user_id`
-
-## adoption_ownership_history
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| history_id | int | NO | PRI |  | auto_increment |
-| adoption_id | int | NO | MUL |  |  |
-| from_user_id | int | YES | MUL |  |  |
-| to_user_id | int | YES | MUL |  |  |
-| action | enum('Claimed','Auto_Claimed_On_Approval','Transferred','Takeover','Released','Auto_Released') | NO |  |  |  |
-| reason | text | YES |  |  |  |
-| performed_by | int | YES | MUL |  |  |
-| created_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-
-Foreign keys: `adoption_id` → `adoptions.adoption_id`, `performed_by` → `users.user_id`, `from_user_id` → `users.user_id`, `to_user_id` → `users.user_id`
-
-## adoption_timeline_logs
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| timeline_id | int | NO | PRI |  | auto_increment |
-| adoption_id | int | NO | MUL |  |  |
-| stage | varchar(50) | NO |  |  |  |
-| action | varchar(100) | NO |  |  |  |
-| performed_by | int | YES | MUL |  |  |
-| notes | text | YES |  |  |  |
-| created_at | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-
-Foreign keys: `adoption_id` → `adoptions.adoption_id`, `performed_by` → `users.user_id`
-
-## adoption_verifications
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| verification_id | int | NO | PRI |  | auto_increment |
-| adoption_id | int | NO | MUL |  |  |
-| verified_by | int | YES | MUL |  |  |
-| id_match_status | varchar(50) | NO |  | Pending |  |
-| residency_status | varchar(50) | NO |  | Unknown |  |
-| blacklist_checked | tinyint(1) | NO |  | 0 |  |
-| is_blacklisted | tinyint(1) | NO |  | 0 |  |
-| verification_notes | text | YES |  |  |  |
-| verified_at | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-
-Foreign keys: `adoption_id` → `adoptions.adoption_id`, `verified_by` → `users.user_id`
-
-## adoptions
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| adoption_id | int | NO | PRI |  | auto_increment |
-| holding_id | int | NO | MUL |  |  |
-| applicant_id | int | YES | MUL |  |  |
-| is_manual_walkin | tinyint(1) | NO |  | 0 |  |
-| manual_applicant_name | varchar(150) | YES |  |  |  |
-| manual_applicant_phone | varchar(50) | YES |  |  |  |
-| manual_applicant_email | varchar(100) | YES |  |  |  |
-| manual_applicant_address | varchar(255) | YES |  |  |  |
-| manual_id_type_number | varchar(100) | YES |  |  |  |
-| status | enum('Pending','Approved','Rejected','Cancelled') | NO |  | Pending |  |
-| full_name | varchar(150) | NO |  |  |  |
-| address | text | NO |  |  |  |
-| contact_no | varchar(20) | NO |  |  |  |
-| has_other_pets | tinyint(1) | NO |  | 0 |  |
-| living_space | enum('House with yard','Apartment','Condo','Other') | NO |  | House with yard |  |
-| reason | text | NO |  |  |  |
-| reviewed_by | int | YES | MUL |  |  |
-| reviewer_role | enum('Subdivision Leader','Barangay Head Officer','Admin') | YES |  |  |  |
-| review_notes | text | YES |  |  |  |
-| reviewed_at | datetime | YES |  |  |  |
-| created_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-| updated_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
-| is_handed_over | tinyint(1) | NO |  | 0 |  |
-| handover_date | datetime | YES |  |  |  |
-| created_pet_id | int | YES | MUL |  |  |
-| id_type | varchar(100) | YES |  |  |  |
-| id_number | varchar(255) | YES |  |  |  |
-| id_photo_url | varchar(255) | YES |  |  |  |
-| handover_evidence_url | varchar(255) | YES |  |  |  |
-| staff_handed_over | tinyint(1) | NO |  | 0 |  |
-| staff_handover_date | datetime | YES |  |  |  |
-| staff_handover_by | int | YES |  |  |  |
-| cancellation_reason | text | YES |  |  |  |
-| cancelled_at | datetime | YES |  |  |  |
-| current_stage | varchar(50) | NO |  | Application |  |
-| application_stage_status | varchar(50) | NO |  | Submitted |  |
-| agreement_signed_at | datetime | YES |  |  |  |
-| agreement_signature_url | varchar(500) | YES |  |  |  |
-| certificate_id | int | YES |  |  |  |
-| handover_location | varchar(255) | YES |  |  |  |
-| handover_photo_url | varchar(500) | YES |  |  |  |
-| post_monitoring_status | varchar(50) | NO |  | Not_Started |  |
-| adoption_completed_at | datetime | YES |  |  |  |
-| is_certificate_sent | tinyint(1) | NO |  | 0 |  |
-| certificate_sent_at | datetime | YES |  |  |  |
-| handover_scheduled_date | datetime | YES |  |  |  |
-| handover_scheduled_time | varchar(50) | YES |  |  |  |
-| handover_assigned_staff | varchar(100) | YES |  |  |  |
-| handover_notes | text | YES |  |  |  |
-| handover_status | varchar(50) | YES |  | Pending |  |
-| resident_handover_confirmed | tinyint(1) | NO |  | 0 |  |
-| resident_handover_confirmed_at | datetime | YES |  |  |  |
-| case_owner_id | int | YES | MUL |  |  |
-| case_owner_assigned_at | datetime | YES |  |  |  |
-| case_owner_assigned_by | int | YES | MUL |  |  |
-
-Foreign keys: `case_owner_id` → `users.user_id`, `case_owner_assigned_by` → `users.user_id`, `created_pet_id` → `pets.pet_id`, `applicant_id` → `users.user_id`, `holding_id` → `holding_animals.holding_id`, `reviewed_by` → `users.user_id`
 
 ## ai_jobs
 
@@ -369,20 +99,6 @@ Foreign keys: `case_owner_id` → `users.user_id`, `case_owner_assigned_by` → 
 | description | text | YES |  |  |  |
 | created_at | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
-## announcement_comments
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| comment_id | int | NO | PRI |  | auto_increment |
-| announcement_id | int | NO | MUL |  |  |
-| user_id | int | NO | MUL |  |  |
-| parent_comment_id | int | YES | MUL |  |  |
-| comment | text | NO |  |  |  |
-| created_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-| updated_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
-
-Foreign keys: `announcement_id` → `announcements.announcement_id`, `parent_comment_id` → `announcement_comments.comment_id`, `user_id` → `users.user_id`
-
 ## announcement_media
 
 | Column | Type | Null | Key | Default | Extra |
@@ -396,18 +112,6 @@ Foreign keys: `announcement_id` → `announcements.announcement_id`, `parent_com
 | uploaded_at | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
 Foreign keys: `announcement_id` → `announcements.announcement_id`
-
-## announcement_reactions
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| reaction_id | int | NO | PRI |  | auto_increment |
-| announcement_id | int | NO | MUL |  |  |
-| user_id | int | NO | MUL |  |  |
-| reaction_type | varchar(50) | YES |  | Like |  |
-| created_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-
-Foreign keys: `announcement_id` → `announcements.announcement_id`, `user_id` → `users.user_id`
 
 ## announcements
 
@@ -428,7 +132,6 @@ Foreign keys: `announcement_id` → `announcements.announcement_id`, `user_id` �
 | updated_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
 | barangay_id | int | YES |  |  |  |
 | cover_image | varchar(255) | YES |  |  |  |
-| allow_comments | tinyint(1) | YES |  | 1 |  |
 
 Foreign keys: `category_id` → `announcement_categories.category_id`, `subdivision_id` → `subdivisions.subdivision_id`, `created_by` → `users.user_id`
 
@@ -462,6 +165,7 @@ Foreign keys: `user_id` → `users.user_id`
 | update_date | date | NO |  |  |  |
 | note | text | YES |  |  |  |
 | evidence_url | varchar(500) | YES |  |  |  |
+| status_after | varchar(20) | YES |  |  |  |
 | recorded_by | int | YES | MUL |  |  |
 | recorded_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
@@ -472,8 +176,8 @@ Foreign keys: `recorded_by` → `users.user_id`, `referral_id` → `barangay_ref
 | Column | Type | Null | Key | Default | Extra |
 |---|---|---|---|---|---|
 | referral_id | int | NO | PRI |  | auto_increment |
-| report_id | int | NO | UNI |  |  |
-| barangay_id | int | NO | MUL |  |  |
+| report_id | int | NO | MUL |  |  |
+| barangay_id | int | YES | MUL |  |  |
 | referred_by | int | YES | MUL |  |  |
 | referred_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 | reason | text | NO |  |  |  |
@@ -484,8 +188,21 @@ Foreign keys: `recorded_by` → `users.user_id`, `referral_id` → `barangay_ref
 | outcome_note | text | YES |  |  |  |
 | outcome_recorded_by | int | YES | MUL |  |  |
 | outcome_recorded_at | datetime | YES |  |  |  |
+| org_type | varchar(20) | YES |  |  |  |
+| org_name | varchar(150) | YES |  |  |  |
+| contact_person | varchar(150) | YES |  |  |  |
+| contact_detail | varchar(255) | YES |  |  |  |
+| is_urgent | tinyint(1) | NO |  | 0 |  |
+| referral_status | varchar(20) | YES |  |  |  |
+| status_updated_at | datetime | YES |  |  |  |
+| status_updated_by | int | YES | MUL |  |  |
+| external_outcome | text | YES |  |  |  |
+| remaining_follow_up | text | YES |  |  |  |
+| follow_up_at | datetime | YES |  |  |  |
 
-Foreign keys: `barangay_id` → `barangays.barangay_id`, `outcome_recorded_by` → `users.user_id`, `referred_by` → `users.user_id`, `report_id` → `reports.report_id`
+**Changed 2026-11-09:** `report_id` is no longer unique (a case can have several referrals; it keeps a plain index, `ix_barangay_referrals_report_id`), `barangay_id` may be empty (a referral to an organisation that is not a Barangay), and the columns from `org_type` on are new (`org_type` values: `barangay`, `animal_control`, `veterinary`, `animal_welfare`, `wildlife`, `other`; `referral_status` values: `sent`, `acknowledged`, `in_progress`, `completed`, `declined`, `no_response`). The table keeps its name and its rows.
+
+Foreign keys: `barangay_id` → `barangays.barangay_id`, `outcome_recorded_by` → `users.user_id`, `referred_by` → `users.user_id`, `report_id` → `reports.report_id`, `status_updated_by` → `users.user_id`
 
 ## barangays
 
@@ -499,12 +216,73 @@ Foreign keys: `barangay_id` → `barangays.barangay_id`, `outcome_recorded_by` �
 | hq_lat | decimal(10,8) | YES |  |  |  |
 | hq_lng | decimal(11,8) | YES |  |  |  |
 
-## behavior_tags
+## case_contact_logs
+
+**New 2026-11-09.** Who was contacted about a case, how, and what came of it.
 
 | Column | Type | Null | Key | Default | Extra |
 |---|---|---|---|---|---|
-| tag_id | int | NO | PRI |  | auto_increment |
-| tag_name | varchar(100) | NO | UNI |  |  |
+| log_id | int | NO | PRI |  | auto_increment |
+| report_id | int | NO | MUL |  |  |
+| subdivision_id | int | NO | MUL |  |  |
+| method | varchar(12) | NO |  |  |  |
+| with_whom | varchar(200) | NO |  |  |  |
+| summary | text | NO |  |  |  |
+| outcome | varchar(20) | NO |  | other |  |
+| contact_at | datetime | NO |  |  |  |
+| logged_by | int | YES | MUL |  |  |
+| created_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+
+`method`: `in_person`, `phone`, `message`, `letter`. `outcome`: `cooperative`, `denied_ownership`, `no_response`, `other`.
+
+Foreign keys: `logged_by` → `users.user_id`, `report_id` → `reports.report_id`, `subdivision_id` → `subdivisions.subdivision_id`
+
+## case_followups
+
+**New 2026-11-09.** A thing to do or check on a case, with a due date.
+
+| Column | Type | Null | Key | Default | Extra |
+|---|---|---|---|---|---|
+| followup_id | int | NO | PRI |  | auto_increment |
+| report_id | int | NO | MUL |  |  |
+| subdivision_id | int | NO | MUL |  |  |
+| kind | varchar(20) | NO |  | follow_up |  |
+| title | varchar(200) | NO |  |  |  |
+| notes | text | YES |  |  |  |
+| due_at | datetime | YES | MUL |  |  |
+| status | varchar(12) | NO | MUL | pending |  |
+| referral_id | int | YES | MUL |  |  |
+| created_by | int | YES | MUL |  |  |
+| created_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| completed_at | datetime | YES |  |  |  |
+| completed_by | int | YES | MUL |  |  |
+| completion_note | text | YES |  |  |  |
+| cancel_reason | varchar(255) | YES |  |  |  |
+
+`kind`: `follow_up`, `site_check`, `reporter_update`, `referral_check`, `warning_end`, `post_closure`. `status`: `pending`, `done`, `cancelled`.
+
+Foreign keys: `completed_by` → `users.user_id`, `created_by` → `users.user_id`, `referral_id` → `barangay_referrals.referral_id`, `report_id` → `reports.report_id`, `subdivision_id` → `subdivisions.subdivision_id`
+
+## case_links
+
+**New 2026-11-09.** Two reports about the same thing, linked without hiding or merging either. Unlinking keeps the row.
+
+| Column | Type | Null | Key | Default | Extra |
+|---|---|---|---|---|---|
+| link_id | int | NO | PRI |  | auto_increment |
+| report_id | int | NO | MUL |  |  |
+| related_report_id | int | NO | MUL |  |  |
+| link_type | varchar(20) | NO |  | related |  |
+| note | text | YES |  |  |  |
+| linked_by | int | YES | MUL |  |  |
+| linked_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| unlinked_at | datetime | YES |  |  |  |
+| unlinked_by | int | YES | MUL |  |  |
+| unlink_reason | text | YES |  |  |  |
+
+`report_id` is the lower id of the pair. `link_type`: `related`, `duplicate`, `same_animal`, `same_incident`. An active link has `unlinked_at` empty.
+
+Foreign keys: `linked_by` → `users.user_id`, `related_report_id` → `reports.report_id`, `report_id` → `reports.report_id`, `unlinked_by` → `users.user_id`
 
 ## chat_messages
 
@@ -526,7 +304,7 @@ Foreign keys: `sender_id` → `users.user_id`, `thread_id` → `chat_threads.thr
 | Column | Type | Null | Key | Default | Extra |
 |---|---|---|---|---|---|
 | thread_id | int | NO | PRI |  | auto_increment |
-| thread_type | enum('Report','Pet_Claim','Direct','Adoption') | NO | MUL | Report |  |
+| thread_type | enum('Report','Direct') | NO | MUL | Report |  |
 | related_id | int | YES |  |  |  |
 | created_by | int | NO | MUL |  |  |
 | recipient_id | int | NO | MUL |  |  |
@@ -536,90 +314,6 @@ Foreign keys: `sender_id` → `users.user_id`, `thread_id` → `chat_threads.thr
 | updated_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
 
 Foreign keys: `created_by` → `users.user_id`, `recipient_id` → `users.user_id`
-
-## claim_assessment_changes
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| change_id | int | NO | PRI |  | auto_increment |
-| assessment_id | int | NO | MUL |  |  |
-| action | varchar(30) | NO |  |  |  |
-| field | varchar(40) | YES |  |  |  |
-| previous_value | varchar(120) | YES |  |  |  |
-| new_value | varchar(120) | YES |  |  |  |
-| reason | text | YES |  |  |  |
-| changed_by | int | YES | MUL |  |  |
-| changed_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-
-Foreign keys: `assessment_id` → `claim_assessments.assessment_id`, `changed_by` → `users.user_id`
-
-## claim_assessments
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| assessment_id | int | NO | PRI |  | auto_increment |
-| claim_id | int | NO | MUL |  |  |
-| report_id | int | NO | MUL |  |  |
-| pet_id | int | YES | MUL |  |  |
-| holding_id | int | YES | MUL |  |  |
-| species | varchar(10) | NO |  |  |  |
-| fine_category | varchar(40) | NO |  |  |  |
-| fine_amount | decimal(10,2) | YES |  |  |  |
-| fine_legal_basis | text | YES |  |  |  |
-| charge_description | varchar(200) | YES |  |  |  |
-| no_charge_applicable | tinyint(1) | NO |  | 0 |  |
-| impounding_fee | decimal(10,2) | NO |  | 0.00 |  |
-| impounding_fee_basis | text | YES |  |  |  |
-| boarding_days | int | NO |  | 0 |  |
-| boarding_fee | decimal(10,2) | NO |  | 0.00 |  |
-| boarding_fee_basis | text | YES |  |  |  |
-| total_due | decimal(10,2) | NO |  | 0.00 |  |
-| status | varchar(20) | NO | MUL | Assessed |  |
-| notes | text | YES |  |  |  |
-| assessed_by | int | YES | MUL |  |  |
-| assessed_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-| amount_paid | decimal(10,2) | YES |  |  |  |
-| receipt_number | varchar(60) | YES |  |  |  |
-| payment_recorded_by | int | YES | MUL |  |  |
-| paid_at | datetime | YES |  |  |  |
-| waiver_reason | text | YES |  |  |  |
-| waived_by | int | YES | MUL |  |  |
-| waived_at | datetime | YES |  |  |  |
-| updated_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
-
-Foreign keys: `assessed_by` → `users.user_id`, `claim_id` → `pet_claims.claim_id`, `holding_id` → `holding_animals.holding_id`, `payment_recorded_by` → `users.user_id`, `pet_id` → `pets.pet_id`, `report_id` → `reports.report_id`, `waived_by` → `users.user_id`
-
-## claim_fee_schedules
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| schedule_id | int | NO | PRI |  | auto_increment |
-| fee_type | varchar(40) | NO | MUL |  |  |
-| species | varchar(10) | YES |  |  |  |
-| min_amount | decimal(10,2) | NO |  |  |  |
-| max_amount | decimal(10,2) | NO |  |  |  |
-| legal_basis | text | NO |  |  |  |
-| barangay_id | int | YES | MUL |  |  |
-| is_active | tinyint(1) | NO |  | 1 |  |
-| created_by | int | YES | MUL |  |  |
-| created_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-| deactivated_by | int | YES | MUL |  |  |
-| deactivated_at | datetime | YES |  |  |  |
-
-Foreign keys: `barangay_id` → `barangays.barangay_id`, `created_by` → `users.user_id`, `deactivated_by` → `users.user_id`
-
-## comments
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| comment_id | int | NO | PRI |  | auto_increment |
-| report_id | int | NO | MUL |  |  |
-| user_id | int | NO | MUL |  |  |
-| parent_comment_id | int | YES | MUL |  |  |
-| comment | text | NO |  |  |  |
-| created_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-
-Foreign keys: `parent_comment_id` → `comments.comment_id`, `report_id` → `reports.report_id`, `user_id` → `users.user_id`
 
 ## coverage_settings
 
@@ -663,32 +357,6 @@ Foreign keys: `subdivision_id` → `subdivisions.subdivision_id`, `updated_by` �
 
 Foreign keys: `user_id` → `users.user_id`
 
-## endorsement_letters
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| letter_id | int | NO | PRI |  | auto_increment |
-| report_id | int | NO | MUL |  |  |
-| leader_id | int | NO | MUL |  |  |
-| status_id | int | NO | MUL | 1 |  |
-| pdf_url | varchar(255) | YES |  |  |  |
-| remarks | text | YES |  |  |  |
-| created_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-| updated_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
-| title | varchar(255) | YES |  |  |  |
-| letter_content | text | YES |  |  |  |
-| file_url | varchar(255) | YES |  |  |  |
-| issued_at | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-
-Foreign keys: `leader_id` → `users.user_id`, `report_id` → `reports.report_id`, `status_id` → `letter_status.status_id`
-
-## facility_status
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| status_id | int | NO | PRI |  | auto_increment |
-| status_name | varchar(50) | NO | UNI |  |  |
-
 ## followup_contact_logs
 
 | Column | Type | Null | Key | Default | Extra |
@@ -722,48 +390,6 @@ Foreign keys: `followup_id` → `owner_followups.followup_id`, `logged_by` → `
 | created_at | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
 Foreign keys: `followup_id` → `owner_followups.followup_id`, `logged_by` → `users.user_id`, `pet_id` → `pets.pet_id`, `report_id` → `reports.report_id`
-
-## holding_animals
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| holding_id | int | NO | PRI |  | auto_increment |
-| report_id | int | NO | UNI |  |  |
-| rescue_id | int | YES | MUL |  |  |
-| animal_type | enum('Dog','Cat','Unknown') | YES |  | Unknown |  |
-| animal_name | varchar(100) | YES |  |  |  |
-| breed | varchar(100) | YES |  |  |  |
-| color | varchar(100) | YES |  |  |  |
-| estimated_size | varchar(50) | YES |  |  |  |
-| facility_status | int | NO | MUL | 1 |  |
-| kennel_slot | varchar(50) | YES |  |  |  |
-| medical_notes | text | YES |  |  |  |
-| adoption_catalog_notes | text | YES |  |  |  |
-| promoted_at | timestamp | YES |  |  |  |
-| promoted_by | int | YES | MUL |  |  |
-| intake_date | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-| discharge_date | timestamp | YES |  |  |  |
-| intake_staff_id | int | YES | MUL |  |  |
-| created_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-| overdue_notified | tinyint(1) | YES |  | 0 |  |
-| sex | enum('Male','Female','Unknown') | YES |  | Unknown |  |
-| estimated_age | varchar(50) | YES |  |  |  |
-
-Foreign keys: `promoted_by` → `users.user_id`, `report_id` → `reports.report_id`, `rescue_id` → `rescues.rescue_id`, `intake_staff_id` → `users.user_id`, `facility_status` → `facility_status.status_id`
-
-## holding_timeline
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| log_id | int | NO | PRI |  | auto_increment |
-| holding_id | int | NO | MUL |  |  |
-| event_type | varchar(50) | NO |  | observation |  |
-| title | varchar(255) | NO |  |  |  |
-| notes | text | YES |  |  |  |
-| logged_by | int | YES | MUL |  |  |
-| logged_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-
-Foreign keys: `holding_id` → `holding_animals.holding_id`, `logged_by` → `users.user_id`
 
 ## landmarks
 
@@ -804,13 +430,6 @@ Foreign keys: `barangay_id` → `barangays.barangay_id`, `subdivision_id` → `s
 
 Foreign keys: `leader_id` → `users.user_id`, `match_id` → `report_matches.match_id`, `pet_id` → `pets.pet_id`, `report_id` → `reports.report_id`
 
-## letter_status
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| status_id | int | NO | PRI |  | auto_increment |
-| status_name | varchar(50) | NO | UNI |  |  |
-
 ## lost_pet_alerts
 
 | Column | Type | Null | Key | Default | Extra |
@@ -821,6 +440,7 @@ Foreign keys: `leader_id` → `users.user_id`, `match_id` → `report_matches.ma
 | pet_id | int | YES | MUL |  |  |
 | owner_id | int | YES | MUL |  |  |
 | status | varchar(20) | NO | MUL | requested |  |
+| alert_type | varchar(20) | NO |  | lost_pet |  |
 | last_seen_at | datetime | YES |  |  |  |
 | last_seen_location | varchar(255) | YES |  |  |  |
 | last_seen_lat | decimal(10,8) | YES |  |  |  |
@@ -1006,40 +626,41 @@ Foreign keys: `followup_id` → `owner_followups.followup_id`, `owner_user_id` �
 | fine_amount | decimal(10,2) | YES |  | 0.00 |  |
 | status | enum('Pending','Acknowledged','Appealed','Resolved') | NO |  | Pending |  |
 | acknowledged_at | timestamp | YES |  |  |  |
+| policy_id | varchar(60) | YES |  |  |  |
+| policy_title | varchar(200) | YES |  |  |  |
+| policy_reference | varchar(200) | YES |  |  |  |
+| observation_days | int | YES |  |  |  |
+| follow_up_at | datetime | YES |  |  |  |
 | created_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 | updated_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
 
 Foreign keys: `issued_by` → `users.user_id`, `pet_id` → `pets.pet_id`, `report_id` → `reports.report_id`, `user_id` → `users.user_id`
 
-## pet_claims
+## ownership_claims
+
+**New 2026-11-09.** A resident's claim that a found animal is theirs. Reviewed by the Subdivision Admin; never establishes ownership by itself.
 
 | Column | Type | Null | Key | Default | Extra |
 |---|---|---|---|---|---|
 | claim_id | int | NO | PRI |  | auto_increment |
 | report_id | int | NO | MUL |  |  |
-| pet_id | int | NO | MUL |  |  |
-| status | enum('Potential Owner Match','Possible Match Found','Pending Review','Approved','Rejected','Evidence Requested','Handover Complete','Pet Received','Merged','Not Needed') | NO |  | Potential Owner Match |  |
-| evidence_url | varchar(255) | YES |  |  |  |
-| vaccine_card_url | varchar(255) | YES |  |  |  |
-| vet_record_url | varchar(255) | YES |  |  |  |
-| registration_record_url | varchar(255) | YES |  |  |  |
-| additional_photos_url | text | YES |  |  |  |
-| distinctive_markings | text | YES |  |  |  |
-| remarks | text | YES |  |  |  |
-| match_score | int | YES |  |  |  |
-| merged_into_claim_id | int | YES |  |  |  |
-| status_before_merge | varchar(30) | YES |  |  |  |
-| status_before_approval | int | YES |  |  |  |
-| owner_whereabouts | varchar(20) | YES |  |  |  |
-| owner_whereabouts_note | text | YES |  |  |  |
-| owner_whereabouts_at | datetime | YES |  |  |  |
-| closed_reason | text | YES |  |  |  |
-| closed_by | int | YES |  |  |  |
-| closed_at | datetime | YES |  |  |  |
-| created_at | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-| updated_at | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
+| alert_id | int | YES | MUL |  |  |
+| subdivision_id | int | NO | MUL |  |  |
+| claimant_user_id | int | YES | MUL |  |  |
+| claimed_pet_id | int | YES | MUL |  |  |
+| statement | text | NO |  |  |  |
+| evidence | json | YES |  |  |  |
+| evidence_urls | json | YES |  |  |  |
+| status | varchar(16) | NO | MUL | submitted |  |
+| review_note | text | YES |  |  |  |
+| reviewed_by | int | YES | MUL |  |  |
+| reviewed_at | datetime | YES |  |  |  |
+| submitted_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| updated_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
 
-Foreign keys: `pet_id` → `pets.pet_id`, `report_id` → `reports.report_id`
+`status`: `submitted`, `under_review`, `needs_info`, `accepted`, `rejected`, `withdrawn`.
+
+Foreign keys: `alert_id` → `lost_pet_alerts.alert_id`, `claimant_user_id` → `users.user_id`, `claimed_pet_id` → `pets.pet_id`, `report_id` → `reports.report_id`, `reviewed_by` → `users.user_id`, `subdivision_id` → `subdivisions.subdivision_id`
 
 ## pet_history
 
@@ -1051,7 +672,6 @@ Foreign keys: `pet_id` → `pets.pet_id`, `report_id` → `reports.report_id`
 | title | varchar(150) | NO |  |  |  |
 | description | text | YES |  |  |  |
 | recovery_method | varchar(50) | YES |  |  |  |
-| scan_id | int | YES | MUL |  |  |
 | actor_id | int | YES | MUL |  |  |
 | actor_name | varchar(100) | YES |  |  |  |
 | actor_role | varchar(50) | YES |  |  |  |
@@ -1062,7 +682,7 @@ Foreign keys: `pet_id` → `pets.pet_id`, `report_id` → `reports.report_id`
 | longitude | decimal(11,8) | YES |  |  |  |
 | created_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
-Foreign keys: `actor_id` → `users.user_id`, `pet_id` → `pets.pet_id`, `scan_id` → `pet_qr_scans.scan_id`
+Foreign keys: `actor_id` → `users.user_id`, `pet_id` → `pets.pet_id`
 
 ## pet_match_confirmation_requests
 
@@ -1107,64 +727,6 @@ Foreign keys: `cancelled_by` → `users.user_id`, `final_by` → `users.user_id`
 | responded_at | datetime | YES |  |  |  |
 
 Foreign keys: `pet_id` → `pets.pet_id`, `proposed_owner_id` → `users.user_id`, `proposed_by` → `users.user_id`, `previous_owner_id` → `users.user_id`, `report_id` → `reports.report_id`
-
-## pet_qr_codes
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| qr_id | int | NO | PRI |  | auto_increment |
-| pet_id | int | NO | UNI |  |  |
-| qr_token | varchar(255) | NO | UNI |  |  |
-| qr_image_url | varchar(255) | YES |  |  |  |
-| is_active | tinyint(1) | YES |  | 1 |  |
-| scan_count | int | YES |  | 0 |  |
-| last_scanned_at | timestamp | YES |  |  |  |
-| created_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-
-Foreign keys: `pet_id` → `pets.pet_id`
-
-## pet_qr_scans
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| scan_id | int | NO | PRI |  | auto_increment |
-| qr_id | int | NO | MUL |  |  |
-| pet_id | int | NO | MUL |  |  |
-| scanned_by | int | YES | MUL |  |  |
-| finder_name | varchar(100) | YES |  |  |  |
-| finder_contact | varchar(20) | YES |  |  |  |
-| scan_lat | decimal(10,8) | YES |  |  |  |
-| scan_lng | decimal(11,8) | YES |  |  |  |
-| street_address | varchar(255) | YES |  |  |  |
-| barangay | varchar(100) | YES |  |  |  |
-| city | varchar(100) | YES |  |  |  |
-| landmark | varchar(255) | YES |  |  |  |
-| location_type | enum('Found Location','Barangay Hall','Temporary Shelter') | YES |  | Found Location |  |
-| notes | varchar(255) | YES |  |  |  |
-| status | enum('PENDING','CONFIRMED','REJECTED','EXPIRED') | NO |  | PENDING |  |
-| confirmed_at | datetime | YES |  |  |  |
-| confirmed_by | int | YES | MUL |  |  |
-| rejection_reason | varchar(255) | YES |  |  |  |
-| pet_status_at_scan | varchar(50) | YES |  |  |  |
-| scanned_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-
-Foreign keys: `confirmed_by` → `users.user_id`, `pet_id` → `pets.pet_id`, `qr_id` → `pet_qr_codes.qr_id`, `scanned_by` → `users.user_id`
-
-## pet_vaccinations
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| vaccination_id | int | NO | PRI |  | auto_increment |
-| pet_id | int | NO | MUL |  |  |
-| vaccine_name | varchar(100) | NO |  |  |  |
-| administered_date | date | NO |  |  |  |
-| expiry_date | date | YES |  |  |  |
-| clinic_name | varchar(100) | YES |  |  |  |
-| veterinarian | varchar(100) | YES |  |  |  |
-| notes | text | YES |  |  |  |
-| created_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-
-Foreign keys: `pet_id` → `pets.pet_id`
 
 ## pets
 
@@ -1274,6 +836,8 @@ Foreign keys: `user_id` → `users.user_id`
 | category_name | varchar(100) | NO | UNI |  |  |
 | description | text | YES |  |  |  |
 
+**Rows added 2026-11-09 (by name, when missing; existing rows are never changed):** Found / Unidentified Animal, Animal Nuisance, Animal Safety Concern, Injured / Distressed Animal, Other Animal Concern. With the existing Lost Pet they are the six categories of the Admin UI; the older categories (Injured, Aggressive, Rabies Risk, Roaming Animal, Rescue Needed) keep working and are read as one of the six.
+
 ## report_disputes
 
 | Column | Type | Null | Key | Default | Extra |
@@ -1336,7 +900,6 @@ Foreign keys: `matched_pet_id` → `pets.pet_id`, `matched_report_id` → `repor
 | report_id | int | NO | MUL |  |  |
 | history_id | int | YES | MUL |  |  |
 | status_id | int | YES | MUL |  |  |
-| holding_log_id | int | YES | MUL |  |  |
 | file_url | varchar(255) | NO |  |  |  |
 | media_type | enum('Image','Video','Document') | NO |  |  |  |
 | animal_type | enum('Dog','Cat','Unknown') | YES |  | Unknown |  |
@@ -1347,7 +910,7 @@ Foreign keys: `matched_pet_id` → `pets.pet_id`, `matched_report_id` → `repor
 | ai_photo_status | varchar(100) | YES |  |  |  |
 | ai_detection_confidence | decimal(4,3) | YES |  |  |  |
 
-Foreign keys: `history_id` → `status_history.history_id`, `holding_log_id` → `holding_timeline.log_id`, `report_id` → `reports.report_id`, `status_id` → `report_status.status_id`
+Foreign keys: `history_id` → `status_history.history_id`, `report_id` → `reports.report_id`, `status_id` → `report_status.status_id`
 
 ## report_returns
 
@@ -1355,7 +918,6 @@ Foreign keys: `history_id` → `status_history.history_id`, `holding_log_id` →
 |---|---|---|---|---|---|
 | return_id | int | NO | PRI |  | auto_increment |
 | report_id | int | NO | MUL |  |  |
-| holding_id | int | YES | MUL |  |  |
 | pet_id | int | YES | MUL |  |  |
 | has_account | tinyint(1) | NO |  | 0 |  |
 | owner_user_id | int | YES | MUL |  |  |
@@ -1374,7 +936,7 @@ Foreign keys: `history_id` → `status_history.history_id`, `holding_log_id` →
 | returned_by | int | YES | MUL |  |  |
 | returned_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
-Foreign keys: `report_id` → `reports.report_id`, `holding_id` → `holding_animals.holding_id`, `pet_id` → `pets.pet_id`, `owner_user_id` → `users.user_id`, `returned_by` → `users.user_id`
+Foreign keys: `report_id` → `reports.report_id`, `pet_id` → `pets.pet_id`, `owner_user_id` → `users.user_id`, `returned_by` → `users.user_id`
 
 ## report_status
 
@@ -1382,21 +944,6 @@ Foreign keys: `report_id` → `reports.report_id`, `holding_id` → `holding_ani
 |---|---|---|---|---|---|
 | status_id | int | NO | PRI |  | auto_increment |
 | status_name | varchar(50) | NO | UNI |  |  |
-
-## report_verifications
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| verification_id | int | NO | PRI |  | auto_increment |
-| report_id | int | NO | MUL |  |  |
-| verified_by | int | NO | MUL |  |  |
-| is_valid | tinyint(1) | NO |  |  |  |
-| remarks | text | YES |  |  |  |
-| verified_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-| leader_id | int | YES |  |  |  |
-| status_id | int | YES |  |  |  |
-
-Foreign keys: `report_id` → `reports.report_id`, `verified_by` → `users.user_id`
 
 ## reports
 
@@ -1414,7 +961,7 @@ Foreign keys: `report_id` → `reports.report_id`, `verified_by` → `users.user
 | separate_incident_reason | text | YES |  |  |  |
 | separate_incident_by | int | YES |  |  |  |
 | separate_incident_at | datetime | YES |  |  |  |
-| animal_type | enum('Dog','Cat','Unknown') | YES | MUL | Unknown |  |
+| animal_type | enum('Dog','Cat','Unknown','Bird','Small mammal','Reptile','Livestock','Wildlife','Other') | YES | MUL | Unknown |  |
 | animal_breed | varchar(100) | YES |  |  |  |
 | animal_color | varchar(255) | YES |  |  |  |
 | estimated_size | enum('Small','Medium','Large') | YES |  |  |  |
@@ -1480,48 +1027,37 @@ Foreign keys: `report_id` → `reports.report_id`, `verified_by` → `users.user
 | ai_description_confidence | json | YES |  |  |  |
 | ai_photo_recommendation | text | YES |  |  |  |
 | ai_photo_details | text | YES |  |  |  |
+| case_status | varchar(20) | YES | MUL |  |  |
+| incident_verification | varchar(20) | YES |  |  |  |
+| incident_basis | text | YES |  |  |  |
+| evidence_sufficiency | varchar(20) | YES |  |  |  |
+| evidence_reviewed | json | YES |  |  |  |
+| urgency_level | varchar(20) | YES |  |  |  |
+| urgency_note | text | YES |  |  |  |
+| assessment_notes | text | YES |  |  |  |
+| assessed_at | datetime | YES |  |  |  |
+| assessed_by | int | YES | MUL |  |  |
+| identity_status | varchar(20) | YES |  |  |  |
+| identity_note | text | YES |  |  |  |
+| ownership_status | varchar(20) | YES |  |  |  |
+| ownership_owner_id | int | YES | MUL |  |  |
+| ownership_evidence | json | YES |  |  |  |
+| ownership_note | text | YES |  |  |  |
+| ownership_decided_by | int | YES | MUL |  |  |
+| ownership_decided_at | datetime | YES |  |  |  |
+| closure_disposition | varchar(40) | YES |  |  |  |
+| closure_reason | text | YES |  |  |  |
+| closed_at | datetime | YES |  |  |  |
+| closed_by | int | YES | MUL |  |  |
+| reopened_count | int | NO |  | 0 |  |
+| last_reopened_at | datetime | YES |  |  |  |
+| last_reopened_by | int | YES | MUL |  |  |
+| last_reopen_reason | text | YES |  |  |  |
+| is_sensitive | tinyint(1) | NO |  | 0 |  |
 
 Foreign keys: `assigned_leader_id` → `users.user_id`, `category_id` → `report_categories.category_id`, `duplicate_of_report_id` → `reports.report_id`, `facility_id` → `landmarks.landmark_id`, `merged_by` → `users.user_id`, `pending_transfer_from_id` → `users.user_id`, `pending_transfer_to_id` → `users.user_id`, `pet_id` → `pets.pet_id`, `split_from_report_id` → `reports.report_id`, `current_status_id` → `report_status.status_id`, `subdivision_id` → `subdivisions.subdivision_id`, `user_id` → `users.user_id`, `verified_by_user_id` → `users.user_id`, `visibility_decided_by` → `users.user_id`
 
-## rescue_assignments
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| assignment_id | int | NO | PRI |  | auto_increment |
-| rescue_id | int | NO | MUL |  |  |
-| user_id | int | NO | MUL |  |  |
-| assigned_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-| staff_id | int | YES |  |  |  |
-| assigned_by | int | YES |  |  |  |
-| assignment_status | enum('Assigned','In Transit','On Site','Completed','Cancelled') | YES |  | Assigned |  |
-| remarks | text | YES |  |  |  |
-
-Foreign keys: `rescue_id` → `rescues.rescue_id`, `user_id` → `users.user_id`
-
-## rescue_status
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| status_id | int | NO | PRI |  | auto_increment |
-| status_name | varchar(50) | NO | UNI |  |  |
-
-## rescues
-
-| Column | Type | Null | Key | Default | Extra |
-|---|---|---|---|---|---|
-| rescue_id | int | NO | PRI |  | auto_increment |
-| report_id | int | NO | MUL |  |  |
-| status_id | int | NO | MUL | 1 |  |
-| assigned_team | varchar(100) | YES |  |  |  |
-| notes | text | YES |  |  |  |
-| scheduled_at | timestamp | YES |  |  |  |
-| completed_at | timestamp | YES |  |  |  |
-| created_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-| staff_id | int | YES |  |  |  |
-| leader_id | int | YES |  |  |  |
-| started_at | datetime | YES |  |  |  |
-
-Foreign keys: `report_id` → `reports.report_id`, `status_id` → `rescue_status.status_id`
+**Changed 2026-11-09:** `animal_type` accepts Bird, Small mammal, Reptile, Livestock, Wildlife and Other (members appended after `Unknown`, so MySQL changes the ENUM in place); the columns from `case_status` on are new (case workflow: the four global statuses, assessment, identity, ownership, closure, reopening and the sensitive flag; see [CASE_WORKFLOW_BACKEND.md](CASE_WORKFLOW_BACKEND.md)). New foreign keys, all to `users.user_id` with `ON DELETE SET NULL`: `assessed_by`, `ownership_owner_id`, `ownership_decided_by`, `closed_by`, `last_reopened_by`. New index: `ix_reports_case_status`.
 
 ## revoked_tokens
 
@@ -1548,7 +1084,6 @@ Foreign keys: `report_id` → `reports.report_id`, `status_id` → `rescue_statu
 | history_id | int | NO | PRI |  | auto_increment |
 | report_id | int | NO | MUL |  |  |
 | report_status_id | int | YES | MUL |  |  |
-| rescue_status_id | int | YES | MUL |  |  |
 | updated_by | int | YES | MUL |  |  |
 | latitude | decimal(10,8) | YES |  |  |  |
 | longitude | decimal(11,8) | YES |  |  |  |
@@ -1556,9 +1091,8 @@ Foreign keys: `report_id` → `reports.report_id`, `status_id` → `rescue_statu
 | facility_id | int | YES | MUL |  |  |
 | remarks | text | YES |  |  |  |
 | created_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-| rescue_id | int | YES |  |  |  |
 
-Foreign keys: `facility_id` → `landmarks.landmark_id`, `report_id` → `reports.report_id`, `rescue_status_id` → `rescue_status.status_id`, `report_status_id` → `report_status.status_id`, `updated_by` → `users.user_id`
+Foreign keys: `facility_id` → `landmarks.landmark_id`, `report_id` → `reports.report_id`, `report_status_id` → `report_status.status_id`, `updated_by` → `users.user_id`
 
 ## subdivisions
 
@@ -1584,6 +1118,8 @@ Foreign keys: `barangay_id` → `barangays.barangay_id`
 | updated_by | int | YES | MUL |  |  |
 
 Foreign keys: `updated_by` → `users.user_id`
+
+Rows keyed `case_settings:<subdivision_id>` (added 2026-11-09) hold a subdivision's case settings as JSON (enabled categories, policies, follow-up periods, publication policy); see [CASE_WORKFLOW_BACKEND.md](CASE_WORKFLOW_BACKEND.md).
 
 ## user_notification_preferences
 

@@ -24,7 +24,6 @@ router = APIRouter(
 )
 
 RESOLVED_REPORT_STATUS_IDS = (9, 10, 11, 12, 14, 17, 18)
-RESOLVED_HOLDING_STATUS_IDS = (3, 4, 5, 7, 8)
 
 
 def _validate_coordinates(lat: Optional[float], lng: Optional[float]) -> None:
@@ -50,7 +49,7 @@ def _sync_facility_reports(landmark: Landmark, db: Session) -> None:
     if not landmark.is_holding_facility or landmark.status != "Active":
         return
 
-    from app.models.report import Report, HoldingAnimal
+    from app.models.report import Report
 
     # 1. Update all active reports already referencing this facility_id
     active_reports = db.query(Report).filter(
@@ -65,21 +64,12 @@ def _sync_facility_reports(landmark: Landmark, db: Session) -> None:
     # 2. If this is an active Barangay holding facility (subdivision_id is None),
     # re-link any active Barangay-custody reports whose facility_id became NULL when an earlier facility row was replaced.
     if landmark.subdivision_id is None:
-        open_holding_report_ids = [
-            r[0] for r in db.query(HoldingAnimal.report_id).filter(
-                HoldingAnimal.report_id.isnot(None),
-                HoldingAnimal.discharge_date.is_(None),
-                HoldingAnimal.facility_status.notin_(RESOLVED_HOLDING_STATUS_IDS)
-            ).all()
-        ]
         orphan_candidates = db.query(Report).filter(
             Report.facility_id.is_(None),
             Report.current_status_id.in_([7, 8, 15, 16])
         ).all()
         for rep in orphan_candidates:
-            if rep.custody_status == "In Barangay Facility" or (
-                rep.report_id in open_holding_report_ids and rep.custody_status != "In Subdivision Facility"
-            ):
+            if rep.custody_status == "In Barangay Facility":
                 rep.facility_id = landmark.landmark_id
                 rep.latitude = landmark.latitude
                 rep.longitude = landmark.longitude

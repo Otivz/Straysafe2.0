@@ -8,6 +8,7 @@ import { NOTICE_TYPES } from '../../data/constants';
 import { useResidentData } from '../../data/context';
 import { feed } from '../../data/selectors';
 import type { NoticeType } from '../../data/types';
+import { useSubdivisionName } from '../../lib/useOffice';
 
 type Filter = 'all' | NoticeType;
 
@@ -17,6 +18,7 @@ type Filter = 'all' | NoticeType;
  */
 export default function CommunityPage() {
   const { state } = useResidentData();
+  const subdivision = useSubdivisionName();
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
 
@@ -26,7 +28,7 @@ export default function CommunityPage() {
   const shown = feed(state, filter).filter((n) => !q || `${n.title} ${n.description} ${n.area}`.toLowerCase().includes(q));
 
   return (
-    <PrimaryScreen title="Community" lead="Lost pets, found animals and safety advisories shared in Selera Homes.">
+    <PrimaryScreen title="Community" lead={`Lost pets, found animals and safety advisories shared in ${subdivision === 'Your subdivision' ? 'your subdivision' : subdivision}.`}>
       <Segmented<Filter>
         label="Show"
         value={filter}

@@ -57,7 +57,7 @@ The Leader can also **close** an alert without resolving the report (pet not fou
   - review status, note, reviewer and time;
   - `client_request_id` (unique), to catch duplicates.
 
-Both tables are created at startup (`create_all`) and are also in `Database3.3.txt`.
+Both tables are created at startup (`create_all`) and are also in `Database3.4_subdivision.sql`.
 
 ## Rules and validation
 
@@ -80,14 +80,16 @@ Both tables are created at startup (`create_all`) and are also in `Database3.3.t
 
 Phone numbers, email addresses and home addresses are never part of an alert or a sighting.
 
+**Pins (2026-11-09).** Another resident sees the **area** of the last-seen place and of every sighting (coordinates rounded to 3 decimals of a degree, about 110 m, flagged `generalized` / `coordinates_generalized`), never the pin. Exact pins stay with the Leader, the Administrator, the person who submitted a sighting (their own) and a lost pet's owner. A pin the leader or the owner types (last seen, correction) must be inside the reporting coverage area, checked on the server.
+
 ## Screens
 
-- **Residents:** there is no standalone list; `/resident/lost-pets` redirects to the resident home, and alerts are opened from the report page or a notification. Each alert (`/resident/lost-pets/:id`) shows:
+- **Residents:** alerts are community notices in the Resident app (`/resident-app/community`, an alert at `/resident-app/community/alert-<id>`, its sightings at `.../sightings`). The legacy `/resident/lost-pets` pages were retired on 2026-11-10. Each alert shows:
   - the alert card;
   - **Report a Sighting** (the Spotted Here form with its own pin map);
   - the **Lost Pet Tracking Map**: a red marker for the last known location and numbered sighting markers (amber, green when verified, blue ring on the latest). Pins are never joined into a route; clicking one opens its details. **Expand map** opens a full-viewport dialog with the same position, zoom, markers, and popup details. Close or Escape returns to the inline map and restores keyboard focus; the page behind the dialog cannot scroll.
   - the **sighting timeline**: last known location first, then sightings by reported time, with the latest submission highlighted.
-- **Subdivision Leaders:** `/subd/lost-pet-alerts` redirects to the Subdivision dashboard; each alert (`/subd/lost-pet-alerts/:id`, opened from the report page, the dashboard section or a notification) shows the same view plus its management actions.
+- **Subdivision Leaders:** notices are managed in the Leader app (`/subd-admin/community`); the legacy `/subd/lost-pet-alerts` pages were retired on 2026-11-10. A notice shows the same view plus its management actions.
 - **Subdivision dashboard:** a compact Lost Pet Alerts section with the same stats, active alerts and latest sighting locations.
 - **Report pages** (resident and Subdivision): a Neighborhood Alert card with the status, sighting count, latest sighting and a link to the map, plus the request button.
 - **Report Location Intelligence and report maps** (added 2026-11-03):
@@ -108,6 +110,10 @@ When a resident places the pin (a map tap or the device location), the form:
 - ignores a late answer for an earlier pin, so each pin gets only its own name.
 
 The marker popup and **Sighting details** show the same Location, Latitude, Longitude and Copy coordinates (`PinLocationInfo`), read from the stored sighting, so they are unchanged after a refresh. Sightings saved without a name (before this change, or when the look-up failed) get a name looked up from their own stored coordinates, one request at a time; it is shown but not saved. Nothing is a placeholder: without a name, the coordinates are shown on their own.
+
+## Found animals (2026-11-09)
+
+The same alert machinery carries a **found-animal notice** (`lost_pet_alerts.alert_type = found_animal`; every earlier row is `lost_pet`): `POST /lost-pet-alerts/reports/{id}/request` with `{"alert_type": "found_animal"}`, then `POST /lost-pet-alerts/{id}/activate`. It is for a Found / Unidentified Animal case that is not sensitive, open and in a subdivision. The Leader, or the resident who reported the animal, can ask for it; a resident's request waits for the Leader unless the subdivision's publication policy is `immediate` for found animals (never for a sensitive, nuisance or safety case). It has no owner and no registered pet; the person who found the animal is not "the owner" and sees what a neighbor sees. Neighbors see the animal's looks and the area, never its distinguishing marks or the finder's own words (they are how the real owner proves ownership). Sightings work as for a lost pet. Residents claim the animal through `POST /reports/{id}/ownership-claims`, reviewed by the Subdivision Admin; a claim never establishes ownership. Closing the case closes the notice. Details: [CASE_WORKFLOW_BACKEND.md](CASE_WORKFLOW_BACKEND.md).
 
 ## Code and tests
 

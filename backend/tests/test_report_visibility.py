@@ -1,7 +1,7 @@
 """
 Report visibility (REPORT_VISIBILITY_IMPLEMENTATION.md): the Subdivision Leader decides Public / Private after
 verifying; false, rejected and merged reports are never shown to other residents; reporter and owner details are
-never shown to other residents; comments, matches and notifications follow the same rule; every decision is logged.
+never shown to other residents; matches and notifications follow the same rule; every decision is logged.
 Run from the backend folder:  python tests/test_report_visibility.py
 """
 import os
@@ -23,7 +23,7 @@ from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models.audit_log import AuditLog  # noqa: E402
 from app.models.notification import Notification  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
-from app.models.report import Comment, Report, ReportStatus  # noqa: E402
+from app.models.report import Report, ReportStatus  # noqa: E402
 from app.models.report_match import ReportMatch  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
 from app.routes import matches, notifications, reports  # noqa: E402
@@ -122,8 +122,6 @@ else:
 rid = report()
 check("2 another resident doesn't get a pending report in the list", rid not in ids(other))
 check("2 another resident gets 404 on the report page", get(other, rid).status_code == 404)
-check("2 another resident can't comment on it (404)",
-      client.post(f"/reports/{rid}/comments", headers=H(other), json={"comment": "hi"}).status_code == 404)
 check("3 the reporter sees it in the list and on the page", rid in ids(reporter) and get(reporter, rid).status_code == 200)
 check("3 staff see it", get(leader, rid).status_code == 200 and get(brgy, rid).status_code == 200)
 
@@ -170,17 +168,6 @@ check("15 staff still get the reporter's identity", staff_body["reporter_name"] 
 check("15 the reporter sees their own name", get(reporter, rid).json()["reporter_name"] == "Rita Reporter")
 check("15 staff see the decision details", staff_body["visibility_decided_by_name"] == "Leo Leader" and staff_body["visible_to_residents"] is True)
 
-# 18. Comments
-res = client.post(f"/reports/{rid}/comments", headers=H(other), json={"comment": "I saw it too", "user_id": admin.user_id})
-c = db.query(Comment).filter(Comment.report_id == rid).order_by(Comment.comment_id.desc()).first()
-check("18 a resident can comment on a verified Public report", res.status_code == 200)
-check("18 the commenter is the signed-in user, never the user_id sent", c is not None and c.user_id == other.user_id)
-check("18 anonymous comments are refused (401)", client.post(f"/reports/{rid}/comments", json={"comment": "x", "user_id": other.user_id}).status_code == 401)
-client.post(f"/reports/{rid}/comments", headers=H(reporter), json={"comment": "Thanks, it's brown"})
-seen = get(owner, rid).json()["comments"]
-check("18 other residents see commenters by first name only, the reporter as Community Reporter",
-      {x["user_name"] for x in seen} == {"Olga", rv.COMMUNITY_REPORTER} and all(x["user_photo"] is None for x in seen), seen)
-
 # 7-8. Public -> Private
 res = set_vis(rid, "Private")
 check("8 changing an earlier decision without a reason is refused (422)", res.status_code == 422)
@@ -188,10 +175,6 @@ res = set_vis(rid, "Private", reason="Neighbour asked for privacy")
 check("7 Public -> Private with a reason works", res.status_code == 200 and row(rid).visibility == rv.PRIVATE, res.text[:200])
 check("7 hidden at once from the other resident's list (search, map) and page",
       rid not in ids(other) and get(other, rid).status_code == 404)
-check("7 existing comments are kept for the reporter and staff",
-      len(get(reporter, rid).json()["comments"]) == 2 and len(get(leader, rid).json()["comments"]) == 2)
-check("2 residents can't comment on a Private report, even the reporter (403, use the chat)",
-      client.post(f"/reports/{rid}/comments", headers=H(reporter), json={"comment": "x"}).status_code == 403)
 log = db.query(AuditLog).filter(AuditLog.action == "SET_REPORT_VISIBILITY", AuditLog.target_id == rid).order_by(AuditLog.log_id.desc()).first()
 check("12 the change is logged with its reason", log.old_values == {"visibility": rv.PUBLIC} and "privacy" in log.new_values["reason"])
 check("reporter is told it stays private",
@@ -206,8 +189,6 @@ check("9 Public then False Alarm: hidden from other residents at once",
       res.status_code == 200 and rid2 not in ids(other) and get(other, rid2).status_code == 404, res.text[:200])
 check("9 the reporter still sees their false report", get(reporter, rid2).status_code == 200)
 check("11 Public on a False Alarm report is refused (409)", set_vis(rid2, "Public", reason="try again please").status_code == 409)
-check("9 comments are closed on a dismissed report (409 for staff too)",
-      client.post(f"/reports/{rid2}/comments", headers=H(leader), json={"comment": "x"}).status_code == 409)
 r2 = row(rid2)
 r2.current_status_id = 2  # the false decision is reversed by any route
 db.commit()
@@ -219,15 +200,13 @@ rid3 = report(status=3, visibility=rv.PUBLIC, verification_status="verified_true
 check("11 a Rejected report stays hidden even if stored Public", rid3 not in ids(other) and get(other, rid3).status_code == 404)
 check("11 Public on a Rejected report is refused (409)", set_vis(rid3, "Public").status_code == 409)
 
-# Resolved stays visible with comments read-only (rule 9)
+# Resolved stays visible as history (rule 9)
 rid4 = report(status=2)
 verify(rid4, "Public")
 r4 = row(rid4)
 r4.current_status_id = 11
 db.commit()
 check("9 a resolved Public report stays visible as history", rid4 in ids(other) and get(other, rid4).status_code == 200)
-check("9 ...with comments closed", get(other, rid4).json()["comments_open"] is False and
-      client.post(f"/reports/{rid4}/comments", headers=H(other), json={"comment": "x"}).status_code == 409)
 
 # 12-13. Merged duplicates and unmerge
 main = report(status=2)
@@ -256,11 +235,9 @@ check("16 an AI-match owner doesn't get the private report in the list", priv no
 card = get(owner, priv)
 cj = card.json() if card.status_code == 200 else {}
 check("16 an AI-match owner gets only the match card", card.status_code == 200 and cj.get("viewer_access") == "match_owner", card.text[:200])
-check("16 the card has photos and looks but no description, reporter, comments or exact spot",
-      cj.get("description") is None and cj.get("reporter_name") == rv.COMMUNITY_REPORTER and cj.get("comments") == []
+check("16 the card has photos and looks but no description, reporter or exact spot",
+      cj.get("description") is None and cj.get("reporter_name") == rv.COMMUNITY_REPORTER
       and cj.get("latitude") == 14.8 and cj.get("user_id") is None and cj.get("animal_type") == "Dog", cj)
-check("16 the match card can't be commented on",
-      client.post(f"/reports/{priv}/comments", headers=H(owner), json={"comment": "mine?"}).status_code == 404)
 mres = client.get(f"/matches/report/{priv}", headers=H(owner))
 src = (mres.json() or [{}])[0].get("source_report") if mres.status_code == 200 and mres.json() else None
 check("16 the match list gives the owner the same card", src is not None and src.get("description") is None
@@ -325,8 +302,8 @@ check("owner card: actual owner retains it", get(owner, linked).json()["can_view
 check("owner card: leader retains it", get(leader, linked).json()["can_view_owner_details"] is True)
 check("owner card: Admin retains it", get(admin, linked).json()["can_view_owner_details"] is True)
 hidden = get(other, linked).json()
-check("owner card: stray-report pet name and QR stay private", all(hidden.get(key) is None for key in
-      ("pet_name", "case_pet_name", "pet_qr_code_url", "pet_qr_code_hash")))
+check("owner card: stray-report pet name stays private", all(hidden.get(key) is None for key in
+      ("pet_name", "case_pet_name")))
 
 activity_report = report(status=2)
 verify(activity_report, "Public")

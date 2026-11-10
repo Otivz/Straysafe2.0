@@ -25,7 +25,7 @@ from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models.lost_pet_alert import LostPetAlert, LostPetSighting  # noqa: E402
 from app.models.notification import Notification  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
-from app.models.report import EndorsementLetter, Report, ReportCategory, ReportStatus, Rescue  # noqa: E402
+from app.models.report import Report, ReportCategory, ReportStatus  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
 from app.routes import lost_pet_alerts, reports  # noqa: E402
 from app.routes.reports import SELERA_CENTER_LAT as LAT, SELERA_CENTER_LNG as LNG  # noqa: E402
@@ -117,8 +117,7 @@ check("broadcast: subdivision residents get the alert (not the owner as a reside
 db.expire_all()
 n = db.query(Notification).filter(Notification.user_id == neighbor.user_id, Notification.type == "lost_pet_alert").one()
 check("broadcast: photo-card details in the message (name, looks, last seen)", "Bantay" in n.title and "Subdivision entrance" in n.message)
-check("scope: no rescue and no Barangay endorsement created", db.query(Rescue).count() == 0 and db.query(EndorsementLetter).count() == 0
-      and db.get(Report, lost.report_id).current_status_id == 1)
+check("scope: the report itself is untouched by the alert", db.get(Report, lost.report_id).current_status_id == 1)
 act = client.get("/lost-pet-alerts/active", headers=H(neighbor)).json()["results"]
 check("residents: active alerts of their subdivision", [x["alert_id"] for x in act] == [aid])
 check("residents of other subdivisions: nothing", client.get("/lost-pet-alerts/active", headers=H(outsider)).json()["results"] == [])
@@ -137,7 +136,7 @@ r = sight(aid, neighbor, seen_at=earlier.isoformat(), description="Drinking at t
 s1 = r.json().get("sighting", {})
 check("sighting: saved unverified with the reported time apart from the submission time", r.status_code == 200
       and s1["status"] == "unverified" and s1["seen_at"].startswith(earlier.isoformat()[:16]) and s1["submitted_at"] != s1["seen_at"], r.text[:300])
-from app.utils.holding_stay import db_now  # noqa: E402
+from app.utils.db_clock import db_now  # noqa: E402
 check("sighting: the server records the submission time (database clock)",
       abs(datetime.fromisoformat(s1["submitted_at"]) - db_now(db)) < timedelta(minutes=5), s1["submitted_at"])
 r2 = sight(aid, neighbor, seen_at=earlier.isoformat(), description="Drinking at the clubhouse fountain", client_request_id="req-1")

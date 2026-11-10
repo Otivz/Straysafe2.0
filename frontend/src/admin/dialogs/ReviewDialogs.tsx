@@ -18,7 +18,7 @@ import { FormFooter, type CaseDialogProps } from './BasicDialogs';
  * not assumed identical. The decision states exactly what it will record, and accepting needs an explicit confirmation.
  */
 export function ClaimReviewDialog({ c, claimId, onClose }: CaseDialogProps & { claimId: string }) {
-  const { state, dispatch } = useAdminData();
+  const { state, dispatch, capabilities } = useAdminData();
   const toast = useToast();
   const { pending, error, run } = useSubmit();
   const claim = c.claims.find((x) => x.id === claimId);
@@ -73,7 +73,11 @@ export function ClaimReviewDialog({ c, claimId, onClose }: CaseDialogProps & { c
       <Field label="Verification notes" required error={errors.note}><Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="What did you compare, and what did you conclude?" /></Field>
       {decision === 'accepted' ? (
         <>
-          <Callout tone="sage" title="Accepting records:">ownership as <strong>Confirmed</strong>{claimant ? <> (owner: {claimant.name})</> : null}{pet ? <>, and the animal as <strong>identified</strong> as {pet.name}</> : null}.{otherOpen > 0 ? ` ${plural(otherOpen, 'other claim')} ${otherOpen === 1 ? 'is' : 'are'} still open. Review ${otherOpen === 1 ? 'it' : 'them'} too.` : ''}</Callout>
+          {capabilities.acceptConfirmsOwnership ? (
+            <Callout tone="sage" title="Accepting records:">ownership as <strong>Confirmed</strong>{claimant ? <> (owner: {claimant.name})</> : null}{pet ? <>, and the animal as <strong>identified</strong> as {pet.name}</> : null}.{otherOpen > 0 ? ` ${plural(otherOpen, 'other claim')} ${otherOpen === 1 ? 'is' : 'are'} still open. Review ${otherOpen === 1 ? 'it' : 'them'} too.` : ''}</Callout>
+          ) : (
+            <Callout tone="sage" title="Accepting records the claim as accepted.">The case’s ownership stays <strong>under review</strong> until you record the ownership decision, with the evidence you relied on, on the Assessment tab{claimant ? <> (the claimant is {claimant.name})</> : null}.{otherOpen > 0 ? ` ${plural(otherOpen, 'other claim')} ${otherOpen === 1 ? 'is' : 'are'} still open. Review ${otherOpen === 1 ? 'it' : 'them'} too.` : ''}</Callout>
+          )}
           <Checkbox label="I compared distinguishing marks and records, and did not rely on registration alone." checked={ack} onChange={(e) => setAck(e.target.checked)} />
           {errors.ack ? <p className="sa-error" role="alert">{errors.ack}</p> : null}
         </>

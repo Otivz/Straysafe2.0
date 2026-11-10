@@ -4,11 +4,12 @@ import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
 import { MapLegend, type KeyKind } from '../../../preview/map/MapLegend';
 import { SightingCard } from '../../components/Cards';
 import { Screen } from '../../components/Screen';
-import { EmptyState, LinkButton, NotFoundState } from '../../components/ui';
+import { EmptyState, ErrorState, LinkButton, ListSkeleton, NotFoundState } from '../../components/ui';
 import { residentPath } from '../../config';
 import { useResidentData } from '../../data/context';
 import { noticeById, reportById } from '../../data/selectors';
 import { useNow } from '../../lib/hooks';
+import { useLoadNotice } from '../../lib/useLoadNotice';
 import { sightingMap } from '../../lib/location';
 
 /**
@@ -21,7 +22,11 @@ import { sightingMap } from '../../lib/location';
 export default function SightingHistoryPage() {
   const { state } = useResidentData();
   const now = useNow();
-  const notice = noticeById(state, useParams().noticeId);
+  const { noticeId } = useParams();
+  const notice = noticeById(state, noticeId);
+  const detail = useLoadNotice(noticeId);
+  if (detail.status === 'idle' || detail.status === 'loading') return <Screen title="Sightings" back={noticeId ? `/community/${noticeId}` : '/community'}><ListSkeleton rows={3} /></Screen>;
+  if (detail.status === 'error') return <Screen title="Sightings" back="/community"><ErrorState onRetry={detail.retry}>{detail.error}</ErrorState></Screen>;
   if (!notice || notice.type === 'safety_advisory') return <Screen title="Sightings" back="/community"><NotFoundState what="notice" to="/community" label="Go to Community" /></Screen>;
 
   const sightings = [...notice.sightings].sort((a, b) => b.observedAt.localeCompare(a.observedAt));

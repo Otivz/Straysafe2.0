@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import L from 'leaflet';
 import { Circle, MapContainer, Marker, Polygon, TileLayer, useMap } from 'react-leaflet';
 import MapAutoResize from '../../components/MapControls/MapAutoResize';
-import { AREA_OUTLINE, GENERAL_AREA_RADIUS_M, OSM_TILES } from '../geo';
+import { GENERAL_AREA_RADIUS_M, OSM_TILES, areaOutline } from '../geo';
 import { dotIcon, pinIcon } from './icons';
 import { AREA_STYLE, OUTLINE_STYLE } from './styles';
 import type { ReadOnlyMapProps } from './types';
@@ -31,7 +31,7 @@ export default function ReadOnlyMap({ pin = null, areas = [], numbered = [], hei
   const [tilesFailed, setTilesFailed] = useState(false);
 
   const bounds = useMemo(() => {
-    const b = L.latLngBounds(AREA_OUTLINE);
+    const b = L.latLngBounds(areaOutline());
     if (pin) b.extend([pin.lat, pin.lng]);
     for (const a of areas) b.extend(L.latLng(a.lat, a.lng).toBounds(a.radiusM * 2));
     for (const p of numbered) b.extend(p.general ? L.latLng(p.lat, p.lng).toBounds(GENERAL_AREA_RADIUS_M * 2) : [p.lat, p.lng]);
@@ -62,7 +62,7 @@ export default function ReadOnlyMap({ pin = null, areas = [], numbered = [], hei
           <MapAutoResize />
           <FitView south={bounds.getSouth()} west={bounds.getWest()} north={bounds.getNorth()} east={bounds.getEast()} />
           <TileLayer {...OSM_TILES} eventHandlers={{ tileerror: () => setTilesFailed(true) }} />
-          <Polygon positions={AREA_OUTLINE} pathOptions={OUTLINE_STYLE} />
+          <Polygon positions={areaOutline()} pathOptions={OUTLINE_STYLE} />
           {areas.map((a) => <Circle key={`area-${a.lat}-${a.lng}`} center={[a.lat, a.lng]} radius={a.radiusM} pathOptions={AREA_STYLE} />)}
           {numbered.filter((p) => p.general).map((p) => <Circle key={`around-${p.n}`} center={[p.lat, p.lng]} radius={GENERAL_AREA_RADIUS_M} pathOptions={AREA_STYLE} />)}
           {pin ? <Marker position={[pin.lat, pin.lng]} icon={pinIcon} interactive={false} keyboard={false} /> : null}

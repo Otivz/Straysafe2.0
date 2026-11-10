@@ -1,7 +1,7 @@
 """
 MULTI_ANIMAL_REPORT_PLAN.md: a group report is split into per-animal records by the Subdivision Leader.
 Covers permissions, atomic/idempotent splits, batches above 10, carry-over, photos kept as evidence, AI re-matching,
-holding per animal, claims and returns per animal, group auto-resolve, adoption, merging and dashboard counts.
+returns per animal, group auto-resolve, merging and dashboard counts (holding, claims and adoption are retired).
 Run from the backend folder:  python tests/test_multi_animal_split.py
 """
 import os
@@ -21,12 +21,10 @@ from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models.ai_job import AiJob  # noqa: E402
 from app.models.audit_log import AuditLog  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
-from app.models.pet_claim import PetClaim  # noqa: E402
-from app.models.report import (FacilityStatus, HoldingAnimal, Report, ReportCategory, ReportMedia,  # noqa: E402
-                               ReportStatus, StatusHistory)
+from app.models.report import Report, ReportCategory, ReportMedia, ReportStatus, StatusHistory  # noqa: E402
 from app.models.report_match import ReportMatch  # noqa: E402
 from app.models.user import Barangay, Role, Subdivision, User  # noqa: E402
-from app.routes import admin, adoptions, audit_logs, claims, holding, report_split, reports  # noqa: E402
+from app.routes import admin, audit_logs, report_split, reports  # noqa: E402
 from app.utils import report_split as rs  # noqa: E402
 from app.utils.ai_matching import image_url_for_entity  # noqa: E402
 from app.utils.auth import create_access_token  # noqa: E402
@@ -34,7 +32,7 @@ from app.utils.uploads import CLOUDINARY_CLOUD_NAME  # noqa: E402
 
 Base.metadata.create_all(bind=engine)
 api = FastAPI()
-for r in (reports, report_split, claims, holding, adoptions, admin, audit_logs):
+for r in (reports, report_split, admin, audit_logs):
     api.include_router(r.router)
 client = TestClient(api, raise_server_exceptions=False)
 db = SessionLocal()
@@ -52,8 +50,6 @@ db.add(Subdivision(subdivision_id=2, barangay_id=2, subdivision_name="S2"))
 db.add(ReportCategory(category_id=4, category_name="Roaming"))
 for sid in range(1, 19):
     db.add(ReportStatus(status_id=sid, status_name=f"S{sid}"))
-for sid in range(1, 9):
-    db.add(FacilityStatus(status_id=sid, status_name=f"F{sid}"))
 db.flush()
 
 
@@ -174,30 +170,20 @@ G3 = group_report(count=2, status=8)
 pet_a = Pet(pet_name="Bantay", pet_type="Dog", owner_id=owner_a.user_id, status="Active")
 db.add(pet_a)
 db.flush()
-held = HoldingAnimal(report_id=G3, facility_status=2, animal_type="Dog")
-db.add(held)
-db.add(PetClaim(report_id=G3, pet_id=pet_a.pet_id, status="Pending Review"))
+db.get(Report, G3).pet_id = pet_a.pet_id
 open_sug = ReportMatch(source_report_id=G3, matched_pet_id=pet_a.pet_id, similarity_score=70, status="AI_SUGGESTED",
                        owner_confirmation_status="PENDING")
 db.add(open_sug)
 db.commit()
-check("the leader must say which animal is the one already in holding",
+check("the leader must say which animal is the registered pet this report is confirmed as",
       split(G3, 2, token="tok-g3-a").status_code == 400)
-r = split(G3, 2, token="tok-g3-b", carry={"holding": 1, "claims": 1})
+r = split(G3, 2, token="tok-g3-b", carry={"pet": 1})
 db.expire_all()
 g3k = r.json().get("created", [])
-check("carry-over: the holding record and claims move to the chosen animal", r.status_code == 200
-      and db.get(HoldingAnimal, held.holding_id).report_id == g3k[1]
-      and db.query(PetClaim).filter(PetClaim.report_id == g3k[1]).count() == 1, r.text)
+check("carry-over: the registered pet moves to the chosen animal", r.status_code == 200
+      and db.get(Report, g3k[1]).pet_id == pet_a.pet_id and db.get(Report, G3).pet_id is None, r.text)
 check("the group's open AI suggestions are closed as superseded",
       db.get(ReportMatch, open_sug.match_id).status == "SUPERSEDED_BY_CASE")
-
-# ------------------------------------------------------------------ holding per animal
-a1 = client.post("/holding/", headers=H(staff), json={"report_id": kids[0], "animal_type": "Dog", "facility_status": 2})
-a2 = client.post("/holding/", headers=H(staff), json={"report_id": kids[1], "animal_type": "Dog", "facility_status": 2})
-check("each animal record gets its own holding record", a1.status_code == 200 and a2.status_code == 200, a1.text + a2.text)
-check("...a second intake for the same animal is still refused",
-      client.post("/holding/", headers=H(staff), json={"report_id": kids[0], "facility_status": 2}).status_code in (400, 409))
 
 # ------------------------------------------------------------------ replace photo (kept as evidence, AI re-run)
 db.expire_all()
@@ -223,17 +209,7 @@ c1.custody_status = "Impounded"
 db.commit()
 check("a held animal record can still be matched (owner search)", rs.held_scan_allowed(db, c1))
 
-# ------------------------------------------------------------------ claims, returns, group auto-resolve
-for k in kids[1:3]:  # Phase 7: a claim needs a held animal (these two were taken in at intake)
-    db.get(Report, k).custody_status = "In Barangay Facility"
-pet_b = Pet(pet_name="Brownie", pet_type="Dog", owner_id=owner_b.user_id, status="Active")
-pet_c = Pet(pet_name="Choco", pet_type="Dog", owner_id=owner_a.user_id, status="Active")
-db.add_all([pet_b, pet_c])
-db.commit()
-ca = client.post("/claims/", headers=H(owner_b), json={"report_id": kids[1], "pet_id": pet_b.pet_id})
-cb = client.post("/claims/", headers=H(owner_a), json={"report_id": kids[2], "pet_id": pet_c.pet_id})
-check("two different owners claim two different animals from one group", ca.status_code == 200 and cb.status_code == 200,
-      ca.text[:200] + cb.text[:200])
+# ------------------------------------------------------------------ returns, group auto-resolve
 db.expire_all()
 kid1 = db.get(Report, kids[1])
 kid1.current_status_id = 9  # returned to its owner
@@ -254,15 +230,15 @@ check("the group timeline says how each animal's case ended",
 check("...with a timeline note", db.query(StatusHistory).filter(StatusHistory.report_id == G,
                                                                  StatusHistory.remarks.like("All 3 animal records%")).count() == 1)
 
-# ------------------------------------------------------------------ adoption from an animal record
+# ------------------------------------------------------------------ an animal record confirmed as a registered pet
 G4 = group_report(count=2, status=6)
 _r4 = split(G4, 2, token="tok-g4-split")
 k4 = _r4.json()["created"]
-h4 = client.post("/holding/", headers=H(staff), json={"report_id": k4[0], "animal_type": "Dog", "facility_status": 2})
-hid = h4.json().get("holding_id")
-pr = client.post(f"/adoptions/promote/{hid}", headers=H(staff), json={"catalog_notes": "Friendly", "adoption_catalog_notes": "Friendly"})
-check("an animal record's holding animal can be promoted for adoption", h4.status_code == 200 and pr.status_code == 200,
-      h4.text[:200] + " | " + pr.text[:300])
+pet_d = Pet(pet_name="Dino", pet_type="Dog", owner_id=owner_a.user_id, status="Active")
+db.add(pet_d)
+db.flush()
+db.get(Report, k4[0]).pet_id = pet_d.pet_id
+db.commit()
 
 # ------------------------------------------------------------------ undo
 G5 = group_report(count=2)
@@ -272,7 +248,7 @@ r = client.post(f"/reports/{G5}/unsplit", headers=H(leader))
 db.expire_all()
 check("undo works while the records are empty", r.status_code == 200 and not rs.is_split_group(db, db.get(Report, G5)), r.text)
 check("...the records are kept (folded back, not deleted)", all(db.get(Report, k) is not None and db.get(Report, k).duplicate_of_report_id == G5 for k in k5))
-check("undo is refused once an animal is in holding", client.post(f"/reports/{G4}/unsplit", headers=H(leader)).status_code == 409)
+check("undo is refused once an animal record is confirmed as a registered pet", client.post(f"/reports/{G4}/unsplit", headers=H(leader)).status_code == 409)
 
 # ------------------------------------------------------------------ dashboard counts
 stats = client.get("/admin/dashboard-stats", headers=H(admin_u))
@@ -300,7 +276,7 @@ grow = next((x for x in lst if x["report_id"] == G2), {})
 check("report lists carry the group link and record count",
       grow.get("split_children_count") == 13 and any(x.get("split_from_report_id") == G for x in lst), grow)
 
-# ------------------------------------------------------------------ status sync: records follow the group until held
+# ------------------------------------------------------------------ status sync: records follow the group while their case is open
 from app.models.landmark import Landmark  # noqa: E402
 fac = Landmark(name="Impound", category="facility", barangay_id=1, latitude=14.8, longitude=121.0, is_holding_facility=True)
 db.add(fac)
@@ -323,31 +299,23 @@ db.expire_all()
 check("custody follows too (picked up)", all(db.get(Report, k).current_status_id == 6
                                                 and db.get(Report, k).custody_status == "Animal Picked Up" for k in k6))
 
-# one animal is taken into holding on its own first
-own = client.post("/holding/", headers=H(staff), json={"report_id": k6[0], "animal_type": "Dog", "facility_status": 2})
-check("one animal record is taken into holding on its own", own.status_code == 200, own.text[:200])
-db.expire_all()
-before_own = db.get(Report, k6[0]).current_status_id
-check("the group report itself can't be taken into holding (per animal instead)",
-      client.post("/holding/", headers=H(staff), json={"report_id": G6, "facility_status": 2}).status_code == 400)
-
-# the group reaches the facility through the normal status update, by the staff assigned to its rescue
-from app.models.report import Rescue  # noqa: E402
-db.add(Rescue(report_id=G6, staff_id=staff.user_id))
+# a group status that reaches the facility (impounded) is copied too, with the group's place
+g6 = db.get(Report, G6)
+g6.current_status_id = 8
+g6.facility_id = fac.landmark_id
+g6.custody_status = "In Barangay Facility"
 db.commit()
-r = client.put(f"/reports/{G6}/status", headers=H(staff), json={"status_id": 8, "facility_id": fac.landmark_id,
-                                                                    "custody_status": "In Barangay Facility",
-                                                                    "remarks": "All dogs brought in"})
 db.expire_all()
-holds = {k: db.query(HoldingAnimal).filter(HoldingAnimal.report_id == k).count() for k in k6}
-check("the group intake gives each remaining animal its own holding record", r.status_code == 200
-      and holds[k6[1]] == 1 and holds[k6[2]] == 1, (r.status_code, r.text[:200], holds))
-check("...no extra holding record for the animal that was already in", holds[k6[0]] == 1)
-check("...and none for the group report itself", db.query(HoldingAnimal).filter(HoldingAnimal.report_id == G6).count() == 0)
-check("the animals taken in with the group are Impounded at the group's facility",
-      all(db.get(Report, k).current_status_id == 8 and db.get(Report, k).facility_id == fac.landmark_id for k in k6[1:]))
-check("the animal that already had its own holding record no longer follows the group",
-      db.get(Report, k6[0]).current_status_id == before_own)
+check("an impounded group status and its facility reach every animal record", all(
+    db.get(Report, k).current_status_id == 8 and db.get(Report, k).facility_id == fac.landmark_id for k in k6))
+db.get(Report, k6[0]).current_status_id = 9    # one animal goes home on its own
+db.commit()
+g6 = db.get(Report, G6)
+g6.current_status_id = 7
+db.commit()
+db.expire_all()
+check("an animal record whose own case is over no longer follows the group",
+      db.get(Report, k6[0]).current_status_id == 9 and all(db.get(Report, k).current_status_id == 7 for k in k6[1:]))
 
 # closing statuses never spread
 G7 = group_report(count=2, status=2)

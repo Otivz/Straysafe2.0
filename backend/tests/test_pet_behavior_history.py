@@ -19,7 +19,7 @@ import app.models  # noqa: F401
 from app.database import Base, get_db
 from app.models.landmark import Landmark
 from app.models.pet import Pet
-from app.models.report import HoldingAnimal, Report, ReportCategory, ReportStatus
+from app.models.report import Report, ReportCategory, ReportStatus
 from app.models.user import Barangay, Subdivision, User
 from app.routes import pets
 from app.utils.auth import create_access_token
@@ -68,8 +68,6 @@ class PetBehaviorHistoryTests(unittest.TestCase):
             db.flush()
             db.add(Report(report_id=1, user_id=RESIDENT, subdivision_id=1, category_id=1, current_status_id=7, latitude=14.8,
                           longitude=121.0, facility_id=1, custody_status='In Barangay Facility', animal_type='Dog', pet_id=IN_CARE))
-            db.flush()
-            db.add(HoldingAnimal(holding_id=1, report_id=1, animal_type='Dog', facility_status=6, intake_staff_id=STAFF))
             db.commit()
 
     def pet(self, pid):

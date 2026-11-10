@@ -3,21 +3,51 @@ import type { ResidentAction } from './reducer';
 import type { ResidentState } from './types';
 
 export type LoadStatus = 'loading' | 'ready' | 'error';
+/** Whether one report's or notice's full record has been read. */
+export type DetailStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+/** A part of the data that could not be read. The rest of the app still works; the shell says what is missing. */
+export interface LoadIssue { section: string; message: string }
+
+/**
+ * What the app can and cannot do because of what the backend offers: a control the backend cannot honour is turned off, with the
+ * reason, instead of letting it fail or pretend.
+ */
+export interface ResidentCapabilities {
+  /** Send a message to the subdivision office from the app. The backend has no such message yet: the office is reached by the details shown. */
+  messageOffice: boolean;
+  /** Separate switches for community notices and safety advisories. The backend always shows them in the app, so there is no switch. */
+  communityToggles: boolean;
+  /** Text messages as a channel. The backend sends none. */
+  smsChannel: boolean;
+}
+
+/** What a change returns when the caller needs something the server decided (the reference of a report or the id of a pet it just created). */
+export interface ActionOutcome { reportRef?: string; petId?: string }
 
 export interface ResidentDataValue {
   state: ResidentState;
   status: LoadStatus;
-  /** Records a change. Rejects with an AdminApiError when the (simulated) request fails. */
-  dispatch(action: ResidentAction): Promise<void>;
+  /** Why the first load failed. */
+  loadError?: string;
+  /** Parts that could not be read. */
+  issues: LoadIssue[];
+  /** Records a change. Rejects with an AdminApiError when the request fails; nothing is shown as saved until the server says so. */
+  dispatch(action: ResidentAction): Promise<ActionOutcome | void>;
   /**
-   * Applies a change that only concerns this device: a report being written, a notification marked as read.
-   * Immediate and never fails, so typing is not delayed. When connected to the API, drafts stay client-side.
+   * Applies a change that only concerns this device: a report being written. Immediate and never fails, so typing is not
+   * delayed. (A notification marked as read is also applied here at once; the connected app tells the server as well.)
    */
   local(action: ResidentAction): void;
-  /** Re-runs the initial load; used by Try again on the error state. */
+  /** Re-runs the load; used by Try again on the error state. */
   reload(): void;
-  /** Preview only: throws the sample data away and starts again. */
-  resetSample(): void;
+  /** Reads one report in full (its timeline, photos, messages and notice). */
+  loadReport(id: string): Promise<void>;
+  reportStatus(id: string): { status: DetailStatus; error?: string };
+  /** Reads one notice in full (its sightings). */
+  loadNotice(id: string): Promise<void>;
+  noticeStatus(id: string): { status: DetailStatus; error?: string };
+  capabilities: ResidentCapabilities;
 }
 
 export const ResidentDataContext = createContext<ResidentDataValue | null>(null);

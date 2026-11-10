@@ -78,7 +78,7 @@ def mrow(mid):
     return db.get(ReportMatch, mid)
 
 
-pet = Pet(pet_name="Boyet", pet_type="Dog", owner_id=OWNER, status="Active")
+pet = Pet(pet_name="Boyet", pet_type="Dog", owner_id=OWNER, registered_by_user_id=OWNER, status="Active")
 db.add(pet)
 db.commit()
 PET = pet.pet_id

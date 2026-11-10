@@ -57,12 +57,15 @@ def _populate_user_fields(user: Optional[User]) -> Optional[User]:
     return user
 
 ROLE_LABELS = {1: "Resident", 2: "Subdivision Leader", 3: "Barangay Staff", 4: "Administrator"}
-LOGIN_PATHS = {1: "/login", 2: "/staff/login", 3: "/staff/login", 4: "/admin/login"}
+# Sign-in pages of the StraySafe 2.0 interfaces (frontend/src/live/config.ts). The Barangay accounts are retired and the
+# Administrator has no screen yet, so those roles get no link.
+LOGIN_PATHS = {1: "/resident-app/login", 2: "/subd-admin/login"}
 
 
 def _login_url(role_id: int) -> Optional[str]:
     base = os.getenv("FRONTEND_URL", "").strip().rstrip("/")
-    return f"{base}{LOGIN_PATHS.get(role_id, '/login')}" if base else None
+    path = LOGIN_PATHS.get(role_id)
+    return f"{base}{path}" if base and path else None
 
 
 def _send_invite(db: Session, user: User) -> bool:

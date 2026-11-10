@@ -23,7 +23,6 @@ from fastapi.testclient import TestClient  # noqa: E402
 import app.models  # noqa: E402,F401
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
-from app.models.pet_claim import PetClaim  # noqa: E402
 from app.models.report import Report, ReportStatus  # noqa: E402
 from app.models.report_match import ReportMatch  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
@@ -79,7 +78,6 @@ qa = ReportMatch(source_report_id=a.report_id, matched_pet_id=pet.pet_id, status
 qb = ReportMatch(source_report_id=b.report_id, matched_pet_id=pet.pet_id, status="COVERED_BY_CASE", owner_confirmation_status="UNSURE",
                  owner_verification_answered_at=datetime(2026, 10, 5), owner_notes="The collar looks different")
 db.add_all([qa, qb])
-db.add(PetClaim(pet_id=pet.pet_id, report_id=root.report_id, status="Approved", evidence_url="https://cdn.example/p.jpg"))
 plain = rep(6, pet_id=None)
 db.commit()
 H = lambda u: {"Authorization": "Bearer " + create_access_token({"sub": str(u.user_id), "user_id": u.user_id, "role_id": u.role_id})}  # noqa: E731

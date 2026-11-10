@@ -1,261 +1,173 @@
+"""Create the first accounts of a development database, only when you ask for them. Run it from backend/, in a terminal:
+
+    python scripts/seed_admin.py --leader      a Subdivision Leader
+    python scripts/seed_admin.py --admin       an Admin (a role reserved for a future implementation)
+
+It asks for the account's e-mail address and for a password (typed twice, never shown). Nothing is read from .env or from the
+environment, and nothing is stored except the password's bcrypt hash in the database: there is no default account, e-mail address
+or password anywhere, and with no option nothing is created. A password must meet the application's own policy (at least 12
+characters with an upper-case letter, a lower-case letter, a number and a special character; at most 72 bytes).
+
+What it does not do: it does not seed reference data (load Database3.4_subdivision.sql for the roles, the barangay, the subdivision
+and the rest) and it never creates or changes a table. An account whose e-mail address already exists is left exactly as it is: no
+password is reset and no role is changed. Passwords and hashes are never printed. Residents register in the application, and the
+Barangay Staff role is retired, so neither is created here.
+"""
+import argparse
+import getpass
 import sys
 import os
+from datetime import datetime
 
-# Add the root directory to sys.path
+# Add the backend directory to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.database import SessionLocal, engine, Base
-from app.models.user import User, Role, Subdivision, Barangay, Position
-from app.models.report import ReportCategory
+from pydantic import EmailStr, TypeAdapter
+from sqlalchemy import func
+
+from app.database import SessionLocal
+from app.models.user import Position, Role, Subdivision, User
 from app.utils.auth import get_password_hash
-from dotenv import load_dotenv
+from app.utils.password_policy import password_problems
 
-# Explicitly load .env from project root
-dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
-load_dotenv(dotenv_path)
+MAX_PASSWORD_BYTES = 72   # bcrypt only looks at the first 72 bytes
+ATTEMPTS = 3
+ACCOUNTS = {
+    "leader": {"label": "Subdivision Leader", "role_id": 2, "name": "Subdivision Leader"},
+    "admin": {"label": "Admin", "role_id": 4, "name": "System Admin"},
+}
 
-def seed_db():
-    # Create tables if they don't exist
-    Base.metadata.create_all(bind=engine)
-    
-    db = SessionLocal()
+
+class SeedError(Exception):
+    """A reason to stop. Raised before anything is written."""
+
+
+def password_problem(password):
+    """Why this password cannot be used, or None. Never repeats the password."""
+    if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        return f"is longer than {MAX_PASSWORD_BYTES} bytes, which bcrypt cannot use."
+    missing = password_problems(password)
+    return ("needs " + ", ".join(missing) + ".") if missing else None
+
+
+def clean_email(raw):
+    value = raw.strip()
+    if not value or len(value) > 100:
+        raise ValueError("An e-mail address of at most 100 characters is required.")
     try:
-        # 1. Seed Roles
-        print("Seeding roles...")
-        roles = {
-            1: 'Citizen',
-            2: 'Subdivision Leader',
-            3: 'Barangay Staff',
-            4: 'Admin'
-        }
-        for r_id, r_name in roles.items():
-            role = db.query(Role).filter(Role.role_id == r_id).first()
-            if not role:
-                db.add(Role(role_id=r_id, role_name=r_name))
-        db.commit()
+        return str(TypeAdapter(EmailStr).validate_python(value)).lower()
+    except Exception:
+        raise ValueError("That is not a valid e-mail address.") from None
 
-        # 2. Seed Positions
-        print("Seeding positions...")
-        positions = [
-            'President',
-            'Secretary',
-            'Barangay Staff',
-            'Tanod',
-            'Animal Rescuer',
-            'Barangay Captain'
-        ]
-        for p_name in positions:
-            pos = db.query(Position).filter(Position.position_name == p_name).first()
-            if not pos:
-                db.add(Position(position_name=p_name))
-        db.commit()
 
-        # 3. Seed Barangay
-        print("Seeding barangay...")
-        barangay = db.query(Barangay).filter(Barangay.barangay_id == 1).first()
-        if not barangay:
-            barangay = Barangay(barangay_id=1, barangay_name='San Vicente', city='Angeles City')
-            db.add(barangay)
-            db.commit()
+def ask_email(label, ask, say, taken):
+    for _ in range(ATTEMPTS):
+        try:
+            email = clean_email(ask(f"E-mail address of the {label}: "))
+        except ValueError as exc:
+            say(f"  {exc}")
+            continue
+        if email in taken:
+            say("  The Leader and the Admin must not use the same e-mail address.")
+            continue
+        return email
+    raise SeedError(f"{label}: no valid e-mail address after {ATTEMPTS} attempts.")
 
-        # 3.5 Seed Report Categories
-        print("Seeding report categories...")
-        categories = {
-            1: 'Injured',
-            2: 'Aggressive',
-            3: 'Rabies Risk',
-            4: 'Roaming',
-            5: 'Rescue Needed'
-        }
-        for cat_id, cat_name in categories.items():
-            cat = db.query(ReportCategory).filter(ReportCategory.category_id == cat_id).first()
-            if not cat:
-                db.add(ReportCategory(category_id=cat_id, category_name=cat_name))
-            else:
-                cat.category_name = cat_name
-        db.commit()
 
-        # 4. Seed Subdivisions
-        print("Seeding subdivisions...")
-        subdivisions = [
-            {'id': 1, 'name': 'Selera Homes', 'barangay_id': 1}
-        ]
-        for sub in subdivisions:
-            subdivision = db.query(Subdivision).filter(Subdivision.subdivision_id == sub['id']).first()
-            if not subdivision:
-                db.add(Subdivision(subdivision_id=sub['id'], subdivision_name=sub['name'], barangay_id=sub['barangay_id']))
-        db.commit()
+def ask_password(label, ask_secret, say):
+    say("Password rules: at least 12 characters (at most 72 bytes) with an upper-case letter, a lower-case letter, a number and a special character.")
+    for _ in range(ATTEMPTS):
+        first = ask_secret(f"Password of the {label} (hidden): ")
+        second = ask_secret("Type it again to confirm (hidden): ")
+        if first != second:
+            say("  The two entries do not match.")
+            continue
+        problem = password_problem(first)
+        if problem:
+            say(f"  The password {problem}")
+            continue
+        return first
+    raise SeedError(f"{label}: no usable password after {ATTEMPTS} attempts.")
 
-        # 5. Seed Users
-        print("Seeding users...")
-        seed_password = os.getenv("SEED_PASSWORD", "password123")
-        default_password_hash = get_password_hash(seed_password)
-        
-        users_to_seed = [
-            {
-                "name": "Emmanuel Vito Cruz",
-                "email": os.getenv("CITIZEN_EMAIL") or "emmanuelvitocruz@gmail.com",
-                "phone": "09171234567",
-                "role_id": 1, # Citizen
-                "subdivision_id": 1,
-                "address": "Block 5 Lot 12, Selera Homes, San Vicente, Santa Maria, Bulacan",
-                "latitude": 14.80131300,
-                "longitude": 121.00310900,
-                "profile_picture": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop",
-                "status": "Active",
-                "is_verified": True
-            },
-            {
-                "name": "Maria Clara Santos",
-                "email": "resident2@straysafe.com",
-                "phone": "09189876543",
-                "role_id": 1, # Citizen
-                "subdivision_id": 1,
-                "address": "Block 8 Lot 24, Selera Homes, San Vicente, Santa Maria, Bulacan",
-                "latitude": 14.80095000,
-                "longitude": 121.00355000,
-                "profile_picture": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&auto=format&fit=crop",
-                "status": "Active",
-                "is_verified": True
-            },
-            {
-                "name": "Juan Dela Cruz",
-                "email": "resident3@straysafe.com",
-                "phone": "09173334455",
-                "role_id": 1, # Citizen
-                "subdivision_id": 1,
-                "address": "Block 3 Lot 15, Selera Homes, San Vicente, Santa Maria, Bulacan",
-                "latitude": 14.80150000,
-                "longitude": 121.00320000,
-                "profile_picture": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop",
-                "status": "Active",
-                "is_verified": True
-            },
-            {
-                "name": "Bea Alonzo Reyes",
-                "email": "resident4@straysafe.com",
-                "phone": "09187778899",
-                "role_id": 1, # Citizen
-                "subdivision_id": 1,
-                "address": "Block 6 Lot 8, Selera Homes, San Vicente, Santa Maria, Bulacan",
-                "latitude": 14.80112000,
-                "longitude": 121.00295000,
-                "profile_picture": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&auto=format&fit=crop",
-                "status": "Active",
-                "is_verified": True
-            },
-            {
-                "name": "Kyla Joy Arriola",
-                "email": os.getenv("SUBD_LEADER_EMAIL") or "kylajoyarriola@gmail.com",
-                "phone": "09192223344",
-                "role_id": 2, # Subdivision Leader
-                "subdivision_id": 1,
-                "position_id": db.query(Position).filter(Position.position_name == "President").first().position_id if db.query(Position).filter(Position.position_name == "President").first() else 1,
-                "address": "Block 1 Lot 2, Selera Homes, San Vicente, Santa Maria, Bulacan",
-                "latitude": 14.80180000,
-                "longitude": 121.00280000,
-                "profile_picture": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&auto=format&fit=crop",
-                "status": "Active",
-                "is_verified": True
-            },
-            {
-                "name": "Kyla Bianca Frias",
-                "email": os.getenv("BRGY_STAFF_EMAIL") or "kylabiancafrias@gmail.com",
-                "phone": "09205556677",
-                "role_id": 3, # Barangay Staff
-                "position_id": db.query(Position).filter(Position.position_name == "Barangay Captain").first().position_id if db.query(Position).filter(Position.position_name == "Barangay Captain").first() else 6,
-                "address": "Barangay Hall, San Vicente, Santa Maria, Bulacan",
-                "latitude": 14.80690600,
-                "longitude": 121.00392970,
-                "profile_picture": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop",
-                "status": "Active",
-                "is_verified": True
-            }
-        ]
 
-        for user_data in users_to_seed:
-            if not user_data["email"]:
-                print(f"Skipping seeding for {user_data['name']} (email not found in .env)")
+def seed(kinds, subdivision_id=None, ask=input, ask_secret=getpass.getpass, say=print):
+    db = SessionLocal()
+    entered = []                                                    # passwords, only so that an error message can be scrubbed of them
+    try:
+        for kind in kinds:                                          # the database is checked before anything is asked
+            if db.get(Role, ACCOUNTS[kind]["role_id"]) is None:
+                raise SeedError("The reference data is missing (the roles). Load Database3.4_subdivision.sql first: this script only creates accounts.")
+        if "leader" in kinds:
+            ids = [row.subdivision_id for row in db.query(Subdivision).order_by(Subdivision.subdivision_id)]
+            if subdivision_id is None and len(ids) == 1:
+                subdivision_id = ids[0]
+            if subdivision_id not in ids:
+                raise SeedError("The Leader needs a subdivision: " + ("the database has none (load Database3.4_subdivision.sql)."
+                                if not ids else f"there are {len(ids)}, pass --subdivision with one of {ids}."))
+        pending = []
+        for kind in kinds:
+            spec = ACCOUNTS[kind]
+            email = ask_email(spec["label"], ask, say, {e for _, e, _ in pending})
+            if db.query(User).filter(func.lower(User.email) == email).first():
+                say(f"{spec['label']}: an account with that e-mail address already exists; left exactly as it is.")
                 continue
-
-            user = db.query(User).filter(User.email == user_data["email"]).first()
-            if not user:
-                print(f"Creating user: {user_data['email']}")
-                new_user = User(
-                    name=user_data["name"],
-                    email=user_data["email"],
-                    password=default_password_hash,
-                    phone=user_data.get("phone"),
-                    role_id=user_data["role_id"],
-                    subdivision_id=user_data.get("subdivision_id"),
-                    position_id=user_data.get("position_id"),
-                    address=user_data.get("address"),
-                    latitude=user_data.get("latitude"),
-                    longitude=user_data.get("longitude"),
-                    profile_picture=user_data.get("profile_picture"),
-                    status=user_data["status"],
-                    is_verified=user_data["is_verified"]
-                )
-                db.add(new_user)
-            else:
-                print(f"User {user_data['email']} exists. Updating complete details...")
-                user.name = user_data["name"]
-                user.role_id = user_data["role_id"]
-                user.phone = user_data.get("phone")
-                user.address = user_data.get("address")
-                user.latitude = user_data.get("latitude")
-                user.longitude = user_data.get("longitude")
-                user.profile_picture = user_data.get("profile_picture")
-                user.status = user_data["status"]
-                user.is_verified = user_data["is_verified"]
-                if "subdivision_id" in user_data:
-                    user.subdivision_id = user_data["subdivision_id"]
-                if "position_id" in user_data:
-                    user.position_id = user_data["position_id"]
-
-        # 6. Seed Admin User
-        admin_email = os.getenv("ADMIN_EMAIL", "admin@straysafe.com")
-        admin_password = os.getenv("ADMIN_PASSWORD", "password123")
-        
-        admin = db.query(User).filter(User.email == admin_email).first()
-        hashed_admin_password = get_password_hash(admin_password)
-        
-        if not admin:
-            print(f"Creating default admin: {admin_email}")
-            new_admin = User(
-                name="System Admin",
-                email=admin_email,
-                password=hashed_admin_password,
-                phone="09110001111",
-                role_id=4,
-                address="StraySafe HQ, Santa Maria, Bulacan",
-                latitude=14.80690600,
-                longitude=121.00392970,
-                profile_picture="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop",
+            password = ask_password(spec["label"], ask_secret, say)
+            entered.append(password)
+            pending.append((kind, email, password))
+        for kind, email, password in pending:
+            spec = ACCOUNTS[kind]
+            position = db.query(Position).filter(Position.position_name == "President").first() if kind == "leader" else None
+            user = User(
+                name=spec["name"],
+                email=email,
+                password=get_password_hash(password),
+                role_id=spec["role_id"],
+                subdivision_id=subdivision_id if kind == "leader" else None,
+                position_id=position.position_id if position else None,
                 status="Active",
-                is_verified=True
+                is_verified=True,
+                password_changed_at=datetime.now(),
             )
-            db.add(new_admin)
-        else:
-            print(f"Admin user {admin_email} exists. Updating details...")
-            admin.password = hashed_admin_password
-            admin.role_id = 4
-            admin.phone = "09110001111"
-            admin.address = "StraySafe HQ, Santa Maria, Bulacan"
-            admin.latitude = 14.80690600
-            admin.longitude = 121.00392970
-            admin.profile_picture = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop"
-            admin.status = "Active"
-            admin.is_verified = True
-            
+            db.add(user)
+            db.flush()
+            say(f"{spec['label']}: created {email} (user id {user.user_id}). The password was not printed; only its bcrypt hash is stored.")
         db.commit()
-        print("Database seeding completed successfully!")
-            
-    except Exception as e:
-        print(f"Error seeding database: {e}")
+    except SeedError:
         db.rollback()
+        raise
+    except Exception as exc:                                         # a database error: never show parameters, hashes or passwords
+        db.rollback()
+        detail = " ".join(str(getattr(exc, "orig", None) or exc).split())[:300]
+        for password in entered:
+            detail = detail.replace(password, "***")
+        raise SeedError(f"Database error ({type(exc).__name__}): {detail}") from None
     finally:
         db.close()
 
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Create the first Subdivision Leader and/or Admin of a development database. It asks for the e-mail address and password.")
+    parser.add_argument("--leader", action="store_true", help="create a Subdivision Leader")
+    parser.add_argument("--admin", action="store_true", help="create an Admin (a reserved role)")
+    parser.add_argument("--subdivision", type=int, help="subdivision id for the Leader (needed only when the database has more than one)")
+    args = parser.parse_args(argv)
+    kinds = [kind for kind in ("leader", "admin") if getattr(args, kind)]
+    if not kinds:
+        print("No account was requested, so nothing was created. Use --leader and/or --admin (see the top of this file).")
+        return 0
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        print("Nothing was created. Run this in a terminal: it asks for the e-mail address and the password, and never reads them from a file, an argument or a pipe.")
+        return 2
+    try:
+        seed(kinds, args.subdivision)
+    except SeedError as why:
+        print(f"Nothing was created. {why}")
+        return 1
+    except (KeyboardInterrupt, EOFError):
+        print("\nCancelled. Nothing was created.")
+        return 1
+    return 0
+
+
 if __name__ == "__main__":
-    seed_db()
+    sys.exit(main())

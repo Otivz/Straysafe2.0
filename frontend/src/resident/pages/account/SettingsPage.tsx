@@ -13,9 +13,10 @@ import { residentPath } from '../../config';
 import { useResidentData } from '../../data/context';
 import type { Settings } from '../../data/types';
 import { useFormFocus, useLeaveGuard, useSubmit } from '../../lib/hooks';
+import { useResidentMode } from '../../mode';
 import { PasswordRules } from '../auth/AuthShell';
 
-/** The change-password sheet. The password is only ever sent to the (simulated) server, never stored. */
+/** The change-password sheet. The password is only ever sent to the server, never stored. */
 function PasswordSheet({ onClose }: { onClose: () => void }) {
   const { changePassword } = useAuth();
   const toast = useToast();
@@ -73,9 +74,10 @@ function PasswordSheet({ onClose }: { onClose: () => void }) {
 
 /** R36 — Notification choices and password. */
 export default function SettingsPage() {
-  const { state, dispatch } = useResidentData();
+  const { state, dispatch, capabilities } = useResidentData();
   const navigate = useNavigate();
   const toast = useToast();
+  const devConnection = useResidentMode().devConnection;   // the Android debug build's backend settings; undefined everywhere else
   const { pending, error, run } = useSubmit();
   const [initial] = useState<Settings>(() => state.settings);
   const [draft, setDraft] = useState<Settings>(initial);
@@ -111,15 +113,15 @@ export default function SettingsPage() {
           <ToggleRow title="Updates on my reports" meta="When a status changes or the subdivision writes to you" checked={draft.notifications.reportUpdates} onChange={topic('reportUpdates')} />
           <ToggleRow title="Sightings of my lost pet" meta="When a neighbour reports seeing your pet" checked={draft.notifications.sightings} onChange={topic('sightings')} />
           <ToggleRow title="Ownership claim updates" checked={draft.notifications.claims} onChange={topic('claims')} />
-          <ToggleRow title="New community notices" meta="Lost and found animals near you" checked={draft.notifications.community} onChange={topic('community')} />
-          <ToggleRow title="Safety advisories" meta="Always on, for your safety" checked disabled onChange={topic('advisories')} />
+          {capabilities.communityToggles ? <ToggleRow title="New community notices" meta="Lost and found animals near you" checked={draft.notifications.community} onChange={topic('community')} /> : null}
+          <ToggleRow title="Safety advisories" meta={capabilities.communityToggles ? 'Always on, for your safety' : 'New community notices and safety advisories always appear in the app'} checked disabled onChange={topic('advisories')} />
         </div>
       </Section>
       <Section title="How you hear">
         <div className="rs-list">
           <ToggleRow title="Notifications in the app" checked={draft.channels.push} onChange={channel('push')} />
           <ToggleRow title="Email" checked={draft.channels.email} onChange={channel('email')} />
-          <ToggleRow title="Text message" meta="Only for urgent updates" checked={draft.channels.sms} onChange={channel('sms')} />
+          {capabilities.smsChannel ? <ToggleRow title="Text message" meta="Only for urgent updates" checked={draft.channels.sms} onChange={channel('sms')} /> : null}
         </div>
       </Section>
       <Section title="Security">
@@ -134,6 +136,13 @@ export default function SettingsPage() {
           <Row icon={LogOut} title="Sign out" onClick={() => setLeaving(true)} danger />
         </div>
       </Section>
+      {devConnection ? (
+        <Section title="Developer">
+          <div className="rs-list">
+            <Row icon={devConnection.icon} title={devConnection.title} meta={devConnection.meta()} onClick={() => guard.leaveTo(residentPath('/connection'))} />
+          </div>
+        </Section>
+      ) : null}
       {changing ? <PasswordSheet onClose={() => setChanging(false)} /> : null}
       {leaving ? <LogoutSheet onClose={() => setLeaving(false)} /> : null}
       {guard.asking ? <DiscardSheet onDiscard={guard.discard} onKeep={guard.keep} /> : null}

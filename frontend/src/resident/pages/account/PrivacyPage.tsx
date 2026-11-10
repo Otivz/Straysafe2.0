@@ -1,6 +1,6 @@
 import { EyeOff, Megaphone, PawPrint, ShieldCheck, UserRound, type LucideIcon } from 'lucide-react';
 import { Screen } from '../../components/Screen';
-import { Callout, LinkButton, Row } from '../../components/ui';
+import { LinkButton, Row } from '../../components/ui';
 import { residentPath } from '../../config';
 
 const SECTIONS: { icon: LucideIcon; title: string; text: string }[] = [
@@ -27,7 +27,6 @@ export default function PrivacyPage() {
           </section>
         ))}
       </div>
-      <Callout tone="amber" title="Preview text.">This page describes how the preview behaves. The final privacy notice is set by the subdivision and must be reviewed before release.</Callout>
       <div className="rs-list">
         <Row to={residentPath('/settings')} title="Choose what you are notified about" />
         <Row to={residentPath('/contact')} title="Ask about your data" meta="To request a copy of your information or its removal, contact the subdivision office." />

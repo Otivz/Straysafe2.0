@@ -11,8 +11,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.audit_log import AuditLog
 from app.models.notification import Notification
-from app.models.pet_claim import PetClaim
-from app.models.report import HoldingAnimal, Report, ReportMedia, ReportReturn, StatusHistory
+from app.models.report import Report, ReportMedia, ReportReturn, StatusHistory
 from app.models.report_match import ReportMatch
 from app.models.user import Subdivision, User
 from app.utils import report_split as rs
@@ -40,9 +39,7 @@ class AnimalIn(BaseModel):
 
 class CarryOver(BaseModel):
     """Which new animal record (0-based position in `animals`) takes over what the group report already has."""
-    holding: Optional[int] = None
     pet: Optional[int] = None
-    claims: Optional[int] = None
 
 
 class SplitRequest(BaseModel):
@@ -89,7 +86,6 @@ def _primary_photo(report: Report) -> Optional[str]:
 
 
 def _child_card(db: Session, child: Report, position: int, total: int) -> dict:
-    holding = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == child.report_id).first()
     return {
         "report_id": child.report_id,
         "label": f"Animal {position} of {total}",
@@ -100,8 +96,6 @@ def _child_card(db: Session, child: Report, position: int, total: int) -> dict:
         "status_name": child.status.status_name if getattr(child, "status", None) else None,
         "photo_url": _primary_photo(child),
         "pet_id": child.pet_id,
-        "holding_id": holding.holding_id if holding else None,
-        "facility_status": holding.facility_status if holding else None,
         "description": child.description,
     }
 
@@ -142,12 +136,10 @@ def _count_note(db: Session, parent: Report, recorded: int) -> Optional[dict]:
 
 
 def _carry_items(db: Session, parent: Report) -> dict:
-    holding = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == parent.report_id).first()
     confirmed = db.query(ReportMatch).filter(ReportMatch.source_report_id == parent.report_id,
                                               ReportMatch.status == "CONFIRMED_MATCH",
                                               ReportMatch.matched_pet_id.isnot(None)).all()
-    claims = db.query(PetClaim).filter(PetClaim.report_id == parent.report_id, PetClaim.status != "Rejected").all()
-    return {"holding": holding, "pet": bool(parent.pet_id or confirmed), "confirmed": confirmed, "claims": claims}
+    return {"pet": bool(parent.pet_id or confirmed), "confirmed": confirmed}
 
 
 def _queue_ai(db: Session, report_id: int, media_id: int, url: str) -> None:
@@ -187,11 +179,11 @@ def get_split_group(report_id: int, db: Session = Depends(get_db), current_user:
     if out["can_split"]:
         # the photos to crop from: every image of the group report (submission photos first)
         imgs = sorted([m for m in (report.media or []) if (m.media_type or "Image") == "Image"],
-                      key=lambda m: bool(m.history_id or m.holding_log_id or m.is_evidence))
+                      key=lambda m: bool(m.history_id or m.is_evidence))
         out["source_photos"] = [m.file_url for m in imgs]
         if not out["is_group"]:
             c = _carry_items(db, report)
-            out["carry_needed"] = {"holding": bool(c["holding"]), "pet": bool(c["pet"]), "claims": bool(c["claims"])}
+            out["carry_needed"] = {"pet": bool(c["pet"])}
     return out
 
 
@@ -241,16 +233,13 @@ def split_report(report_id: int, body: SplitRequest, req: Request, db: Session =
         animals.append(a)
 
     # What the group already has must go to exactly one animal (first batch only).
-    carry = _carry_items(db, report) if first_batch else {"holding": None, "pet": False, "confirmed": [], "claims": []}
+    carry = _carry_items(db, report) if first_batch else {"pet": False, "confirmed": []}
     choice = body.carry
-    needs = [k for k, present in (("holding", bool(carry["holding"])), ("pet", carry["pet"]), ("claims", bool(carry["claims"]))) if present]
+    needs = ["pet"] if carry["pet"] else []
     for key in needs:
         idx = getattr(choice, key)
         if idx is None or not (0 <= idx < n):
-            what = {"holding": "the animal already in the holding place",
-                    "pet": "the registered pet this report is confirmed as",
-                    "claims": "the open owner claims"}[key]
-            raise HTTPException(status_code=400, detail=f"Choose which animal is {what}.")
+            raise HTTPException(status_code=400, detail="Choose which animal is the registered pet this report is confirmed as.")
 
     total = len(existing) + n
     created: List[Report] = []
@@ -291,8 +280,6 @@ def split_report(report_id: int, body: SplitRequest, req: Request, db: Session =
     db.flush()
 
     # Carry over what the group report already had.
-    if first_batch and carry["holding"] is not None:
-        carry["holding"].report_id = created[choice.holding].report_id
     if first_batch and carry["pet"]:
         target = created[choice.pet]
         target.pet_id = report.pet_id or (carry["confirmed"][0].matched_pet_id if carry["confirmed"] else None)
@@ -300,9 +287,6 @@ def split_report(report_id: int, body: SplitRequest, req: Request, db: Session =
         for m in carry["confirmed"]:
             m.source_report_id = target.report_id
         report.pet_id = None
-    if first_batch and carry["claims"]:
-        for c in carry["claims"]:
-            c.report_id = created[choice.claims].report_id
 
     # The group report steps aside: its open AI suggestions are closed as superseded.
     for m in db.query(ReportMatch).filter(
@@ -378,10 +362,6 @@ def unsplit_report(report_id: int, req: Request, db: Session = Depends(get_db),
     busy = []
     for c in children:
         reasons = []
-        if db.query(HoldingAnimal.holding_id).filter(HoldingAnimal.report_id == c.report_id).first():
-            reasons.append("is in the holding place")
-        if db.query(PetClaim.claim_id).filter(PetClaim.report_id == c.report_id, PetClaim.status != "Rejected").first():
-            reasons.append("has an owner claim")
         if c.pet_id or db.query(ReportMatch.match_id).filter(ReportMatch.source_report_id == c.report_id,
                                                              ReportMatch.status == "CONFIRMED_MATCH").first():
             reasons.append("is confirmed as a registered pet")

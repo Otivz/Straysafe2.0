@@ -21,18 +21,18 @@ from fastapi.testclient import TestClient  # noqa: E402
 import app.models  # noqa: E402,F401
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models.manual_match import ManualMatchDecision  # noqa: E402
-from app.models.report import HoldingAnimal, Report, ReportCategory, ReportStatus, StatusHistory  # noqa: E402
+from app.models.report import Report, ReportCategory, ReportStatus, StatusHistory  # noqa: E402
 from app.models.report_match import ReportMatch  # noqa: E402
 from app.models.system_setting import SystemSetting  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
-from app.routes import claims, manual_matching, matches, pet_match_confirmations, reports  # noqa: E402
+from app.routes import manual_matching, matches, pet_match_confirmations, reports  # noqa: E402
 from app.utils import ai_suggestions  # noqa: E402
 from app.utils.auth import create_access_token  # noqa: E402
 
 os.environ.pop("GEMINI_API_KEY", None)  # after the imports: app.database loads .env
 Base.metadata.create_all(bind=engine)
 api = FastAPI()
-for r in (manual_matching.router, matches.router, reports.router, pet_match_confirmations.router, claims.router):
+for r in (manual_matching.router, matches.router, reports.router, pet_match_confirmations.router):
     api.include_router(r)
 client = TestClient(api, raise_server_exceptions=False)
 db = SessionLocal()
@@ -85,7 +85,6 @@ stray1 = report(animal_type="Dog", animal_breed="Aspin mix", animal_color="Brown
 stray2 = report(animal_type="Dog", animal_breed="Shih Tzu", animal_color="White", lat=14.9, lng=121.1)  # ~15 km away
 cat1 = report(animal_type="Cat", animal_color="Black")
 other_subd = report(subd=2, animal_type="Dog", animal_color="Brown")
-db.add(HoldingAnimal(report_id=stray1, sex="Male", animal_type="Dog"))
 db.commit()
 
 # ── AI status ──
@@ -117,19 +116,18 @@ ids = lambda resp: {x["report_id"] for x in resp.json()["results"]}  # noqa: E73
 r = client.get("/manual-matching/reports", headers=HL)
 check("search: a leader sees only their own subdivision", r.status_code == 200 and ids(r) == {lost, stray1, stray2, cat1}, r.text[:300])
 # Barangay scope (app/utils/matching_scope.py): Barangay-managed cases and published Lost Pet reports only
-check("scope: barangay staff don't see internal subdivision reports", ids(client.get("/manual-matching/reports", headers=HS)) == {stray1},
+check("scope: barangay staff don't see internal subdivision reports", ids(client.get("/manual-matching/reports", headers=HS)) == set(),
       ids(client.get("/manual-matching/reports", headers=HS)))
 db.add(StatusHistory(report_id=other_subd, report_status_id=4, updated_by=leader2.user_id))  # escalated to the Barangay
 lost_row = db.get(Report, lost)
 lost_row.visibility, lost_row.visibility_decided_by = "Public", leader.user_id  # the owner's Lost Pet report is published
 db.commit()
-check("scope: staff see escalated cases, holding intakes and published Lost Pet reports",
-      ids(client.get("/manual-matching/reports", headers=HS)) == {lost, stray1, other_subd})
+check("scope: staff see escalated cases and published Lost Pet reports",
+      ids(client.get("/manual-matching/reports", headers=HS)) == {lost, other_subd})
 check("search: report type lost", ids(client.get("/manual-matching/reports?report_type=lost", headers=HL)) == {lost})
 check("search: animal type cat", ids(client.get("/manual-matching/reports?animal_type=Cat", headers=HL)) == {cat1})
 check("search: breed text", ids(client.get("/manual-matching/reports?breed=aspin", headers=HL)) == {lost, stray1})
 check("search: color text", ids(client.get("/manual-matching/reports?color=white", headers=HL)) == {lost, stray2})
-check("search: sex comes from the holding record", ids(client.get("/manual-matching/reports?gender=Male", headers=HL)) == {stray1})
 check("search: distinguishing features", ids(client.get("/manual-matching/reports?features=red+collar", headers=HL)) == {lost, stray1})
 check("search: radius", ids(client.get("/manual-matching/reports?lat=14.8&lng=121.0&radius_km=2", headers=HL)) == {lost, stray1, cat1})
 check("search: LIKE wildcards in the text are literal", ids(client.get("/manual-matching/reports?breed=%25", headers=HL)) == set())
@@ -138,7 +136,7 @@ check("search: location text (subdivision)", ids(client.get("/manual-matching/re
 check("search: date range", ids(client.get("/manual-matching/reports?date_from=2026-10-02", headers=HL)) == set())
 row = next(x for x in client.get("/manual-matching/reports", headers=HL).json()["results"] if x["report_id"] == stray1)
 check("result card: type, characteristics, location, status, reporter",
-      row["report_type"] == "Stray Animal" and row["gender"] == "Male" and row["reporter"]["name"] == "Res"
+      row["report_type"] == "Stray Animal" and row["gender"] is None and row["reporter"]["name"] == "Res"
       and "email" not in row["reporter"] and row["status"] == "S2", row)
 
 # ── Candidates ──
@@ -406,11 +404,11 @@ check("pets: a report already linked to a pet gets no pet candidates", r.json()[
 check("pets: and can't send a confirmation", send(p=bantay, rid=linked).status_code == 409)
 
 from app.utils.push_categories import category_for, notification_link  # noqa: E402
-check("push: owner request opens My Pets on that request", notification_link(1, "pet_match_confirmation", 7) == "/resident/pets?confirm=7"
+check("push: owner request opens My Pets in the Resident app", notification_link(1, "pet_match_confirmation", 7) == "/resident-app/pets"
       and category_for("pet_match_confirmation") == category_for("potential_match"))
-check("push: owner answer opens the report's pet candidates for staff",
-      notification_link(2, "pet_match_confirmation_result", 9) == "/subd/manual-matching?report=9&kind=pet"
-      and notification_link(3, "pet_match_confirmation_result", 9) == "/brgy/manual-matching?report=9&kind=pet")
+check("push: owner answer opens the report's case for the Leader; retired Barangay accounts get the web root",
+      notification_link(2, "pet_match_confirmation_result", 9) == "/subd-admin/cases/9"
+      and notification_link(3, "pet_match_confirmation_result", 9) == "/")
 
 # ── match-pair endpoint for Potential Match Review modal ──
 mp_report = report(animal_type="Dog")
@@ -446,8 +444,7 @@ check("owner view: the pet record's size, address, description, age and owner na
       {"size", "registered_address", "notes", "estimated_age", "is_neutered", "owner_name"} <= set(yp) and yp["owner_name"] == "OwnerIn", yp)
 
 # ── Barangay data separation: registered-pet pool and endpoint protection ──
-from app.models.pet_claim import PetClaim  # noqa: E402
-from app.models.report import EndorsementLetter  # noqa: E402
+from app.models.barangay_referral import BarangayReferral  # noqa: E402
 
 brgy_owner = mk("BrgyOwner", 1, subd=None)              # lives in the barangay, outside any subdivision
 brgy_pet = pet(brgy_owner, "Brgyaso", breed="Aspin", color_markings="Brown")
@@ -456,11 +453,10 @@ endorsed_owner = mk("EndorsedOwner", 1, subd=2)
 endorsed_pet = pet(endorsed_owner, "Endorso", breed="Aspin", color_markings="Brown")
 private_pet = pet(endorsed_owner, "Pribado", breed="Aspin", color_markings="Brown")   # subdivision registry only
 endorsed_case = report(subd=2, animal_type="Dog")
-db.add(EndorsementLetter(report_id=endorsed_case, leader_id=leader2.user_id, letter_content="Formal endorsement"))
-db.add(PetClaim(report_id=endorsed_case, pet_id=endorsed_pet, status="Pending Review"))
+db.add(BarangayReferral(report_id=endorsed_case, barangay_id=1, referred_by=leader2.user_id, reason="Formal referral", contact_method="call"))
+db.get(Report, endorsed_case).pet_id = endorsed_pet                                   # the case's linked pet
 brgy_sighting = report(subd=2, animal_type="Dog", animal_breed="Aspin", animal_color="Brown")
-db.add(HoldingAnimal(report_id=brgy_sighting, animal_type="Dog"))                    # Barangay holding intake
-db.get(Report, brgy_sighting).current_status_id = 7                                 # Under Observation at the Barangay
+db.get(Report, brgy_sighting).current_status_id = 7                                 # handled by the Barangay
 internal = report(subd=2, animal_type="Dog", animal_breed="Aspin")                   # unendorsed subdivision record
 db.commit()
 
@@ -516,18 +512,19 @@ cand = next(x for x in client.get(f"/manual-matching/reports/{brgy_sighting}/pet
             if x["pet_id"] == endorsed_pet)
 check("no AI: a manual pair in the candidates has no score and says manual",
       cand["pair"]["matching_mode"] == "manual" and cand["pair"]["similarity_score"] is None, cand["pair"])
-old_claim = PetClaim(report_id=brgy_sighting, pet_id=endorsed_pet, status="Pending Review", match_score=50)  # saved before the rule
-db.add(old_claim)
-db.commit()
-cr = client.get(f"/claims/{old_claim.claim_id}", headers=HS)
-check("no AI: a claim from a manual match is labelled manual with no AI score (even one saved with 50)",
-      cr.status_code == 200 and cr.json()["matching_mode"] == "manual" and cr.json()["match_score"] is None, cr.text[:300])
-db.expire_all()
-check("no AI: the stored claim isn't rewritten by reading it", db.get(PetClaim, old_claim.claim_id).match_score == 50)
 hist = reports.dispute_match_history(db, mrow.match_id)
 check("no AI: dispute history of a manual record says manual, no score", hist["matching_mode"] == "manual" and hist["similarity_score"] is None, hist)
 ai_hist = reports.dispute_match_history(db, db.query(ReportMatch).filter(ReportMatch.source_report_id == ai_src).one().match_id)
 check("AI records keep their score in the history", ai_hist["matching_mode"] == "ai" and ai_hist["similarity_score"] == 83, ai_hist)
+
+# ── Search by sex: it comes from the linked registered pet ──
+male_pet = pet(owner_out, "Malepet", breed="Aspin", color_markings="Brown")
+db.get(Pet, male_pet).gender = "Male"
+male_report = report(animal_type="Dog", animal_color="Brown")
+db.get(Report, male_report).pet_id = male_pet
+db.commit()
+male_ids = ids(client.get("/manual-matching/reports?gender=Male", headers=HL))
+check("search: sex comes from the linked registered pet", male_report in male_ids and stray2 not in male_ids and cat1 not in male_ids, male_ids)
 
 print(f"\n{sum(results)}/{len(results)} checks passed")
 sys.exit(0 if all(results) else 1)

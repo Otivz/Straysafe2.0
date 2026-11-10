@@ -407,13 +407,6 @@
   .rs-points__icon { display: grid; place-items: center; flex-shrink: 0; width: 42px; height: 42px; border-radius: 12px; background: var(--sa-brand-soft); color: var(--sa-brand-ink); }
   .rs-points strong { display: block; font-size: 16px; }
   .rs-points__text { display: block; font-size: 15px; line-height: 22px; color: var(--sa-ink-2); }
-  .rs-devbox {
-    padding: 14px; border: 1px dashed color-mix(in srgb, var(--sa-amber) 70%, var(--sa-ink)); border-radius: var(--rs-radius); background: var(--sa-amber-soft);
-    color: var(--sa-amber-ink); font-size: 14px; line-height: 20px;
-  }
-  .rs-devbox__title { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-  .rs-devbox code { padding: 1px 5px; border-radius: 4px; background: rgb(255 255 255 / 0.75); color: var(--sa-ink); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; overflow-wrap: anywhere; }
-  .rs-devbox a { color: inherit; }
 
   .rs-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .rs-tile {

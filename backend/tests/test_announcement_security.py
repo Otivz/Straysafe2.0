@@ -1,6 +1,6 @@
 """
-Community alerts (announcements) can only be changed by officials allowed to manage them, and comments / reactions are
-always by the logged-in user (SYSTEM_AUDIT.md 4.1). Run from the backend folder:
+Community alerts (announcements) can only be changed by officials allowed to manage them (SYSTEM_AUDIT.md 4.1).
+(Comments and reactions no longer exist; their checks went with them.) Run from the backend folder:
     python tests/test_announcement_security.py
 """
 import os
@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 import app.models  # noqa: E402,F401
 from app.database import Base, SessionLocal, engine  # noqa: E402
-from app.models.announcement import Announcement, AnnouncementCategory, AnnouncementComment, AnnouncementReaction  # noqa: E402
+from app.models.announcement import Announcement, AnnouncementCategory  # noqa: E402
 from app.models.audit_log import AuditLog  # noqa: E402
 from app.models.user import Barangay, Role, Subdivision, User  # noqa: E402
 from app.routes import announcements  # noqa: E402
@@ -76,8 +76,6 @@ check("no login: can't edit an alert", client.put(f"/announcements/{A}", json=ED
 check("no login: can't change its status", client.patch(f"/announcements/{A}/status?status=Archived").status_code == 401)
 check("no login: can't upload media",
       client.post(f"/announcements/{A}/media", files={"file": ("x.jpg", b"x", "image/jpeg")}).status_code == 401)
-check("no login: can't comment", client.post(f"/announcements/{A}/comments", json={"user_id": resident.user_id, "comment": "hi"}).status_code == 401)
-check("no login: can't react", client.post(f"/announcements/{A}/react", json={"user_id": resident.user_id}).status_code == 401)
 db.expire_all()
 check("...and the alert is unchanged", db.get(Announcement, A).title == "Rabies advisory" and db.get(Announcement, A).status == "Published")
 
@@ -95,17 +93,6 @@ check("the status change is in the audit log with who did it",
       db.query(AuditLog).filter(AuditLog.action == "Update Announcement Status", AuditLog.user_id == staff.user_id).count() == 1)
 r = client.put(f"/announcements/{A}", json={**EDIT, "title": "Rabies advisory (updated)"}, headers=H(admin))
 check("an admin can edit any alert", r.status_code == 200 and r.json()["title"] == "Rabies advisory (updated)", r.text[:200])
-
-# ---- comments and reactions are by the logged-in user, whatever user_id is sent
-r = client.post(f"/announcements/{A}/comments", json={"user_id": other_resident.user_id, "comment": "posted as someone else?"}, headers=H(resident))
-check("a comment is saved as the logged-in user, not the user_id sent", r.status_code == 200 and r.json()["user_id"] == resident.user_id, r.text[:200])
-r = client.post(f"/announcements/{A}/comments", json={"comment": "no user_id at all"}, headers=H(other_resident))
-check("...and works without a user_id in the body", r.status_code == 200 and r.json()["user_id"] == other_resident.user_id, r.text[:200])
-r = client.post(f"/announcements/{A}/react", json={"user_id": other_resident.user_id, "reaction_type": "Like"}, headers=H(resident))
-db.expire_all()
-reacts = db.query(AnnouncementReaction).filter(AnnouncementReaction.announcement_id == A).all()
-check("a reaction is saved as the logged-in user", r.status_code == 200 and [x.user_id for x in reacts] == [resident.user_id],
-      (r.text[:200], [x.user_id for x in reacts]))
 
 # ---- the full subdivision listing (drafts and members-only posts included) is for that area's officials
 # (2026-11-02, tests/test_announcement_access.py); residents read published posts through their own feed

@@ -6,10 +6,11 @@ import { Screen } from '../../components/Screen';
 import { useToast } from '../../components/toast';
 import { Button, Callout, ClaimPill, FormError, LinkButton, NotFoundState, Section, UpdateTimeline } from '../../components/ui';
 import { residentPath } from '../../config';
-import { CLAIM_STATUS, SAMPLE_OFFICE } from '../../data/constants';
+import { CLAIM_STATUS } from '../../data/constants';
 import { useResidentData } from '../../data/context';
 import { claimById, noticeById, petById } from '../../data/selectors';
 import { useFormFocus, useNow, useSubmit } from '../../lib/hooks';
+import { useOffice } from '../../lib/useOffice';
 
 const STEPS = ['Submitted', 'Under review', 'Decision'];
 
@@ -19,6 +20,7 @@ export default function ClaimStatusPage() {
   const now = useNow();
   const toast = useToast();
   const claim = claimById(state, useParams().claimId);
+  const { office } = useOffice();
   const { ref, invalid } = useFormFocus();
   const { pending, error, run } = useSubmit();
   const [reply, setReply] = useState('');
@@ -71,7 +73,7 @@ export default function ClaimStatusPage() {
       {claim.status === 'approved' ? (
         <Callout tone="sage" title="Your claim was approved.">
           {claim.decisionNote}
-          <span className="rs-block rs-mt">{SAMPLE_OFFICE.name}: {SAMPLE_OFFICE.phone} · {SAMPLE_OFFICE.hours}</span>
+          {office ? <span className="rs-block rs-mt">{office.name}: {[office.phone, office.hours].filter(Boolean).join(' · ')}</span> : null}
           <span className="rs-row-actions rs-mt"><LinkButton size="sm" to={residentPath('/contact')}>Contact the office</LinkButton></span>
         </Callout>
       ) : null}

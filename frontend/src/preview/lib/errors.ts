@@ -1,17 +1,21 @@
 /**
  * Every mutation the UI performs is async and may fail. In the preview these failures are simulated from the
- * "Preview tools" menu; once the data layer talks to the API, the same three kinds map to a failed request, a 401,
- * and a 5xx/4xx response, so the screens do not need to change.
+ * "Preview tools" menu; in live mode (src/live/http.ts) the same three kinds map to a request that never got an answer
+ * ('network'), a 401 that the session refresh could not fix ('session'), and any other error response ('server', carrying
+ * the server's own explanation), so the screens do not care which mode they run in.
  */
 export type AdminErrorKind = 'network' | 'session' | 'server';
 
 export class AdminApiError extends Error {
   readonly kind: AdminErrorKind;
+  /** The HTTP status, when the error came from a response (live mode only). */
+  readonly status?: number;
 
-  constructor(kind: AdminErrorKind, message?: string) {
+  constructor(kind: AdminErrorKind, message?: string, status?: number) {
     super(message ?? defaultMessage(kind));
     this.name = 'AdminApiError';
     this.kind = kind;
+    this.status = status;
   }
 }
 

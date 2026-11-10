@@ -4,15 +4,16 @@ import { Field, Select, Textarea } from '../../components/form';
 import { Screen } from '../../components/Screen';
 import { Button, Callout, EmptyState, FormError, LinkButton } from '../../components/ui';
 import { residentPath } from '../../config';
-import { SAMPLE_OFFICE } from '../../data/constants';
 import { useResidentData } from '../../data/context';
 import { useFormFocus, useSubmit } from '../../lib/hooks';
+import { useOffice } from '../../lib/useOffice';
 
 const TOPICS = ['A report I made', 'A lost or found notice', 'An ownership claim', 'My account or privacy', 'Something else'];
 
-/** R39 — Contact the subdivision: office details (sample) and a message form. */
+/** R39 — Contact the subdivision: the office's details and, where the app can send one, a message form. */
 export default function ContactPage() {
-  const { dispatch } = useResidentData();
+  const { dispatch, capabilities } = useResidentData();
+  const { office } = useOffice();
   const { ref, invalid } = useFormFocus();
   const { pending, error, run } = useSubmit();
   const [topic, setTopic] = useState('');
@@ -24,7 +25,7 @@ export default function ContactPage() {
     return (
       <Screen title="Contact the subdivision" back="/profile">
         <EmptyState tone="sage" icon={MessageSquareText} title="Message sent" action={<LinkButton variant="primary" to={residentPath('/profile')}>Back to Profile</LinkButton>}>
-          In the real app the office replies to the email on your account. In this preview nothing was sent anywhere.
+          The office replies to the email on your account.
         </EmptyState>
       </Screen>
     );
@@ -44,22 +45,26 @@ export default function ContactPage() {
     <Screen
       title="Contact the subdivision"
       back="/profile"
-      footer={<Button type="submit" form="contact-form" variant="primary" block loading={pending}>Send message</Button>}
+      footer={capabilities.messageOffice ? <Button type="submit" form="contact-form" variant="primary" block loading={pending}>Send message</Button> : undefined}
     >
-      <section className="rs-office" aria-label="Office details">
-        <p className="rs-office__title">{SAMPLE_OFFICE.name}</p>
-        <ul>
-          <li><Phone size={17} aria-hidden="true" /><span>{SAMPLE_OFFICE.phone}</span></li>
-          <li><Mail size={17} aria-hidden="true" /><span>{SAMPLE_OFFICE.email}</span></li>
-          <li><Clock size={17} aria-hidden="true" /><span>{SAMPLE_OFFICE.hours}</span></li>
-          <li><MapPin size={17} aria-hidden="true" /><span>{SAMPLE_OFFICE.address}</span></li>
-        </ul>
-        <p className="rs-meta">Sample information for this preview. Not a real office.</p>
-      </section>
+      {office ? (
+        <section className="rs-office" aria-label="Office details">
+          <p className="rs-office__title">{office.name}</p>
+          <ul>
+            {office.phone ? <li><Phone size={17} aria-hidden="true" /><span>{office.phone}</span></li> : null}
+            {office.email ? <li><Mail size={17} aria-hidden="true" /><span>{office.email}</span></li> : null}
+            {office.hours ? <li><Clock size={17} aria-hidden="true" /><span>{office.hours}</span></li> : null}
+            {office.address ? <li><MapPin size={17} aria-hidden="true" /><span>{office.address}</span></li> : null}
+          </ul>
+        </section>
+      ) : (
+        <Callout tone="info" title="The office has not added its contact details yet.">Ask the guardhouse, or your Subdivision Leader, how to reach the office.</Callout>
+      )}
 
       <Callout tone="amber" title="Not for emergencies.">If someone is in danger or hurt right now, call local emergency services or tell the guardhouse.</Callout>
 
       {error ? <FormError message={error} /> : null}
+      {capabilities.messageOffice ? (
       <form id="contact-form" className="rs-stack" onSubmit={(e) => void submit(e)} noValidate>
         <div ref={ref} className="rs-stack">
           <Field label="What is it about?" required error={errors.topic}>
@@ -73,6 +78,7 @@ export default function ContactPage() {
           </Field>
         </div>
       </form>
+      ) : <p className="rs-sub">Sending a message from the app is not available yet. Use the details above, or talk to the guardhouse.</p>}
     </Screen>
   );
 }

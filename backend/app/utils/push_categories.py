@@ -19,17 +19,17 @@ _TYPE_CATEGORY = {
     "comment": REPORTS, "report_claimed": REPORTS, "report_takeover": REPORTS, "report_transfer_request": REPORTS,
     "report_transfer_accepted": REPORTS, "report_transfer_rejected": REPORTS, "unassigned_report_alert": REPORTS,
     "enforcement": REPORTS,
-    # Rescues
-    "rescue_assignment": RESCUES, "alert": RESCUES, "holding_overdue_alert": RESCUES,
+    # Case activity (preference column push_rescues)
+    "alert": RESCUES,
     # Pet matches
     "lost_pet_alert": PET_MATCHES, "lost_pet_sighting": PET_MATCHES, "lost_pet_alert_request": PET_MATCHES,
     "potential_match": PET_MATCHES, "pet_owner_confirmation": PET_MATCHES, "pet_owner_confirmation_result": PET_MATCHES,
     "pet_match_confirmation": PET_MATCHES, "pet_match_confirmation_result": PET_MATCHES, "leader_identity_verified": PET_MATCHES,
-    "wrong_identity": PET_MATCHES, "qr_recovery_request": PET_MATCHES, "qr_finder_thanks": PET_MATCHES, "reunion_photo_requested": PET_MATCHES,
+    "wrong_identity": PET_MATCHES, "reunion_photo_requested": PET_MATCHES,
     # Claims
     "claim": CLAIMS,
     # Messages
-    "message": MESSAGES, "match_message": MESSAGES, "adoption_chat": MESSAGES,
+    "message": MESSAGES, "match_message": MESSAGES,
     # "Send test notification" (only the master switch applies)
     "push_test": SYSTEM,
 }
@@ -48,8 +48,6 @@ def category_for(ntype: Optional[str]) -> Optional[str]:
         return None
     if t in _TYPE_CATEGORY:
         return _TYPE_CATEGORY[t]
-    if t.startswith("adoption") or t.startswith("adopter"):
-        return ADOPTIONS
     return None
 
 
@@ -84,65 +82,29 @@ def push_tag(ntype: Optional[str], related_id: Optional[int]) -> str:
     return f"{cat}-{related_id}" if related_id else f"{cat}-general"
 
 
-# ---- where a tap goes (R4): the same pages the notification bells open -----------------------------------------
+# ---- where a tap goes (R4): a screen of the StraySafe 2.0 interface of that role --------------------------------
+# The Resident app and the Subdivision Leader app (frontend/src/live/config.ts). A resident's report screen is addressed by the case
+# reference (SS-<year>-<id>), which a push does not know, so it opens the list; a Leader's case screen accepts the bare report id.
+RESIDENT_APP = "/resident-app"
+LEADER_APP = "/subd-admin"
+
+
 def notification_link(role_id: int, ntype: Optional[str], related_id: Optional[int], title: str = "") -> str:
     t = (ntype or "").lower()
-    ti = (title or "").lower()
     rid = related_id
-    if role_id == 1:  # Resident (ResiNavbar)
-        if t == "pet_owner_confirmation":
-            return "/resident/pets"
-        if t == "pet_match_confirmation":
-            return f"/resident/pets?confirm={rid}" if rid else "/resident/pets"
-        if t in ("lost_pet_alert", "lost_pet_sighting"):
-            return f"/resident/lost-pets/{rid}" if rid else "/resident-home"
-        if t == "adoption_available_again" and rid:
-            return f"/adopt/apply/{rid}"
-        if t.startswith("adoption") and rid:
-            return f"/adopt/applications?adoption={rid}" + ("&chat=1" if t == "adoption_chat" else "")
-        if t == "status_update" and rid:
-            return f"/resident/reports/{rid}"
-        if t == "match_message" and rid:
-            return f"/resident/reports/{rid}/match-review?openChat=true"
-        if t == "potential_match" and rid:
-            return f"/resident/reports/{rid}/match-review"
-        if t == "reunion_photo_requested" and rid:
-            return f"/resident/reports/{rid}?openReunited=true"
-        if t in ("message", "comment") and rid:
-            return f"/resident/reports/{rid}?openChat=true"
-        if t in ("alert", "qr_recovery_request") and rid:
-            return f"/resident/pet/{rid}/scan-history"
-        return f"/resident/reports/{rid}" if rid else "/resident-home"
-    if role_id == 2:  # Subdivision Leader (SubdNavbar)
+    if role_id == 1:  # Resident app
+        if t in ("pet_owner_confirmation", "pet_match_confirmation"):
+            return f"{RESIDENT_APP}/pets"
+        if t == "lost_pet_alert":
+            return f"{RESIDENT_APP}/community/alert-{rid}" if rid else f"{RESIDENT_APP}/community"
+        if t == "lost_pet_sighting":
+            return f"{RESIDENT_APP}/community/alert-{rid}/sightings" if rid else f"{RESIDENT_APP}/community"
+        return f"{RESIDENT_APP}/reports" if rid else f"{RESIDENT_APP}/home"
+    if role_id == 2:  # Subdivision Leader app
         if t == "pet_owner_confirmation_result":
-            return "/subd/pet-records"
-        if t == "pet_match_confirmation_result":
-            return f"/subd/manual-matching?report={rid}&kind=pet" if rid else "/subd/manual-matching"
+            return f"{LEADER_APP}/pets"
         if t in ("lost_pet_alert", "lost_pet_sighting", "lost_pet_alert_request"):
-            return f"/subd/lost-pet-alerts/{rid}" if rid else "/subd/dashboard"
-        if t in ("message", "comment"):
-            return f"/subd/reports/{rid}?openChat=true" if rid else "/subd/reports?openChat=true"
-        if t == "claim":
-            return "/subd/pet-claims"
-        return f"/subd/reports/{rid}" if rid else "/subd/reports"
-    if role_id == 3:  # Barangay Staff (BrgyNavbar)
-        if t.startswith("adoption_task_") and t in ("adoption_task_assigned", "adoption_task_reassigned",
-                                                    "adoption_task_cancelled", "adoption_task_updated"):
-            return "/brgy/adoption-tasks"
-        if t == "pet_owner_confirmation_result":
-            return "/brgy/pet-records"
-        if t == "pet_match_confirmation_result":
-            return f"/brgy/manual-matching?report={rid}&kind=pet" if rid else "/brgy/manual-matching"
-        if t == "adoption_chat" and rid:
-            return f"/brgy/messages?adoptionId={rid}"
-        if t.startswith("adoption") and rid:
-            return f"/brgy/adoptions?view={rid}"
-        if "holding" in t or "holding" in ti or "impound" in t:
-            return "/brgy/holding-facility"
-        if "adopt" in t or "adopt" in ti:
-            return "/brgy/adoptions"
-        if "claim" in t:
-            return "/brgy/pet-claims"
-        return f"/brgy/reports/{rid}" if rid else "/brgy/dashboard"
-    # Admin
-    return f"/admin/reports/{rid}" if rid and category_for(t) in (REPORTS, RESCUES) else "/admin/dashboard"
+            return f"{LEADER_APP}/community"
+        return f"{LEADER_APP}/cases/{rid}" if rid else f"{LEADER_APP}/cases"
+    # No other role has an interface: retired Barangay accounts are never pushed to, and the Administrator has no screen yet.
+    return "/"

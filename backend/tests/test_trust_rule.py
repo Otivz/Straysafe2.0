@@ -19,6 +19,7 @@ from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 import app.models  # noqa: E402,F401
+from _case_helpers import make_warning_ready  # noqa: E402  (what an owner warning now requires)
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
 from app.models.report import Report, ReportStatus  # noqa: E402
@@ -131,6 +132,7 @@ r = client.post(f"/reports/{R15}/recheck-identity", json={"note": "same scar and
 check("the handling leader re-checks the identity", r.status_code == 200, r.text[:200])
 check("after the re-check the bite counts toward Boyet", pet_row(PET).bite_incident_count == 1 and pet_row(PET).has_bite_history)
 check("...ownership proof by record now applies", owner_already_on_record(get(R15), OWNER, db) is True)
+make_warning_ready(db, R15, OWNER, observation_days=3)   # a verified incident, a confirmed owner and a confirmed policy
 r = client.post("/warnings/", json=w, headers=HL)
 check("...and a warning can be issued", r.status_code == 200, r.text[:200])
 body = client.get(f"/reports/{R15}", headers=HL).json()

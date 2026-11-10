@@ -1,131 +1,70 @@
 /**
  * The seam between the Resident UI and authentication.
  *
- * Screens only talk to a `ResidentGateway`. Today the only implementation is the in-memory PREVIEW gateway below, which
- * exists in development builds only (see ../config.ts). The real backend contract it will be replaced by is the one the
- * legacy resident login already uses (see utils/api.ts and pages/citizen/ResidentsLogin.tsx):
+ * Screens only talk to a `ResidentGateway`. Its implementation (httpGateway.ts, imported by ResidentLiveRoot.tsx) is not imported
+ * here, so this file carries no credentials and no network code. The real backend contract:
  *
- *   POST /auth/login            { email | phone, password }
- *   POST /auth/register         { name, email, phone, address, password }   then a verification code step
- *   POST /auth/verify-otp       { email, otp }
- *   POST /auth/forgot-password  { email }      POST /auth/reset-password  { token/code, password }
- *   POST /auth/change-password  { current_password, new_password }
- *   GET  /auth/verify-session   POST /auth/logout
+ *   POST /users/                { name, email, password, phone, role_id: 1, subdivision_id, address }   register (unverified)
+ *   POST /auth/login            { email, password }   -> a verified session, or a RESTRICTED token with requires_otp (an emailed code)
+ *   POST /auth/verify-otp       { otp }               with the restricted token -> the verified session
+ *   POST /auth/resend-otp       {}                    with the restricted token (30 s cooldown)
+ *   GET  /auth/verify-session   POST /auth/logout     POST /auth/refresh (done by utils/api.ts from the httpOnly cookie)
+ *   POST /auth/forgot-password  { email }  ->  an emailed 6-digit code;   POST /auth/reset-password  { email, otp, new_password }
+ *   POST /auth/change-password  { current_password, new_password }   (ends every session, this one included)
  *
- * To reconnect: write an `httpGateway` implementing this interface with utils/api.ts, return it from `gateway`, and delete
- * the preview gateway. No screen needs to change.
+ * The server signs in by EMAIL only (LoginRequest.email); a mobile number cannot be used to sign in.
  */
-import { AdminApiError } from '../../preview/lib/errors';
-import { getPreviewFlags, sleep } from '../../preview/lib/previewFlags';
-import { PENDING_KEY, PREVIEW_CODE, SESSION_KEY } from '../config';
-import { SAMPLE_ACCOUNT } from '../data/seed';
-
-export interface SignupProfile { id: string; name: string; email: string; phone: string; unit: string; street: string }
+export interface SignupProfile {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  unit: string;
+  street: string;
+  /** The subdivision the resident joins (the sign-up screen offers a choice only when there is more than one). */
+  subdivisionId?: number;
+}
 
 export interface ResidentSession {
   userId: string;
   name: string;
   email: string;
-  /** Always 'preview' until a real gateway exists, so a mock session is never mistaken for a real one. */
-  mode: 'preview';
   startedAt: string;
-  /** Present for accounts created in the preview, so their (empty) data can be built. */
-  profile?: SignupProfile;
+  /** The backend role: 1 = resident. */
+  roleId?: number;
+  subdivisionId?: number | null;
+  phone?: string | null;
+  address?: string | null;
 }
 
+/** Signing in either completes, or the account still has to be verified with the emailed code. */
+export type SignInResult = { status: 'signed_in'; session: ResidentSession } | { status: 'verify' };
+
 export interface ResidentGateway {
+  /** What identifies a resident when signing in: only the email (the real backend). */
+  signInWith: 'email_or_phone' | 'email';
+  /** How a forgotten password is recovered: an emailed 6-digit code (the real backend). */
+  recovery: 'link' | 'code';
   restore(): ResidentSession | null;
-  signIn(identifier: string, password: string): Promise<ResidentSession>;
-  register(profile: Omit<SignupProfile, 'id'>): Promise<void>;
+  /** Ask the server whether the restored session is still good. Resolves null when it is not. */
+  verifySession?(): Promise<ResidentSession | null>;
+  signIn(identifier: string, password: string): Promise<SignInResult>;
+  /** Creates the account and starts the verification. The password goes to the server and is never kept here. */
+  register(profile: Omit<SignupProfile, 'id'>, password: string): Promise<void>;
   pendingSignup(): SignupProfile | null;
+  /** What the server said about sending the code (for example that the email could not be sent). */
+  codeNotice?(): string | null;
   resendCode(): Promise<void>;
   verify(code: string): Promise<ResidentSession>;
   signOut(): Promise<void>;
   requestPasswordReset(identifier: string): Promise<void>;
+  /** Recovery by link. */
   resetPassword(token: string, password: string): Promise<void>;
+  /** Recovery by code. */
+  resetPasswordWithCode?(email: string, code: string, password: string): Promise<void>;
   changePassword(current: string, next: string): Promise<void>;
+  /** True when changing the password ends the session (the real backend signs the person out everywhere). */
+  endsSessionOnPasswordChange?: boolean;
+  /** The subdivisions a new resident can join. */
+  subdivisions?(): Promise<{ id: number; name: string }[]>;
 }
-
-const SAMPLE_PHONE_DIGITS = '09170000104';
-const digits = (s: string) => s.replace(/\D/g, '');
-
-const guardNetwork = () => { if (getPreviewFlags().offline) throw new AdminApiError('network'); };
-const read = <T>(storage: Storage, key: string): T | null => { try { const raw = storage.getItem(key); return raw ? (JSON.parse(raw) as T) : null; } catch { return null; } };
-const write = (key: string, value: unknown) => { try { sessionStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable: kept in memory only */ } };
-
-const makeSession = (userId: string, name: string, email: string, profile?: SignupProfile): ResidentSession => {
-  const session: ResidentSession = { userId, name, email, mode: 'preview', startedAt: new Date().toISOString(), ...(profile ? { profile } : {}) };
-  write(SESSION_KEY, session);
-  return session;
-};
-
-let pending: SignupProfile | null = null;
-
-const previewGateway: ResidentGateway = {
-  restore: () => read<ResidentSession>(sessionStorage, SESSION_KEY),
-
-  async signIn(identifier, password) {
-    await sleep(550);
-    guardNetwork();
-    const id = identifier.trim().toLowerCase();
-    const known = id === SAMPLE_ACCOUNT.email || digits(identifier) === SAMPLE_PHONE_DIGITS;
-    if (!known || password !== SAMPLE_ACCOUNT.password) throw new AdminApiError('server', 'Incorrect email, phone or password.');
-    return makeSession(SAMPLE_ACCOUNT.id, SAMPLE_ACCOUNT.name, SAMPLE_ACCOUNT.email);
-  },
-
-  async register(profile) {
-    await sleep(650);
-    guardNetwork();
-    if (profile.email.trim().toLowerCase() === SAMPLE_ACCOUNT.email) throw new AdminApiError('server', 'An account with this email already exists. Try signing in instead.');
-    pending = { id: `res-new-${Math.random().toString(36).slice(2, 8)}`, ...profile };
-    write(PENDING_KEY, pending); // never includes the password
-  },
-
-  pendingSignup() {
-    pending ??= read<SignupProfile>(sessionStorage, PENDING_KEY);
-    return pending;
-  },
-
-  async resendCode() { await sleep(600); guardNetwork(); },
-
-  async verify(code) {
-    await sleep(600);
-    guardNetwork();
-    const p = previewGateway.pendingSignup();
-    if (!p) throw new AdminApiError('server', 'Your sign-up expired. Please create the account again.');
-    if (code !== PREVIEW_CODE) throw new AdminApiError('server', 'That code is not correct. Check it and try again.');
-    pending = null;
-    try { sessionStorage.removeItem(PENDING_KEY); } catch { /* ignore */ }
-    return makeSession(p.id, p.name, p.email, p);
-  },
-
-  async signOut() {
-    // Forget the session locally first, so even a reload right now cannot resurrect it; then "tell the server".
-    try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
-    await sleep(150);
-  },
-
-  async requestPasswordReset() {
-    await sleep(600);
-    guardNetwork();
-    // Always resolves, so the screen never reveals whether an account exists.
-  },
-
-  // The preview validates these flows but never changes the sample password, so nothing credential-like is kept anywhere.
-  async resetPassword(token) {
-    await sleep(600);
-    guardNetwork();
-    if (token !== 'preview') throw new AdminApiError('server', 'This reset link is invalid or has expired. Request a new one.');
-  },
-
-  async changePassword(current) {
-    await sleep(500);
-    guardNetwork();
-    // Only the sample resident has a known password. Accounts created in the preview never stored one, so there is nothing to compare.
-    if (read<ResidentSession>(sessionStorage, SESSION_KEY)?.userId === SAMPLE_ACCOUNT.id && current !== SAMPLE_ACCOUNT.password) {
-      throw new AdminApiError('server', 'Your current password is incorrect.');
-    }
-  },
-};
-
-export const gateway: ResidentGateway = previewGateway;

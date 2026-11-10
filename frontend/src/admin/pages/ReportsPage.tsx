@@ -2,12 +2,12 @@ import { useSearchParams } from 'react-router-dom';
 import { ChartNoAxesColumn } from 'lucide-react';
 import { ChartCard, BarList, DataTable, LineChart, SegmentedBar, type SegPart } from '../components/charts';
 import { Field, Input, Segmented } from '../components/form';
-import { Callout, EmptyState, PageHeader, Panel } from '../components/layout';
+import { Callout, EmptyState, ErrorState, PageHeader, PageSkeleton, Panel } from '../components/layout';
 import { OUTCOME_GROUPS, REFERRAL_STATUS } from '../data/constants';
-import { useAdminData } from '../data/context';
-import { analytics, type DateRange } from '../data/selectors';
+import type { DateRange } from '../data/selectors';
 import { addDays, fmtDate, plural, startOfDay } from '../../preview/lib/format';
 import { usePageTitle } from '../lib/hooks';
+import { useAnalytics } from '../lib/useAnalytics';
 import { useNow } from '../../preview/lib/hooks';
 
 type Preset = '30' | '90' | 'ytd' | 'custom';
@@ -31,7 +31,6 @@ function delta(now: number, before: number, hasEarlier: boolean, period: string)
 /** A20 — Reports & analytics. A few operational insights, not an analytics platform. */
 export default function ReportsPage() {
   usePageTitle('Analytics');
-  const { state } = useAdminData();
   const now = useNow();
   const [params, setParams] = useSearchParams();
 
@@ -54,8 +53,8 @@ export default function ReportsPage() {
   const previous: DateRange = { from: new Date(range.from.getTime() - lengthMs), to: range.from };
   const days = Math.round(lengthMs / 86_400_000);
 
-  const data = analytics(state.cases, range);
-  const before = analytics(state.cases, previous);
+  const result = useAnalytics(range, previous);
+  const { data, before } = result;
   const period = `previous ${days} days`;
   const hasEarlier = before.received > 0 || before.closed > 0;
 
@@ -86,9 +85,11 @@ export default function ReportsPage() {
         <p className="sa-small sa-text-3 sm:ml-auto">{fmtDate(range.from.toISOString())} – {fmtDate(addDays(range.to, -1).toISOString())}</p>
       </div>
 
-      {data.received === 0 && data.closed === 0 ? (
-        <Panel><EmptyState icon={ChartNoAxesColumn} title="No activity in this period">Try a longer date range. Reports and closed cases that fall inside the range are counted here.</EmptyState></Panel>
-      ) : (
+      {result.status === 'loading' ? <PageSkeleton />
+        : result.status === 'error' ? <ErrorState message={result.error} onRetry={result.retry} />
+          : data.received === 0 && data.closed === 0 ? (
+            <Panel><EmptyState icon={ChartNoAxesColumn} title="No activity in this period">Try a longer date range. Reports and closed cases that fall inside the range are counted here.</EmptyState></Panel>
+          ) : (
         <div className="flex flex-col gap-6">
           <div className="sa-stats" role="list" aria-label="Summary for the selected period">
             <div role="listitem" className="sa-stat"><span className="sa-stat__value sa-num">{data.received}</span><span className="sa-stat__label">Reports received</span><span className="sa-meta">{delta(data.received, before.received, hasEarlier, period)}</span></div>

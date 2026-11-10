@@ -94,7 +94,7 @@ def check(condition: bool, desc: str):
 print("\n--- Observation summary details ---")
 
 # 1. Converting the database clock to UTC
-with patch("app.utils.holding_stay.db_now", side_effect=local_db_now):
+with patch("app.utils.db_clock.db_now", side_effect=local_db_now):
     local = _now().replace(microsecond=0) + LOCAL_OFFSET
     check(db_local_to_utc(db, local) == local - LOCAL_OFFSET, "a database-clock time is converted to UTC (8 hours earlier)")
     check(db_local_to_utc(db, None) is None, "no time stays empty")
@@ -104,7 +104,7 @@ warned_at_local = (_now() + LOCAL_OFFSET).replace(microsecond=0)
 db.add(OwnerWarning(warning_id=1, user_id=1, pet_id=1, report_id=1, issued_by=2, warning_level="1st Warning",
                     violation_type="Free-Roaming Unleashed", description="Unattended outside.", created_at=warned_at_local))
 db.commit()
-with patch("app.utils.holding_stay.db_now", side_effect=local_db_now), \
+with patch("app.utils.db_clock.db_now", side_effect=local_db_now), \
         patch("app.routes.owner_followups.db_now", side_effect=local_db_now), \
         patch("app.utils.notification_dispatcher.dispatch_notification"):
     res = client.get("/owner-followups/under-observation", headers=leader_hdr)
@@ -121,7 +121,7 @@ fu.is_extended, fu.extension_days, fu.extension_reason = True, 2, "Owner was out
 fu.status, fu.closed_by, fu.closed_at = "complied", 2, _now()
 db.commit()
 report = db.get(Report, 1)
-with patch("app.utils.holding_stay.db_now", side_effect=local_db_now):
+with patch("app.utils.db_clock.db_now", side_effect=local_db_now):
     public = observation_summary(db, report)
     staff = observation_summary(db, report, staff_details=True)
 check(public["started_at"] is not None and public["started_at"].endswith("+00:00"), "start time is sent, marked as UTC")

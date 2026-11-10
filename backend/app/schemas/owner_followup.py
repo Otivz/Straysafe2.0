@@ -216,14 +216,12 @@ class OwnerFollowUpOut(BaseModel):
 
     # Endorsement details
     endorsement_date: Optional[datetime] = None
-    endorsement_letter_content: Optional[str] = None
     endorsement_status: Optional[str] = None
 
     current_observation_day: Optional[int] = None
     observation_day_display: Optional[str] = None
     remaining_time_display: Optional[str] = None
     progress_percent: Optional[float] = None
-    endorsement_letter: Optional[str] = None
     is_escalated: bool = False
 
     created_at: Optional[datetime] = None

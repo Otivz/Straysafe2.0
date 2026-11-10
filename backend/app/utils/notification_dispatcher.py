@@ -209,54 +209,6 @@ def notify_ai_match_alert(
     )
 
 
-def notify_claim_decision(
-    db: Session,
-    pet_owner: User,
-    pet_name: str,
-    claim_id: int,
-    report_id: int,
-    decision_status: str,
-    remarks: Optional[str] = None,
-) -> None:
-    """Dispatches pet claim approval or rejection notice."""
-    subject, text_b, html_b = email_templates.render_claim_decision_email(
-        user_name=pet_owner.name,
-        pet_name=pet_name,
-        report_id=report_id,
-        claim_status=decision_status,
-        remarks=remarks,
-    )
-    email_data = {
-        "recipient_email": pet_owner.email,
-        "subject": subject,
-        "text_body": text_b,
-        "html_body": html_b,
-        "category": "claims",
-        "template_key": f"claim_{decision_status.lower()}",
-        "idempotency_key": f"claim_{claim_id}_{decision_status.lower()}",
-        "related_entity_type": "claim",
-        "related_entity_id": claim_id,
-    }
-    if decision_status == "Approved":
-        title = "🎉 Pet Claim Approved!"
-        msg = f"Your claim for pet '{pet_name}' on report #{report_id} has been approved! You can coordinate pickup directly with your subdivision leader."
-    else:
-        title = f"Pet Claim {decision_status}"
-        msg = f"Your claim for pet '{pet_name}' on report #{report_id} has been {decision_status.lower()}."
-    if remarks:
-        msg += f" Remarks: {remarks}"
-
-    dispatch_notification(
-        db=db,
-        user_id=pet_owner.user_id,
-        title=title,
-        message=msg,
-        notification_type="status_update",
-        related_id=report_id,
-        email_data=email_data,
-    )
-
-
 def notify_pet_reunited(
     db: Session,
     user: User,
@@ -289,45 +241,6 @@ def notify_pet_reunited(
         message=f"Pet '{pet_name}' on Report #{report_id} has been physically reunited with {reunited_with}. Case is now resolved.",
         notification_type="status_update",
         related_id=report_id,
-        email_data=email_data,
-    )
-
-
-def notify_qr_scanned(
-    db: Session,
-    pet_owner: User,
-    pet_name: str,
-    landmark: Optional[str] = None,
-    lat: Optional[float] = None,
-    lng: Optional[float] = None,
-    pet_id: Optional[int] = None,
-) -> None:
-    """Dispatches urgent collar QR scan alert."""
-    subject, text_b, html_b = email_templates.render_qr_scanned_email(
-        user_name=pet_owner.name,
-        pet_name=pet_name,
-        landmark=landmark,
-        latitude=lat,
-        longitude=lng,
-    )
-    email_data = {
-        "recipient_email": pet_owner.email,
-        "subject": subject,
-        "text_body": text_b,
-        "html_body": html_b,
-        "category": "pet_matches",
-        "template_key": "qr_tag_scanned",
-        "idempotency_key": None,  # Scan alerts are real-time events
-        "related_entity_type": "pet",
-        "related_entity_id": pet_id,
-    }
-    dispatch_notification(
-        db=db,
-        user_id=pet_owner.user_id,
-        title=f"🚨 QR Code Scanned for {pet_name}!",
-        message=f"Someone scanned the QR tag for {pet_name} near {landmark or 'a reported location'}.",
-        notification_type="qr_recovery_request",
-        related_id=pet_id,
         email_data=email_data,
     )
 

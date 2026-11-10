@@ -50,7 +50,8 @@ export default function PetDetailsPage() {
             <Block title="Pet information">
               <Kv wide rows={[
                 ['Animal', `${ANIMAL_TYPES[pet.type]} · ${pet.breed}`], ['Colour', pet.color], ['Sex', pet.sex === 'unknown' ? 'Not recorded' : pet.sex[0].toUpperCase() + pet.sex.slice(1)],
-                ['Age', pet.ageText], ['Size', SIZE_LABEL[pet.size]], ['Microchip', pet.microchipped ? 'Declared as microchipped' : 'Not declared'], ['Vaccination', VACCINATION[pet.vaccination]],
+                ['Age', pet.ageText], ['Size', SIZE_LABEL[pet.size]],
+                ['Vaccination', VACCINATION[pet.vaccination]],
               ]} />
             </Block>
             <Block title="Distinguishing characteristics" description="Useful when comparing with a reported animal.">
@@ -59,9 +60,15 @@ export default function PetDetailsPage() {
             </Block>
             <Block title="Photos" description={`${pet.photos} uploaded by the owner`}>
               <div className="sa-evgrid">
-                {Array.from({ length: pet.photos }, (_, i) => (
-                  <span key={i} className="sa-tile" aria-label={`Photo ${i + 1} of ${pet.name}`}><span className="sa-tile__art"><Camera size={24} aria-hidden="true" /></span><span className="sa-tile__cap"><strong>Photo {i + 1}</strong><span className="sa-text-3">Sample placeholder</span></span></span>
-                ))}
+                {Array.from({ length: pet.photos }, (_, i) => {
+                  const url = pet.photoUrls?.[i];
+                  return (
+                    <span key={i} className="sa-tile" aria-label={`Photo ${i + 1} of ${pet.name}`}>
+                      <span className="sa-tile__art">{url ? <img src={url} alt="" loading="lazy" /> : <Camera size={24} aria-hidden="true" />}</span>
+                      <span className="sa-tile__cap"><strong>Photo {i + 1}</strong>{url ? null : <span className="sa-text-3">No preview available</span>}</span>
+                    </span>
+                  );
+                })}
               </div>
             </Block>
           </Panel>
@@ -72,7 +79,7 @@ export default function PetDetailsPage() {
             <Block tight title={<span className="flex items-center gap-2"><Lock size={14} aria-hidden="true" />Registered owner</span>} description="As declared at registration. Visible to administrators only.">
               {owner ? (
                 <>
-                  <Kv stack rows={[['Name', owner.name], ['Unit', `${owner.unit} · ${owner.street}`], ['Phone', maskPhone(owner.phone)]]} />
+                  <Kv stack rows={[['Name', owner.name], ['Unit', [owner.unit, owner.street].filter(Boolean).join(' · ')], ['Phone', maskPhone(owner.phone)]]} />
                   <p className="sa-small mt-3"><Link to={adminPath(`/residents/${owner.id}`)} className="font-semibold">View resident profile</Link></p>
                 </>
               ) : <p className="sa-small sa-text-2">No owner is recorded.</p>}

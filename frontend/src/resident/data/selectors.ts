@@ -7,6 +7,14 @@ export const noticeById = (s: ResidentState, id: string | undefined) => s.notice
 export const claimById = (s: ResidentState, id: string | undefined) => s.claims.find((c) => c.id === id);
 export const petById = (s: ResidentState, id: string | null | undefined) => s.pets.find((p) => p.id === id);
 export const nextReportId = (s: ResidentState) => refId(s.nextRef);
+/**
+ * What happens to a lost-pet or found-animal report once it is sent: `published` (a notice is shown to neighbours at once) or
+ * `pending_review` (an administrator decides first). It is the subdivision's own publication setting.
+ */
+export const visibilityAfterSending = (s: ResidentState, kind: 'lost' | 'found'): 'published' | 'pending_review' => {
+  const mode = kind === 'lost' ? s.publication?.lost_pet ?? 'immediate' : s.publication?.found_animal ?? 'review';
+  return mode === 'immediate' ? 'published' : 'pending_review';
+};
 export const unreadCount = (s: ResidentState) => s.notifications.filter((n) => !n.read).length;
 
 export const isActive = (r: Report) => r.status !== 'closed';

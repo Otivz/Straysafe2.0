@@ -10,7 +10,7 @@ import { unreadCount } from '../../data/selectors';
 
 /** R34 — Profile and everything that is not a report. R40 (sign out) is the confirmation opened from here. */
 export default function ProfilePage() {
-  const { state } = useResidentData();
+  const { state, capabilities } = useResidentData();
   const [leaving, setLeaving] = useState(false);
   const { profile } = state;
   const unread = unreadCount(state);
@@ -23,8 +23,8 @@ export default function ProfilePage() {
         <div className="min-w-0">
           <h2 className="rs-h2">{profile.name}</h2>
           <p className="rs-meta">{profile.email}</p>
-          <p className="rs-meta">{profile.phone}</p>
-          <p className="rs-meta">{profile.unit} · {profile.street}</p>
+          {profile.phone ? <p className="rs-meta">{profile.phone}</p> : null}
+          {[profile.unit, profile.street].some(Boolean) ? <p className="rs-meta">{[profile.unit, profile.street].filter(Boolean).join(' · ')}</p> : null}
           <p className="rs-meta">Member since {fmtDate(profile.memberSince)}</p>
         </div>
       </section>
@@ -38,12 +38,11 @@ export default function ProfilePage() {
       <div className="rs-list">
         <Row to={to('/privacy')} icon={LockKeyhole} title="Privacy and your data" meta="What is shared, and with whom" />
         <Row to={to('/help')} icon={CircleHelp} title="Help" meta="Questions about reports, notices and claims" />
-        <Row to={to('/contact')} icon={LifeBuoy} title="Contact the subdivision" meta="Office hours and a message form" />
+        <Row to={to('/contact')} icon={LifeBuoy} title="Contact the subdivision" meta={capabilities.messageOffice ? 'Office hours and a message form' : 'Office hours and how to reach them'} />
       </div>
       <div className="rs-list">
         <Row icon={LogOut} title="Sign out" onClick={() => setLeaving(true)} danger />
       </div>
-      <p className="rs-center rs-meta">StraySafe preview · sample data only</p>
 
       {leaving ? <LogoutSheet onClose={() => setLeaving(false)} /> : null}
     </PrimaryScreen>

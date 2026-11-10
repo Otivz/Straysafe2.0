@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
-import { api } from './api';
-import { getCachedData, onFacilitySync, setCachedData } from './cache';
+// The subdivision's reporting area: the built-in outline and centre, the distance helper and the radius rule. The connected apps replace
+// the built-in area with the server's own (GET /reports/coverage-area) before any map is drawn (see src/preview/geo.ts).
 
 export const SELERA_DEFAULT_POLYGON = [
     { lat: 14.801496, lng: 121.005174 },
@@ -46,82 +45,6 @@ export const isValidLatLng = (lat: unknown, lng: unknown): boolean => {
     return Number.isFinite(nLat) && Number.isFinite(nLng) && !(nLat === 0 && nLng === 0) && Math.abs(nLat) <= 90 && Math.abs(nLng) <= 180;
 };
 
-// Authoritative Barangay San Vicente HQ coordinates (kept synchronized in-place with the database)
-export const SAN_VICENTE_HQ: [number, number] = [14.80745, 121.00941];
-export const BARANGAY_SAN_VICENTE_HQ: [number, number] = SAN_VICENTE_HQ;
-export const ADMIN_HQ: [number, number] = SAN_VICENTE_HQ;
-
-export const syncSanVicenteHQ = (lat: unknown, lng: unknown): [number, number] => {
-    if (isValidLatLng(lat, lng)) {
-        SAN_VICENTE_HQ[0] = Number(lat);
-        SAN_VICENTE_HQ[1] = Number(lng);
-    }
-    return [SAN_VICENTE_HQ[0], SAN_VICENTE_HQ[1]];
-};
-
-export const fetchBarangayHQCoords = async (barangayId: number = 1): Promise<[number, number]> => {
-    try {
-        const res = await api.get(`/landmarks/barangay/${barangayId}/hq`);
-        if (res.data && isValidLatLng(res.data.hq_lat, res.data.hq_lng)) {
-            const updated = syncSanVicenteHQ(res.data.hq_lat, res.data.hq_lng);
-            setCachedData('straysafe_brgy_hq', res.data, 60_000);
-            return updated;
-        }
-    } catch {
-        // Fallback to active barangay holding facility or current SAN_VICENTE_HQ
-    }
-    return [SAN_VICENTE_HQ[0], SAN_VICENTE_HQ[1]];
-};
-
-/**
- * React hook that returns the latest Barangay HQ coordinates [lat, lng] from the database
- * and automatically updates whenever Admin modifies facilities or Barangay HQ.
- */
-export const useBarangayHQCoords = (barangayId: number = 1): [number, number] => {
-    const [coords, setCoords] = useState<[number, number]>(() => {
-        const cached = getCachedData<any>('straysafe_brgy_hq');
-        if (cached && isValidLatLng(cached.hq_lat, cached.hq_lng)) {
-            return syncSanVicenteHQ(cached.hq_lat, cached.hq_lng);
-        }
-        return [SAN_VICENTE_HQ[0], SAN_VICENTE_HQ[1]];
-    });
-
-    useEffect(() => {
-        let mounted = true;
-        const load = async () => {
-            const latest = await fetchBarangayHQCoords(barangayId);
-            if (mounted) {
-                setCoords((prev) =>
-                    Math.abs(prev[0] - latest[0]) > 1e-7 || Math.abs(prev[1] - latest[1]) > 1e-7
-                        ? [latest[0], latest[1]]
-                        : prev
-                );
-            }
-        };
-        load();
-        const unsubscribe = onFacilitySync(() => {
-            load();
-        });
-        const onWinFocus = () => {
-            load();
-        };
-        window.addEventListener('focus', onWinFocus);
-        const pollTimer = window.setInterval(() => {
-            if (typeof document === 'undefined' || document.visibilityState === 'visible') {
-                load();
-            }
-        }, 8000);
-        return () => {
-            mounted = false;
-            unsubscribe();
-            window.removeEventListener('focus', onWinFocus);
-            window.clearInterval(pollTimer);
-        };
-    }, [barangayId]);
-
-    return coords;
-};
-
 export const COVERAGE_OUTSIDE_ERROR_MESSAGE = "This report location is outside the current STRAY-SAFE reporting coverage area.";
 
 export interface CoverageAreaInfo {
@@ -148,30 +71,6 @@ export const calculateDistanceMeters = (lat1: number, lng1: number, lat2: number
         Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) ** 2;
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
-};
-
-// Cache key the maps read the coverage area from (utils/cache)
-export const COVERAGE_CACHE_KEY = 'straysafe_coverage_area';
-
-export const fetchCoverageArea = async (): Promise<CoverageAreaInfo> => {
-    try {
-        const res = await api.get<CoverageAreaInfo>('/reports/coverage-area');
-        if (res.data && res.data.center_latitude) {
-            return res.data;
-        }
-    } catch (e) {
-        console.warn('Failed to fetch coverage area from server, using default Selera Homes center:', e);
-    }
-    return {
-        id: 1,
-        subdivision_id: 1,
-        center_label: 'Selera Homes',
-        center_latitude: SELERA_DEFAULT_CENTER[0],
-        center_longitude: SELERA_DEFAULT_CENTER[1],
-        radius_meters: 1000,
-        boundary_polygon: SELERA_DEFAULT_POLYGON,
-        is_active: true
-    };
 };
 
 export const isWithinCoverage = (

@@ -8,7 +8,7 @@ import { Field, FieldGroup, Input, OptionGroup, Select, Textarea } from '../comp
 import { Block, Callout, EmptyState, FormError, PageHeader, Panel } from '../components/layout';
 import { NoticePreview } from '../components/NoticePreview';
 import { useToast } from '../components/toast';
-import { ANIMAL_TYPES, GENERAL_LOCATIONS, NOTICE_TYPES } from '../data/constants';
+import { ANIMAL_TYPES, NOTICE_TYPES } from '../data/constants';
 import { useAdminData } from '../data/context';
 import { caseById } from '../data/selectors';
 import type { Case, Notice, NoticeMedia, NoticeType } from '../data/types';
@@ -65,7 +65,7 @@ export default function NoticeEditorPage() {
 }
 
 function NoticeEditor({ existing, from }: { existing?: Notice; from?: Case }) {
-  const { state, dispatch } = useAdminData();
+  const { state, dispatch, capabilities } = useAdminData();
   const toast = useToast();
   const navigate = useNavigate();
   const go = useGuardedNavigate();
@@ -95,7 +95,12 @@ function NoticeEditor({ existing, from }: { existing?: Notice; from?: Case }) {
     { ok: !namedResident, pass: 'No resident is named', fail: `Mentions ${namedResident?.name ?? 'a resident'} by name. Public notices should not name people.` },
   ];
   const clean = checks.every((c) => c.ok);
-  const linkable = state.cases.filter((c) => !c.sensitive && (c.status !== 'closed' || c.id === f.caseId));
+  // A lost-pet alert and a found-animal notice are kept on a case by the backend, with a title made from the report and the report's
+  // own photo. A safety advisory has no case.
+  const onCase = !capabilities.noticeWithoutCase && f.type !== 'safety_advisory';
+  const noCase = !capabilities.noticeWithoutCase && f.type === 'safety_advisory';
+  const wantedCategory = f.type === 'found_animal' ? 'found_animal' : 'lost_pet';
+  const linkable = state.cases.filter((c) => !c.sensitive && (c.status !== 'closed' || c.id === f.caseId) && (!onCase || c.category === wantedCategory));
   const set = (patch: Partial<Form>) => setF((p) => ({ ...p, ...patch }));
 
   const addPhotos = (e: ChangeEvent<HTMLInputElement>) => {
@@ -107,22 +112,25 @@ function NoticeEditor({ existing, from }: { existing?: Notice; from?: Case }) {
       if (f.media.length + added.length >= MAX_PHOTOS) { message = `You can add up to ${MAX_PHOTOS} photos.`; break; }
       if (!file.type.startsWith('image/')) { message = `“${file.name}” is not an image.`; continue; }
       if (file.size > MAX_BYTES) { message = `“${file.name}” is larger than 5 MB.`; continue; }
-      added.push({ id: `m-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name: file.name, url: URL.createObjectURL(file) });
+      added.push({ id: `m-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name: file.name, url: URL.createObjectURL(file), file });
     }
     setPhotoError(message);
     if (added.length) set({ media: [...f.media, ...added] });
   };
-  const removePhoto = (m: NoticeMedia) => { if (m.url) URL.revokeObjectURL(m.url); set({ media: f.media.filter((x) => x.id !== m.id) }); };
+  const removePhoto = (m: NoticeMedia) => { if (m.file && m.url) URL.revokeObjectURL(m.url); set({ media: f.media.filter((x) => x.id !== m.id) }); };
+  // A photo the server already holds cannot be removed from here (the backend has no way to), so no remove button is offered for it.
+  const removable = (m: NoticeMedia) => !!m.file;
 
   const build = (): Notice => ({
-    id: existing?.id ?? `notice-${Date.now().toString(36)}`, type: f.type, title: f.title.trim(), description: f.description.trim(), location: f.location.trim(),
+    id: existing?.id ?? `notice-${Date.now().toString(36)}`, type: f.type, title: onCase ? (existing?.title ?? '') : f.title.trim(), description: f.description.trim(), location: f.location.trim(),
     media: f.media, status: existing?.status ?? 'draft', caseId: f.caseId || null, source: existing?.source ?? 'admin', createdAt: existing?.createdAt ?? '', updatedAt: '',
     publishedAt: existing?.publishedAt ?? null, author: existing?.author ?? state.admin.name,
   });
 
   const validate = (forPublish: boolean) => {
     const next: Record<string, string> = {};
-    if (f.title.trim().length < 5) next.title = 'Give the notice a clear title (at least 5 characters).';
+    if (!onCase && f.title.trim().length < 5) next.title = 'Give the notice a clear title (at least 5 characters).';
+    if (onCase && !f.caseId) next.caseId = 'Choose the case this notice is about.';
     if (forPublish) {
       if (f.description.trim().length < 20) next.description = 'Describe what residents need to know (at least 20 characters).';
       if (!f.location.trim()) next.location = 'Add a general location, such as “Near the clubhouse”.';
@@ -158,39 +166,47 @@ function NoticeEditor({ existing, from }: { existing?: Notice; from?: Case }) {
                   <FieldGroup label="Type">
                     <OptionGroup name="type" label="Notice type" cols={3} value={f.type} onChange={(type) => set({ type })} options={(Object.keys(NOTICE_TYPES) as NoticeType[]).map((t) => ({ value: t, label: NOTICE_TYPES[t].label, description: NOTICE_TYPES[t].hint }))} />
                   </FieldGroup>
-                  <Field label="Title" required error={errors.title} hint={`${f.title.length}/${TITLE_MAX}`}><Input value={f.title} maxLength={TITLE_MAX} onChange={(e) => set({ title: e.target.value })} placeholder="e.g. Lost cat: gray tabby with white paws" /></Field>
+                  {onCase ? (
+                    <Field label="Title" hint="Made from the case, for example “Missing dog: Mochi”, so it always matches the report."><p className="sa-small sa-semibold">{existing?.title || 'Made when the notice is saved'}</p></Field>
+                  ) : (
+                    <Field label="Title" required error={errors.title} hint={`${f.title.length}/${TITLE_MAX}`}><Input value={f.title} maxLength={TITLE_MAX} onChange={(e) => set({ title: e.target.value })} placeholder="e.g. Lost cat: gray tabby with white paws" /></Field>
+                  )}
                   <Field label="Description" required error={errors.description} hint={`${TYPE_HELP[f.type]} (${f.description.length}/${BODY_MAX})`}><Textarea rows={6} value={f.description} maxLength={BODY_MAX} onChange={(e) => set({ description: e.target.value })} /></Field>
                   <Field label="General location" required error={errors.location} hint="A general area only. No house or lot numbers.">
-                    <Input value={f.location} onChange={(e) => set({ location: e.target.value })} list="general-locations" placeholder="e.g. Near the clubhouse" />
+                    <Input value={f.location} onChange={(e) => set({ location: e.target.value })} placeholder="e.g. Near the clubhouse" />
                   </Field>
-                  <datalist id="general-locations">{GENERAL_LOCATIONS.map((l) => <option key={l} value={l} />)}</datalist>
                 </div>
               </Block>
 
-              <Block title="Photos" description={`Optional. Up to ${MAX_PHOTOS}, 5 MB each. Avoid people, house numbers and licence plates.`}>
-                <div className="flex flex-wrap items-center gap-3">
-                  {f.media.map((m) => (
-                    <div key={m.id} className="relative">
-                      {m.url ? <img src={m.url} alt={m.name} className="size-20 rounded-md object-cover" style={{ border: '1px solid var(--sa-line)' }} /> : <span className="sa-tile__art size-20 rounded-md" style={{ aspectRatio: '1' }} title={m.name}><ImagePlus size={18} aria-hidden="true" /></span>}
-                      <button type="button" className="sa-btn sa-btn--secondary sa-btn--icon sa-btn--sm" style={{ position: 'absolute', top: -8, right: -8, width: 24, height: 24, borderRadius: 999 }} aria-label={`Remove ${m.name}`} onClick={() => removePhoto(m)}><X size={12} aria-hidden="true" /></button>
-                    </div>
-                  ))}
-                  {f.media.length < MAX_PHOTOS ? <Button icon={ImagePlus} onClick={() => fileInput.current?.click()}>Add photos</Button> : null}
-                  <input ref={fileInput} type="file" accept="image/*" multiple hidden onChange={addPhotos} />
-                </div>
-                {photoError ? <p className="sa-error mt-2" role="alert">{photoError}</p> : null}
-                {f.media.some((m) => !m.url) ? <p className="sa-hint mt-2">Photos added in an earlier session are kept as placeholders in this preview.</p> : null}
-              </Block>
+              {onCase ? (
+                <Block title="Photos"><p className="sa-small sa-text-2">The notice shows the photo from the case, never one you add here. Choose a case with a clear photo of the animal.</p></Block>
+              ) : (
+                <Block title="Photos" description={`Optional. Up to ${MAX_PHOTOS}, 5 MB each. Avoid people, house numbers and licence plates.`}>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {f.media.map((m) => (
+                      <div key={m.id} className="relative">
+                        {m.url ? <img src={m.url} alt={m.name} className="size-20 rounded-md object-cover" style={{ border: '1px solid var(--sa-line)' }} /> : <span className="sa-tile__art size-20 rounded-md" style={{ aspectRatio: '1' }} title={m.name}><ImagePlus size={18} aria-hidden="true" /></span>}
+                        {removable(m) ? <button type="button" className="sa-btn sa-btn--secondary sa-btn--icon sa-btn--sm" style={{ position: 'absolute', top: -8, right: -8, width: 24, height: 24, borderRadius: 999 }} aria-label={`Remove ${m.name}`} onClick={() => removePhoto(m)}><X size={12} aria-hidden="true" /></button> : null}
+                      </div>
+                    ))}
+                    {f.media.length < MAX_PHOTOS ? <Button icon={ImagePlus} onClick={() => fileInput.current?.click()}>Add photos</Button> : null}
+                    <input ref={fileInput} type="file" accept="image/*" multiple hidden onChange={addPhotos} />
+                  </div>
+                  {photoError ? <p className="sa-error mt-2" role="alert">{photoError}</p> : null}
+                </Block>
+              )}
 
-              <Block title="Related case" description="Optional. Links the notice to a case so the case history records it. The case itself stays private.">
-                <Field label="Case">
-                  <Select value={f.caseId} onChange={(e) => set({ caseId: e.target.value })}>
-                    <option value="">Not linked to a case</option>
-                    {linkable.map((c) => <option key={c.id} value={c.id}>{c.id} · {c.title}</option>)}
-                  </Select>
-                </Field>
-                <p className="sa-hint mt-2">Private complaints are not listed here and can never be published.</p>
-              </Block>
+              {noCase ? null : (
+                <Block title="Related case" description={onCase ? 'The case this notice is about. The notice is kept with it, and the case itself stays private.' : 'Optional. Links the notice to a case so the case history records it. The case itself stays private.'}>
+                  <Field label="Case" required={onCase} error={errors.caseId}>
+                    <Select value={f.caseId} disabled={onCase && !!existing} onChange={(e) => set({ caseId: e.target.value })}>
+                      <option value="">{onCase ? 'Choose a case…' : 'Not linked to a case'}</option>
+                      {linkable.map((c) => <option key={c.id} value={c.id}>{c.id} · {c.title}</option>)}
+                    </Select>
+                  </Field>
+                  <p className="sa-hint mt-2">Private complaints are not listed here and can never be published.</p>
+                </Block>
+              )}
             </Panel>
           </fieldset>
 

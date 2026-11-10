@@ -11,8 +11,7 @@ from app.models.audit_log import AuditLog
 from app.models.barangay_referral import BarangayReferral, OUTCOME_STATUS
 from app.models.pet import Pet
 from app.models.owner_followup import OwnerFollowUp
-from app.models.pet_claim import PetClaim
-from app.models.report import Adoption, HoldingAnimal, Report, ReportCategory, Rescue
+from app.models.report import Report, ReportCategory
 from app.models.report_match import ReportMatch
 from app.models.user import Subdivision, User
 from app.models.warning import OwnerWarning
@@ -27,19 +26,13 @@ STATUS_GROUPS = (
     ('under_review', 'Under review', (15, 16)),
     ('verified', 'Verified', (2,)),
     ('endorsed', 'Referred to Barangay', (4, 13)),
-    ('in_progress', 'Owner observation / legacy rescue or custody', (5, 6, 7, 8)),
+    ('in_progress', 'Owner observation / other in-progress', (5, 6, 7, 8)),
     ('resolved', 'Resolved', (9, 10, 11)),
     ('rejected', 'Rejected / dismissed', (3, 14)),
     ('closed_other', 'Closed (deceased / not found)', (12, 17)),
 )
 STATUS_GROUP_OF = {sid: key for key, _, ids in STATUS_GROUPS for sid in ids}
 STATUS_FILTERS = ('all', 'active', 'closed') + tuple(key for key, _, _ in STATUS_GROUPS)
-# Rescue requests: 1 Pending, 2 Approved, 3 Rejected, 4 Started, 5 Dispatched, 6 Resolved
-RESCUE_GROUPS = {'pending': (1,), 'active': (2, 4, 5), 'completed': (6,), 'cancelled': (3,)}
-IN_CUSTODY_HOLDING = (1, 2, 6, 8)
-FOR_ADOPTION_HOLDING = 6
-COMPLETED_CLAIMS = ('Handover Complete', 'Pet Received')
-
 
 def status_group(status_id):
     return STATUS_GROUP_OF.get(status_id, 'pending' if status_id is None else 'closed_other' if status_id in CLOSED_REPORT_STATUS_IDS else 'in_progress')
@@ -195,11 +188,8 @@ def analytics_payload(db: Session, filters: AnalyticsFilters, subdivision_id: Op
     eligible_reports = report_attributes(db.query(Report.report_id), filters, subdivision_id)
     pets_q = registry_query(db, filters, subdivision_id)
     warnings_q = warnings_query(db, filters, subdivision_id, eligible_reports, pets_q)
-    holding_q = db.query(HoldingAnimal).filter(HoldingAnimal.report_id.in_(eligible_reports))
-    # Referrals are records of external work, separate from report status and legacy rescue requests.
+    # Referrals are records of external work, separate from the report status.
     referral_q = db.query(BarangayReferral).filter(BarangayReferral.report_id.in_(eligible_reports))
-    rescue_q = db.query(Rescue).filter(Rescue.report_id.in_(eligible_reports), Rescue.status_id == 6, Rescue.started_at.isnot(None), Rescue.completed_at >= Rescue.started_at)
-    adoption_q = db.query(Adoption).join(HoldingAnimal, Adoption.holding_id == HoldingAnimal.holding_id).filter(HoldingAnimal.report_id.in_(eligible_reports))
     matches_q = db.query(ReportMatch).filter(ReportMatch.source_report_id.in_(eligible_reports))
     users = db.query(User.user_id, User.status)
     if subdivision_id:
@@ -209,9 +199,9 @@ def analytics_payload(db: Session, filters: AnalyticsFilters, subdivision_id: Op
         audit_q = audit_q.filter(AuditLog.user_id.in_(users.with_entities(User.user_id)))
     earliest = base.with_entities(func.min(Report.created_at)).scalar()
     if not filters.days and not filters.start_date:
-        candidates = [earliest, warnings_q.with_entities(func.min(OwnerWarning.created_at)).scalar(), holding_q.with_entities(func.min(HoldingAnimal.intake_date)).scalar(), referral_q.with_entities(func.min(BarangayReferral.referred_at)).scalar()]
+        candidates = [earliest, warnings_q.with_entities(func.min(OwnerWarning.created_at)).scalar(), referral_q.with_entities(func.min(BarangayReferral.referred_at)).scalar()]
         if admin:
-            candidates.extend([rescue_q.with_entities(func.min(Rescue.completed_at)).scalar(), adoption_q.with_entities(func.min(Adoption.created_at)).scalar(), matches_q.with_entities(func.min(ReportMatch.created_at)).scalar(), audit_q.with_entities(func.min(AuditLog.created_at)).scalar()])
+            candidates.extend([matches_q.with_entities(func.min(ReportMatch.created_at)).scalar(), audit_q.with_entities(func.min(AuditLog.created_at)).scalar()])
         earliest = min((value for value in candidates if value), default=None)
     start, end, grouping = date_window(filters, earliest)
     columns = (Report.report_id, Report.subdivision_id, Report.created_at, Report.verified_at,
@@ -274,16 +264,6 @@ def analytics_payload(db: Session, filters: AnalyticsFilters, subdivision_id: Op
     warning_counts = Counter(scope for _, scope in warnings)
     violations = Counter(w.violation_type or 'Other' for w, _ in warnings)
 
-    holding = in_window(holding_q, HoldingAnimal.intake_date, start, end).all()
-    # Returned to the owner by the records (status, owner-return record, completed claim, returned custody)
-    from app.utils.adoption_eligibility import owner_handover_evidence_map
-    returned = owner_handover_evidence_map(db, holding)
-    holding_summary = {
-        'total_intake': len(holding),
-        'returned_to_owner': sum(bool(returned.get(h.holding_id)) for h in holding),
-        'currently_held': sum(h.facility_status in (1, 2, 6, 8) and h.discharge_date is None for h in holding),
-        'transferred_to_shelter': sum(h.facility_status == 5 for h in holding),
-    }
     kpis_groups = Counter(status_group(r.current_status_id) for r in reports)
     # Observations (owner follow-ups) on the cases in scope: open now, and concluded in the period
     obs_q = db.query(OwnerFollowUp.status, OwnerFollowUp.closed_at).filter(OwnerFollowUp.report_id.in_(eligible_reports))
@@ -330,51 +310,16 @@ def analytics_payload(db: Session, filters: AnalyticsFilters, subdivision_id: Op
         'priority_distribution': {name: priorities[name] for name in ('Low', 'Medium', 'High', 'Unspecified')},
         'pet_compliance': {'total_pets': total_pets, 'vaccinated': vaccinated, 'unvaccinated': total_pets - vaccinated, 'compliance_rate': percentage(vaccinated, total_pets), 'bite_history_count': bite_history},
         'warnings_breakdown': [{'violation': name, 'count': count} for name, count in violations.most_common()],
-        'holding_summary': holding_summary,
         'observations': observations,
         'referral_summary': referral_summary,
     }
+    # The case workflow numbers for the Admin Analytics page (additive; same filters and window as everything above)
+    result['case_lifecycle'] = case_lifecycle_summary(db, base, eligible_reports, cat_names, start, end, grouping, referral_q)
     if not admin:
         result['subdivision'] = {'id': subdivision_id, 'name': subdivision.subdivision_name, 'barangay_name': subdivision.barangay.barangay_name if subdivision.barangay else ''}
         return result
 
-    # Rescue requests have no creation timestamp: they follow their report's filing date (the incident cohort)
-    cohort_ids = in_window(base, Report.created_at, start, end).with_entities(Report.report_id)
-    rescue_rows = (db.query(Rescue.status_id, Rescue.started_at, Report.created_at).join(Report, Report.report_id == Rescue.report_id)
-                   .filter(Rescue.report_id.in_(cohort_ids)).all())
-    response = [(r.started_at - r.created_at).total_seconds() / 3600 for r in rescue_rows
-                if r.started_at and r.created_at and r.started_at >= r.created_at]
-    rescue_summary = {'total': len(rescue_rows), **{k: sum(r.status_id in ids for r in rescue_rows) for k, ids in RESCUE_GROUPS.items()},
-                      'avg_report_to_start_hours': round(sum(response) / len(response), 1) if response else None,
-                      'response_samples': len(response)}
-    # Current custody snapshot (not limited to the period): animals in Barangay custody now
-    custody_rows = db.query(HoldingAnimal).filter(HoldingAnimal.report_id.in_(eligible_reports)).all()
-    custody_returned = owner_handover_evidence_map(db, custody_rows)
-    in_custody = [h for h in custody_rows if h.facility_status in IN_CUSTODY_HOLDING and h.discharge_date is None
-                  and not custody_returned.get(h.holding_id)]
-    custody_snapshot = {
-        'in_custody_now': len(in_custody),
-        'available_for_adoption_now': sum(h.facility_status == FOR_ADOPTION_HOLDING for h in in_custody),
-        'returned_to_owner_total': sum(bool(v) for v in custody_returned.values()),
-        'adopted_total': sum(h.facility_status == 7 and not custody_returned.get(h.holding_id) for h in custody_rows),
-    }
-    claim_rows = in_window(db.query(PetClaim.status).filter(PetClaim.report_id.in_(eligible_reports)), PetClaim.created_at, start, end).all()
-    claims_summary = {'submitted': len(claim_rows), 'approved_pending_handover': sum(c.status == 'Approved' for c in claim_rows),
-                      'handed_over': sum(c.status in COMPLETED_CLAIMS for c in claim_rows),
-                      'rejected': sum(c.status == 'Rejected' for c in claim_rows)}
-    result.update({'rescue_summary': rescue_summary, 'custody_snapshot': custody_snapshot, 'claims_summary': claims_summary})
-
-    rescues = in_window(rescue_q, Rescue.completed_at, start, end).all()
-    durations = [(r.completed_at - r.started_at).total_seconds() / 3600 for r in rescues]
-    adoptions = in_window(adoption_q, Adoption.created_at, start, end).all()
-    approved = sum(a.status == 'Approved' for a in adoptions)
-    # A successful adoption is a completed handover; an approved (or pending) application is not one yet
-    handed_over = sum(a.status == 'Approved' and a.staff_handed_over and a.is_handed_over for a in adoptions)
-    sla = {'avg_verification_hours': kpis['avg_verification_hours'], 'avg_rescue_hours': round(sum(durations) / len(durations), 1) if durations else None,
-           'total_verified_cases': kpis['verified_reports'], 'total_completed_rescues': len(rescues)}
-    holding_and_adoption = {**holding_summary, 'total_adoptions': len(adoptions), 'approved_adoptions': approved, 'completed_handovers': handed_over,
-                            'successful_adoptions': handed_over, 'pending_adoptions': sum(a.status == 'Pending' for a in adoptions),
-                            'adoption_rate': percentage(approved, len(adoptions))}
+    sla = {'avg_verification_hours': kpis['avg_verification_hours'], 'total_verified_cases': kpis['verified_reports']}
     matches = in_window(matches_q, ReportMatch.created_at, start, end).with_entities(ReportMatch.status, ReportMatch.similarity_score).all()
     confirmed = [m for m in matches if m.status == 'CONFIRMED_MATCH']
     reviewed = [m for m in matches if m.status in ('CONFIRMED_MATCH', 'NOT_A_MATCH')]
@@ -386,12 +331,105 @@ def analytics_payload(db: Session, filters: AnalyticsFilters, subdivision_id: Op
             for s in subdivisions if not subdivision_id or s.subdivision_id == subdivision_id
         ], key=lambda row: (-row['total_reports'], row['subdivision_name'])),
         'sla_metrics': sla,
-        'holding_and_adoption': holding_and_adoption,
         'ai_performance': {'total_matches_suggested': len(matches), 'confirmed_matches': len(confirmed), 'reviewed_matches': len(reviewed), 'review_acceptance_rate': percentage(len(confirmed), len(reviewed)), 'average_confidence_score': round(sum(m.similarity_score for m in confirmed) / len(confirmed), 1) if confirmed else None},
         'security_overview': {'total_users': len(user_rows), 'active_users': sum(u.status == 'Active' for u in user_rows), 'suspended_users': sum(u.status in ('Inactive', 'Suspended') for u in user_rows), 'audit_events_count': in_window(audit_q, AuditLog.created_at, start, end).count()},
     })
-    # total_rescues: every rescue request of the cohort (was: only completed ones with valid timestamps);
-    # total_adoptions: completed handovers (was: approved applications)
-    result['kpis'].update(total_rescues=rescue_summary['total'], completed_rescues=rescue_summary['completed'],
-                          total_adoptions=handed_over, total_intake=len(holding), total_users=len(user_rows))
+    result['kpis'].update(total_users=len(user_rows))
     return result
+
+
+def _median(values):
+    ordered = sorted(values)
+    if not ordered:
+        return None
+    mid = len(ordered) // 2
+    return round(ordered[mid] if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) / 2, 1)
+
+
+def case_lifecycle_summary(db, base, eligible_reports, cat_names, start, end, grouping, referral_q):
+    """
+    The case workflow's numbers, one place, same window as the rest of the payload.
+      received / closed         cases reported / closed in the window. A closure is dated by closed_at (legacy closures
+                                made before that column existed have no date, so they are not counted as closed in a window)
+      resolved_share            of the closed cases, the share whose documented outcome is a resolution. A closed case is
+                                NOT assumed resolved: unresolved and invalid closures are counted separately
+      median_days_to_close      from report to closure
+      outcomes                  by outcome group and disposition (a legacy closure is read from its legacy status)
+      referrals                 by organisation, type and status; one case can have several
+    """
+    from app.models.case_records import CaseFollowUp, OwnershipClaim
+    from app.utils import case_vocab as V
+
+    rows = base.with_entities(Report.report_id, Report.created_at, Report.closed_at, Report.closure_disposition, Report.current_status_id,
+                              Report.case_status, Report.reopened_count, Report.category_id).all()
+
+    def status_of(r):
+        return r.case_status if r.case_status in V.CASE_STATUSES else V.case_status_from_legacy(r.current_status_id)
+
+    def within(value):
+        return value is not None and start <= value < end
+
+    received = [r for r in rows if within(r.created_at)]
+    closed = [r for r in rows if status_of(r) == V.CLOSED and within(r.closed_at)]
+    outcome_of = {r.report_id: V.effective_disposition(r.closure_disposition, r.current_status_id)[0] for r in closed}
+    group_of = {rid: V.disposition_group(d) for rid, d in outcome_of.items()}
+    resolved = sum(1 for g in group_of.values() if g == 'resolved')
+    days = [(r.closed_at - r.created_at).total_seconds() / 86400 for r in closed if r.created_at and r.closed_at >= r.created_at]
+
+    buckets, cursor = {}, bucket(start.date(), grouping)
+    while cursor < end.date():
+        buckets[cursor] = {'start_date': cursor.isoformat(), 'received': 0, 'closed': 0}
+        cursor = next_bucket(cursor, grouping)
+    for r in received:
+        key = bucket(r.created_at.date(), grouping)
+        if key in buckets:
+            buckets[key]['received'] += 1
+    for r in closed:
+        key = bucket(r.closed_at.date(), grouping)
+        if key in buckets:
+            buckets[key]['closed'] += 1
+
+    families = Counter(V.category_family(cat_names.get(r.category_id)) for r in received)
+    outcomes = []
+    for group in V.OUTCOME_GROUPS:
+        items = [{'id': d, 'label': info[2], 'count': sum(1 for x in outcome_of.values() if x == d)} for d, info in V.DISPOSITIONS.items() if info[0] == group]
+        outcomes.append({'group': group, 'count': sum(i['count'] for i in items), 'items': items})
+
+    referral_rows = referral_q.with_entities(BarangayReferral.org_type, BarangayReferral.org_name, BarangayReferral.referral_status,
+                                             BarangayReferral.final_outcome, BarangayReferral.barangay_id, BarangayReferral.referred_at).all()
+
+    def referral_status(x):
+        return x.referral_status or ('completed' if x.final_outcome else 'sent')
+
+    in_period = [x for x in referral_rows if within(x.referred_at)]
+    followups = db.query(CaseFollowUp.status, CaseFollowUp.due_at, CaseFollowUp.completed_at).filter(CaseFollowUp.report_id.in_(eligible_reports)).all()
+    now = local_now().replace(tzinfo=None)
+    claims = db.query(OwnershipClaim.status, OwnershipClaim.submitted_at).filter(OwnershipClaim.report_id.in_(eligible_reports)).all()
+    return {
+        'received': len(received), 'closed': len(closed),
+        'resolved_share': percentage(resolved, len(closed)),
+        'median_days_to_close': _median(days),
+        'status_counts': {s: sum(1 for r in rows if status_of(r) == s) for s in V.CASE_STATUSES},
+        'timeline': list(buckets.values()),
+        'categories': sorted(({'id': k, 'label': V.CATEGORY_FAMILIES[k], 'count': families.get(k, 0)} for k in V.CATEGORY_FAMILIES),
+                             key=lambda c: (-c['count'], c['label'])),
+        'outcomes': outcomes,
+        'closed_without_resolution': sum(1 for g in group_of.values() if g == 'unresolved'),
+        'reopened': {'cases': sum(1 for r in rows if (r.reopened_count or 0) > 0), 'events': sum(r.reopened_count or 0 for r in rows)},
+        'referrals': {
+            'total': len(in_period),
+            'open_now': sum(1 for x in referral_rows if referral_status(x) in V.OPEN_REFERRAL_STATUSES and not x.final_outcome),
+            'by_type': [{'org_type': t, 'count': n} for t, n in Counter((x.org_type or ('barangay' if x.barangay_id else 'other')) for x in in_period).most_common()],
+            'by_org': [{'name': n, 'count': c} for n, c in Counter((x.org_name or 'Unnamed') for x in in_period).most_common()],
+            'by_status': [{'status': s, 'count': c} for s, c in Counter(referral_status(x) for x in in_period).most_common()],
+        },
+        'followups': {
+            'pending': sum(1 for f in followups if f.status == 'pending'),
+            'overdue': sum(1 for f in followups if f.status == 'pending' and f.due_at is not None and f.due_at < now),
+            'completed_in_period': sum(1 for f in followups if f.status == 'done' and within(f.completed_at)),
+        },
+        'claims': {'submitted_in_period': sum(1 for c in claims if within(c.submitted_at)),
+                   'open_now': sum(1 for c in claims if c.status in V.ACTIVE_CLAIM_STATUSES),
+                   'accepted': sum(1 for c in claims if c.status == 'accepted'),
+                   'rejected': sum(1 for c in claims if c.status == 'rejected')},
+    }

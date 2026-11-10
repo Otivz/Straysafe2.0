@@ -1,16 +1,33 @@
+# Runs on a throwaway SQLite file, never on the application database (see _isolated_db.py). app.main cannot be imported in a
+# test (its start-up is MySQL only and changes the configured database), so the app is rebuilt from the routers under test,
+# which is the wiring app.main uses.
+import ast
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _isolated_db  # noqa: E402,F401  (FIRST: throwaway SQLite, no outside services, MySQL disabled)
 
 from fastapi.testclient import TestClient
 from sqlalchemy import text
-from app.main import app, ensure_performance_indexes
+from app.routes import admin, audit_logs
 from app.models.user import User
 from app.database import engine
 from app.utils.auth import get_current_user, get_optional_user
 
+app = _isolated_db.build_app(admin.router, audit_logs.router)
+_isolated_db.create_schema_and_seed()
 client = TestClient(app)
+
+
+def declared_performance_indexes():
+    """The (table, index name, CREATE INDEX statement) rows of ensure_performance_indexes(), read from app/main.py's source."""
+    source = open(os.path.join(_isolated_db.BACKEND, "app", "main.py"), encoding="utf-8").read()
+    function = next(n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef) and n.name == "ensure_performance_indexes")
+    for node in ast.walk(function):
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "indexes" for t in node.targets):
+            return ast.literal_eval(node.value)
+    raise AssertionError("ensure_performance_indexes() no longer declares an `indexes` list")
 
 def create_mock_user(user_id: int, role_id: int, name: str = "Admin Tester"):
     user = User()
@@ -51,7 +68,7 @@ def run_tests():
         "total_reports", "active_reports", "resolved_reports", "resolution_rate",
         "total_pets", "vaccinated_pets", "compliance_rate",
         "total_users", "active_users",
-        "holding_count", "active_adoptions_count", "pending_warnings_count",
+        "returned_to_owner_count", "pending_warnings_count",
         "subdivisions_list", "recent_activity_logs", "active_map_reports"
     ]
     for field in expected_fields:
@@ -73,7 +90,7 @@ def run_tests():
     res_badge_200 = client.get("/admin/badge-counts")
     assert res_badge_200.status_code == 200, f"Expected 200 for Admin, got {res_badge_200.status_code}: {res_badge_200.text}"
     badges = res_badge_200.json()
-    assert "active_reports" in badges and "pending_adoptions" in badges
+    assert "active_reports" in badges and "pending_warnings" in badges and "pending_adoptions" not in badges
     print(f"[PASS] 4. Admin (Role 4) GET /admin/badge-counts returned: {badges}")
 
     # ─────────────────────────────────────────────────────────────
@@ -107,7 +124,11 @@ def run_tests():
     # TASK ADMIN-007: Performance Indexes on Hot Tables
     # ─────────────────────────────────────────────────────────────
     print("\n--- Verifying TASK ADMIN-007: Performance Indexes ---")
-    ensure_performance_indexes()
+    # ensure_performance_indexes() lives in app.main, which cannot be imported in a test, and the throwaway database is
+    # SQLite (it has no information_schema). The check keeps its meaning: each required index must be DECLARED by that
+    # function, its CREATE INDEX statement (the very one the function runs) must work against the real model tables, and the
+    # index must then be in the database's catalog. The state of a MySQL server is deliberately no longer inspected.
+    declared = {(t, i): ddl for t, i, ddl in declared_performance_indexes()}
 
     required_indexes = [
         ("audit_logs", "idx_audit_type_created"),
@@ -115,13 +136,17 @@ def run_tests():
         ("pets", "idx_pets_owner_status"),
     ]
 
+    def present(conn, table, idx_name):
+        return conn.execute(text("SELECT COUNT(*) FROM pragma_index_list(:table) WHERE name = :idx"),
+                            {"table": table, "idx": idx_name}).scalar()
+
     with engine.begin() as conn:
         for table, idx_name in required_indexes:
-            count = conn.execute(text(
-                "SELECT COUNT(*) FROM information_schema.STATISTICS "
-                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND INDEX_NAME = :idx"
-            ), {"table": table, "idx": idx_name}).scalar()
-            assert count > 0, f"Index {idx_name} on {table} not found in information_schema.STATISTICS!"
+            assert (table, idx_name) in declared, f"ensure_performance_indexes() no longer declares {idx_name} on {table}"
+            if not present(conn, table, idx_name):
+                conn.execute(text(declared[(table, idx_name)]))
+            count = present(conn, table, idx_name)
+            assert count > 0, f"Index {idx_name} on {table} not found in the database catalog!"
             print(f"[PASS] 7. Index '{idx_name}' verified present on table '{table}'")
 
     app.dependency_overrides.clear()

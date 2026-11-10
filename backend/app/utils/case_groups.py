@@ -284,95 +284,6 @@ def release_inherited_pet(db: Session, root: Report, pet_id: int) -> bool:
     return True
 
 
-# --- One claim per pet and case ------------------------------------------------------------------------------------
-CLAIM_PROOF_FIELDS = ("vaccine_card_url", "vet_record_url", "registration_record_url", "additional_photos_url", "evidence_url")
-_CLAIM_RANK = {"Pet Received": 6, "Handover Complete": 5, "Approved": 4, "Evidence Requested": 3, "Pending Review": 2,
-               "Possible Match Found": 1, "Potential Owner Match": 1}
-
-
-def pick_case_claim(claims: list):
-    """The claim that represents the case: the furthest along, then the earliest filed."""
-    live = [c for c in claims if c.status not in ("Merged", "Rejected")]
-    if not live:
-        return None
-    return sorted(live, key=lambda c: (-_CLAIM_RANK.get(c.status, 0), c.created_at or datetime.max, c.claim_id))[0]
-
-
-def live_claim(db: Session, claim):
-    """Follow a merged claim to the case's claim it was merged into."""
-    from app.models.pet_claim import PetClaim
-    seen = set()
-    while claim is not None and claim.status == "Merged" and claim.merged_into_claim_id and claim.claim_id not in seen:
-        seen.add(claim.claim_id)
-        nxt = db.get(PetClaim, claim.merged_into_claim_id)
-        if nxt is None:
-            break
-        claim = nxt
-    return claim
-
-
-def consolidate_case_claims(db: Session, root: Report, actor: Optional[User] = None, req: Optional[Request] = None) -> dict:
-    """
-    One claim per pet per case. Redundant claims for the same pet on the case's reports are marked Merged and point at
-    the case's claim (proof and markings copied over, nothing deleted). A merged claim whose case claim is no longer in
-    the same case (reports unmerged) is reopened with its earlier status. No commit.
-    """
-    from app.models.pet_claim import PetClaim
-    from app.utils.audit import log_activity
-
-    members = case_members(db, root)
-    ids = [m.report_id for m in members]
-    out = {"merged": [], "reopened": []}
-    if not ids:
-        return out
-    claims = db.query(PetClaim).filter(PetClaim.report_id.in_(ids)).order_by(PetClaim.claim_id).all()
-    by_id = {c.claim_id: c for c in claims}
-
-    for c in claims:
-        if c.status == "Merged" and (c.merged_into_claim_id not in by_id):
-            c.status = c.status_before_merge or "Pending Review"
-            c.merged_into_claim_id = c.status_before_merge = None
-            note = f"Reopened: the reports are no longer in the same case (Case #{root.report_id})."
-            c.remarks = f"{c.remarks}\n{note}" if c.remarks else note
-            out["reopened"].append(c.claim_id)
-            log_activity(db=db, action="REOPEN_CASE_CLAIM", target_table="pet_claims", target_id=c.claim_id,
-                         description=f"Claim #{c.claim_id} (Report #{c.report_id}) reopened as {c.status}: its reports were unmerged.",
-                         user_id=actor.user_id if actor else None, log_type="operation",
-                         old_values={"status": "Merged"}, new_values={"status": c.status}, request=req, commit=False)
-
-    for pet_id in sorted({c.pet_id for c in claims}):
-        same = [c for c in claims if c.pet_id == pet_id]
-        keep = pick_case_claim(same)
-        if keep is None:
-            continue
-        for c in same:
-            if c.claim_id == keep.claim_id or c.status in ("Merged", "Rejected"):
-                continue
-            for f in CLAIM_PROOF_FIELDS:
-                if getattr(c, f) and not getattr(keep, f):
-                    setattr(keep, f, getattr(c, f))
-            if c.distinctive_markings and not keep.distinctive_markings:
-                keep.distinctive_markings = c.distinctive_markings
-            if c.match_score and (not keep.match_score or c.match_score > keep.match_score):
-                keep.match_score = c.match_score
-            note_keep = (f"Claim #{c.claim_id} (Report #{c.report_id}) was combined into this claim: the reports are one "
-                         f"case (Case #{root.report_id}).")
-            keep.remarks = f"{keep.remarks}\n{note_keep}" if keep.remarks else note_keep
-            c.status_before_merge, c.status, c.merged_into_claim_id = c.status, "Merged", keep.claim_id
-            note = (f"Combined into claim #{keep.claim_id} (Report #{keep.report_id}): one claim per pet for Case "
-                    f"#{root.report_id}. Kept for the record.")
-            c.remarks = f"{c.remarks}\n{note}" if c.remarks else note
-            out["merged"].append((c.claim_id, keep.claim_id))
-            log_activity(db=db, action="MERGE_CASE_CLAIM", target_table="pet_claims", target_id=c.claim_id,
-                         description=f"Claim #{c.claim_id} (Report #{c.report_id}) combined into claim #{keep.claim_id} "
-                                     f"(Report #{keep.report_id}) for Case #{root.report_id}.",
-                         user_id=actor.user_id if actor else None, log_type="operation",
-                         old_values={"status": c.status_before_merge}, new_values={"status": "Merged", "merged_into_claim_id": keep.claim_id},
-                         request=req, commit=False)
-    db.flush()
-    return out
-
-
 # --- One owner conversation per pet and case -----------------------------------------------------------------------
 def case_conversation(db: Session, root: Report, pet_id: Optional[int]):
     """The case's primary look-alike conversation about this pet: the earliest one among the case's reports."""
@@ -520,7 +431,6 @@ def resync_case_pet_identity(db: Session, report: Report, actor: Optional[User] 
             r.verification_notes = "Reopened: the case confirmation that covered this suggestion no longer applies."
             out["reopened"].append(r.match_id)
 
-    out["claims"] = consolidate_case_claims(db, root, actor, req)
     if conf is None:
         db.flush()
         _refresh_released(db, out)

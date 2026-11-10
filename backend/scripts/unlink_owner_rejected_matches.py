@@ -18,7 +18,6 @@ from app.database import SessionLocal  # noqa: E402
 from app.models.report_match import ReportMatch  # noqa: E402
 from app.models.user import User  # noqa: E402
 from app.models.pet_history import PetHistory  # noqa: F401,E402 — registers mapper
-from app.models.pet_qr import PetQRScan  # noqa: F401,E402 — registers mapper
 from app.routes.matches import unlink_pet_match  # noqa: E402
 
 

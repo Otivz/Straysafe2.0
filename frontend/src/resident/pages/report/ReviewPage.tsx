@@ -10,7 +10,7 @@ import { Button, Callout, FormError, MediaThumbs } from '../../components/ui';
 import { residentPath } from '../../config';
 import { ANIMAL_TYPES, CATEGORIES, EXTRA_FIELD, VISIBILITY_COPY } from '../../data/constants';
 import { useResidentData } from '../../data/context';
-import { nextReportId } from '../../data/selectors';
+import { nextReportId, visibilityAfterSending } from '../../data/selectors';
 import type { Draft } from '../../data/types';
 import { stepPath } from '../../lib/flow';
 import { useSubmit } from '../../lib/hooks';
@@ -45,15 +45,30 @@ function ReviewForm({ draft, onSending }: { draft: Draft; onSending: () => void 
   if (!draft.location) missing.push({ text: 'where the animal was', to: stepPath('location') });
   const complete = missing.length === 0;
 
-  const visibility = cat.kind === 'lost' ? 'published' : cat.kind === 'found' ? 'pending_review' : 'private';
+  // What happens after sending is the subdivision's own publication setting.
+  const visibility = cat.kind === 'incident' ? 'private' : visibilityAfterSending(state, cat.kind);
+  // A notice that will be shown to neighbours needs the resident's say-so (even when an administrator approves it first).
+  const consentNeeded = cat.kind === 'lost' || (cat.kind === 'found' && visibility === 'published');
   const VisIcon = visibility === 'published' ? Eye : visibility === 'pending_review' ? Hourglass : EyeOff;
   const noticeTitle = `Lost ${animal.toLowerCase()}${draft.petName.trim() ? `: ${draft.petName.trim()}` : ''}`;
 
+  const consent = (
+    <Checkbox
+      checked={agree}
+      onChange={(e) => { setAgree(e.target.checked); setAgreeError(false); }}
+      error={agreeError ? (visibility === 'published' ? 'Please confirm to publish the notice.' : 'Please confirm to send the notice.') : undefined}
+      label={visibility === 'published'
+        ? 'I understand this notice and photo will be visible to my neighbours in Community.'
+        : 'I understand this notice and photo will be visible to my neighbours in Community once an administrator approves it.'}
+    />
+  );
+
   const submit = async () => {
-    if (cat.kind === 'lost' && !agree) { setAgreeError(true); return; }
-    const id = nextReportId(state);
+    if (consentNeeded && !agree) { setAgreeError(true); return; }
+    // The server tells the real reference once the report is filed; until then this is the next number in line.
+    let id = nextReportId(state);
     onSending();
-    const ok = await run(async () => { await dispatch({ type: 'report/submit' }); });
+    const ok = await run(async () => { const sent = await dispatch({ type: 'report/submit' }); if (sent?.reportRef) id = sent.reportRef; });
     if (ok) navigate(residentPath(`/report/submitted/${id}`), { replace: true });
   };
 
@@ -64,7 +79,7 @@ function ReviewForm({ draft, onSending }: { draft: Draft; onSending: () => void 
       draft={draft}
       footer={(
         <Button variant="primary" block loading={pending} disabled={!complete} onClick={() => void submit()}>
-          {cat.kind === 'lost' ? 'Publish notice and submit' : cat.kind === 'found' ? 'Submit for review' : 'Submit report'}
+          {visibility === 'published' ? 'Publish notice and submit' : cat.kind === 'incident' ? 'Submit report' : 'Submit for review'}
         </Button>
       )}
     >
@@ -111,14 +126,10 @@ function ReviewForm({ draft, onSending }: { draft: Draft; onSending: () => void 
             </span>
           </div>
           <p className="rs-hint">Never shown: your name, phone number, address, or the exact spot.</p>
-          <Checkbox
-            checked={agree}
-            onChange={(e) => { setAgree(e.target.checked); setAgreeError(false); }}
-            error={agreeError ? 'Please confirm to publish the notice.' : undefined}
-            label="I understand this notice and photo will be visible to my neighbours in Community."
-          />
+          {consent}
         </div>
       ) : null}
+      {cat.kind === 'found' && consentNeeded ? <div className="rs-stack-sm">{consent}</div> : null}
 
       {cat.kind === 'incident' ? (
         <Callout tone="info">An administrator will review your report. You can follow it under My reports, and add information later.</Callout>

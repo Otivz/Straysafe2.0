@@ -26,7 +26,7 @@ Updated: 24 October 2026. This document describes the implemented administrator 
 ## Access and routes
 
 - Administrator (role 4): `/admin/analytics`, backed by `GET /analytics/admin`. May view all subdivisions or select one.
-- Subdivision leader (role 2): `/subd/analytics`, backed by `GET /analytics/subdivision`. Requires an assigned subdivision and cannot request another subdivision.
+- Subdivision leader (role 2): `/subd-admin/reports` (the Analytics page of the Leader app), backed by `GET /analytics/subdivision`. Requires an assigned subdivision and cannot request another subdivision.
 - Residents and barangay staff (roles 1 and 3) cannot access these analytics endpoints.
 - An administrator using the subdivision endpoint must supply a subdivision or have one assigned.
 - Existing JWT authentication and user-scoped browser caching are reused. Analytics endpoints are read-only.
@@ -84,7 +84,7 @@ During a new filter request, results from another filter combination are hidden.
 
 ## Implementation
 
-- `frontend/src/pages/Admin/AdminAnalytics.tsx` and `frontend/src/pages/Subd_Leaders/SubdAnalytics.tsx`: role-specific wrappers.
+- `frontend/src/admin/pages/ReportsPage.tsx` and `frontend/src/admin/lib/useAnalytics.ts`: the Leader app page and its data hook (the legacy Admin and Leader wrappers were removed on 2026-11-10; the Administrator has no analytics screen yet).
 - `frontend/src/components/analytics/AnalyticsDashboard.tsx`: shared dashboard, filters, benchmarks, and metric cards.
 - `frontend/src/components/analytics/AnalyticsCharts.tsx`: native SVG trend, category donut, and distribution bars.
 - `frontend/src/components/analytics/analytics.ts`: typed response contract, URL filters, scoped requests/cache, formatting, benchmark sorting, and CSV generation.
@@ -98,7 +98,7 @@ No chart package or new frontend dependency was added. Each response includes fi
 ## Validation
 
 - Backend: `.venv/Scripts/python.exe -m unittest discover -s backend/tests -p test_analytics.py -v` — 14 regression tests.
-- Frontend: `npx eslint src/components/analytics src/pages/Admin/AdminAnalytics.tsx src/pages/Subd_Leaders/SubdAnalytics.tsx` from `frontend`.
+- Frontend: `npx eslint src/admin` from `frontend`.
 - Production: `npm run build` from `frontend` (TypeScript and Vite).
 - Chrome smoke checks with synthetic API fixtures: role-specific rendering, filters/grouping, chart controls/table, rapid request cancellation, custom dates, empty/error/retry/cache states, CSV download, print styles, and mobile layouts. These checks do not modify production records.
 

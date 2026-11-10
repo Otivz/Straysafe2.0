@@ -1,7 +1,7 @@
 """
 End-to-end backend & API synchronization tests for Global Facility and Map Synchronization:
-- Test A: Facility Deletion (Selera Homes holding facility deleted -> excluded from active queries, reports, holding lists, and maps; historical records preserved).
-- Test B: Facility & Barangay HQ Location Update (Barangay facility and HQ coordinates updated -> reflected across /landmarks, /landmarks/barangay/1/hq, /reports, and /rescue-requests).
+- Test A: Facility Deletion (Selera Homes holding facility deleted -> excluded from active queries, reports and maps; historical records preserved).
+- Test B: Facility & Barangay HQ Location Update (Barangay facility and HQ coordinates updated -> reflected across /landmarks, /landmarks/barangay/1/hq and /reports).
 - Test C: Facility Addition & Role-Based Jurisdiction Visibility (Admin adds facility -> visible to authorized roles with exact coordinates; Subdivision Leader cannot create new holding facilities; invalid coordinates rejected).
 - Test D: Persistence, Orphan Relinking & Audit Logs (Replacing an old Barangay facility re-links active Barangay-held reports to the new facility and coordinates; audit logs recorded for CREATE_LANDMARK, UPDATE_LANDMARK, DELETE_LANDMARK, UPDATE_BARANGAY_HQ).
 """
@@ -23,9 +23,9 @@ import app.models  # noqa: E402,F401
 from app.database import Base, SessionLocal as Session, engine, get_db  # noqa: E402
 from app.models.audit_log import AuditLog  # noqa: E402
 from app.models.landmark import Landmark  # noqa: E402
-from app.models.report import HoldingAnimal, Report, ReportStatus, Rescue  # noqa: E402
+from app.models.report import Report, ReportStatus  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
-from app.routes import holding, landmarks, reports, rescue  # noqa: E402
+from app.routes import landmarks, reports  # noqa: E402
 from app.utils.auth import create_access_token  # noqa: E402
 
 Base.metadata.create_all(bind=engine)
@@ -33,8 +33,6 @@ Base.metadata.create_all(bind=engine)
 api = FastAPI()
 api.include_router(landmarks.router)
 api.include_router(reports.router)
-api.include_router(rescue.router)
-api.include_router(holding.router)
 
 
 def override_db():
@@ -149,8 +147,6 @@ rep_brgy = Report(
 )
 db.add_all([rep_subd, rep_brgy])
 db.flush()
-db.add(HoldingAnimal(report_id=rep_brgy.report_id, animal_type="Dog", facility_status=2))
-db.add(Rescue(report_id=rep_brgy.report_id, status_id=7, leader_id=subd_leader.user_id, staff_id=brgy_staff.user_id))
 db.commit()
 
 
@@ -232,22 +228,12 @@ check(
 for role_label, actor in [("Subdivision Leader", subd_leader), ("Barangay Staff", brgy_staff), ("Resident", resident), ("Admin", admin)]:
     r_view = client.get(f"/reports/{rep_brgy.report_id}", headers=auth_headers(actor)).json()
     check(
-        f"Test B4 ({role_label}): Report held in Barangay facility reflects new coordinates",
-        abs(float(r_view["latitude"]) - NEW_FAC_LAT) < 1e-6
-        and abs(float(r_view["longitude"]) - NEW_FAC_LNG) < 1e-6
-        and abs(float(r_view["facility"]["latitude"]) - NEW_FAC_LAT) < 1e-6,
+        f"Test B4 ({role_label}): the report view keeps the incident's own pin and shows no holding facility",
+        abs(float(r_view["latitude"]) - 14.8015) < 1e-6
+        and abs(float(r_view["longitude"]) - 121.0040) < 1e-6
+        and r_view["facility"] is None and r_view["facility_id"] is None,
         str((r_view.get("latitude"), r_view.get("longitude"), r_view.get("facility")))
     )
-
-rescues_list = client.get("/rescue-requests/", headers=auth_headers(brgy_staff)).json()
-matching_rescue = next((x for x in rescues_list if x["report_id"] == rep_brgy.report_id), None)
-check(
-    "Test B5: /rescue-requests reflects updated Barangay facility coordinates",
-    matching_rescue is not None
-    and abs(float(matching_rescue["report"]["latitude"]) - NEW_FAC_LAT) < 1e-6
-    and abs(float(matching_rescue["report"]["longitude"]) - NEW_FAC_LNG) < 1e-6,
-    str(matching_rescue)
-)
 
 # ==============================================================================
 # TEST C — FACILITY ADDITION, VALIDATION & ROLE PERMISSIONS
@@ -313,14 +299,18 @@ replacement_brgy = client.post(
     }
 )
 check("Test D1: Admin creates replacement Barangay shelter (201)", replacement_brgy.status_code == 201, replacement_brgy.text)
-rep_after_replace = client.get(f"/reports/{rep_brgy.report_id}", headers=auth_headers(brgy_staff)).json()
+db.expire_all()
+rep_after_replace = db.get(Report, rep_brgy.report_id)
 check(
-    "Test D2: Active Barangay-held report automatically re-links to replacement Barangay shelter and its coordinates",
-    rep_after_replace["facility_id"] == replacement_brgy.json()["landmark_id"]
-    and abs(float(rep_after_replace["latitude"]) - 14.808888) < 1e-6
-    and rep_after_replace["landmark"] == "New Barangay Animal Shelter",
-    str((rep_after_replace.get("facility_id"), rep_after_replace.get("latitude"), rep_after_replace.get("landmark")))
+    "Test D2: the stored Barangay-custody report is re-linked to the replacement Barangay shelter and its coordinates",
+    rep_after_replace.facility_id == replacement_brgy.json()["landmark_id"]
+    and abs(float(rep_after_replace.latitude) - 14.808888) < 1e-6
+    and rep_after_replace.landmark == "New Barangay Animal Shelter",
+    str((rep_after_replace.facility_id, rep_after_replace.latitude, rep_after_replace.landmark))
 )
+view_after = client.get(f"/reports/{rep_brgy.report_id}", headers=auth_headers(brgy_staff)).json()
+check("Test D3a: ...while the report view still shows the incident's own pin, never a holding facility",
+      view_after["facility"] is None and abs(float(view_after["latitude"]) - 14.8015) < 1e-6, str((view_after.get("facility"), view_after.get("latitude"))))
 
 audit_actions = [a[0] for a in db.query(AuditLog.action).all()]
 check(

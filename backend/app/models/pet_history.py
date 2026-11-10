@@ -15,13 +15,10 @@ class PetHistory(Base):
     pet_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("pets.pet_id", ondelete="CASCADE"), nullable=False, index=True
     )
-    event_type: Mapped[str] = mapped_column(String(100), nullable=False)  # "QR_TAG_SCANNED", "OWNER_CONFIRMED_RECOVERY", "RECOVERY_REJECTED", "STATUS_CHANGE"
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)  # e.g. "OWNER_CONFIRMED_RECOVERY", "STATUS_CHANGE"
     title: Mapped[str] = mapped_column(String(150), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    recovery_method: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # "QR Tag Scan", "Manual", etc.
-    scan_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("pet_qr_scans.scan_id", ondelete="SET NULL"), nullable=True
-    )
+    recovery_method: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # e.g. "Manual"
     actor_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
     )
@@ -36,4 +33,3 @@ class PetHistory(Base):
 
     pet = relationship("Pet")
     actor = relationship("User", foreign_keys=[actor_id])
-    scan = relationship("PetQRScan", foreign_keys=[scan_id])

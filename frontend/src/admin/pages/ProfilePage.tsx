@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { KeyRound } from 'lucide-react';
 import { useAuth } from '../auth/context';
-import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Field, Input } from '../components/form';
 import { Avatar, Block, FormError, Kv, PageHeader, Panel } from '../components/layout';
@@ -9,6 +8,7 @@ import { SaveBar } from '../components/SaveBar';
 import { useToast } from '../components/toast';
 import { useAdminData } from '../data/context';
 import { ChangePasswordDialog } from '../dialogs/PasswordDialog';
+import { useAdminMode } from '../mode';
 import { fmtDate, fmtDateTime } from '../../preview/lib/format';
 import { usePageTitle } from '../lib/hooks';
 import { useUnsavedGuard } from '../lib/navGuard';
@@ -17,8 +17,9 @@ import { useSubmit } from '../lib/useSubmit';
 /** A22 — Admin profile: name, contact information, password and account information. */
 export default function ProfilePage() {
   usePageTitle('Your profile');
-  const { state, dispatch } = useAdminData();
+  const { state, dispatch, capabilities } = useAdminData();
   const { session } = useAuth();
+  const { gateway } = useAdminMode();
   const toast = useToast();
   const { pending, error, run } = useSubmit();
   const a = state.admin;
@@ -50,7 +51,7 @@ export default function ProfilePage() {
               <div className="flex flex-col gap-5">
                 <div className="sa-grid2">
                   <Field label="Name" required error={errors.name}><Input value={f.name} autoComplete="name" onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
-                  <Field label="Position" optional><Input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></Field>
+                  <Field label="Position" optional hint={capabilities.editProfileTitle ? undefined : 'Given by the system administrator.'}><Input value={f.title} disabled={!capabilities.editProfileTitle} onChange={(e) => setF({ ...f, title: e.target.value })} /></Field>
                 </div>
                 <div className="sa-grid2">
                   <Field label="Email" required error={errors.email}><Input type="email" value={f.email} autoComplete="email" onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>
@@ -65,7 +66,7 @@ export default function ProfilePage() {
 
         <Panel>
           <Block title="Password" description="Use at least 12 characters, with upper and lower case letters, a number and a special character." action={<Button icon={KeyRound} onClick={() => setChanging(true)}>Change password</Button>}>
-            <p className="sa-small sa-text-2">You will stay signed in on this device after changing it.</p>
+            <p className="sa-small sa-text-2">{gateway.endsSessionOnPasswordChange ? 'Changing it signs you out of every device, so you will sign in again with the new password.' : 'You will stay signed in on this device after changing it.'}</p>
           </Block>
         </Panel>
 
@@ -73,7 +74,7 @@ export default function ProfilePage() {
           <Block title="Account information">
             <Kv wide rows={[
               ['Role', a.role], ['Subdivision', a.subdivision], ['Member since', fmtDate(a.memberSince)],
-              ['This session', session ? <span>Started {fmtDateTime(session.startedAt)} <Badge>Preview</Badge></span> : '—'],
+              ['This session', session ? <span>Started {fmtDateTime(session.startedAt)}</span> : '—'],
             ]} />
           </Block>
         </Panel>

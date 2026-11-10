@@ -18,7 +18,7 @@ import type { OpenCaseDialog } from './dialogState';
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
-/** The assessment fields without the save stamp (the reducer adds who/when). */
+/** The assessment fields without the save stamp (who and when come from the saved record). */
 const bare = (a: Assessment): Omit<Assessment, 'savedAt' | 'savedBy'> => ({
   incident: a.incident, incidentBasis: a.incidentBasis, evidenceSufficiency: a.evidenceSufficiency, evidenceReviewed: a.evidenceReviewed,
   urgency: a.urgency, urgencyNote: a.urgencyNote, notes: a.notes,
@@ -101,7 +101,7 @@ function IncidentSection({ c, locked, openDialog }: { c: Case; locked: boolean; 
 const DECISIONS: { value: MatchDecision; label: string }[] = [{ value: 'not_match', label: 'Not a match' }, { value: 'possible', label: 'Possibly the same' }, { value: 'confirmed', label: 'Confirm identity' }];
 
 function IdentitySection({ c, locked }: { c: Case; locked: boolean }) {
-  const { state, dispatch } = useAdminData();
+  const { state, dispatch, capabilities } = useAdminData();
   const toast = useToast();
   const { pending, error, run } = useSubmit();
   const initial: IdentityReview = c.identity;
@@ -109,7 +109,9 @@ function IdentitySection({ c, locked }: { c: Case; locked: boolean }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const dirty = !same(f, initial);
   useUnsavedGuard(dirty);
-  const candidates = registryMatches(state.pets, c);
+  // The backend records the identity status and the notes, not a decision for each candidate pet. Where it cannot keep those
+  // decisions the candidates are not offered, rather than letting a click look saved.
+  const candidates = capabilities.petMatchDecisions ? registryMatches(state.pets, c) : [];
 
   const decide = (petId: string, d: MatchDecision) => {
     const matches = { ...f.matches, [petId]: d };
@@ -142,7 +144,9 @@ function IdentitySection({ c, locked }: { c: Case; locked: boolean }) {
             <div className="mt-5">
               <p className="sa-label mb-1">Possible registry matches</p>
               <p className="sa-hint mb-3">Registered pets that could look similar. Looking alike is not confirmation, and a registered pet is a reference, not proof of ownership.</p>
-              {candidates.length === 0 ? (
+              {!capabilities.petMatchDecisions ? (
+                <p className="sa-small sa-text-2">Compare the animal with the Pets directory yourself, then record the result below. The identity status and your notes are what is saved.</p>
+              ) : candidates.length === 0 ? (
                 <p className="sa-small sa-text-2">No registered pets look similar. You can still record an identity from other evidence, such as the guard recognising the animal.</p>
               ) : candidates.map((p) => {
                 const owner = residentById(state, p.ownerId);
@@ -174,7 +178,7 @@ function IdentitySection({ c, locked }: { c: Case; locked: boolean }) {
 
 // -------------------------------------------------------------------------------------------------------- ownership
 function OwnershipSection({ c, locked, openDialog }: { c: Case; locked: boolean; openDialog: OpenCaseDialog }) {
-  const { state, dispatch } = useAdminData();
+  const { state, dispatch, capabilities } = useAdminData();
   const toast = useToast();
   const { pending, error, run } = useSubmit();
   const now = useNow();
@@ -239,7 +243,7 @@ function OwnershipSection({ c, locked, openDialog }: { c: Case; locked: boolean;
 
       {c.claims.length > 0 ? (
         <Panel>
-          <Block title="Ownership claims" description="Review each claim against the evidence. Accepting one records ownership as confirmed.">
+          <Block title="Ownership claims" description={capabilities.acceptConfirmsOwnership ? 'Review each claim against the evidence. Accepting one records ownership as confirmed.' : 'Review each claim against the evidence. Accepting one does not confirm ownership: record that decision above, with the evidence you relied on.'}>
             <ul className="m-0 flex list-none flex-col gap-3 p-0">
               {c.claims.map((cl) => (
                 <li key={cl.id} className="sa-record">

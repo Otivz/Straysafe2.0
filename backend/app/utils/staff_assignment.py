@@ -1,4 +1,4 @@
-"""Validate assignment targets before changing a case, team or adoption record."""
+"""Validate assignment targets before changing a case or team record."""
 from typing import Iterable, Optional
 
 from fastapi import HTTPException

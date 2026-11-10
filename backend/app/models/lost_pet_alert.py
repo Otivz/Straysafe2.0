@@ -27,6 +27,9 @@ class LostPetAlert(Base):
     owner_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True, index=True)
     # requested -> active -> closed (requested can also be declined -> closed)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="requested", index=True)
+    # lost_pet (the original, and every older row) or found_animal: a notice that an animal with no known owner was
+    # found, so its owner can come forward. A found-animal alert has no owner and no registered pet.
+    alert_type: Mapped[str] = mapped_column(String(20), nullable=False, default="lost_pet", server_default="lost_pet")
     # Last known location and time (from the owner's report; the leader may correct them)
     last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_seen_location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

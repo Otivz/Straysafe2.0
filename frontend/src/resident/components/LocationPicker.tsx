@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from 'react';
 import { LocateFixed, MapPin } from 'lucide-react';
-import { REGISTERED_LANDMARKS, checkReportingArea, landmarkLabel, nearestLandmark, previewCoverage, type Landmark } from '../../preview/geo';
+import { checkReportingArea, landmarkLabel, nearestLandmark, registeredLandmarks, reportingCoverage, type Landmark } from '../../preview/geo';
 import { MapLegend } from '../../preview/map/MapLegend';
 import { locationErrorMessage } from '../../utils/geolocationDefaults';
 import type { GeoPoint } from '../data/types';
@@ -27,7 +27,7 @@ const autoLabel = (lat: number, lng: number) => { const l = nearestLandmark(lat,
  * always usable: tap the map, describe the place, or use the current position (when permitted).
  *
  * A spot can be reported when it is inside the reporting area: a radius around the subdivision centre, the same rule the
- * legacy server applies. The orange outline on the map is approximate and only for orientation; it decides nothing.
+ * server applies. The orange outline on the map is approximate and only for orientation; it decides nothing.
  *
  * `publicText` is for places that neighbours will read (lost and found notices, sightings): the place name is then required
  * and checked for phone numbers, emails and exact addresses before it can be confirmed.
@@ -46,6 +46,8 @@ export function LocationPicker({ initial, onConfirm, confirmLabel = 'Confirm loc
   const [error, setError] = useState<string>();
   const [labelError, setLabelError] = useState<string>();
   const { ref, invalid } = useFormFocus();
+  const landmarks = registeredLandmarks();
+  const radius = reportingCoverage().radius_meters;
   const check = pin ? checkReportingArea(pin.lat, pin.lng) : null;
 
   const place = (lat: number, lng: number, fromGps = false) => {
@@ -85,7 +87,8 @@ export function LocationPicker({ initial, onConfirm, confirmLabel = 'Confirm loc
   const confirm = () => {
     if (pin && check && !check.inside) { setError('Move the pin inside the reporting area to continue.'); return; }
     const typed = text.trim();
-    if (!pin && typed.length < 3) { setError('Tap the map, use your location, or describe where the animal was.'); invalid(); return; }
+    // The server files every report at a position, so the pin is required.
+    if (!pin) { setError('Tap the map to place the pin, or use your location. The subdivision needs a position to follow up.'); invalid(); return; }
     if (publicText && typed.length < 3) { setLabelError('Add a few words about the place, for example “next to the main entrance gate”. Neighbours see these words and a general area, not your pin.'); invalid(); return; }
     const label = typed || PINNED_LABEL;
     const problem = publicText ? publicTextProblem(label) : null;
@@ -102,9 +105,9 @@ export function LocationPicker({ initial, onConfirm, confirmLabel = 'Confirm loc
           <Input value={text} onChange={(e) => { setText(e.target.value); setTouched(true); setError(undefined); setLabelError(undefined); }} placeholder="Next to the main entrance gate" autoComplete="off" />
         </Field>
       </div>
-      {REGISTERED_LANDMARKS.length > 0 ? (
+      {landmarks.length > 0 ? (
         <div className="rs-chips rs-chips--scroll" role="group" aria-label="Registered landmarks">
-          {REGISTERED_LANDMARKS.map((l) => <button key={l.id} type="button" className="rs-chip rs-chip--btn" onClick={() => pickLandmark(l)}>{l.name}</button>)}
+          {landmarks.map((l) => <button key={l.id} type="button" className="rs-chip rs-chip--btn" onClick={() => pickLandmark(l)}>{l.name}</button>)}
         </div>
       ) : null}
 
@@ -123,13 +126,13 @@ export function LocationPicker({ initial, onConfirm, confirmLabel = 'Confirm loc
         <Suspense fallback={<Skeleton h={290} />}>
           <LocationMap pin={pin} onPick={place} onTilesFailed={() => setTilesFailed(true)} />
         </Suspense>
-        <MapLegend items={[{ kind: 'outline', label: 'Approximate subdivision outline' }, { kind: 'radius', label: `Reporting area (preview setting: ${previewCoverage().radius_meters} m)` }]} />
+        <MapLegend items={[{ kind: 'outline', label: 'Approximate subdivision outline' }, { kind: 'radius', label: `Reporting area (${radius} m from the centre)` }]} />
         {tilesFailed ? <p className="rs-hint">The map pictures couldn’t load, but the pin and the outlines still work. You can also just describe the place.</p> : <p className="rs-hint">Tap the map to place the pin, then drag it to adjust.</p>}
       </div>
 
       {pin && check ? (check.inside
         ? <p className="rs-selected"><MapPin size={16} aria-hidden="true" />Pin placed, inside the reporting area.</p>
-        : <Callout tone="amber">That spot is about {nearest10(check.distanceM)} m from the subdivision centre. Reports must be within {check.limitM} m (a preview setting), so move the pin closer.</Callout>) : null}
+        : <Callout tone="amber">That spot is about {nearest10(check.distanceM)} m from the subdivision centre. Reports must be within {check.limitM} m, so move the pin closer.</Callout>) : null}
       {error && pin ? <p className="rs-error" role="alert">{error}</p> : null}
       <Button variant="primary" block onClick={confirm}>{confirmLabel}</Button>
     </div>

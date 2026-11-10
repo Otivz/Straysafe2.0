@@ -23,7 +23,7 @@ from app.limiter import limiter  # noqa: E402
 from app.models.report import Report, ReportStatus  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
-from app.routes import rescue, reports  # noqa: E402
+from app.routes import reports  # noqa: E402
 from app.utils.auth import create_access_token  # noqa: E402
 
 Base.metadata.create_all(bind=engine)
@@ -31,7 +31,6 @@ api = FastAPI()
 api.state.limiter = limiter
 api.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 api.include_router(reports.router)
-api.include_router(rescue.router)
 client = TestClient(api, raise_server_exceptions=False)
 db = SessionLocal()
 
@@ -116,8 +115,6 @@ for sid, label in [(5, "dispatch (5)"), (6, "picked up (6)"), (7, "holding facil
     check(f"escalated (4): Barangay staff cannot {label} before approval (403)", r.status_code == 403 and "approve" in r.text.lower(), f"{r.status_code} {r.text[:120]}")
 r = status(E, head, 7)
 check("...not even the Head Officer can skip approval", r.status_code == 403, f"{r.status_code} {r.text[:120]}")
-r = client.post("/rescue-requests/assign-team", json={"report_id": E, "assigned_personnel_ids": [tanod.user_id]}, headers=H(head))
-check("assigning a response team before approval is refused (403)", r.status_code == 403 and "approve" in r.text.lower(), f"{r.status_code} {r.text[:140]}")
 db.expire_all()
 check("escalated report unchanged by refused attempts", db.get(Report, E).current_status_id == 4)
 r = status(E, head, 13)

@@ -2,7 +2,7 @@
 Subdivision-only gate (docs/06-future-proposals/SUBDIVISION_ONLY_RESTRUCTURING_PLAN.md, Phase 1).
 
 StraySafe serves the subdivision only. The Barangay is an external party: it has no account here, and its
-rescue, holding, claiming and adoption workflows happen outside StraySafe. Their records are kept read-only.
+rescue, holding, claiming and adoption workflows happen outside StraySafe (their routers and tables are removed).
 
 One switch, read here and nowhere else. It is OFF by default in code (no .env change needed).
 Set the environment variable BARANGAY_WORKFLOWS_ENABLED=1 only to run the legacy two-client system
@@ -22,15 +22,9 @@ RETIRED_WORKFLOW_MESSAGE = (
     "This step is handled by the Barangay outside StraySafe. Existing records are kept read-only."
 )
 
-# Write endpoints in retired routers that kept features still use (route path templates as FastAPI registers them).
-# - POST /rescue-requests/: the Subdivision Leader's "Escalate to Barangay" until Phase 3 replaces it with the referral log.
-# - POST /claims/ and PATCH /claims/{claim_id}/status: the owner-return step in PetMatchReview and
-#   CompleteHandoverModal (open decision in the plan, section 11).
-KEPT_WRITE_ROUTES = {
-    ("POST", "/rescue-requests/"),
-    ("POST", "/claims/"),
-    ("PATCH", "/claims/{claim_id}/status"),
-}
+# Write endpoints of a gated router that kept features still use (route path templates as FastAPI registers them).
+# None remain: the retired routers are gone. The gate still guards the landmark holding-place designations.
+KEPT_WRITE_ROUTES: set = set()
 
 READ_METHODS = {"GET", "HEAD", "OPTIONS"}
 
@@ -65,9 +59,8 @@ def refuse_barangay_provisioning(role_id=None, is_head_officer=False) -> None:
 
 def retired_workflow(request: Request) -> None:
     """
-    Router-level dependency for the retired Barangay workflows (rescue dispatch, holding, claims,
-    claim fees, adoption). Reads stay available as history; writes are refused for every role,
-    except the routes in KEPT_WRITE_ROUTES.
+    Guard for the retired Barangay holding-place designations (landmarks). Reads stay available; writes are refused
+    for every role, except the routes in KEPT_WRITE_ROUTES.
     """
     if barangay_workflows_enabled() or request.method in READ_METHODS:
         return

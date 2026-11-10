@@ -4,20 +4,16 @@ from typing import List, Optional
 from fastapi.concurrency import run_in_threadpool
 from fastapi import APIRouter, Body, Depends, HTTPException, UploadFile, File, Form, Query, status
 from sqlalchemy import or_, and_
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.models.announcement import Announcement, AnnouncementMedia, AnnouncementCategory, AnnouncementComment, AnnouncementReaction
+from app.models.announcement import Announcement, AnnouncementMedia, AnnouncementCategory
 from app.utils.audit import log_activity
 from app.models.user import User, Subdivision
 from app.utils.auth import get_current_user, get_current_staff_or_admin, verify_subdivision_scope
 from app.schemas.announcement import (
     AnnouncementCreate,
     AnnouncementResponse,
-    AnnouncementCommentCreate,
-    AnnouncementCommentResponse,
-    AnnouncementReactionCreate,
-    AnnouncementReactionResponse
 )
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.uploads import read_and_validate_upload
@@ -48,8 +44,6 @@ def _load_full(db: Session, announcement_id: int) -> Announcement:
             joinedload(Announcement.category),
             joinedload(Announcement.subdivision),
             joinedload(Announcement.media),
-            selectinload(Announcement.comments).joinedload(AnnouncementComment.user),
-            selectinload(Announcement.reactions),
         )
         .filter(Announcement.announcement_id == announcement_id)
         .first()
@@ -80,35 +74,6 @@ def _presentation_category(db_name: Optional[str]) -> str:
 
 
 def _to_response(ann: Announcement) -> AnnouncementResponse:
-    comments_list = []
-    if ann.comments:
-        for c in ann.comments:
-            comments_list.append(
-                AnnouncementCommentResponse(
-                    comment_id=c.comment_id,  # type: ignore
-                    announcement_id=c.announcement_id,  # type: ignore
-                    user_id=c.user_id,  # type: ignore
-                    user_name=c.user.name if c.user else "Unknown User",
-                    user_photo=c.user.profile_picture if c.user else None,
-                    parent_comment_id=c.parent_comment_id,  # type: ignore
-                    comment=c.comment,  # type: ignore
-                    created_at=c.created_at,  # type: ignore
-                )
-            )
-
-    reactions_list = []
-    if ann.reactions:
-        for r in ann.reactions:
-            reactions_list.append(
-                AnnouncementReactionResponse(
-                    reaction_id=r.reaction_id,  # type: ignore
-                    announcement_id=r.announcement_id,  # type: ignore
-                    user_id=r.user_id,  # type: ignore
-                    reaction_type=r.reaction_type,  # type: ignore
-                    created_at=r.created_at,  # type: ignore
-                )
-            )
-
     return AnnouncementResponse(
         announcement_id=ann.announcement_id,  # type: ignore
         title=ann.title,  # type: ignore
@@ -121,8 +86,6 @@ def _to_response(ann: Announcement) -> AnnouncementResponse:
         posted_by=ann.creator.name if ann.creator else "Subdivision Leader",
         posted_on=ann.published_at or ann.created_at,  # type: ignore
         media=ann.media or [],
-        comments=comments_list,
-        reactions=reactions_list,
         status=str(ann.status or "Published"),
     )
 
@@ -140,8 +103,6 @@ def get_subdivision_announcements(subdivision_id: int, db: Session = Depends(get
             joinedload(Announcement.category),
             joinedload(Announcement.subdivision),
             joinedload(Announcement.media),
-            selectinload(Announcement.comments).joinedload(AnnouncementComment.user),
-            selectinload(Announcement.reactions),
         )
         .filter(
             or_(
@@ -172,8 +133,6 @@ def get_barangay_announcements(
             joinedload(Announcement.category),
             joinedload(Announcement.subdivision),
             joinedload(Announcement.media),
-            selectinload(Announcement.comments).joinedload(AnnouncementComment.user),
-            selectinload(Announcement.reactions),
         )
         .filter(
             or_(
@@ -248,8 +207,6 @@ def get_resident_announcement_feed(user_id: int, db: Session = Depends(get_db),
             joinedload(Announcement.category),
             joinedload(Announcement.subdivision),
             joinedload(Announcement.media),
-            selectinload(Announcement.comments).joinedload(AnnouncementComment.user),
-            selectinload(Announcement.reactions),
         )
         .filter(
             Announcement.status == "Published",
@@ -323,8 +280,6 @@ def create_announcement(
             joinedload(Announcement.category),
             joinedload(Announcement.subdivision),
             joinedload(Announcement.media),
-            selectinload(Announcement.comments).joinedload(AnnouncementComment.user),
-            selectinload(Announcement.reactions)
         )
         .filter(Announcement.announcement_id == row.announcement_id)
         .first()
@@ -362,89 +317,6 @@ async def upload_announcement_media(
     db.commit()
     db.refresh(media)
     return media
-
-
-@router.post("/{announcement_id}/comments", response_model=AnnouncementCommentResponse)
-def add_announcement_comment(
-    announcement_id: int,
-    payload: AnnouncementCommentCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    ann = db.query(Announcement).filter(Announcement.announcement_id == announcement_id).first()
-    if not ann:
-        raise HTTPException(status_code=404, detail="Announcement not found")
-
-    db_comment = AnnouncementComment(
-        announcement_id=announcement_id,
-        user_id=current_user.user_id,   # the logged-in user; a user_id in the body is ignored
-        parent_comment_id=payload.parent_comment_id,
-        comment=payload.comment,
-    )
-    db.add(db_comment)
-    db.commit()
-    db.refresh(db_comment)
-
-    db_comment = (
-        db.query(AnnouncementComment)
-        .options(joinedload(AnnouncementComment.user))
-        .filter(AnnouncementComment.comment_id == db_comment.comment_id)
-        .first()
-    )
-    if not db_comment:
-        raise HTTPException(status_code=404, detail="Comment not found")
-
-    return AnnouncementCommentResponse(
-        comment_id=db_comment.comment_id,  # type: ignore
-        announcement_id=db_comment.announcement_id,  # type: ignore
-        user_id=db_comment.user_id,  # type: ignore
-        user_name=db_comment.user.name if db_comment.user else "Unknown User",
-        user_photo=db_comment.user.profile_picture if db_comment.user else None,
-        parent_comment_id=db_comment.parent_comment_id,  # type: ignore
-        comment=db_comment.comment,  # type: ignore
-        created_at=db_comment.created_at,  # type: ignore
-    )
-
-
-@router.post("/{announcement_id}/react", response_model=dict)
-def react_to_announcement(
-    announcement_id: int,
-    payload: AnnouncementReactionCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    ann = db.query(Announcement).filter(Announcement.announcement_id == announcement_id).first()
-    if not ann:
-        raise HTTPException(status_code=404, detail="Announcement not found")
-    reactor_id = current_user.user_id   # the logged-in user; a user_id in the body is ignored
-
-    existing = (
-        db.query(AnnouncementReaction)
-        .filter(
-            AnnouncementReaction.announcement_id == announcement_id,
-            AnnouncementReaction.user_id == reactor_id,
-        )
-        .first()
-    )
-
-    if existing:
-        if existing.reaction_type == payload.reaction_type:
-            db.delete(existing)
-            db.commit()
-            return {"status": "removed", "reaction_type": payload.reaction_type}
-        else:
-            existing.reaction_type = payload.reaction_type  # type: ignore
-            db.commit()
-            return {"status": "updated", "reaction_type": payload.reaction_type}
-    else:
-        new_reaction = AnnouncementReaction(
-            announcement_id=announcement_id,  # type: ignore
-            user_id=reactor_id,  # type: ignore
-            reaction_type=payload.reaction_type,  # type: ignore
-        )
-        db.add(new_reaction)
-        db.commit()
-        return {"status": "added", "reaction_type": payload.reaction_type}
 
 
 @router.put("/{announcement_id}", response_model=AnnouncementResponse)
@@ -503,8 +375,6 @@ def update_announcement(announcement_id: int, payload: AnnouncementCreate, db: S
             joinedload(Announcement.category),
             joinedload(Announcement.subdivision),
             joinedload(Announcement.media),
-            selectinload(Announcement.comments).joinedload(AnnouncementComment.user),
-            selectinload(Announcement.reactions)
         )
         .filter(Announcement.announcement_id == announcement_id)
         .first()

@@ -29,6 +29,9 @@ from app.models.user import Subdivision, User
 from app.utils.audit import log_activity
 from app.utils.auth import get_current_user
 from app.utils.case_closure import CLOSED_REPORT_STATUS_IDS
+from app.utils import case_policy
+from app.utils import case_vocab as V
+from app.utils.report_visibility import generalize_coord
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/lost-pet-alerts", tags=["lost-pet-alerts"])
@@ -47,7 +50,7 @@ MAX_BEFORE_REPORT = timedelta(days=3)      # an earlier sighting can't predate t
 # ── helpers ────────────────────────────────────────────────────────────────
 
 def _db_now(db: Session) -> datetime:
-    from app.utils.holding_stay import db_now
+    from app.utils.db_clock import db_now
     return db_now(db)
 
 
@@ -123,33 +126,62 @@ def _require_leader(user: User, alert_or_subdivision) -> None:
         raise HTTPException(status_code=403, detail="Only this subdivision's Leader can manage its neighborhood alerts.")
 
 
-def _require_open_lost_report(report: Report) -> None:
-    from app.utils.claim_custody import is_lost_pet_report
-    if not is_lost_pet_report(report):
+def _require_open_lost_report(report: Report, alert_type: str = "lost_pet") -> None:
+    """The report must be one a notice of this type can be about: a Lost Pet Report, or a Found / Unidentified Animal case."""
+    from app.utils.case_vocab import is_lost_pet_report
+    if alert_type == "found_animal":
+        from app.utils.warning_rules import report_family
+        if report_family(report) != V.FOUND_ANIMAL:
+            raise HTTPException(status_code=409, detail="A found-animal notice is for Found / Unidentified Animal reports only.")
+    elif not is_lost_pet_report(report):
         raise HTTPException(status_code=409, detail="Neighborhood alerts are for Lost Pet Reports only.")
+    if report.is_sensitive:
+        raise HTTPException(status_code=409, detail="A private complaint is never published as a notice.")
     if report.duplicate_of_report_id or (report.current_status_id or 0) in CLOSED_REPORT_STATUS_IDS:
-        raise HTTPException(status_code=409, detail="This Lost Pet Report is already closed or merged.")
+        raise HTTPException(status_code=409, detail="This report is already closed or merged.")
     if not report.subdivision_id:
         raise HTTPException(status_code=409, detail="This report isn't in a subdivision, so there is no neighborhood to alert.")
 
 
-def _pet_card(db: Session, alert: LostPetAlert) -> Dict[str, Any]:
-    """What neighbors need to recognize the pet: the pet record if linked, else what the owner reported."""
+def _require_in_coverage(db: Session, lat: Optional[float], lng: Optional[float]) -> None:
+    """A pin the user types is checked against the coverage area the server holds (the browser's map is not the rule)."""
+    if lat is None or lng is None:
+        return
+    from app.routes.reports import is_inside_reporting_coverage
+    inside, _, radius = is_inside_reporting_coverage(lat, lng, db)
+    if not inside:
+        raise HTTPException(status_code=400, detail=f"Pin the location inside the subdivision's coverage area (within {radius} m).")
+
+
+def _privileged(db: Session, viewer: User, alert: LostPetAlert) -> bool:
+    """Who sees exact pins and names on an alert: the Leader / Administrator, and a lost pet's owner. For a found animal
+    nobody is the owner: the person who reported it sees what any neighbor sees."""
+    return _is_leader_of(viewer, alert.subdivision_id) or (alert.alert_type != "found_animal" and _is_owner(db, viewer, alert))
+
+
+def _pet_card(db: Session, alert: LostPetAlert, privileged: bool = True) -> Dict[str, Any]:
+    """
+    What neighbors need to recognize the pet: the pet record if linked, else what the owner reported.
+    For a found animal the distinguishing marks and the finder's own words are NOT shown to neighbors: they are how the
+    real owner proves the animal is theirs, and the finder's text may carry details about the finder.
+    """
     rep, pet = alert.report, alert.pet
+    found = alert.alert_type == "found_animal"
     photo = None
     if pet is not None:
         photo = pet.photo_url or pet.photo_front_url
     if not photo and rep is not None:
         photo = next((m.file_url for m in (rep.media or []) if m.file_url and m.media_type in ("Image", None)), None)
     colors = [c for c in ((pet.color_markings if pet else None), (pet.primary_color if pet else None), (pet.secondary_color if pet else None)) if c]
+    hide_details = found and not privileged
     return {
-        "name": (pet.pet_name if pet else None) or "Missing pet",
+        "name": (pet.pet_name if pet else None) or ("Found animal" if found else "Missing pet"),
         "photo_url": photo,
         "species": (pet.pet_type if pet else None) or (rep.animal_type if rep else None),
         "breed": (pet.breed if pet else None) or (rep.animal_breed if rep else None),
         "color": ", ".join(dict.fromkeys(colors)) or (rep.animal_color if rep else None),
-        "distinguishing_marks": (pet.distinctive_markings if pet else None),
-        "description": rep.description if rep else None,
+        "distinguishing_marks": None if hide_details else (pet.distinctive_markings if pet else None),
+        "description": None if hide_details else (rep.description if rep else None),
     }
 
 
@@ -162,8 +194,14 @@ def _sighting_view(db: Session, s: LostPetSighting, viewer: User, privileged: bo
     mine = s.reporter_id == viewer.user_id
     # Neighbors see "A neighbor"; the owner and the leader see the reporter's name (never a phone or address)
     label = "You" if mine else ((s.reporter.name if s.reporter else "A resident") if privileged else "A neighbor")
+    # Exact pins only for the person who submitted it and for the leader / the lost pet's owner; every other resident
+    # gets the area (~110 m), never the spot.
+    exact = mine or privileged
     return {
-        "sighting_id": s.sighting_id, "latitude": _num(s.latitude), "longitude": _num(s.longitude),
+        "sighting_id": s.sighting_id,
+        "latitude": _num(s.latitude) if exact else generalize_coord(s.latitude),
+        "longitude": _num(s.longitude) if exact else generalize_coord(s.longitude),
+        "coordinates_generalized": not exact,
         "location_label": s.location_label, "location_source": s.location_source,
         "seen_at": _iso(s.seen_at), "submitted_at": _iso(s.submitted_at),
         "description": s.description, "photo_url": s.photo_url, "status": s.status, "review_note": s.review_note,
@@ -172,19 +210,21 @@ def _sighting_view(db: Session, s: LostPetSighting, viewer: User, privileged: bo
 
 
 def _alert_view(db: Session, alert: LostPetAlert, viewer: User, with_sightings: bool = False) -> Dict[str, Any]:
-    privileged = _is_leader_of(viewer, alert.subdivision_id) or _is_owner(db, viewer, alert)
+    privileged = _privileged(db, viewer, alert)
     sightings = (db.query(LostPetSighting).options(joinedload(LostPetSighting.reporter))
                  .filter(LostPetSighting.alert_id == alert.alert_id)
                  .order_by(LostPetSighting.seen_at, LostPetSighting.submitted_at, LostPetSighting.sighting_id).all())
     latest = max(sightings, key=lambda s: (s.submitted_at or datetime.min, s.sighting_id), default=None)
     subd = db.get(Subdivision, alert.subdivision_id)
     data = {
-        "alert_id": alert.alert_id, "report_id": alert.report_id, "status": alert.status,
+        "alert_id": alert.alert_id, "report_id": alert.report_id, "status": alert.status, "alert_type": alert.alert_type,
         "subdivision": subd.subdivision_name if subd else None,
-        "pet": _pet_card(db, alert),
+        "pet": _pet_card(db, alert, privileged),
         "owner_first_name": _first_name(db, alert.owner_id),
         "last_seen": {"at": _iso(alert.last_seen_at), "location": alert.last_seen_location,
-                      "latitude": _num(alert.last_seen_lat), "longitude": _num(alert.last_seen_lng)},
+                      "latitude": _num(alert.last_seen_lat) if privileged else generalize_coord(alert.last_seen_lat),
+                      "longitude": _num(alert.last_seen_lng) if privileged else generalize_coord(alert.last_seen_lng),
+                      "generalized": not privileged},
         "contact_preference": alert.contact_preference, "contact_text": CONTACT_TEXT.get(alert.contact_preference, CONTACT_TEXT["app_message"]),
         "owner_note": alert.owner_note, "leader_message": alert.leader_message,
         "requested_at": _iso(alert.requested_at), "activated_at": _iso(alert.activated_at),
@@ -194,6 +234,8 @@ def _alert_view(db: Session, alert: LostPetAlert, viewer: User, with_sightings: 
         "accepting_sightings": alert.status == ACTIVE,
         "is_owner": _is_owner(db, viewer, alert), "can_manage": _is_leader_of(viewer, alert.subdivision_id),
         "residents_notified": alert.residents_notified if privileged else None,
+        # who asked for the notice: the Leader's own notice list tells a resident's request from the Leader's own (not for neighbors)
+        "requested_by": alert.requested_by if privileged else None,
     }
     if with_sightings:
         data["sightings"] = [_sighting_view(db, s, viewer, privileged) for s in sightings]
@@ -232,6 +274,9 @@ def _commit(db: Session) -> None:
 # ── owner: request an alert ────────────────────────────────────────────────
 
 class AlertRequest(BaseModel):
+    # lost_pet: the owner of a Lost Pet Report asks for an alert. found_animal: a notice that an animal with no known
+    # owner was found, so its owner can come forward (the Leader, or the resident who reported it, asks for it).
+    alert_type: str = Field("lost_pet", pattern="^(lost_pet|found_animal)$")
     last_seen_at: Optional[datetime] = None
     last_seen_location: Optional[str] = Field(None, max_length=255)
     last_seen_lat: Optional[float] = Field(None, ge=-90, le=90)
@@ -250,22 +295,29 @@ def request_alert(report_id: int, payload: AlertRequest, req: Request, db: Sessi
     report = _report_or_404(db, report_id)
     owners = _owner_ids(db, report)
     by_leader = _is_leader_of(current_user, report.subdivision_id)
-    if current_user.user_id not in owners and not by_leader:
+    found = payload.alert_type == "found_animal"
+    if found:
+        # Nobody owns it yet: the Leader / Administrator, or the resident who reported the animal, can ask for the notice
+        if not by_leader and current_user.user_id != report.user_id:
+            raise HTTPException(status_code=403, detail="Only the Subdivision Leader or the resident who reported the animal can ask for a found-animal notice.")
+    elif current_user.user_id not in owners and not by_leader:
         raise HTTPException(status_code=403, detail="Only the pet's owner or the Subdivision Leader can request a neighborhood alert.")
-    _require_open_lost_report(report)
+    _require_open_lost_report(report, payload.alert_type)
     now = _db_now(db)
     if payload.last_seen_at and payload.last_seen_at.replace(tzinfo=None) > _manila_now() + MAX_FUTURE:
         raise HTTPException(status_code=400, detail="The last-seen time can't be in the future.")
+    _require_in_coverage(db, payload.last_seen_lat, payload.last_seen_lng)
     alert = db.query(LostPetAlert).filter(LostPetAlert.report_id == report.report_id).with_for_update().first()
     if alert is not None and alert.status in OPEN_ALERT:
         raise HTTPException(status_code=409, detail=f"A neighborhood alert for this report is already {alert.status}.")
     if alert is None:
         alert = LostPetAlert(report_id=report.report_id)
         db.add(alert)
+    alert.alert_type = payload.alert_type
     alert.subdivision_id = report.subdivision_id
-    alert.pet_id = report.pet_id
-    pet = db.get(Pet, report.pet_id) if report.pet_id else None
-    alert.owner_id = current_user.user_id if current_user.user_id in owners else ((pet.owner_id if pet else None) or report.user_id)
+    alert.pet_id = None if found else report.pet_id
+    pet = db.get(Pet, report.pet_id) if (report.pet_id and not found) else None
+    alert.owner_id = None if found else (current_user.user_id if current_user.user_id in owners else ((pet.owner_id if pet else None) or report.user_id))
     alert.status = REQUESTED
     alert.last_seen_at = payload.last_seen_at.replace(tzinfo=None) if payload.last_seen_at else report.created_at
     alert.last_seen_location = (payload.last_seen_location or "").strip() or report.initial_landmark or report.landmark
@@ -276,13 +328,21 @@ def request_alert(report_id: int, payload: AlertRequest, req: Request, db: Sessi
     alert.requested_by, alert.requested_at = current_user.user_id, now
     alert.closed_at = alert.closed_by = alert.close_outcome = alert.close_reason = None
     db.flush()
+    asked_for = "a found-animal notice" if found else "a neighborhood alert for their missing pet"
     _notify(db, [] if by_leader and current_user.user_id not in owners else _leader_ids(db, report.subdivision_id), "lost_pet_alert_request", alert.alert_id,
-            "Neighborhood alert requested",
-            f"{current_user.name} asked for a neighborhood alert for their missing pet (Report #{report.report_id}). "
+            "Found-animal notice requested" if found else "Neighborhood alert requested",
+            f"{current_user.name} asked for {asked_for} (Report #{report.report_id}). "
             "Review the report and activate the alert to notify residents.")
     log_activity(db=db, action="REQUEST_LOST_PET_ALERT", target_table="lost_pet_alerts", target_id=alert.alert_id,
-                 description=f"{current_user.name} requested a neighborhood alert for Report #{report.report_id}.",
+                 description=f"{current_user.name} requested {'a found-animal notice' if found else 'a neighborhood alert'} for Report #{report.report_id}.",
                  user_id=current_user.user_id, log_type="operation", request=req, commit=False)
+    # Publication policy: submitting the request and publishing the notice are separate. A resident's request goes to
+    # the Leader for review unless the subdivision chose to publish lost-pet / found-animal notices at once. A private
+    # complaint, a nuisance or a safety concern is never published at once (case_policy.publication_mode).
+    mode = case_policy.publication_mode(case_policy.load_settings(db, report.subdivision_id),
+                                        V.FOUND_ANIMAL if found else V.LOST_PET, bool(report.is_sensitive))
+    if not by_leader and mode == "immediate":
+        _broadcast(db, alert, None, now)
     _commit(db)
     return _alert_view(db, alert, current_user)
 
@@ -312,7 +372,7 @@ class ActivateRequest(BaseModel):
     last_seen_lng: Optional[float] = Field(None, ge=-180, le=180)
 
 
-def _apply_details(alert: LostPetAlert, body, now: datetime) -> None:
+def _apply_details(alert: LostPetAlert, body, now: datetime, db: Session) -> None:
     if body.last_seen_at is not None:
         if body.last_seen_at.replace(tzinfo=None) > _manila_now() + MAX_FUTURE:
             raise HTTPException(status_code=400, detail="The last-seen time can't be in the future.")
@@ -320,6 +380,7 @@ def _apply_details(alert: LostPetAlert, body, now: datetime) -> None:
     if body.last_seen_location is not None:
         alert.last_seen_location = body.last_seen_location.strip() or alert.last_seen_location
     if body.last_seen_lat is not None and body.last_seen_lng is not None:
+        _require_in_coverage(db, body.last_seen_lat, body.last_seen_lng)
         alert.last_seen_lat, alert.last_seen_lng = Decimal(str(body.last_seen_lat)), Decimal(str(body.last_seen_lng))
     if body.leader_message is not None:
         alert.leader_message = body.leader_message.strip() or None
@@ -333,33 +394,54 @@ def activate_alert(alert_id: int, payload: ActivateRequest, req: Request, db: Se
     _require_leader(current_user, alert)
     if alert.status == ACTIVE:
         raise HTTPException(status_code=409, detail="This neighborhood alert is already active.")
-    _require_open_lost_report(alert.report)
+    _require_open_lost_report(alert.report, alert.alert_type)
     now = _db_now(db)
-    _apply_details(alert, payload, now)
-    alert.status, alert.activated_by, alert.activated_at = ACTIVE, current_user.user_id, now
+    _apply_details(alert, payload, now, db)
+    _broadcast(db, alert, current_user, now, req)
+    _commit(db)
+    return _alert_view(db, alert, current_user)
+
+
+def _broadcast(db: Session, alert: LostPetAlert, actor: Optional[User], now: datetime, req: Optional[Request] = None) -> None:
+    """
+    Publish the notice to the subdivision's residents. `actor` is the Leader who published it, or None when the
+    subdivision's own publication policy published it (a resident's request under 'immediate'). The same for a lost
+    pet's alert and a found-animal notice; only the wording and who is told differ.
+    """
+    found = alert.alert_type == "found_animal"
+    alert.status, alert.activated_by, alert.activated_at = ACTIVE, (actor.user_id if actor else None), now
     alert.closed_at = alert.closed_by = alert.close_outcome = alert.close_reason = None
-    card = _pet_card(db, alert)
+    card = _pet_card(db, alert, privileged=False)   # what neighbors may know: never the marks that prove ownership
     looks = ", ".join(x for x in (card["species"], card["breed"], card["color"]) if x)
     where = alert.last_seen_location or "the subdivision"
     residents = [u for (u,) in db.query(User.user_id).filter(User.role_id == 1, User.subdivision_id == alert.subdivision_id,
                                                                User.status == "Active").all()]
     owners = _owner_ids(db, alert.report)
-    alert.residents_notified = _notify(
-        db, [u for u in residents if u not in owners], "lost_pet_alert", alert.alert_id,
-        f"Missing pet: {card['name']} - have you seen it?",
-        f"{card['name']} ({looks or 'pet'}) was last seen near {where} on {_fmt_date(alert.last_seen_at)} at "
-        f"{_fmt_time(alert.last_seen_at)}. If you spot it, open the alert and tap Report a Sighting.")
-    _notify(db, owners, "lost_pet_alert", alert.alert_id, "Your neighborhood alert is live",
-            f"Residents of the subdivision were alerted about {card['name']} ({alert.residents_notified} notified). "
-            "You'll be notified of every sighting.")
-    db.add(StatusHistory(report_id=alert.report_id, report_status_id=alert.report.current_status_id, updated_by=current_user.user_id,
-                         remarks=f"Neighborhood alert broadcast to {alert.residents_notified} residents by {current_user.name}."))
+    if found:
+        alert.residents_notified = _notify(
+            db, [u for u in residents if u not in owners], "lost_pet_alert", alert.alert_id,
+            "Found animal: is it yours?",
+            f"An animal ({looks or 'animal'}) was found near {where} on {_fmt_date(alert.last_seen_at)}. If it is yours, open the "
+            "notice and send an ownership claim. Please do not approach an animal you do not know.")
+        _notify(db, owners, "lost_pet_alert", alert.alert_id, "Your found-animal notice is live",
+                f"Residents of the subdivision were told about the animal you reported ({alert.residents_notified} notified).")
+    else:
+        alert.residents_notified = _notify(
+            db, [u for u in residents if u not in owners], "lost_pet_alert", alert.alert_id,
+            f"Missing pet: {card['name']} - have you seen it?",
+            f"{card['name']} ({looks or 'pet'}) was last seen near {where} on {_fmt_date(alert.last_seen_at)} at "
+            f"{_fmt_time(alert.last_seen_at)}. If you spot it, open the alert and tap Report a Sighting.")
+        _notify(db, owners, "lost_pet_alert", alert.alert_id, "Your neighborhood alert is live",
+                f"Residents of the subdivision were alerted about {card['name']} ({alert.residents_notified} notified). "
+                "You'll be notified of every sighting.")
+    by = f"by {actor.name}" if actor else "under the subdivision's publication policy"
+    db.add(StatusHistory(report_id=alert.report_id, report_status_id=alert.report.current_status_id,
+                         updated_by=actor.user_id if actor else None,
+                         remarks=f"{'Found-animal notice' if found else 'Neighborhood alert'} published to {alert.residents_notified} residents {by}."))
     log_activity(db=db, action="ACTIVATE_LOST_PET_ALERT", target_table="lost_pet_alerts", target_id=alert.alert_id,
-                 description=f"{current_user.name} activated the neighborhood alert for Report #{alert.report_id} "
-                             f"({alert.residents_notified} residents notified).",
-                 user_id=current_user.user_id, log_type="operation", request=req, commit=False)
-    _commit(db)
-    return _alert_view(db, alert, current_user)
+                 description=f"{actor.name if actor else 'The publication policy'} published the {'found-animal notice' if found else 'neighborhood alert'} "
+                             f"for Report #{alert.report_id} ({alert.residents_notified} residents notified).",
+                 user_id=actor.user_id if actor else None, log_type="operation", request=req, commit=False)
 
 
 @router.patch("/{alert_id}")
@@ -370,7 +452,7 @@ def update_alert(alert_id: int, payload: ActivateRequest, req: Request, db: Sess
     _require_leader(current_user, alert)
     if alert.status not in OPEN_ALERT:
         raise HTTPException(status_code=409, detail="A closed alert can't be edited.")
-    _apply_details(alert, payload, _db_now(db))
+    _apply_details(alert, payload, _db_now(db), db)
     log_activity(db=db, action="UPDATE_LOST_PET_ALERT", target_table="lost_pet_alerts", target_id=alert.alert_id,
                  description=f"{current_user.name} updated the neighborhood alert for Report #{alert.report_id}.",
                  user_id=current_user.user_id, log_type="operation", request=req, commit=False)
@@ -418,7 +500,7 @@ def mark_reunited(alert_id: int, payload: ReunitedRequest, req: Request, db: Ses
     report = alert.report
     _require_open_lost_report(report)
     if report.facility_id is not None:
-        raise HTTPException(status_code=409, detail="The animal is at a holding facility; its handover goes through the pet claim.")
+        raise HTTPException(status_code=409, detail="The animal is recorded at a facility; resolve the case from the report page so the handover is recorded.")
     owner = db.get(User, alert.owner_id) if alert.owner_id else None
     if owner is None:
         raise HTTPException(status_code=409, detail="The owner's account is missing; resolve the report from the report page.")
@@ -467,6 +549,38 @@ def list_active(db: Session = Depends(get_db), current_user: User = Depends(get_
     return {"results": [_alert_view(db, a, current_user) for a in q.order_by(LostPetAlert.activated_at.desc()).all()]}
 
 
+@router.get("/mine")
+def list_mine(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """A resident's own notices in every state (requested, active, closed): the ones on reports they filed, about their
+    pet, or that they asked for. Active notices of other residents are /active. Declared before /{alert_id}."""
+    if current_user.role_id != 1:
+        raise HTTPException(status_code=403, detail="This list is for residents. Leaders use the notice list.")
+    from sqlalchemy import or_
+    rows = (db.query(LostPetAlert).options(joinedload(LostPetAlert.report), joinedload(LostPetAlert.pet))
+            .join(Report, Report.report_id == LostPetAlert.report_id)
+            .filter(or_(Report.user_id == current_user.user_id, LostPetAlert.owner_id == current_user.user_id,
+                        LostPetAlert.requested_by == current_user.user_id))
+            .order_by(LostPetAlert.requested_at.desc(), LostPetAlert.alert_id.desc()).limit(200).all())
+    return {"results": [_alert_view(db, a, current_user) for a in rows]}
+
+
+@router.get("/all")
+def list_all(limit: int = 200, offset: int = 0, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Every notice of the Leader's subdivision in every state (requested, active, closed), newest request first: the
+    Leader's notice list. The Administrator reads every subdivision's. Declared before /{alert_id}."""
+    if current_user.role_id not in (2, 4):
+        raise HTTPException(status_code=403, detail="Subdivision Leader access required.")
+    q = db.query(LostPetAlert).options(joinedload(LostPetAlert.report), joinedload(LostPetAlert.pet))
+    if current_user.role_id == 2:
+        if not current_user.subdivision_id:
+            raise HTTPException(status_code=403, detail="A subdivision assignment is required.")
+        q = q.filter(LostPetAlert.subdivision_id == current_user.subdivision_id)
+    total = q.count()
+    page = min(max(limit, 1), 200)
+    rows = q.order_by(LostPetAlert.requested_at.desc(), LostPetAlert.alert_id.desc()).offset(max(offset, 0)).limit(page).all()
+    return {"total": total, "limit": page, "offset": max(offset, 0), "results": [_alert_view(db, a, current_user) for a in rows]}
+
+
 @router.get("/dashboard")
 def leader_dashboard(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Subdivision Leader overview from the records: alerts, sightings, reunions and lost reports waiting."""
@@ -485,7 +599,7 @@ def leader_dashboard(db: Session = Depends(get_db), current_user: User = Depends
               .filter(LostPetSighting.alert_id.in_(ids)).order_by(LostPetSighting.submitted_at.desc(), LostPetSighting.sighting_id.desc())
               .limit(10).all()) if ids else []
     # Lost Pet Reports still open without an open alert (for the leader to review / alert)
-    from app.utils.claim_custody import LOST_PET_CATEGORY_ID, LOST_PET_MARKER
+    from app.utils.case_vocab import LOST_PET_CATEGORY_ID, LOST_PET_MARKER
     from sqlalchemy import or_
     lost_q = db.query(Report).filter(
         or_(Report.category_id == LOST_PET_CATEGORY_ID, Report.description.contains(LOST_PET_MARKER)),

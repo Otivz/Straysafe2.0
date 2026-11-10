@@ -26,7 +26,7 @@ from app.database import get_db
 from app.models.manual_match import ManualMatchDecision
 from app.models.notification import Notification
 from app.models.pet import Pet
-from app.models.report import HoldingAnimal, Report, StatusHistory
+from app.models.report import Report, StatusHistory
 from app.models.report_match import ReportMatch
 from app.models.user import Subdivision, User
 from app.utils.audit import log_activity
@@ -145,11 +145,8 @@ def _apply_filters(q, f: Filters):
     if f.color and f.color.strip():
         q = q.filter(or_(_contains(Report.animal_color, f.color), _contains(Report.ai_dominant_color, f.color)))
     if f.gender:
-        # Reports have no sex field: it comes from the holding record or the linked registered pet
-        q = q.filter(or_(
-            exists().where(and_(HoldingAnimal.report_id == Report.report_id, HoldingAnimal.sex == f.gender)),
-            exists().where(and_(Pet.pet_id == Report.pet_id, Pet.gender == f.gender)),
-        ))
+        # Reports have no sex field: it comes from the linked registered pet
+        q = q.filter(exists().where(and_(Pet.pet_id == Report.pet_id, Pet.gender == f.gender)))
     if f.features:
         for word in [w for w in f.features.split() if w.strip()][:6]:
             q = q.filter(or_(_contains(Report.description, word), _contains(Report.condition, word),
@@ -191,12 +188,7 @@ def _load_options(q):
 def _genders(db: Session, reports: Iterable[Report]) -> Dict[int, str]:
     reports = list(reports)
     out: Dict[int, str] = {}
-    ids = [r.report_id for r in reports]
-    if ids:
-        for rid, sex in db.query(HoldingAnimal.report_id, HoldingAnimal.sex).filter(HoldingAnimal.report_id.in_(ids)).all():
-            if _known(sex):
-                out[rid] = sex
-    pet_ids = {r.pet_id for r in reports if r.pet_id and r.report_id not in out}
+    pet_ids = {r.pet_id for r in reports if r.pet_id}
     if pet_ids:
         pets = dict(db.query(Pet.pet_id, Pet.gender).filter(Pet.pet_id.in_(pet_ids)).all())
         for r in reports:
@@ -1032,8 +1024,6 @@ def record_decision(
     linked_case_id = None
     if payload.decision == "CONFIRMED_MATCH" and payload.link_case and not same_case:
         linked_case_id = confirm_report_match(db, current_user, match, notes, req, actor_role)
-        from app.routes.matches import reconcile_pair_holding
-        reconcile_pair_holding(db, match)
     elif payload.decision == "NOT_A_MATCH":
         # Closes any other open suggestion between the two cases; refuses reports already merged together
         reject_report_match(db, current_user, match, notes, actor_role)

@@ -24,6 +24,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401
+from _case_helpers import make_warning_ready  # what an owner warning now requires
 from app.models.audit_log import AuditLog  # noqa: F401  (audit table for log_activity)
 from app.database import Base, get_db
 from app.models.user import Barangay, Subdivision, User
@@ -124,7 +125,9 @@ def check(condition, desc):
 
 print("\n--- Running Owner Observation Update Tests ---")
 
-# 1. First Warning starts the observation and tells the owner.
+# 1. First Warning starts the observation and tells the owner (the case first needs a verified incident, a confirmed owner and a confirmed policy).
+with Session() as _s:
+    make_warning_ready(_s, 1, 1, observation_days=3)
 with patch("app.services.email_templates.render_owner_warning_email", return_value=("Subj", "Body", "<b>Body</b>")):
     res_warn = client.post("/warnings/", json={
         "user_id": 1, "pet_id": 1, "report_id": 1, "warning_level": "1st Warning",

@@ -5,17 +5,16 @@ import { adminPath } from '../config';
 import { useAuth } from '../auth/context';
 import { IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/Dialog';
-import { ErrorState, PageSkeleton } from '../components/layout';
+import { Callout, ErrorState, PageSkeleton } from '../components/layout';
 import { useAdminData } from '../data/context';
 import { NavGuardContext, type NavGuard } from '../lib/navGuard';
 import { NotificationsDrawer } from './NotificationsDrawer';
-import { PreviewBar } from './PreviewBar';
 import { SessionExpiredDialog, LogoutDialog } from './SessionDialogs';
 import { BellButton, Sidebar } from './Sidebar';
 
-/** The signed-in frame: sidebar, preview banner, loading/error gate, and the app-wide dialogs. */
+/** The signed-in frame: sidebar, loading/error gate, and the app-wide dialogs. */
 export default function AdminLayout() {
-  const { state, status, reload } = useAdminData();
+  const { state, status, reload, issues, loadError } = useAdminData();
   const { expired } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -68,9 +67,14 @@ export default function AdminLayout() {
               </Link>
               <BellButton unread={unread} onClick={() => setNotificationsOpen(true)} />
             </div>
-            <PreviewBar />
             <main id="main" tabIndex={-1} className="sa-page outline-none">
-              {status === 'loading' ? <PageSkeleton /> : status === 'error' ? <ErrorState onRetry={reload} /> : <Outlet />}
+              {status === 'ready' && issues.length > 0 ? (
+                <Callout tone="amber" title="Some information could not be loaded." className="mb-5">
+                  {issues.map((i) => i.message).join(' ')}{' '}
+                  <button type="button" className="font-semibold underline" onClick={reload}>Reload</button>
+                </Callout>
+              ) : null}
+              {status === 'loading' ? <PageSkeleton /> : status === 'error' ? <ErrorState onRetry={reload} message={loadError} /> : <Outlet />}
             </main>
           </div>
         </div>

@@ -108,7 +108,7 @@ export function NoteDialog({ c, onClose }: CaseDialogProps) {
   );
 }
 
-/** Evidence viewer. Sample items are placeholders; real media will render here once the API provides it. */
+/** Evidence viewer: the stored file, or a note when the item has no file to show. */
 export function EvidenceDialog({ c, evidenceId, onClose }: CaseDialogProps & { evidenceId: string }) {
   const item = c.evidence.find((e) => e.id === evidenceId);
   if (!item) return null;
@@ -116,7 +116,10 @@ export function EvidenceDialog({ c, evidenceId, onClose }: CaseDialogProps & { e
   const reviewed = c.assessment.evidenceReviewed.includes(item.id);
   return (
     <Dialog title={item.label} description={`${item.kind === 'cctv' ? 'CCTV' : item.kind[0].toUpperCase() + item.kind.slice(1)} · added ${fmtDateTime(item.capturedAt)}`} onClose={onClose} footer={<Button onClick={onClose}>Close</Button>}>
-      <div className="sa-tile__art rounded-lg" style={{ aspectRatio: '16 / 10' }}><span className="flex flex-col items-center gap-2"><Icon size={32} aria-hidden="true" /><span className="sa-small">Sample placeholder</span></span></div>
+      {item.url && item.kind === 'photo' ? <img src={item.url} alt={item.label} className="w-full rounded-lg" style={{ maxHeight: '60vh', objectFit: 'contain', background: 'var(--sa-sand)' }} />
+        : item.url && item.kind === 'video' ? <video src={item.url} controls className="w-full rounded-lg" style={{ maxHeight: '60vh' }} />
+          : item.url ? <p className="sa-small"><a href={item.url} target="_blank" rel="noopener noreferrer" className="font-semibold">Open the file</a></p>
+            : <div className="sa-tile__art rounded-lg" style={{ aspectRatio: '16 / 10' }}><span className="flex flex-col items-center gap-2"><Icon size={32} aria-hidden="true" /><span className="sa-small">No preview available</span></span></div>}
       <Kv rows={[
         ['Source', { reporter: 'Submitted by the reporter', admin: 'Added by an administrator', resident: 'Another resident', external: 'External authority' }[item.source]],
         ['Review', reviewed ? 'Marked as reviewed in the assessment' : 'Not yet reviewed'],

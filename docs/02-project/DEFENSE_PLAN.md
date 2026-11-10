@@ -115,7 +115,7 @@ Prepare steps 7–10 **before** the defense (a case already in holding and an ad
 - [ ] Notifications and messengers on the laptop turned off.
 
 **Demo data:**
-- Use the seed accounts (`backend/scripts/seed_admin.py`); **don't show real residents' names, phones or addresses.** If the database holds real people's data, make a demo copy.
+- Use test accounts you created for the demo (a Subdivision Leader from `backend/scripts/seed_admin.py --leader` and Residents registered in the app, with test names); **don't show real residents' names, phones or addresses.** If the database holds real people's data, make a demo copy.
 - Back up the database the day before (`mysqldump`), so you can restore it if a rehearsal changes data.
 
 ---

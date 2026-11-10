@@ -54,7 +54,7 @@ export default function ClaimPage() {
     const ok = await run(async () => {
       await dispatch({
         type: 'claim/submit', noticeId: notice.id, petId: petId === 'none' ? null : petId, statement,
-        evidence: [...proof, ...media.map((m) => `Photo: ${m.name}`)],
+        evidence: [...proof, ...media.map((m) => `Photo: ${m.name}`)], media,
       });
     });
     if (ok) toast.success('Claim sent for review');

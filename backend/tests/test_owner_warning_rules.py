@@ -20,6 +20,7 @@ from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 import app.models  # noqa: E402,F401
+from _case_helpers import make_warning_ready  # noqa: E402  (what an owner warning now requires)
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models.leader_identity import LeaderIdentityVerification  # noqa: E402
 from app.models.notification import Notification  # noqa: E402
@@ -88,6 +89,8 @@ def report(pet_id=None, subd=1, assigned=None, **kw):
                created_at=kw.pop("created_at", CLOCK[0]), landmark="Gate 1", **kw)
     db.add(r)
     db.commit()
+    # An owner warning needs a verified incident, a confirmed owner and a confirmed policy (utils/warning_rules.py)
+    make_warning_ready(db, r.report_id, owner.user_id, observation_days=3)
     return r.report_id
 
 

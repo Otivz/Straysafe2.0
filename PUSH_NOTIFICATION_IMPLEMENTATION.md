@@ -92,7 +92,7 @@ a change that was rolled back.
 
 ### R4. Where a tap goes
 - The server builds the link (`url`) from the type and `related_id`, **per role**. For example, a report notification
-  goes to `/resident/reports/52` for a resident and `/subd/reports/52` for a leader.
+  goes to `/resident-app/reports` for a resident and `/subd-admin/cases/52` for a leader (`notification_link` in `backend/app/utils/push_categories.py`, re-pointed on 2026-11-10; the web client of web push (service worker, opt-in card) was retired with the legacy portals, the endpoints and the 2.0 preference flags remain).
 - This copies the click handling the navbars already have, moved into one backend function
   (`notification_link(user, notification)`), so the bell and the push open the same page.
 - If the target can't be opened any more, the page shows its normal "not available" message.
@@ -205,7 +205,7 @@ a change that was rolled back.
 | 5 | The report became Private for that resident | Skipped (no lock-screen leak) |
 | 6 | Payload | Only `title`, `body` (≤120), `url`, `tag`, `notification_id`; no email, phone or address |
 | 7 | "Hide details" on | Generic text only |
-| 8 | URL per role | Resident gets `/resident/...`, leader gets `/subd/...` |
+| 8 | URL per role | Resident gets `/resident-app/...`, leader gets `/subd-admin/...` |
 | 9 | Push server returns 410 | Subscription revoked, not used again |
 | 10 | 500 then 200 | Retried, then `sent`; never sent twice |
 | 11 | Older than 24 h | `failed`, not sent |
@@ -293,4 +293,3 @@ Then run the full suite (`for t in tests/test_*.py`), `tsc` and `vite build`.
 - **Real round trip** (headless Chrome, dev site, no database writes):
   - Chrome subscribed through `fcm.googleapis.com`, and Google accepted our VAPID-signed, encrypted push (HTTP 201).
   - Showing the notification needs a real (non-headless) browser: that's manual test 1 in section 6.
-

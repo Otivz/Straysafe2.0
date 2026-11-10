@@ -1,5 +1,5 @@
 """
-D6: reading reports requires sign-in, and a registered pet owner's phone / email / home address / QR token are only
+D6: reading reports requires sign-in, and a registered pet owner's phone / email / home address are only
 shown to staff and to that owner. Other residents who can see the report (here: its reporter) never get the owner's
 identity either: the name shows as "Registered Owner" (report visibility, rule 6).
 Run from the backend folder:  python tests/test_report_privacy.py
@@ -19,7 +19,6 @@ from fastapi.testclient import TestClient  # noqa: E402
 import app.models  # noqa: E402,F401
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
-from app.models.pet_qr import PetQRCode  # noqa: E402
 from app.models.report import Report, ReportStatus  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
 from app.routes import reports  # noqa: E402
@@ -52,7 +51,6 @@ leader = mk_user("Leader", 2, subdivision_id=1, barangay_id=1)
 pet = Pet(pet_name="Kippy", pet_type="Dog", owner_id=owner.user_id, status="Active")
 db.add(pet)
 db.flush()
-db.add(PetQRCode(pet_id=pet.pet_id, qr_token="secret-qr-token-123456", qr_image_url="https://cdn.example/qr.png", is_active=True))
 rep = Report(user_id=neighbour.user_id, subdivision_id=1, category_id=1, latitude=14.8, longitude=121.0, current_status_id=2,
              animal_type="Dog", pet_id=pet.pet_id, ai_suggested_risk_level="Low")
 db.add(rep)
@@ -69,7 +67,7 @@ def check(label, ok, extra=""):
 
 
 def contact(body):
-    return {k: body.get(k) for k in ("owner_phone", "owner_email", "owner_address", "pet_qr_token")}
+    return {k: body.get(k) for k in ("owner_phone", "owner_email", "owner_address")}
 
 
 check("report list requires sign-in", client.get("/reports/").status_code == 401)
@@ -77,7 +75,7 @@ check("a single report requires sign-in", client.get(f"/reports/{RID}").status_c
 
 body = client.get(f"/reports/{RID}", headers=H(neighbour)).json()
 check("another resident sees the report but not the owner's name", body.get("report_id") == RID and body.get("owner_name") == "Registered Owner", body.get("owner_name"))
-check("...but not the owner's phone, email, home address or QR token", all(v is None for v in contact(body).values()), contact(body))
+check("...but not the owner's phone, email or home address", all(v is None for v in contact(body).values()), contact(body))
 lst = client.get("/reports/", headers=H(neighbour)).json()
 row = next(r for r in lst if r["report_id"] == RID)
 check("same in the report list", all(v is None for v in contact(row).values()), contact(row))
@@ -85,7 +83,7 @@ check("same in the report list", all(v is None for v in contact(row).values()), 
 body = client.get(f"/reports/{RID}", headers=H(owner)).json()
 check("the pet's owner sees their own contact details", body.get("owner_phone") == "09171234567" and body.get("owner_address") == "12 Private St.", contact(body))
 body = client.get(f"/reports/{RID}", headers=H(leader)).json()
-check("staff see the owner's contact for the handover", body.get("owner_phone") == "09171234567" and body.get("pet_qr_token"), contact(body))
+check("staff see the owner's contact for the handover", body.get("owner_phone") == "09171234567" and body.get("owner_email"), contact(body))
 row = next(r for r in client.get("/reports/", headers=H(leader)).json() if r["report_id"] == RID)
 check("...in the list too", row.get("owner_email") == "pet.owner@test-mail.com", contact(row))
 

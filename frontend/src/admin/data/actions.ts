@@ -1,0 +1,36 @@
+/**
+ * Every change the Subdivision Leader screens can ask for, as one typed action. Screens never edit records directly; they dispatch an
+ * action, and the live provider (src/admin/live/actions.ts) turns each one into one or a few requests on the real API. The server decides
+ * the result: nothing is applied to the screen's data until the request has succeeded and the touched records have been read back.
+ */
+import type {
+  AdminProfile, Assessment, CaseStatus, ClaimStatus, ComplianceResult, ContactMethod, DispositionId, FollowUpKind, IdentityReview, Notice,
+  OwnerContact, OwnershipReview, Priority, ReferralStatus, Resident, Settings, WarningDelivery,
+} from './types';
+
+export type AdminAction =
+  | { type: 'case/changeStatus'; id: string; to: CaseStatus; note?: string }
+  | { type: 'case/changePriority'; id: string; to: Priority; reason: string }
+  | { type: 'case/addNote'; id: string; text: string }
+  | { type: 'case/saveAssessment'; id: string; assessment: Omit<Assessment, 'savedAt' | 'savedBy'>; identity: IdentityReview; ownership: OwnershipReview; alsoSetUrgent: boolean }
+  | { type: 'case/recordFollowUp'; id: string; kind: FollowUpKind; title: string; notes?: string; dueAt: string | null; doneNow: boolean }
+  | { type: 'case/completeFollowUp'; id: string; followUpId: string; note?: string }
+  | { type: 'case/cancelFollowUp'; id: string; followUpId: string }
+  | { type: 'case/recordOwnerContact'; id: string; at: string; method: ContactMethod; withWhom: string; summary: string; outcome: OwnerContact['outcome']; nextStepAt: string | null }
+  | { type: 'case/issueWarning'; id: string; policyId: string; details: string; delivery: WarningDelivery; observationDays: number | null; observationStart: string | null; followUpAt: string | null }
+  | { type: 'case/recordCompliance'; id: string; warningId: string; observedAt: string; result: ComplianceResult; notes: string; conclude: 'compliant' | 'non_compliant' | null }
+  | { type: 'case/createReferral'; id: string; orgId: string; orgName: string; reason: string; referredAt: string; contactPerson: string; contactChannel: string; notes: string }
+  | { type: 'case/updateReferral'; id: string; referralId: string; status: ReferralStatus; note: string; externalOutcome?: string; remainingFollowUp?: string; followUpAt?: string | null }
+  | { type: 'case/reviewClaim'; id: string; claimId: string; decision: ClaimStatus; note: string }
+  | { type: 'case/linkCases'; id: string; otherIds: string[] }
+  | { type: 'case/unlinkCase'; id: string; otherId: string }
+  | { type: 'case/close'; id: string; disposition: DispositionId; reason: string; followUpCheckAt: string | null; endOpenItems: boolean }
+  | { type: 'case/reopen'; id: string; reason: string }
+  | { type: 'notice/save'; notice: Notice; publish: boolean }
+  | { type: 'notice/archive'; id: string; reason: string }
+  | { type: 'notice/delete'; id: string }
+  | { type: 'notification/read'; id: string }
+  | { type: 'notification/readAll' }
+  | { type: 'resident/setStatus'; id: string; status: Resident['status'] }
+  | { type: 'settings/set'; settings: Settings }
+  | { type: 'admin/updateProfile'; patch: Partial<Pick<AdminProfile, 'name' | 'title' | 'email' | 'phone'>> };

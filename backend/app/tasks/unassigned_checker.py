@@ -1,10 +1,9 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
-from app.models.report import Report, HoldingAnimal, HoldingTimeline
+from app.models.report import Report
 from app.models.user import User
 from app.models.notification import Notification
 from app.models.audit_log import AuditLog
@@ -122,135 +121,6 @@ def check_and_notify_unassigned_reports(threshold_minutes: int = 30) -> int:
     return processed_count
 
 
-def check_and_notify_overdue_holding_animals(default_stay_days: Optional[int] = None) -> int:
-    """
-    Checks for active holding animals that:
-    1. Are not resolved/discharged (facility_status not in 3, 4, 5, 7, 8)
-    2. Have an intake_date
-    3. Have exceeded the stay duration limit (the Barangay's stored stay limit unless one is given)
-    4. Have not been notified yet (overdue_notified is False or None)
-
-    Sends a holding_overdue_alert notification to relevant staff,
-    records a timeline entry, and marks overdue_notified = True.
-    Off in the Subdivision-only system: holding is handled by the Barangay outside StraySafe (app/utils/retired.py).
-    """
-    from app.utils.retired import barangay_workflows_enabled
-    if not barangay_workflows_enabled():
-        return 0
-    db: Session = SessionLocal()
-    processed_count = 0
-    try:
-        from app.utils.holding_stay import db_now, get_stay_limit_days
-        now = db_now(db)   # same clock as the stored intake dates
-        if default_stay_days is None:
-            default_stay_days = get_stay_limit_days(db)
-        # Statuses meaning discharged/closed: 3=Claimed, 4=Deceased, 5=Transferred, 7=Adopted, 8=Impounded
-        terminal_statuses = [3, 4, 5, 7, 8]
-
-        cutoff_date = now - timedelta(days=default_stay_days)
-
-        overdue_animals = db.query(HoldingAnimal).filter(
-            ~HoldingAnimal.facility_status.in_(terminal_statuses),
-            HoldingAnimal.intake_date <= cutoff_date,
-            (HoldingAnimal.overdue_notified.is_(False) | HoldingAnimal.overdue_notified.is_(None))
-        ).all()
-
-        if not overdue_animals:
-            return 0
-
-        # Barangay staff (role 3; the Head Officer is role 3 with is_head_officer) and the Administrator (role 4)
-        brgy_staff_all = db.query(User).filter(
-            User.role_id.in_([3, 4])
-        ).all()
-
-        from app.utils.holding_stay import facility_stay_start
-        for animal in overdue_animals:
-            # each facility has its own stay clock: a fresh stay after a move isn't overdue yet
-            intake_time = facility_stay_start(animal) or animal.intake_date or animal.created_at
-            if intake_time and intake_time > cutoff_date:
-                continue
-            report = db.query(Report).filter(Report.report_id == animal.report_id).first()
-            days_held = max(default_stay_days, int((now - intake_time).total_seconds() // 86400))
-            animal_desc = animal.animal_name or animal.breed or animal.animal_type or "Rescued Stray"
-            rep_id_str = f"#{report.report_id}" if report else f"Holding #{animal.holding_id}"
-
-            is_subd_case = (
-                report is not None
-                and report.subdivision_id is not None
-                and not report.endorsement_letter
-                and report.current_status_id not in (4, 5, 6, 13)
-            )
-
-            if is_subd_case and report is not None:
-                # Notify subdivision leaders of stay limit
-                subd_leaders = db.query(User).filter(
-                    User.subdivision_id == report.subdivision_id,
-                    User.role_id == 2
-                ).all()
-                for leader in subd_leaders:
-                    notif = Notification(
-                        user_id=leader.user_id,
-                        title=f"⏳ Holding Stay Notice: {animal_desc} ({rep_id_str})",
-                        message=(
-                            f"Animal in subdivision holding place has reached {days_held} days in custody "
-                            f"(limit: {default_stay_days} days). Please consider coordinating next steps or endorsement to Barangay."
-                        ),
-                        type="holding_overdue_alert",
-                        related_id=animal.holding_id
-                    )
-                    db.add(notif)
-            else:
-                target_staff = [
-                    s for s in brgy_staff_all
-                    if not report or not getattr(report, 'barangay_id', None) or getattr(s, 'barangay_id', None) is None or s.barangay_id == report.barangay_id
-                ] or brgy_staff_all
-
-                for staff in target_staff:
-                    existing = db.query(Notification).filter(
-                        Notification.user_id == staff.user_id,
-                        Notification.type == "holding_overdue_alert",
-                        Notification.related_id == animal.holding_id
-                    ).first()
-
-                    if not existing:
-                        notif = Notification(
-                            user_id=staff.user_id,
-                            title=f"🚨 Holding Stay Overdue: {animal_desc} ({rep_id_str})",
-                            message=(
-                                f"Animal in holding place has reached {days_held} days in custody, "
-                                f"exceeding the {default_stay_days}-day stay limit. "
-                                f"Please review for impoundment or promote to adoption catalog."
-                            ),
-                            type="holding_overdue_alert",
-                            related_id=animal.holding_id
-                        )
-                        db.add(notif)
-
-            # Record timeline entry with neutral author
-            timeline_entry = HoldingTimeline(
-                holding_id=animal.holding_id,
-                event_type='observation',
-                title=f'Stay Limit Notice ({days_held} Days Held)',
-                notes=f'Animal reached {days_held} days in facility custody (stay limit: {default_stay_days} days).',
-                logged_by=None,
-            )
-            db.add(timeline_entry)
-
-            animal.overdue_notified = True
-            processed_count += 1
-
-        db.commit()
-        if processed_count > 0:
-            logger.info(f"Sent overdue holding notifications for {processed_count} animal(s).")
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error checking overdue holding animals: {e}")
-    finally:
-        db.close()
-
-    return processed_count
-
-
 def prune_old_notifications(retention_days: int = 30) -> int:
     """
     Delete read + archived notifications older than `retention_days` days.
@@ -276,35 +146,6 @@ def prune_old_notifications(retention_days: int = 30) -> int:
         db.close()
 
 
-def check_and_notify_monitoring_schedules() -> int:
-    """
-    Checks all adoptions currently in Stage 9 (Post-Adoption Monitoring)
-    and reconciles their Day 7, Day 14, Day 30 follow-up milestones,
-    sending due alerts to adopters and overdue alerts to staff without duplicates.
-    """
-    from app.models.report import Adoption
-    from app.routes.adoptions import reconcile_monitoring_schedules_for_adoption
-
-    db: Session = SessionLocal()
-    processed_count = 0
-    try:
-        active_adoptions = db.query(Adoption).filter(
-            (Adoption.current_stage == "Monitoring") | (Adoption.post_monitoring_status == "Active")
-        ).all()
-        for app in active_adoptions:
-            try:
-                reconcile_monitoring_schedules_for_adoption(app, db)
-                processed_count += 1
-            except Exception as e:
-                logger.warning(f"Error checking monitoring schedule for adoption #{app.adoption_id}: {e}")
-        return processed_count
-    except Exception as e:
-        logger.error(f"Error in check_and_notify_monitoring_schedules: {e}")
-        return 0
-    finally:
-        db.close()
-
-
 def check_and_notify_owner_followups() -> int:
     """
     Checks all active owner observations for 24h owner reminders
@@ -322,48 +163,20 @@ def check_and_notify_owner_followups() -> int:
         db.close()
 
 
-def reconcile_adoption_after_owner_return() -> int:
-    """
-    Existing records: an animal returned to its owner but still listed for adoption (or with open applications) is
-    taken out of adoption, with history kept (docs/01-system/ADOPTION_ELIGIBILITY_RULES.md).
-    """
-    from app.utils.adoption_eligibility import reconcile_returned_listings
-
-    db: Session = SessionLocal()
-    try:
-        out = reconcile_returned_listings(db)
-        n = len(out["removed_from_catalog"]) + len(out["applications_closed"])
-        if n:
-            logger.info(f"Adoption reconciliation: removed {out['removed_from_catalog']}, closed {out['applications_closed']}")
-        return n
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error in reconcile_adoption_after_owner_return: {e}")
-        return 0
-    finally:
-        db.close()
-
-
 async def start_unassigned_reports_watcher(interval_seconds: int = 60, threshold_minutes: int = 30):
     """
-    Background loop that wakes up every `interval_seconds` to check for stale unassigned reports,
-    overdue holding facility animals, post-adoption monitoring milestone alerts (due/overdue),
+    Background loop that wakes up every `interval_seconds` to check for stale unassigned reports
     and active owner observation follow-up milestones.
     Also triggers nightly pruning of old archived notifications.
     """
     logger.info(
-        f"Starting Operations Watcher: checking every {interval_seconds}s for unassigned reports, overdue holding animals, monitoring schedules, and owner follow-ups."
+        f"Starting Operations Watcher: checking every {interval_seconds}s for unassigned reports and owner follow-ups."
     )
     iteration = 0
     while True:
         try:
             await asyncio.to_thread(check_and_notify_unassigned_reports, threshold_minutes)
-            await asyncio.to_thread(check_and_notify_overdue_holding_animals)
-            await asyncio.to_thread(check_and_notify_monitoring_schedules)
             await asyncio.to_thread(check_and_notify_owner_followups)
-            # Roughly every 10 minutes (and on the first pass): animals returned to their owner leave adoption
-            if iteration % 10 == 0:
-                await asyncio.to_thread(reconcile_adoption_after_owner_return)
 
             iteration += 1
             # Run notification pruning roughly once per 24 hours (1440 iterations at 60s)

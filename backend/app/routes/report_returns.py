@@ -70,43 +70,4 @@ def get_return_for_report(
     if rec is not None:
         return serialize_return(rec, db=db)
 
-    # Check if a PetClaim on this case was completed
-    from app.models.pet_claim import PetClaim
-    from app.models.pet import Pet
-    claim = db.query(PetClaim).filter(
-        PetClaim.report_id.in_(member_ids),
-        PetClaim.status.in_(["Handover Complete", "Pet Received"])
-    ).order_by(PetClaim.claim_id.desc()).first()
-    if claim:
-        pet = claim.pet or (db.query(Pet).filter(Pet.pet_id == claim.pet_id).first() if claim.pet_id else None)
-        owner = pet.owner if (pet and pet.owner) else None
-        return {
-            "return_id": None,
-            "report_id": claim.report_id,
-            "pet_id": claim.pet_id,
-            "has_account": bool(owner is not None),
-            "owner_user_id": owner.user_id if owner else None,
-            "owner_name": owner.name if owner else "Owner",
-            "owner_phone": owner.phone if owner else None,
-            "owner_email": owner.email if owner else None,
-            "owner_address": owner.address if owner else None,
-            "relationship_to_animal": "Owner",
-            "id_presented": None,
-            "id_type": None,
-            "id_last4": None,
-            "ownership_verified_by_record": True,
-            "handover_photo_url": getattr(claim, "handover_photo_url", None),   # only a photo taken at the handover
-            "ownership_proof_urls": [],
-            "notes": claim.remarks,
-            "returned_by": None,
-            "returned_by_name": "Authorized Staff",
-            "returned_at": claim.updated_at.isoformat() if claim.updated_at else None,
-            "is_already_reunited": True,
-            "claim_id": claim.claim_id,
-            "claim_status": claim.status,
-            "pet_name": pet.name or pet.display_name if pet else None,
-            "pet_breed": pet.breed if pet else None,
-            "pet_photo_url": pet.photo_url if pet else None,
-        }
-
     return None

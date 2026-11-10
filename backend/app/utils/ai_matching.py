@@ -59,8 +59,7 @@ def image_url_for_entity(entity: Any, is_pet: bool = False) -> Optional[str]:
         # Report entity
         media_list = list(getattr(entity, "media", None) or [])
         # The report's main photo first (not a timeline/care-log attachment, not evidence), then any other photo.
-        media_list.sort(key=lambda m: bool(getattr(m, "history_id", None) or getattr(m, "holding_log_id", None)
-                                           or getattr(m, "is_evidence", False)))
+        media_list.sort(key=lambda m: bool(getattr(m, "history_id", None) or getattr(m, "is_evidence", False)))
         if media_list and len(media_list) > 0:
             for m in media_list:
                 m_url = getattr(m, "file_url", None)

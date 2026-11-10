@@ -6,7 +6,7 @@ This document defines where a report's status lives and how resolving an observa
 
 ## Source of truth
 
-- **`reports.current_status_id` is the only status of a report.** Every page reads it through the reports API (field `status_id`):
+- **`reports.current_status_id` is the status every legacy page reads, and `reports.case_status` is its four-state reading** (reported, under review, in progress, closed; added 2026-11-09, see [CASE_WORKFLOW_BACKEND.md](CASE_WORKFLOW_BACKEND.md)). A flush hook keeps the two in step whichever a code path changes, so they never disagree at rest. Every page reads the status through the reports API (field `status_id`, and `case_status`):
   - resident reports;
   - Subdivision and Barangay report views, lists and dashboards;
   - case details and the tracking timeline;

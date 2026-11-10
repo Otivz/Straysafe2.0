@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { FlaskConical } from 'lucide-react';
 
 const FLOW = ['Report', 'Assess', 'Coordinate', 'Monitor', 'Document', 'Close'];
 
@@ -34,16 +33,6 @@ export function AuthShell({ children, below }: { children: ReactNode; below?: Re
           </div>
         </div>
       </main>
-    </div>
-  );
-}
-
-/** Always visible on signed-out screens in the preview, so it can never be mistaken for a live sign-in. */
-export function DevPreviewNote({ children }: { children: ReactNode }) {
-  return (
-    <div className="sa-devbox" role="note">
-      <p className="flex items-center gap-2"><FlaskConical size={15} aria-hidden="true" /><strong>Development preview</strong></p>
-      <div className="mt-1">{children}</div>
     </div>
   );
 }

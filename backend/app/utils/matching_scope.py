@@ -2,11 +2,11 @@
 Manual Matching data scope (docs/01-system/MANUAL_REPORT_MATCHING.md, "Data scope").
 
 Barangay Staff (role 3) match only Barangay-managed records:
-  Reports   - cases the Barangay manages (handled / rescued / endorsed / escalated / holding intake, judged on the case
+  Reports   - cases the Barangay manages (handled status or a referral to it, judged on the case
               and its merged reports), plus Lost Pet reports the owner published (publicly visible). Internal,
               unendorsed subdivision reports stay with the Subdivision.
   Pets      - pets of owners who live in the barangay outside a subdivision, pets registered by the barangay's staff,
-              and pets tied to a Barangay-managed case (the case's linked pet or a claim on it). The private
+              and pets tied to a Barangay-managed case (the case's linked pet). The private
               subdivision pet registry is never searched.
 Subdivision Leaders (role 2): reports in their subdivision (unchanged); pets whose owner lives in their subdivision, and
               ownerless (community) pets registered by someone from their subdivision.
@@ -21,8 +21,8 @@ from sqlalchemy import and_, exists, false, or_, select, true
 from sqlalchemy.orm import Session
 
 from app.models.pet import Pet
-from app.models.pet_claim import PetClaim
-from app.models.report import EndorsementLetter, HoldingAnimal, Report, Rescue, StatusHistory
+from app.models.barangay_referral import BarangayReferral
+from app.models.report import Report, StatusHistory
 from app.models.user import Subdivision, User
 from app.utils.case_review import BARANGAY_HANDLED_STATUSES
 
@@ -41,14 +41,12 @@ def _barangay_subdivisions(barangay_id: Optional[int]):
 
 
 def _managed_root_ids():
-    """Reports the Barangay manages or managed: handled status, a rescue, an endorsement, an escalation, a holding intake."""
+    """Reports the Barangay manages or managed: a handled status, a referral to it, or an escalation in the history."""
     return select(Report.report_id).where(or_(
         Report.current_status_id.in_(BARANGAY_HANDLED_STATUSES),
-        exists().where(Rescue.report_id == Report.report_id),
-        exists().where(EndorsementLetter.report_id == Report.report_id),
+        exists().where(BarangayReferral.report_id == Report.report_id),
         exists().where(and_(StatusHistory.report_id == Report.report_id,
                             StatusHistory.report_status_id.in_(ESCALATED_HISTORY_STATUSES))),
-        exists().where(HoldingAnimal.report_id == Report.report_id),
     ))
 
 
@@ -92,13 +90,10 @@ def require_report_in_pool(db: Session, user: User, report: Report) -> None:
 
 
 def _managed_case_pet_ids(barangay_id: Optional[int]):
-    """Pets tied to a Barangay-managed case in this barangay: the case's linked pet, or a claim on the case."""
+    """Pets tied to a Barangay-managed case in this barangay: the case's linked pet."""
     managed = barangay_managed_condition()
     area = Report.subdivision_id.in_(_barangay_subdivisions(barangay_id)) if barangay_id is not None else true()
-    linked = select(Report.pet_id).where(Report.pet_id.isnot(None), managed, area)
-    claimed = (select(PetClaim.pet_id).join(Report, Report.report_id == PetClaim.report_id)
-               .where(PetClaim.pet_id.isnot(None), managed, area))
-    return linked.union(claimed)
+    return select(Report.pet_id).where(Report.pet_id.isnot(None), managed, area)
 
 
 def pet_pool_condition(user: User):

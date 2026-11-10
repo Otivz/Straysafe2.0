@@ -9,6 +9,7 @@ import { Button, Callout } from '../../components/ui';
 import { residentPath } from '../../config';
 import { ANIMAL_TYPES, ANIMAL_TYPE_IDS, CATEGORIES, EXTRA_FIELD, PET_TYPE_IDS } from '../../data/constants';
 import { useResidentData } from '../../data/context';
+import { visibilityAfterSending } from '../../data/selectors';
 import type { CategoryId, Draft, ReportKind } from '../../data/types';
 import { useFlowNav } from '../../lib/flow';
 import { useFormFocus, useNow } from '../../lib/hooks';
@@ -45,6 +46,10 @@ const NOTES: Record<CategoryId, { tone: 'info' | 'amber'; title?: string; text: 
   other: { tone: 'info', text: 'This report is private. Neighbours will not see it, or who sent it.' },
 };
 
+/** The two notes that follow the subdivision's publication setting (connected); every other note is fixed. */
+const LOST_REVIEWED: (typeof NOTES)[CategoryId] = { tone: 'info', text: 'An administrator reviews this before a notice is shown to neighbours. Once it is, the notice shows your pet’s photo, description and the general area. Your name, phone and address are never shown.' };
+const FOUND_PUBLISHED: (typeof NOTES)[CategoryId] = { tone: 'info', text: 'After you submit, a notice with the animal’s description and the general area is visible to neighbours. Please do not hand the animal to someone who only says it is theirs.' };
+
 type Errors = Partial<Record<'animalType' | 'description' | 'observedAt', string>>;
 
 function DetailsForm({ draft }: { draft: Draft }) {
@@ -57,7 +62,9 @@ function DetailsForm({ draft }: { draft: Draft }) {
   const [discarding, setDiscarding] = useState(false);
   const kind = CATEGORIES[draft.category].kind;
   const copy = COPY[kind];
-  const note = NOTES[draft.category];
+  const note = draft.category === 'lost_pet' && visibilityAfterSending(state, 'lost') === 'pending_review' ? LOST_REVIEWED
+    : draft.category === 'found_animal' && visibilityAfterSending(state, 'found') === 'published' ? FOUND_PUBLISHED
+      : NOTES[draft.category];
   const extra = EXTRA_FIELD[draft.category];
   const patch = (p: Partial<Draft>) => local({ type: 'draft/patch', patch: p });
   const clear = (key: keyof Errors) => setErrors((prev) => ({ ...prev, [key]: undefined }));

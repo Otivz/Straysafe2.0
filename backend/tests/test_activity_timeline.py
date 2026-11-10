@@ -21,6 +21,7 @@ from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 import app.models  # noqa: E402,F401
+from _case_helpers import make_warning_ready  # noqa: E402  (what an owner warning now requires)
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models.owner_followup import OwnerFollowUp  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
@@ -121,6 +122,7 @@ check("timeline: started comes before ended", starts and ends and starts[0] < en
 
 # ── First warning starts the observation ──
 r2 = report(pet("Browny"))
+make_warning_ready(db, r2, owner.user_id, observation_days=3)   # verified incident, confirmed owner, confirmed policy
 with patch("app.routes.warnings.dispatch_notification"), \
      patch("app.services.email_templates.render_owner_warning_email", return_value=("S", "B", "<b>B</b>")):
     r = client.post("/warnings/", headers=HL, json={"user_id": owner.user_id, "report_id": r2, "warning_level": "1st Warning",

@@ -10,7 +10,7 @@ The Admin has pins/heat views, date/category/untouched filters, resolved-pin and
 
 ## Shared rules
 
-Implementation: [heatmap.ts](../../frontend/src/utils/heatmap.ts). Closure authority: [case_closure.py](../../backend/app/utils/case_closure.py).
+Implementation: the frontend helper `frontend/src/utils/heatmap.ts` was removed on 2026-11-10 with the legacy Admin heatmap page (recover it from Git history if a 2.0 screen needs these rules); the 2.0 interfaces show no heatmap. Closure authority: [case_closure.py](../../backend/app/utils/case_closure.py).
 
 | Topic | Rule |
 | --- | --- |

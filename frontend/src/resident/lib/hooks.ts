@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import { useNavigate } from 'react-router-dom';
 import { AdminApiError, errorMessage } from '../../preview/lib/errors';
 import { useBeforeUnload } from '../../preview/lib/hooks';
-import { usePreviewFlags } from '../../preview/lib/previewFlags';
 import { useAuth } from '../auth/context';
 
 export { useNow } from '../../preview/lib/hooks';
@@ -17,7 +16,7 @@ export function usePageTitle(title: string): void {
 }
 
 /**
- * Predictable Back: go to the previous screen when there is one inside this preview, otherwise to a sensible parent.
+ * Predictable Back: go to the previous screen when there is one inside the app, otherwise to a sensible parent.
  * (React Router keeps an index in history.state; 0 means this is the first entry of the tab.)
  */
 export function useBack(fallback: string): () => void {
@@ -77,11 +76,10 @@ const subscribeOnline = (notify: () => void) => {
   return () => { window.removeEventListener('online', notify); window.removeEventListener('offline', notify); };
 };
 
-/** True when the browser is offline, or when the preview's "Network unavailable" switch is on. */
+/** True when the browser is offline. */
 export function useOffline(): boolean {
-  const { offline } = usePreviewFlags();
   const online = useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true);
-  return offline || !online;
+  return !online;
 }
 
 /**

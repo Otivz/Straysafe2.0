@@ -13,8 +13,8 @@ const STATUS_ORDER: CaseStatus[] = ['reported', 'under_review', 'in_progress', '
 const FAQ: { q: string; text: string; a: ReactNode }[] = [
   {
     q: 'What can I report?',
-    text: 'Lost pets, found animals, animal nuisance, safety concerns, injured animals and anything else involving an animal in Selera Homes.',
-    a: <p>Lost pets, found animals, animal nuisance (noise or roaming), animal safety concerns, injured or distressed animals, and anything else involving an animal in Selera Homes. Start from <Link to={residentPath('/report')}>Report</Link>.</p>,
+    text: 'Lost pets, found animals, animal nuisance, safety concerns, injured animals and anything else involving an animal in your subdivision.',
+    a: <p>Lost pets, found animals, animal nuisance (noise or roaming), animal safety concerns, injured or distressed animals, and anything else involving an animal in your subdivision. Start from <Link to={residentPath('/report')}>Report</Link>.</p>,
   },
   {
     q: 'Who sees my report?',
@@ -66,7 +66,7 @@ const FAQ: { q: string; text: string; a: ReactNode }[] = [
   {
     q: 'How do I contact the subdivision?',
     text: 'Use Contact the subdivision for office hours, the phone number and a message form. Not for emergencies.',
-    a: <p>Open <Link to={residentPath('/contact')}>Contact the subdivision</Link> for the office hours, phone number, email and a message form. The contact details in this preview are sample information. For an emergency, call local emergency services or tell the guardhouse first.</p>,
+    a: <p>Open <Link to={residentPath('/contact')}>Contact the subdivision</Link> for the office hours, phone number, email and a message form. For an emergency, call local emergency services or tell the guardhouse first.</p>,
   },
   {
     q: 'How do I add something to a report?',

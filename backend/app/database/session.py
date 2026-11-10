@@ -4,6 +4,8 @@ from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 
+from .connection_guard import install_connection_guard
+
 # Load environment variables from the project root
 env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), '.env')
 load_dotenv(dotenv_path=env_path)
@@ -28,6 +30,7 @@ else:
     }
 
 engine = create_engine(DATABASE_URL, **engine_kwargs)
+install_connection_guard(engine)   # a test process can never open a MySQL connection (see connection_guard.py)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 class Base(DeclarativeBase):

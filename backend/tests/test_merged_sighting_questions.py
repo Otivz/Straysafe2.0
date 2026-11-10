@@ -27,7 +27,6 @@ import app.models  # noqa: E402,F401
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models.notification import Notification  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
-from app.models.pet_claim import PetClaim  # noqa: E402
 from app.models.report import Report, ReportStatus  # noqa: E402
 from app.models.report_match import ReportMatch  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
@@ -84,7 +83,6 @@ conf = ReportMatch(source_report_id=root.report_id, matched_pet_id=pet.pet_id, s
 sug2 = ReportMatch(source_report_id=s2.report_id, matched_pet_id=pet.pet_id, similarity_score=90, status="AI_SUGGESTED",
                    owner_confirmation_status="PENDING")
 db.add_all([conf, sug2])
-db.add(PetClaim(pet_id=pet.pet_id, report_id=root.report_id, status="Approved", evidence_url="https://cdn.example/proof.jpg"))
 db.commit()
 H = lambda u: {"Authorization": "Bearer " + create_access_token({"sub": str(u.user_id), "user_id": u.user_id, "role_id": u.role_id})}  # noqa: E731
 results = []

@@ -1,15 +1,20 @@
 """
-Owner warning rules (Phase 6, docs/01-system/OWNER_WARNING_RULES.md).
+Owner warning rules (Phase 6, docs/01-system/OWNER_WARNING_RULES.md), plus the eligibility rules of the case workflow.
 
 - Only the Subdivision Leader issues warnings, for a report in their own subdivision, to the registered pet's actual
   owner (an account). Owners without an account get a logged verbal warning instead (follow-up contact entry).
+- A warning needs ALL of: an open case about a concern an owner can be warned for (nuisance or safety), an incident
+  that was verified, an owner whose ownership was confirmed with evidence, and a CONFIRMED subdivision policy that
+  covers the concern. Checked here, on the server, in this order (the same order the Admin screen explains it).
+- The observation period comes from the policy. A policy without one means no observation period: none is assumed.
+- No fine is ever worked out by the system: fine_amount is whatever the issuer typed, and 0 otherwise.
 - One warning per incident, pet, violation and tier, never going back to a lower tier. A logged repeat incident is a
   separate incident, so it can receive its own warning.
 - The suggested tier comes from the pet's (or owner's) existing warning history for that violation.
 - Residents read only their own notices; staff read warnings for reports / owners in their area.
 """
 from datetime import timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
 from sqlalchemy import or_
@@ -20,6 +25,9 @@ from app.models.pet import Pet
 from app.models.report import Report
 from app.models.user import User
 from app.models.warning import OwnerWarning
+from app.schemas.case import PolicyIn
+from app.utils import case_policy, case_state
+from app.utils import case_vocab as V
 from app.utils.auth import verify_subdivision_scope
 
 TIERS = ["Notice", "1st Warning", "2nd Warning", "Final Notice / Escalation"]
@@ -32,7 +40,49 @@ INSTRUCTIONS = {
     "Repeated Impoundment Retrieval": "Keep your pet secured so it is not impounded again.",
     "Other": "Please address the reported concern about your pet.",
 }
-COMPLIANCE_DAYS = 3
+
+
+def report_family(report: Report) -> str:
+    """Which of the six concerns this report is (older categories are read as one of them)."""
+    category = getattr(report, "category", None)
+    return V.category_family(category.category_name if category is not None else None)
+
+
+def warning_blocker(report: Report, owner: Optional[User]) -> Optional[Tuple[int, str]]:
+    """
+    The first reason a warning cannot be issued for this case, as (HTTP status, message), or None when the case and the
+    owner qualify. The policy is checked separately (it needs the subdivision's settings).
+    """
+    if case_state.is_closed(report):
+        return 409, "The case is closed. Reopen it before issuing a warning."
+    if report_family(report) not in V.VIOLATION_FAMILIES:
+        return 409, "Owner warnings do not apply to this kind of concern."
+    confirmed = case_state.ownership_of(report) == "confirmed" and report.ownership_owner_id
+    if not confirmed:
+        return 409, "Requires a confirmed owner. Complete the ownership review first."
+    if owner is not None and report.ownership_owner_id != owner.user_id:
+        return 409, "The warning must go to the owner confirmed for this case."
+    if not case_state.incident_is_verified(report):
+        return 409, "Requires a verified incident. Record the assessment first."
+    return None
+
+
+def require_warning_eligible(db: Session, report: Report, owner: Optional[User], policy_id: Optional[str]) -> PolicyIn:
+    """Raise 409/422 with the first missing requirement; otherwise return the policy the warning is issued under."""
+    blocker = warning_blocker(report, owner)
+    if blocker:
+        raise HTTPException(status_code=blocker[0], detail=blocker[1])
+    settings = case_policy.load_settings(db, report.subdivision_id)
+    return case_policy.resolve_policy(settings, report_family(report), policy_id)
+
+
+def observation_days_for(db: Session, report: Report, policy_id: Optional[str] = None) -> Optional[int]:
+    """The observation period the applicable policy defines, in days. None: it defines none, and none is assumed."""
+    settings = case_policy.load_settings(db, report.subdivision_id)
+    try:
+        return case_policy.resolve_policy(settings, report_family(report), policy_id).observation_days
+    except HTTPException:
+        return None
 
 
 def _same_pet(q, pet_id: Optional[int]):
@@ -152,7 +202,9 @@ def followup_incidents(db: Session, followup: OwnerFollowUp) -> List[Dict[str, A
             "prefill": {
                 "violation_type": violation,
                 "incident_date": when.isoformat() if when else None,
-                "comply_by": (when + timedelta(days=COMPLIANCE_DAYS)).date().isoformat() if when else None,
+                # The period this observation actually runs for: nothing is assumed when there is none
+                "comply_by": ((when + timedelta(days=followup.duration_days)).date().isoformat()
+                              if when and followup.duration_days else None),
                 "instructions": INSTRUCTIONS.get(violation, INSTRUCTIONS["Other"]),
                 **suggest_tier(db, violation, followup.pet_id, followup.owner_id, report_id),
             },

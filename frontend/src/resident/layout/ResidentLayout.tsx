@@ -4,12 +4,12 @@ import { LogOut } from 'lucide-react';
 import { useAuth } from '../auth/context';
 import { BottomNav } from '../components/Chrome';
 import { Sheet } from '../components/Sheet';
-import { Button, ErrorState, ListSkeleton } from '../components/ui';
-import { RESIDENT_BASE } from '../config';
+import { Button, Callout, ErrorState, ListSkeleton } from '../components/ui';
+import { residentBase } from '../config';
 import { useResidentData } from '../data/context';
 import { Frame } from './Frame';
 
-/** Paths (below the preview base) that show the bottom navigation. Every other screen is a focused task with Back. */
+/** Paths (below the app base) that show the bottom navigation. Every other screen is a focused task with Back. */
 const PRIMARY = new Set(['/home', '/community', '/report', '/reports', '/profile']);
 
 /** Shown when a request reports that the session is no longer valid. It cannot be dismissed: the only way on is to sign in. */
@@ -28,13 +28,14 @@ function SessionExpiredSheet() {
   );
 }
 
-/** The signed-in frame: preview bar, loading/error gate, bottom navigation on primary screens and the session dialog. */
+/** The signed-in frame: loading/error gate, bottom navigation on primary screens and the session dialog. */
 export default function ResidentLayout() {
-  const { state, status, reload } = useResidentData();
+  const { state, status, reload, issues, loadError } = useResidentData();
   const { expired } = useAuth();
   const { pathname } = useLocation();
 
-  const path = pathname.startsWith(RESIDENT_BASE) ? pathname.slice(RESIDENT_BASE.length).replace(/\/+$/, '') || '/' : pathname;
+  const base = residentBase();
+  const path = pathname.startsWith(base) ? pathname.slice(base.length).replace(/\/+$/, '') || '/' : pathname;
   const primary = PRIMARY.has(path);
 
   // After moving to another screen, start at the top and hand focus to the main region (keyboard and screen readers).
@@ -50,7 +51,14 @@ export default function ResidentLayout() {
   return (
     <Frame signedIn>
       <main id="main" tabIndex={-1} className="rs-main outline-none">
-        {status === 'loading' ? <div className="rs-content"><ListSkeleton rows={5} /></div> : status === 'error' ? <ErrorState onRetry={reload} title="We can’t load your information" /> : <Outlet />}
+        {status === 'ready' && issues.length > 0 ? (
+          <div className="rs-content">
+            <Callout tone="amber" title="Some information could not be loaded.">
+              {issues.map((i) => i.message).join(' ')} <button type="button" className="rs-seeall" onClick={reload}>Reload</button>
+            </Callout>
+          </div>
+        ) : null}
+        {status === 'loading' ? <div className="rs-content"><ListSkeleton rows={5} /></div> : status === 'error' ? <ErrorState onRetry={reload} title="We can’t load your information">{loadError ? `${loadError} Nothing you already submitted was lost.` : undefined}</ErrorState> : <Outlet />}
       </main>
       {primary && status === 'ready' ? <BottomNav unreadReports={unreadReports} /> : null}
       {expired ? <SessionExpiredSheet /> : null}

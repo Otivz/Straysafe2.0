@@ -1,10 +1,11 @@
+import { useEffect, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Eye, EyeOff, Footprints, Hourglass, PlusCircle } from 'lucide-react';
 import { fmtDateTime } from '../../../preview/lib/format';
 import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
 import { MapLegend } from '../../../preview/map/MapLegend';
 import { Screen } from '../../components/Screen';
-import { Callout, LinkButton, MediaThumbs, NotFoundState, Row, Section, StatusPill, UpdateTimeline } from '../../components/ui';
+import { Callout, ErrorState, LinkButton, ListSkeleton, MediaThumbs, NotFoundState, Row, Section, StatusPill, UpdateTimeline } from '../../components/ui';
 import { CATEGORY_ICON } from '../../components/icons';
 import { residentPath } from '../../config';
 import { ANIMAL_TYPES, CATEGORIES, EXTRA_FIELD, STATUS, VISIBILITY_COPY } from '../../data/constants';
@@ -21,10 +22,20 @@ const ORDER: CaseStatus[] = ['reported', 'under_review', 'in_progress', 'closed'
  * For a found animal it is also the found-animal details of the resident who reported it (R23 shows the published notice).
  */
 export default function ReportDetailsPage() {
-  const { state } = useResidentData();
+  const { state, loadReport, reportStatus } = useResidentData();
   const now = useNow();
-  const report = reportById(state, useParams().reportId);
-  if (!report) return <Screen title="Report" back="/reports"><NotFoundState what="report" to="/reports" label="Go to My reports" /></Screen>;
+  const { reportId } = useParams();
+  const report = reportById(state, reportId);
+  // The list holds each report as the server's timeline gives it; the case chat and the latest changes are read when it is opened.
+  const load = useRef(loadReport);
+  useEffect(() => { load.current = loadReport; });
+  useEffect(() => { if (reportId) void load.current(reportId); }, [reportId]);
+  const detail = reportStatus(reportId ?? '');
+  if (!report) {
+    if (detail.status === 'idle' || detail.status === 'loading') return <Screen title="Report" back="/reports"><ListSkeleton rows={3} /></Screen>;
+    if (detail.status === 'error') return <Screen title="Report" back="/reports"><ErrorState onRetry={() => { void loadReport(reportId ?? ''); }}>{detail.error}</ErrorState></Screen>;
+    return <Screen title="Report" back="/reports"><NotFoundState what="report" to="/reports" label="Go to My reports" /></Screen>;
+  }
 
   const cat = CATEGORIES[report.category];
   const Icon = CATEGORY_ICON[report.category];
@@ -111,6 +122,7 @@ export default function ReportDetailsPage() {
       </Section>
 
       <Section title="Updates">
+        {detail.error ? <Callout tone="amber">{detail.error}</Callout> : null}
         <UpdateTimeline updates={report.updates} now={now} label="Updates on this report" />
       </Section>
     </Screen>

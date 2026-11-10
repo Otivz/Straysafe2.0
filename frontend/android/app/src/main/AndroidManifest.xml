@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- No android:usesCleartextTraffic here on purpose: this app targets API 36, where the default is HTTPS only. Only the debug build type turns
+         plain http on (src/debug/AndroidManifest.xml). -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:usesCleartextTraffic="true"
         android:theme="@style/AppTheme">
 
         <activity
@@ -16,6 +17,7 @@
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
             android:exported="true">
 
             <intent-filter>
@@ -36,15 +38,15 @@
         </provider>
     </application>
 
-    <!-- Permissions -->
+    <!-- Permissions: only what the Resident app uses.
+         INTERNET and ACCESS_NETWORK_STATE: the backend, and the app's offline notice (online/offline events).
+         Location (coarse and fine are requested together, as Android 12+ asks): "use my current location" on the report map, asked for
+         when the resident taps it, while the app is open. No background location, no continuous tracking.
+         Photos and videos are chosen through the system picker (an <input type="file">, no capture), which needs no storage or camera
+         permission. A "take a photo now" button would need CAMERA added back. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-feature android:name="android.hardware.camera" android:required="false" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 </manifest>

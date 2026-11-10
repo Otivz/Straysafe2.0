@@ -6,7 +6,8 @@ from datetime import datetime
 
 from app.database import get_db
 from app.models.chat import ChatThread, ChatMessage
-from app.models.report import Report, Rescue, RescueAssignment, EndorsementLetter
+from app.models.barangay_referral import BarangayReferral
+from app.models.report import Report
 from app.models.user import User, Subdivision
 from app.models.notification import Notification
 from app.models.report_match import ReportMatch
@@ -16,8 +17,8 @@ from app.schemas.chat import (
     ChatMessageCreate, ChatMessageResponse,
     ChatStatsResponse
 )
+from app.utils.pet_ownership import became_owner_after
 from app.utils.auth import get_current_user
-from app.utils.pet_adoption import owned_through_later_adoption
 from app.utils.uploads import validate_cloudinary_url
 
 router = APIRouter(
@@ -173,10 +174,20 @@ def generate_memorable_match_title(pet: Optional[Pet], report: Optional[Report],
     return f"Match: {pet_name} ({descriptor})"
 
 
+def _referred_report_ids(db: Session) -> list:
+    """Reports that have a Barangay referral on record (the referral log replaced rescue requests and endorsement letters)."""
+    return [r for (r,) in db.query(BarangayReferral.report_id).distinct().all()]
+
+
+def _assigned_report_ids(db: Session, user_id: int) -> list:
+    """Reports whose handling leader is this user (rescue assignments no longer exist)."""
+    return [r for (r,) in db.query(Report.report_id).filter(Report.assigned_leader_id == user_id).all()]
+
+
 def is_report_escalated_to_barangay(report: Optional[Report], db: Session) -> bool:
     """
     Determines if an incident report has been escalated or forwarded to Barangay Operations.
-    Subdivision internal reports (Reported, Verified, Rejected) without a rescue or endorsement
+    Subdivision internal reports (Reported, Verified, Rejected) without a Barangay referral
     are strictly invisible and inaccessible to Barangay staff.
     """
     if not report:
@@ -184,13 +195,8 @@ def is_report_escalated_to_barangay(report: Optional[Report], db: Session) -> bo
     # Direct barangay-level reports (no subdivision) belong to Barangay
     if report.subdivision_id is None:
         return True
-    # Rescue mission or request created
-    has_rescue = db.query(Rescue.rescue_id).filter(Rescue.report_id == report.report_id).first() is not None
-    if has_rescue:
-        return True
-    # Endorsement letter created/sent
-    has_endorsement = db.query(EndorsementLetter.letter_id).filter(EndorsementLetter.report_id == report.report_id).first() is not None
-    if has_endorsement:
+    # A referral to the Barangay was recorded
+    if db.query(BarangayReferral.referral_id).filter(BarangayReferral.report_id == report.report_id).first() is not None:
         return True
     # Escalated or active barangay operational statuses
     status_id = report.current_status_id or getattr(report, 'status_id', None)
@@ -213,7 +219,7 @@ def get_or_create_report_thread(report_id: int, current_user: User, db: Session)
     # Look for existing thread
     thread = find_report_thread(report_id, db)
     if not thread:
-        # Serialize concurrent first messages so a single thread is created per report (the same lock as adoption chats)
+        # Serialize concurrent first messages so a single thread is created per report (one lock for every case chat)
         db.query(Report.report_id).filter(Report.report_id == report_id).with_for_update().first()
         thread = find_report_thread(report_id, db)
 
@@ -295,10 +301,10 @@ def check_user_report_chat_access(report_id: int, current_user: User, thread: Op
         return True
     # ...and the owner of the pet the report really is: linked to their pet, or staff confirmed the match and the
     # owner hasn't rejected it. A mere AI suggestion doesn't (the owner has the look-alike match chat for that).
-    # (Not when the pet became theirs by adopting it after this report was filed: the conversation between the
-    # reporter and the officials is not the adopter's.)
+    # (Not when the pet became theirs after this report was filed: the conversation between the reporter and the
+    # officials is not a later owner's.)
     if report.pet_id and db.query(Pet.pet_id).filter(Pet.pet_id == report.pet_id, Pet.owner_id == current_user.user_id).first() \
-            and not owned_through_later_adoption(db, report.pet_id, current_user.user_id, report.created_at):
+            and not became_owner_after(db, report.pet_id, current_user.user_id, report.created_at):
         return True
     confirmed_pet_ids = [pid for (pid,) in db.query(ReportMatch.matched_pet_id).join(Pet, ReportMatch.matched_pet_id == Pet.pet_id).filter(
         ReportMatch.source_report_id == report_id,
@@ -306,21 +312,12 @@ def check_user_report_chat_access(report_id: int, current_user: User, thread: Op
         ReportMatch.status.in_(("CONFIRMED_MATCH", "COVERED_BY_CASE")),
         ReportMatch.owner_confirmation_status != "OWNER_REJECTED",
     ).all()]
-    return any(not owned_through_later_adoption(db, pid, current_user.user_id, report.created_at) for pid in confirmed_pet_ids)
+    return any(not became_owner_after(db, pid, current_user.user_id, report.created_at) for pid in confirmed_pet_ids)
 
 
 def is_user_assigned_to_report(report_id: int, user_id: int, db: Session) -> bool:
-    rescues = db.query(Rescue).filter(Rescue.report_id == report_id).all()
-    for r in rescues:
-        if r.staff_id == user_id or r.leader_id == user_id:
-            return True
-        assignment = db.query(RescueAssignment).filter(
-            RescueAssignment.rescue_id == r.rescue_id,
-            (RescueAssignment.user_id == user_id) | (RescueAssignment.staff_id == user_id)
-        ).first()
-        if assignment:
-            return True
-    return False
+    """The leader handling the case (rescue assignments are retired)."""
+    return db.query(Report.report_id).filter(Report.report_id == report_id, Report.assigned_leader_id == user_id).first() is not None
 
 
 def report_chat_send_denied_message(user: User) -> str:
@@ -500,7 +497,7 @@ def check_user_match_chat_access(match_id: int, current_user: User, thread: Opti
         return True
 
     pet = db.query(Pet).filter(Pet.pet_id == match.matched_pet_id).first() if match.matched_pet_id else None
-    if pet and pet.owner_id == current_user.user_id and not owned_through_later_adoption(
+    if pet and pet.owner_id == current_user.user_id and not became_owner_after(
             db, pet.pet_id, current_user.user_id, source_report.created_at if source_report else None):
         return True
     if source_report and source_report.user_id == current_user.user_id:
@@ -563,7 +560,6 @@ def report_chat_finished(db: Session, report: Optional[Report]) -> bool:
     """
     if report is None:
         return False
-    from app.models.pet_claim import PetClaim
     from app.models.report import ReportReturn
     from app.utils.case_groups import case_members, case_root
     root = case_root(db, report)
@@ -575,23 +571,17 @@ def report_chat_finished(db: Session, report: Optional[Report]) -> bool:
     if "reunited" in (root.custody_status or "").lower():
         return True
     ids = [m.report_id for m in case_members(db, root)]
-    if db.query(ReportReturn.return_id).filter(ReportReturn.report_id.in_(ids)).first():
-        return True
-    return db.query(PetClaim.claim_id).filter(
-        PetClaim.report_id.in_(ids),
-        PetClaim.status.in_(("Handover Complete", "Pet Received"))
-    ).first() is not None
+    return db.query(ReportReturn.return_id).filter(ReportReturn.report_id.in_(ids)).first() is not None
 
 
 def match_chat_finished(db: Session, match: Optional[ReportMatch], source_report: Optional[Report]) -> bool:
     """
-    A look-alike match chat ends like report and adoption chats: when the case is finished, or, while the case is
+    A look-alike match chat ends like a report chat: when the case is finished, or, while the case is
     "Claimed by Owner" (kept open so owner and leader can arrange the pickup), once the handover is recorded
     (an owner return, the claim at Handover Complete / Pet Received, or custody "Reunited").
     """
     if source_report is None:
         return False
-    from app.models.pet_claim import PetClaim
     from app.models.report import ReportReturn
     from app.utils.case_groups import case_members, case_root
     root = case_root(db, source_report)
@@ -603,13 +593,7 @@ def match_chat_finished(db: Session, match: Optional[ReportMatch], source_report
     if "reunited" in (root.custody_status or "").lower():
         return True
     ids = [m.report_id for m in case_members(db, root)]
-    if db.query(ReportReturn.return_id).filter(ReportReturn.report_id.in_(ids)).first():
-        return True
-    pet_id = match.matched_pet_id if match is not None else None
-    q = db.query(PetClaim.claim_id).filter(PetClaim.report_id.in_(ids), PetClaim.status.in_(("Handover Complete", "Pet Received")))
-    if pet_id:
-        q = q.filter(PetClaim.pet_id == pet_id)
-    return q.first() is not None
+    return db.query(ReportReturn.return_id).filter(ReportReturn.report_id.in_(ids)).first() is not None
 
 def default_staff_recipient(db: Session, report: Optional[Report], exclude_user_id: Optional[int], fallback_user_id: int) -> int:
     """
@@ -761,20 +745,6 @@ def send_report_message(
                 if leader.user_id != current_user.user_id:
                     recipient_user_ids.add(leader.user_id)
 
-        # 5. Assigned Barangay Responders and Staff for this report
-        rescues = db.query(Rescue).filter(Rescue.report_id == report_id).all()
-        for r in rescues:
-            if r.staff_id and r.staff_id != current_user.user_id:
-                recipient_user_ids.add(r.staff_id)
-            if r.leader_id and r.leader_id != current_user.user_id:
-                recipient_user_ids.add(r.leader_id)
-            assignments = db.query(RescueAssignment).filter(RescueAssignment.rescue_id == r.rescue_id).all()
-            for a in assignments:
-                if a.user_id and a.user_id != current_user.user_id:
-                    recipient_user_ids.add(a.user_id)
-                if a.staff_id and a.staff_id != current_user.user_id:
-                    recipient_user_ids.add(a.staff_id)
-
         for uid in recipient_user_ids:
             notif = Notification(
                 user_id=uid,
@@ -837,9 +807,6 @@ def mark_thread_messages_as_read(
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
 
-    # Adoption chats are authorized per application; they must use /chat/adoptions/{id}/read.
-    if thread.thread_type == "Adoption":
-        raise HTTPException(status_code=404, detail="Thread not found")
     if thread.related_id is None:
         raise HTTPException(status_code=400, detail="Invalid thread association")
     related_id = thread.related_id
@@ -1064,11 +1031,7 @@ class _ThreadListContext:
         self.users: dict = {}
         self.last_messages: dict = {}
         self.unread: dict = {}
-        self.assigned_report_ids = set(
-            [r for (r,) in db.query(Rescue.report_id).join(RescueAssignment, Rescue.rescue_id == RescueAssignment.rescue_id).filter(
-                (RescueAssignment.user_id == user.user_id) | (RescueAssignment.staff_id == user.user_id)).all()]
-            + [r for (r,) in db.query(Rescue.report_id).filter(
-                (Rescue.staff_id == user.user_id) | (Rescue.leader_id == user.user_id)).all()])
+        self.assigned_report_ids = set(_assigned_report_ids(db, user.user_id))
         self._escalated_ids: Optional[set] = None
         self._subd_barangay: Optional[dict] = None
 
@@ -1110,12 +1073,11 @@ class _ThreadListContext:
         }
 
     def _escalated(self, report) -> bool:
-        """Same rule as is_report_escalated_to_barangay(), from two queries for the whole list."""
+        """Same rule as is_report_escalated_to_barangay(), from one query for the whole list."""
         if report.subdivision_id is None:
             return True
         if self._escalated_ids is None:
-            self._escalated_ids = ({r for (r,) in self.db.query(Rescue.report_id).all()}
-                                   | {r for (r,) in self.db.query(EndorsementLetter.report_id).all()})
+            self._escalated_ids = set(_referred_report_ids(self.db))
         return (report.report_id in self._escalated_ids
                 or (report.current_status_id or getattr(report, "status_id", None)) in [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17])
 
@@ -1211,26 +1173,13 @@ def list_user_threads(
     elif current_user.role_id == 3:
         # Barangay Staff & Responders:
         is_head = getattr(current_user, 'is_head_officer', False)
-        assigned_rescue_report_ids = [
-            r[0] for r in db.query(Rescue.report_id).join(
-                RescueAssignment, Rescue.rescue_id == RescueAssignment.rescue_id
-            ).filter(
-                (RescueAssignment.user_id == current_user.user_id) |
-                (RescueAssignment.staff_id == current_user.user_id)
-            ).all()
-        ] + [
-            r[0] for r in db.query(Rescue.report_id).filter(
-                (Rescue.staff_id == current_user.user_id) | (Rescue.leader_id == current_user.user_id)
-            ).all()
-        ]
+        assigned_rescue_report_ids = _assigned_report_ids(db, current_user.user_id)
 
-        rescue_rep_ids = [r[0] for r in db.query(Rescue.report_id).all()]
-        endorsement_rep_ids = [e[0] for e in db.query(EndorsementLetter.report_id).all()]
+        referred_rep_ids = _referred_report_ids(db)
         escalated_statuses = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17]
 
         escalation_filter = or_(
-            Report.report_id.in_(rescue_rep_ids),
-            Report.report_id.in_(endorsement_rep_ids),
+            Report.report_id.in_(referred_rep_ids),
             Report.current_status_id.in_(escalated_statuses),
             Report.subdivision_id.is_(None)
         )
@@ -1362,13 +1311,11 @@ def list_user_threads(
         match_query = match_query.filter(Pet.owner_id == current_user.user_id)
     elif current_user.role_id == 3:
         is_head = getattr(current_user, 'is_head_officer', False)
-        rescue_rep_ids = [r[0] for r in db.query(Rescue.report_id).all()]
-        endorsement_rep_ids = [e[0] for e in db.query(EndorsementLetter.report_id).all()]
+        referred_rep_ids = _referred_report_ids(db)
         escalated_statuses = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17]
 
         escalation_filter = or_(
-            Report.report_id.in_(rescue_rep_ids),
-            Report.report_id.in_(endorsement_rep_ids),
+            Report.report_id.in_(referred_rep_ids),
             Report.current_status_id.in_(escalated_statuses),
             Report.subdivision_id.is_(None)
         )
@@ -1522,29 +1469,16 @@ def get_unread_chat_count(
     elif current_user.role_id == 3:
         # Barangay Staff & Responders:
         is_head = getattr(current_user, 'is_head_officer', False)
-        rescue_rep_ids = [r[0] for r in db.query(Rescue.report_id).all()]
-        endorsement_rep_ids = [e[0] for e in db.query(EndorsementLetter.report_id).all()]
+        referred_rep_ids = _referred_report_ids(db)
         escalated_statuses = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17]
 
         escalation_filter = or_(
-            Report.report_id.in_(rescue_rep_ids),
-            Report.report_id.in_(endorsement_rep_ids),
+            Report.report_id.in_(referred_rep_ids),
             Report.current_status_id.in_(escalated_statuses),
             Report.subdivision_id.is_(None)
         )
 
-        assigned_report_ids = [
-            r[0] for r in db.query(Rescue.report_id).join(
-                RescueAssignment, Rescue.rescue_id == RescueAssignment.rescue_id
-            ).filter(
-                (RescueAssignment.user_id == current_user.user_id) |
-                (RescueAssignment.staff_id == current_user.user_id)
-            ).all()
-        ] + [
-            r[0] for r in db.query(Rescue.report_id).filter(
-                (Rescue.staff_id == current_user.user_id) | (Rescue.leader_id == current_user.user_id)
-            ).all()
-        ]
+        assigned_report_ids = _assigned_report_ids(db, current_user.user_id)
 
         if is_head and current_user.barangay_id:
             subd_ids = [s.subdivision_id for s in db.query(Subdivision).filter(Subdivision.barangay_id == current_user.barangay_id).all()]

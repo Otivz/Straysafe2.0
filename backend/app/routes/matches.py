@@ -10,9 +10,8 @@ from sqlalchemy import or_, and_, desc, func
 from app.schemas.report import effective_priority
 from app.database import get_db
 from app.models.report_match import ReportMatch
-from app.models.report import Report, ReportMedia, StatusHistory, HoldingAnimal, HoldingTimeline, ReportReturn
+from app.models.report import Report, ReportMedia, StatusHistory, ReportReturn
 from app.models.pet import Pet
-from app.models.pet_claim import PetClaim
 from app.models.user import Subdivision, User
 from app.models.notification import Notification
 from app.models.pet_history import PetHistory
@@ -56,8 +55,6 @@ from app.utils.case_groups import (
     PENDING_MATCH_STATUSES,
     case_confirmed_match,
     root_ids,
-    pick_case_claim,
-    live_claim,
 )
 
 
@@ -198,25 +195,6 @@ def _serialize_with_case_confirmation(matches: List[ReportMatch], report_id: Opt
     return extra + out
 
 
-# Claim statuses before the owner has filed the claim with proof: no shortcut yet
-_CLAIM_NOT_FILED = ("Potential Owner Match", "Possible Match Found")
-
-
-def _filed_case_claim(db: Session, m: ReportMatch) -> Optional[PetClaim]:
-    """The case's pet claim for this match's pet, once the owner has filed it (follows merged claims)."""
-    if not m.matched_pet_id or m.source_report is None:
-        return None
-    member_ids = [r.report_id for r in case_members(db, case_root(db, m.source_report))]
-    raw = db.query(PetClaim).filter(PetClaim.pet_id == m.matched_pet_id, PetClaim.report_id.in_(member_ids)).all()
-    live = []
-    for c in raw:
-        c = live_claim(db, c)
-        if c is not None and c.pet_id == m.matched_pet_id and c.report_id in member_ids and c not in live:
-            live.append(c)
-    claim = pick_case_claim(live)
-    return claim if claim is not None and claim.status not in _CLAIM_NOT_FILED else None
-
-
 def _serialize_matches(matches: List[ReportMatch], user: User, db: Session, queue: bool = False) -> List[ReportMatchResponse]:
     """Open suggestions of closed or impounded cases are left out everywhere (they need no decision)."""
     out = []
@@ -238,9 +216,6 @@ def _serialize_matches(matches: List[ReportMatch], user: User, db: Session, queu
             if resp.identity_lock_reason:
                 active = active_case_lock(db, m)
                 resp.separate_incident_case_id = active["root"].report_id if active else None
-            claim = _filed_case_claim(db, m)
-            if claim is not None:
-                resp.claim_id, resp.claim_status = claim.claim_id, claim.status
         out.append(_redact_for_resident(resp, user, m, db, scope) if user.role_id == 1 else resp)
     return out
 
@@ -845,7 +820,6 @@ def _scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[R
     Strictly adheres to:
     - Individual Visual Identity > Breed / Generic Similarity
     - Excludes reports that have reached report status 8 (Impounded) or terminal states.
-    - Preserves animals in Holding Facility (facility_status 1-7).
     """
     report = db.query(Report).options(
         joinedload(Report.media),
@@ -1324,6 +1298,9 @@ def get_duplicates_for_report(
     curr_rep = db.query(Report).filter(Report.report_id == report_id).first()
     if not curr_rep:
         return []
+    # Staff read the suspected duplicates of reports in their own scope only (same as opening the report)
+    if not _report_in_staff_scope(current_user, curr_rep, db):
+        return []
 
     # If report is closed/resolved (not duplicate 18) and not merged, check if any confirmed matches exist
     if curr_rep.current_status_id in [3, 9, 10, 11, 12, 14, 17] and not curr_rep.duplicate_of_report_id:
@@ -1638,27 +1615,11 @@ def get_case_match_review(
             ReportMatch.matched_pet_id == target_pet_id,
             ReportMatch.status != SUPERSEDED_STATUS,
         ).first()
-        or db.query(PetClaim.claim_id).filter(
-            PetClaim.report_id.in_(member_ids), PetClaim.pet_id == target_pet_id,
-        ).first()
     ):
         raise HTTPException(status_code=403, detail="Access denied: This pet is not linked to the requested case.")
 
-    # Resolve canonical claim report from active PetClaims across the case
-    active_claim: Optional[PetClaim] = None
-    if target_pet_id:
-        raw_claims = db.query(PetClaim).filter(
-            PetClaim.report_id.in_(member_ids),
-            PetClaim.pet_id == target_pet_id
-        ).order_by(PetClaim.claim_id).all()
-        live_claims = []
-        for c in raw_claims:
-            resolved = live_claim(db, c)
-            if resolved and resolved.status != "Merged" and resolved not in live_claims:
-                live_claims.append(resolved)
-        active_claim = pick_case_claim(live_claims) if live_claims else None
-
-    canonical_claim_report_id = active_claim.report_id if active_claim else root.report_id
+    # The case's first report (the owner's initial answer) is always Tab 1
+    canonical_claim_report_id = root.report_id
 
     # Arrange reports: canonical claim report is always Tab 1, others ordered chronologically
     canonical_rep = next((m for m in members if m.report_id == canonical_claim_report_id), members[0])
@@ -1702,51 +1663,19 @@ def get_case_match_review(
             m_rec = cov_match
             report_matches_by_id[rep_item.report_id] = m_rec
 
-        owner_status = m_rec.owner_confirmation_status if m_rec else ("OWNER_CONFIRMED" if is_initial and active_claim else "PENDING")
+        owner_status = m_rec.owner_confirmation_status if m_rec else ("PENDING")
         official_status = m_rec.status if m_rec else ("COVERED_BY_CASE" if not is_initial else "PENDING_VERIFICATION")
 
         # Tab status indicator
         if is_initial:
-            has_proof = bool(
-                active_claim and (
-                    active_claim.vaccine_card_url or
-                    active_claim.vet_record_url or
-                    active_claim.registration_record_url or
-                    active_claim.additional_photos_url or
-                    active_claim.evidence_url
-                )
-            )
-            if active_claim:
-                if active_claim.status in ("Handover Complete", "Pet Received"):
-                    tab_status = "Officially Verified"
-                elif active_claim.status == "Approved":
-                    tab_status = "Claim Approved"
-                elif active_claim.status == "Rejected":
-                    tab_status = "Rejected"
-                elif active_claim.status == "Evidence Requested":
-                    tab_status = "Evidence Requested"
-                elif active_claim.status == "Pending Review":
-                    tab_status = "Claim Pending Review"
-                elif not has_proof:
-                    if owner_status == "OWNER_CONFIRMED":
-                        tab_status = "Sent to Subdivision"  # owner confirmed; proof optional, the leader decides
-                    elif owner_status == "OWNER_REJECTED":
-                        tab_status = "Rejected"
-                    elif owner_status == "UNSURE":
-                        tab_status = "Unsure"
-                    else:
-                        tab_status = "Awaiting Response"
-                else:
-                    tab_status = "Claim Pending Review"
+            if owner_status == "OWNER_CONFIRMED":
+                tab_status = "Sent to Subdivision"  # owner confirmed; the leader decides
+            elif owner_status == "OWNER_REJECTED":
+                tab_status = "Rejected"
+            elif owner_status == "UNSURE":
+                tab_status = "Unsure"
             else:
-                if owner_status == "OWNER_CONFIRMED":
-                    tab_status = "Sent to Subdivision"  # owner confirmed; proof optional, the leader decides
-                elif owner_status == "OWNER_REJECTED":
-                    tab_status = "Rejected"
-                elif owner_status == "UNSURE":
-                    tab_status = "Unsure"
-                else:
-                    tab_status = "Awaiting Response"
+                tab_status = "Awaiting Response"
         else:
             if official_status == "CONFIRMED_MATCH":
                 tab_status = "Officially Verified"
@@ -1843,25 +1772,6 @@ def get_case_match_review(
             "match": match_data
         })
 
-    claim_payload = None
-    if active_claim:
-        claim_payload = {
-            "claim_id": active_claim.claim_id,
-            "report_id": active_claim.report_id,
-            "pet_id": active_claim.pet_id,
-            "status": active_claim.status,
-            "evidence_url": active_claim.evidence_url,
-            "vaccine_card_url": active_claim.vaccine_card_url,
-            "vet_record_url": active_claim.vet_record_url,
-            "registration_record_url": active_claim.registration_record_url,
-            "additional_photos_url": active_claim.additional_photos_url,
-            "distinctive_markings": active_claim.distinctive_markings,
-            "remarks": active_claim.remarks,
-            "match_score": active_claim.match_score,
-            "created_at": active_claim.created_at.isoformat() if active_claim.created_at else None,
-            "updated_at": active_claim.updated_at.isoformat() if active_claim.updated_at else None,
-        }
-
     pet_payload = None
     if target_pet:
         pet_payload = {
@@ -1888,21 +1798,10 @@ def get_case_match_review(
             } if target_pet.owner else None
         }
 
-    has_valid_claim_proof = bool(
-        active_claim and (
-            active_claim.vaccine_card_url or
-            active_claim.vet_record_url or
-            active_claim.registration_record_url or
-            active_claim.additional_photos_url or
-            active_claim.evidence_url or
-            active_claim.status in ("Approved", "Handover Complete", "Pet Received")
-        ) and active_claim.status not in ("Rejected", "Merged")
-    )
     canonical_match_record = report_matches_by_id.get(canonical_claim_report_id) or root_match
-    initial_claim_completed = (
-        has_valid_claim_proof and (
-            not canonical_match_record or canonical_match_record.owner_confirmation_status != "OWNER_REJECTED"
-        )
+    # The owner has answered Yes on the case's first report: further sightings can be answered too
+    initial_claim_completed = bool(
+        canonical_match_record and canonical_match_record.owner_confirmation_status == "OWNER_CONFIRMED"
     )
 
     db.commit()
@@ -1918,7 +1817,6 @@ def get_case_match_review(
         "is_merged_case": len(tabs) > 1,
         "initial_claim_completed": initial_claim_completed,
         "pet": pet_payload,
-        "claim": claim_payload,
         "reports": tabs
     }
 
@@ -1947,6 +1845,9 @@ def get_match_by_id(match_id: int, db: Session = Depends(get_db), current_user: 
 @router.get("/report/{report_id}", response_model=List[ReportMatchResponse])
 def get_matches_for_report(report_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Fetch all registered pet matches involving a specific report."""
+    # Staff read the matches of reports in their own scope only; a resident's access is decided when they are serialized
+    if current_user.role_id in (2, 3) and not _report_in_staff_scope(current_user, db.get(Report, report_id), db):
+        return []
     matches = db.query(ReportMatch).options(
         joinedload(ReportMatch.source_report).joinedload(Report.media),
         joinedload(ReportMatch.source_report).joinedload(Report.reporter),
@@ -2000,27 +1901,6 @@ def _notify_cross_subdivision_pair(db: Session, a: Report, b: Report) -> None:
                         else "The reports are in different subdivisions, so the Barangay reviews this pair.")),
         ))
     db.flush()
-
-
-def reconcile_pair_holding(db: Session, match: ReportMatch) -> None:
-    """Both reports of a confirmed pair were admitted to holding: keep one stay and discharge the other."""
-    if not (match.source_report_id and match.matched_report_id):
-        return
-    src_holding = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == match.source_report_id).first()
-    tgt_holding = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == match.matched_report_id).first()
-
-    if src_holding and tgt_holding and src_holding.holding_id != tgt_holding.holding_id:
-        from app.utils.holding_stay import db_now
-        # If target is already transferred to Barangay or further along, resolve source holding
-        tgt_is_brgy = bool(tgt_holding.report and tgt_holding.report.facility and tgt_holding.report.facility.facility_type == 'barangay_facility')
-        src_is_brgy = bool(src_holding.report and src_holding.report.facility and src_holding.report.facility.facility_type == 'barangay_facility')
-
-        if tgt_is_brgy and not src_is_brgy:
-            src_holding.facility_status = 5  # Transferred to Shelter / Barangay
-            src_holding.discharge_date = db_now(db)
-        else:
-            tgt_holding.facility_status = 5
-            tgt_holding.discharge_date = db_now(db)
 
 
 def _verify_snapshot(db: Session, match: ReportMatch) -> dict:
@@ -2212,7 +2092,6 @@ def verify_match(
         match.verification_notes = payload.notes.strip()
         match.reviewed_by = current_user.user_id
         match.reviewer_role = actor_role
-        reconcile_pair_holding(db, match)
 
         # Add to StatusHistory for source report
         hist = StatusHistory(
@@ -2486,49 +2365,23 @@ def submit_owner_feedback(
     if is_merged_sighting:
         if is_owner and payload.owner_confirmation in ["OWNER_CONFIRMED", "OWNER_REJECTED", "UNSURE"]:
             # Backend validation requirement:
-            # Sighting confirmations require that the initial ownership claim has been submitted with proof.
+            # Sighting confirmations require that the owner already confirmed the case's first report.
             canonical_claim_report_id = None
             has_valid_claim_proof = False
-            if root_rep and match.matched_pet_id:
-                members = case_members(db, root_rep)
-                member_ids = [m.report_id for m in members]
-                raw_claims = db.query(PetClaim).filter(
-                    PetClaim.report_id.in_(member_ids),
-                    PetClaim.pet_id == match.matched_pet_id
-                ).order_by(PetClaim.claim_id).all()
-                live_claims = []
-                for c in raw_claims:
-                    resolved = live_claim(db, c)
-                    if resolved and resolved.status not in ("Merged", "Rejected") and resolved not in live_claims:
-                        live_claims.append(resolved)
-                active_c = pick_case_claim(live_claims) if live_claims else None
-                canonical_claim_report_id = active_c.report_id if active_c else root_rep.report_id
-
-                if active_c:
-                    has_proof = bool(
-                        active_c.vaccine_card_url or
-                        active_c.vet_record_url or
-                        active_c.registration_record_url or
-                        active_c.additional_photos_url or
-                        active_c.evidence_url or
-                        active_c.status in ("Approved", "Handover Complete", "Pet Received")
-                    )
-                    if has_proof:
-                        has_valid_claim_proof = True
-
-            # Verify that the canonical claim match is not OWNER_REJECTED
             canonical_match = None
-            if canonical_claim_report_id and match.matched_pet_id:
+            if root_rep and match.matched_pet_id:
+                canonical_claim_report_id = root_rep.report_id
                 canonical_match = db.query(ReportMatch).filter(
                     ReportMatch.source_report_id == canonical_claim_report_id,
                     ReportMatch.matched_pet_id == match.matched_pet_id
                 ).first()
+                has_valid_claim_proof = bool(canonical_match and canonical_match.owner_confirmation_status == "OWNER_CONFIRMED")
 
             if (not has_valid_claim_proof) or (canonical_match and canonical_match.owner_confirmation_status == "OWNER_REJECTED"):
                 initial_rep_label = f"Report #{canonical_claim_report_id}" if canonical_claim_report_id else "the initial report"
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Before confirming additional sightings, please complete your initial pet ownership claim and submit the required proof of ownership in {initial_rep_label}."
+                    detail=f"Before confirming additional sightings, please confirm that the first report is your pet ({initial_rep_label})."
                 )
 
         match.owner_confirmation_status = payload.owner_confirmation

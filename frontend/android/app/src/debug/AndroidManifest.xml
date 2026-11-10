@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- DEBUG BUILD TYPE ONLY (assembleDebug). Android merges this file into the manifest of the debug APK and never into a release build.
+         It lets the debug app reach a backend on the developer's own network over plain http, the address typed into Connection Settings
+         (docs/05-operations/ANDROID_RESIDENT_APP.md). The main manifest does not set this attribute, so a release build keeps Android's
+         default for apps targeting API 28 or newer: cleartext traffic refused, HTTPS only. No network security configuration, no custom
+         trust anchors and no certificate exceptions exist anywhere: TLS validation is Android's own. -->
+    <application android:usesCleartextTraffic="true" />
+</manifest>

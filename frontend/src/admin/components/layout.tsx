@@ -65,11 +65,12 @@ export function EmptyState({ icon: Icon, title, children, action, compact }: { i
   );
 }
 
-export function ErrorState({ onRetry }: { onRetry: () => void }) {
+/** `message` is what the server (or the network layer) said, when there is one; without it the screen assumes a lost connection. */
+export function ErrorState({ onRetry, message }: { onRetry: () => void; message?: string }) {
   return (
     <div className="sa-panel">
-      <EmptyState icon={WifiOff} title="We can’t reach the server" action={<Button variant="primary" onClick={onRetry}>Try again</Button>}>
-        Check your connection and try again. Anything you already saved is safe.
+      <EmptyState icon={WifiOff} title={message ? 'We couldn’t load this' : 'We can’t reach the server'} action={<Button variant="primary" onClick={onRetry}>Try again</Button>}>
+        {message ? `${message} Anything you already saved is safe.` : 'Check your connection and try again. Anything you already saved is safe.'}
       </EmptyState>
     </div>
   );

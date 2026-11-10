@@ -3,7 +3,7 @@ Account fields: nobody grants themselves a role, Head Officer status, position, 
 - self-edit: personal details only (unchanged values from a whole-record save are fine)
 - Head Officer: name, phone, address, position, status and officer-in-charge of staff in their own barangay
 - administrator: everything
-- public sign-up: no position; certificate signatory: the Head Officer flag, never a position title
+- public sign-up: no position
 Run from the backend folder:  python tests/test_account_self_edit.py
 """
 import os
@@ -20,10 +20,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 import app.models  # noqa: E402,F401
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.limiter import limiter  # noqa: E402
-from app.models.report import Adoption, HoldingAnimal, Report  # noqa: E402
 from app.models.user import Barangay, Position, Subdivision, User  # noqa: E402
 from app.routes import users  # noqa: E402
-from app.routes.adoptions import _certificate_signatory  # noqa: E402
 from app.utils.auth import create_access_token  # noqa: E402
 
 Base.metadata.create_all(bind=engine)
@@ -117,25 +115,6 @@ new = db.query(User).filter(User.email == "newperson@test-mail.com").first() if 
 check("public sign-up creates a resident without a position", r.status_code == 200 and new and new.role_id == 1 and new.position_id is None,
       f"{r.status_code} {r.text[:160]}")
 check("...and adds no title to the positions list", db.query(Position).count() == before)
-
-# ---- certificate signatory ----
-db.add(Report(report_id=1, user_id=1, subdivision_id=1, category_id=1, latitude=14.8, longitude=121.0, current_status_id=10, animal_type="Dog"))
-db.flush()
-db.add(HoldingAnimal(holding_id=1, report_id=1, animal_type="Dog", facility_status=6))
-db.flush()
-db.add(Adoption(adoption_id=1, holding_id=1, applicant_id=1, full_name="A", address="S", contact_no="09123456789", reason="R"))
-db.add(User(user_id=50, name="Self-Titled Captain", email="captain@test-mail.com", password="x", role_id=3, is_verified=True,
-            status="Active", barangay_id=1, is_head_officer=False, position_id=6))
-db.commit()
-db.expire_all()
-signer = _certificate_signatory(db.get(Adoption, 1), db)
-check("the certificate is signed by the Head Officer, not by someone titled 'Barangay Captain'", signer is not None and signer.user_id == 3,
-      signer.name if signer else None)
-db.query(User).filter(User.user_id == 3).update({"is_head_officer": False})
-db.commit()
-db.expire_all()
-signer = _certificate_signatory(db.get(Adoption, 1), db)
-check("with no Head Officer, a 'Barangay Captain' title alone doesn't sign", signer is None or signer.user_id != 50, signer.name if signer else None)
 
 passed = sum(results)
 print(f"\n{passed}/{len(results)} account self-edit checks passed")

@@ -1,7 +1,7 @@
 """
 A pet owner's own lost-pet report: other residents see the contact the owner typed in the lost-pet form (name and phone,
 already written in the report's description) so a finder can call, while the pet is still Lost. Nothing else about
-the owner is shown (address, email, QR), and a sighting someone else reported about a registered pet stays private
+the owner is shown (address, email), and a sighting someone else reported about a registered pet stays private
 (report visibility, rule 6).
 Run from the backend folder:  python tests/test_lost_pet_contact.py
 """
@@ -20,7 +20,6 @@ from fastapi.testclient import TestClient  # noqa: E402
 import app.models  # noqa: E402,F401
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
-from app.models.pet_qr import PetQRCode  # noqa: E402
 from app.models.report import Report, ReportStatus  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
 from app.routes import reports  # noqa: E402
@@ -53,7 +52,6 @@ leader = mk_user("Leo Leader", 2, subdivision_id=1, barangay_id=1)
 pet = Pet(pet_name="Rocky", pet_type="Dog", owner_id=owner.user_id, status="Lost")
 db.add(pet)
 db.flush()
-db.add(PetQRCode(pet_id=pet.pet_id, qr_token="secret-qr-token-123456", qr_image_url="https://cdn.example/qr.png", is_active=True))
 
 
 def lost_desc(contact):
@@ -61,7 +59,7 @@ def lost_desc(contact):
             "• Species & Breed: Dog - Aspin\n"
             f"• Contact Person: {contact}\n"
             "• Last Seen: Recently around the park\n\n"
-            "If you see this pet, please immediately call them or scan the pet's StraySafe QR tag!")
+            "If you see this pet, please immediately call them.")
 
 
 def report(user, desc, category=6):
@@ -89,15 +87,15 @@ def check(label, ok, extra=""):
 
 
 def owner_fields(b):
-    return {k: b.get(k) for k in ("owner_name", "owner_phone", "owner_email", "owner_address", "owner_id", "pet_qr_token",
-                                  "pet_qr_code_url", "reporter_name", "user_id")}
+    return {k: b.get(k) for k in ("owner_name", "owner_phone", "owner_email", "owner_address", "owner_id",
+                                  "reporter_name", "user_id")}
 
 
 b = client.get(f"/reports/{LOST}", headers=H(finder)).json()
 check("another resident sees the contact name the owner typed", b.get("owner_name") == "Emma's Brother", owner_fields(b))
 check("...and the phone they typed (not the account's)", b.get("owner_phone") == "0918 765 4321", owner_fields(b))
-check("...but not the owner's email, home address, id or QR",
-      all(b.get(k) is None for k in ("owner_email", "owner_address", "owner_id", "pet_qr_token", "pet_qr_code_url")), owner_fields(b))
+check("...but not the owner's email, home address or id",
+      all(b.get(k) is None for k in ("owner_email", "owner_address", "owner_id")), owner_fields(b))
 check("...and the reporter fields stay anonymous", b.get("user_id") is None and b.get("reporter_name") != owner.name, owner_fields(b))
 
 b = client.get(f"/reports/{NO_PHONE}", headers=H(finder)).json()

@@ -34,9 +34,6 @@ from app.services.email_templates import (
     render_report_submitted_email,
     render_report_status_email,
     render_ai_match_alert_email,
-    render_claim_decision_email,
-    render_rescue_assignment_email,
-    render_qr_scanned_email,
     render_unassigned_reminder_email
 )
 from app.utils.notification_dispatcher import dispatch_notification
@@ -86,18 +83,6 @@ def test_email_templates_render():
     subj, text, html = render_ai_match_alert_email("Juan", "Barnaby", 202, 94, "Phase 2 Clubhouse")
     assert "Barnaby" in subj
     assert "94% Similarity" in html
-
-    subj, text, html = render_claim_decision_email("Ana", "Brownie", 55, "Approved", "Please proceed to Barangay Hall with valid ID.")
-    assert "Approved" in subj
-    assert "Brownie" in html
-
-    subj, text, html = render_rescue_assignment_email("Officer Santos", 12, 303, "Dog", "Phase 3 Gate", "Alpha Team")
-    assert "303" in subj
-    assert "Officer Santos" in html
-
-    subj, text, html = render_qr_scanned_email("Carlos", "Max", "Barangay Park Bench", 14.801, 121.002)
-    assert "Max" in subj
-    assert "Barangay Park Bench" in html
 
     subj, text, html = render_unassigned_reminder_email("Leader Gomez", 404, "Dog", "Phase 1 Gate", 35)
     assert "404" in subj

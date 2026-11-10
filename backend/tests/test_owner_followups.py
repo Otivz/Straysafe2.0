@@ -21,7 +21,7 @@ from sqlalchemy.pool import StaticPool
 import app.models  # noqa: F401
 from app.database import Base, get_db
 from app.models.user import Barangay, Subdivision, User
-from app.models.report import Report, ReportStatus, HoldingAnimal
+from app.models.report import Report, ReportStatus
 from app.models.pet import Pet
 from app.models.system_setting import SystemSetting
 from app.models.owner_followup import OwnerFollowUp, FollowUpContactLog

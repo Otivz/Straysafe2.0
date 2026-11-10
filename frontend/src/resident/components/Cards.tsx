@@ -42,8 +42,9 @@ export function NoticeCard({ notice }: { notice: Notice }) {
   );
 }
 
-/** Photos on a notice. Real thumbnails when this tab has them; otherwise a clearly labelled sample placeholder. */
-export function PhotoStrip({ count, media }: { count: number; media?: Media[] }) {
+/** Photos on a notice. The stored photo when the server has one, then thumbnails this tab has; otherwise a clearly labelled sample placeholder. */
+export function PhotoStrip({ count, media, urls }: { count: number; media?: Media[]; urls?: string[] }) {
+  if (urls && urls.length > 0) return <MediaThumbs media={urls.map((url, i) => ({ id: `u${i}`, name: `Photo ${i + 1}`, kind: 'photo' as const, size: 0, url }))} />;
   if (media && media.some((m) => m.url)) return <MediaThumbs media={media} />;
   if (count === 0) return <p className="rs-meta">No photo was added.</p>;
   return (

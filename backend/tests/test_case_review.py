@@ -21,17 +21,17 @@ import app.models  # noqa: E402,F401
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.limiter import limiter  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
-from app.models.report import HoldingAnimal, Report, ReportStatus  # noqa: E402
+from app.models.report import Report, ReportStatus  # noqa: E402
 from app.models.report_match import ReportMatch  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
-from app.routes import matches, pets, reports, rescue  # noqa: E402
+from app.routes import matches, pets, reports  # noqa: E402
 from app.utils.auth import create_access_token  # noqa: E402
 
 Base.metadata.create_all(bind=engine)
 api = FastAPI()
 api.state.limiter = limiter
 api.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-for r in (reports.router, rescue.router, pets.router, matches.router):
+for r in (reports.router, pets.router, matches.router):
     api.include_router(r)
 client = TestClient(api, raise_server_exceptions=False)
 db = SessionLocal()
@@ -98,10 +98,6 @@ R = mk_report()
 r = status(R, leader, 4)
 check("escalating without an animal record is refused", r.status_code == 400 and "animal record" in r.text.lower(), r.text[:200])
 check("...and the report stays Verified", db.get(Report, R).current_status_id == 2)
-r = client.post("/rescue-requests/", json={"report_id": R, "status_id": 1, "description": "please rescue"}, headers=H(leader))
-db.expire_all()
-check("creating a rescue request (which escalates) is refused without a record too",
-      r.status_code == 400 and "animal record" in r.text.lower() and db.get(Report, R).current_status_id == 2, r.text[:200])
 
 r = status(R, leader, 11)
 check("resolving without an animal record is refused", r.status_code == 400 and "resolved" in r.text.lower(), r.text[:200])
@@ -111,12 +107,6 @@ check("closing as False Alarm doesn't need a record", r.status_code == 200, r.te
 R2 = mk_report()
 r = status(R2, leader, 3, "not a real stray at all")
 check("rejecting doesn't need a record", r.status_code == 200, r.text[:200])
-
-R3 = mk_report()
-db.add(HoldingAnimal(report_id=R3, animal_type="Dog", facility_status=2))
-db.commit()
-r = status(R3, leader, 4)
-check("a holding-facility record also counts as the animal record", r.status_code == 200, r.text[:200])
 
 R4 = mk_report(pet=True)
 r = status(R4, leader, 4)

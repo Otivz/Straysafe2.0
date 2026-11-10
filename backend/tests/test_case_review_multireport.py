@@ -1,11 +1,11 @@
 """
 Automated Test Suite: Multi-Report Tab System for Pet Match Review
 Validates:
-1. Canonical claim report identification (claim on merged report placed as Tab 1)
+1. The case's first report is Tab 1 (legacy pet claims are retired: the owner's Yes on the first report unlocks the sightings)
 2. Strict endpoint authorization (owner & in-scope staff allowed; third-party citizen & out-of-scope staff 403)
-3. Incomplete ownership claim status (confirmed without proof)
+3. Owner confirmed, awaiting the subdivision
 4. Decoupled independent statuses (owner Yes != official verification)
-5. Sighting rejection isolation (rejecting sighting does not invalidate initial claim)
+5. Sighting rejection isolation (rejecting sighting does not invalidate the first report's Yes)
 6. Unmerge graceful handling (unmerged report removed from case, loads as standalone on direct URL)
 7. Notification deep-linking per-tab representation
 
@@ -28,16 +28,15 @@ import app.models  # noqa: F401
 from app.database import Base, SessionLocal, engine
 from app.models.notification import Notification
 from app.models.pet import Pet
-from app.models.pet_claim import PetClaim
 from app.models.report import Report, ReportCategory, ReportMedia, ReportStatus, StatusHistory
 from app.models.report_match import ReportMatch
 from app.models.user import Barangay, Subdivision, User
-from app.routes import claims, matches, reports
+from app.routes import matches, reports
 from app.utils.auth import create_access_token
 
 Base.metadata.create_all(bind=engine)
 api = FastAPI()
-for r in (claims.router, matches.router, reports.router):
+for r in (matches.router, reports.router):
     api.include_router(r)
 
 client = TestClient(api, raise_server_exceptions=True)
@@ -292,31 +291,26 @@ def test_merged_sightings_and_canonical_claim():
 # Test 4: Decoupled Statuses & Sighting Confirmation Independence
 # -------------------------------------------------------------------------------------
 def test_decoupled_statuses_and_rejection():
-    # Attempting to confirm Sighting 2 (Report 202) before initial claim proof MUST be rejected
+    # The owner has not answered on the first report yet: Sighting 2 (Report 202) MUST be rejected
+    db.expire_all()
+    db.get(ReportMatch, 301).owner_confirmation_status = "PENDING"
+    db.commit()
     res_s2_premature = client.post(
         "/matches/302/owner-feedback",
         json={"owner_confirmation": "OWNER_CONFIRMED", "remarks": "Trying to confirm prematurely"},
         headers=H_OWNER
     )
     record(
-        "Sighting 2 Locked Before Initial Claim Proof (400 Bad Request)",
+        "Sighting 2 Locked Before the Owner Confirms the First Report (400 Bad Request)",
         res_s2_premature.status_code == 400
     )
 
-    # Submit ownership claim for Yeye on Report 201 (Initial Claim)
-    claim = PetClaim(
-        claim_id=501,
-        report_id=201,
-        pet_id=pet_yeye.pet_id,
-        status="Pending Review",
-        vaccine_card_url="https://res.cloudinary.com/test/vaccine.jpg",
-        vet_record_url="https://res.cloudinary.com/test/vet.pdf",
-        remarks="Submitted vaccination card and vet record"
-    )
-    db.add(claim)
+    # The owner confirms Yeye on Report 201 (the first report)
+    db.expire_all()
+    db.get(ReportMatch, 301).owner_confirmation_status = "OWNER_CONFIRMED"
     db.commit()
 
-    # Now that initial claim has proof, owner confirms Sighting 2 (Report 202)
+    # Now that the first report is confirmed, the owner confirms Sighting 2 (Report 202)
     res_s2 = client.post(
         "/matches/302/owner-feedback",
         json={"owner_confirmation": "OWNER_CONFIRMED", "remarks": "Still Yeye"},
@@ -377,14 +371,11 @@ def test_claim_proof_submission():
     data = res.json()
     t1 = data["reports"][0]
     record(
-        "Tab 1 Updates to 'Claim Pending Review' After Proof Upload",
-        t1["tab_status"] == "Claim Pending Review",
+        "Tab 1 Stays 'Sent to Subdivision' After the Owner's Yes",
+        t1["tab_status"] == "Sent to Subdivision",
         f"Got: {t1['tab_status']}"
     )
-    record(
-        "Claim Details Returned in Payload",
-        data.get("claim") is not None and data["claim"]["claim_id"] == 501
-    )
+    record("No Legacy Claim Payload in the Case Review", "claim" not in data)
     record(
         "Initial Claim Completed Flag True in Payload",
         data.get("initial_claim_completed") is True
@@ -403,7 +394,7 @@ def test_deep_linking_from_merged_report():
         data["case_root_id"] == 201 and len(data["reports"]) == 3
     )
     record(
-        "Canonical Claim Report Remains Tab 1 (Report 201)",
+        "The First Report Remains Tab 1 (Report 201)",
         data["canonical_claim_report_id"] == 201 and data["reports"][0]["report_id"] == 201
     )
 
@@ -673,23 +664,12 @@ def test_section_7_confirmation_isolation():
         f"IDs: {m_id_430}, {m_id_435}, {m_id_442}"
     )
 
-    # Test 4: Submit ownership proof for Report 430
+    # Test 4: the owner confirms Report 430 (the first report)
     client.post(
         f"/matches/{m_id_430}/owner-feedback",
         json={"owner_confirmation": "OWNER_CONFIRMED", "remarks": "Confirmed my pet Yeye", "report_id": 430},
         headers=H_OWNER
     )
-    claim430 = PetClaim(
-        claim_id=502,
-        report_id=430,
-        pet_id=pet_yeye.pet_id,
-        status="Pending Review",
-        evidence_url="https://cloudinary.com/proof_yeye.jpg",
-        remarks="Owner proof for Yeye"
-    )
-    db.add(claim430)
-    db.commit()
-
     # Test 8 Pre-check: Database state snapshot before Sighting 2 rejection
     db.expire_all()
     db_m430_before = db.get(ReportMatch, m_id_430)
@@ -728,14 +708,13 @@ def test_section_7_confirmation_isolation():
         db_m442_after.owner_confirmation_status == "PENDING"
     )
 
-    # Test 4: Initial claim preservation
+    # Test 4: the first report's Yes is preserved
     res_case_after_s2 = client.get("/matches/case-review/430?pet_id=101", headers=H_OWNER)
     case_data_s2 = res_case_after_s2.json()
     record(
-        "Test 4: Initial claim and evidence preserved after rejecting Sighting 2",
-        case_data_s2.get("claim") is not None
-        and case_data_s2["claim"]["evidence_url"] == "https://cloudinary.com/proof_yeye.jpg"
-        and case_data_s2["reports"][0]["tab_status"] == "Claim Pending Review"
+        "Test 4: The first report's Yes is preserved after rejecting Sighting 2",
+        case_data_s2["reports"][0]["owner_confirmation_status"] == "OWNER_CONFIRMED"
+        and case_data_s2["reports"][0]["tab_status"] == "Sent to Subdivision"
     )
 
     # Test 3: Confirm the third sighting (Report 442)
@@ -756,7 +735,7 @@ def test_section_7_confirmation_isolation():
         t430["owner_confirmation_status"] == "OWNER_CONFIRMED"
         and t435["owner_confirmation_status"] == "OWNER_REJECTED"
         and t442["owner_confirmation_status"] == "OWNER_CONFIRMED"
-        and t430["tab_status"] == "Claim Pending Review"
+        and t430["tab_status"] == "Sent to Subdivision"
         and t435["tab_status"] == "Rejected"
         and t442["tab_status"] == "Confirmed by Owner"
     )
@@ -875,25 +854,16 @@ def test_section_7_scenarios_a_through_f():
     m_id_635 = tabs[1]["match"]["match_id"]
     m_id_642 = tabs[2]["match"]["match_id"]
 
-    # --- Scenario A — Initial claim incomplete ---
-    # Owner selects Yes on Report 630, but no proof submitted
-    res_confirm_630 = client.post(
-        f"/matches/{m_id_630}/owner-feedback",
-        json={"owner_confirmation": "OWNER_CONFIRMED", "remarks": "Yes this is Yeye", "report_id": 630},
-        headers=H_OWNER
-    )
-    record("Scenario A1: Owner selects Yes on Report 630", res_confirm_630.status_code == 200)
-
-    # Check case review shows initial_claim_completed == False, Tab 1 is 'Sent to Subdivision'
+    # --- Scenario A — First report not confirmed yet ---
     res_rev_a = client.get("/matches/case-review/630?pet_id=101", headers=H_OWNER)
     data_a = res_rev_a.json()
     record(
-        "Scenario A2: Case review shows initial_claim_completed is False and Tab 1 is Sent to Subdivision",
+        "Scenario A2: Case review shows initial_claim_completed is False and Tab 1 is Awaiting Response",
         data_a.get("initial_claim_completed") is False
-        and data_a["reports"][0]["tab_status"] == "Sent to Subdivision"
+        and data_a["reports"][0]["tab_status"] == "Awaiting Response"
     )
 
-    # Attempt to confirm Report 635 and Report 642 while initial claim is incomplete -> MUST fail with 400
+    # Attempt to confirm Report 635 and Report 642 before the first report is confirmed -> MUST fail with 400
     res_s2_locked = client.post(
         f"/matches/{m_id_635}/owner-feedback",
         json={"owner_confirmation": "OWNER_CONFIRMED", "remarks": "Should be locked", "report_id": 635},
@@ -907,7 +877,7 @@ def test_section_7_scenarios_a_through_f():
     record(
         "Scenario A3: Report 635 confirmation actions locked on backend (400 Bad Request)",
         res_s2_locked.status_code == 400
-        and "Before confirming additional sightings, please complete your initial pet ownership claim" in res_s2_locked.json().get("detail", "")
+        and "Before confirming additional sightings, please confirm that the first report is your pet" in res_s2_locked.json().get("detail", "")
     )
     record(
         "Scenario A4: Report 642 confirmation actions locked on backend (400 Bad Request)",
@@ -919,33 +889,27 @@ def test_section_7_scenarios_a_through_f():
     res_direct_642 = client.get("/matches/case-review/642?pet_id=101", headers=H_OWNER)
     data_f = res_direct_642.json()
     record(
-        "Scenario F: Direct URL access to Report 642 indicates canonical initial claim is Report 630 and claim is incomplete",
+        "Scenario F: Direct URL access to Report 642 indicates the first report is Report 630 and it is not confirmed yet",
         res_direct_642.status_code == 200
         and data_f.get("canonical_claim_report_id") == 630
         and data_f.get("initial_claim_completed") is False
     )
 
-    # --- Scenario B — Initial claim submitted ---
-    # Submit ownership proof for Report 630
-    claim_630 = PetClaim(
-        claim_id=601,
-        report_id=630,
-        pet_id=pet_yeye.pet_id,
-        status="Pending Review",
-        vaccine_card_url="https://res.cloudinary.com/test/yeye_vax.jpg",
-        vet_record_url="https://res.cloudinary.com/test/yeye_vet.pdf",
-        remarks="Valid proof uploaded for Yeye"
+    # --- Scenario B — The owner confirms the first report ---
+    res_confirm_630 = client.post(
+        f"/matches/{m_id_630}/owner-feedback",
+        json={"owner_confirmation": "OWNER_CONFIRMED", "remarks": "Yes this is Yeye", "report_id": 630},
+        headers=H_OWNER
     )
-    db.add(claim_630)
-    db.commit()
+    record("Scenario B0: Owner selects Yes on Report 630", res_confirm_630.status_code == 200)
 
     # Verify initial_claim_completed becomes True
     res_rev_b = client.get("/matches/case-review/630?pet_id=101", headers=H_OWNER)
     data_b = res_rev_b.json()
     record(
-        "Scenario B1: Initial claim marked completed after proof submitted",
+        "Scenario B1: Initial confirmation marked completed after the owner's Yes",
         data_b.get("initial_claim_completed") is True
-        and data_b["reports"][0]["tab_status"] == "Claim Pending Review"
+        and data_b["reports"][0]["tab_status"] == "Sent to Subdivision"
     )
 
     # Reports 635 and 642 are now UNLOCKED!
@@ -954,7 +918,7 @@ def test_section_7_scenarios_a_through_f():
         json={"owner_confirmation": "OWNER_REJECTED", "remarks": "No, tail different", "report_id": 635},
         headers=H_OWNER
     )
-    record("Scenario B2: Sighting 2 confirmation succeeds after initial claim submitted (200 OK)", res_s2_unlocked.status_code == 200)
+    record("Scenario B2: Sighting 2 confirmation succeeds after the first report is confirmed (200 OK)", res_s2_unlocked.status_code == 200)
 
     # --- Scenario C — Independent responses ---
     # Report 630 = OWNER_CONFIRMED + Proof
@@ -974,7 +938,7 @@ def test_section_7_scenarios_a_through_f():
         tabs_c[0]["owner_confirmation_status"] == "OWNER_CONFIRMED"
         and tabs_c[1]["owner_confirmation_status"] == "OWNER_REJECTED"
         and tabs_c[2]["owner_confirmation_status"] == "OWNER_CONFIRMED"
-        and tabs_c[0]["tab_status"] == "Claim Pending Review"
+        and tabs_c[0]["tab_status"] == "Sent to Subdivision"
         and tabs_c[1]["tab_status"] == "Rejected"
         and tabs_c[2]["tab_status"] == "Confirmed by Owner"
     )
@@ -985,10 +949,8 @@ def test_section_7_scenarios_a_through_f():
     data_d = res_reload2.json()
     tabs_d = data_d["reports"]
     record(
-        "Scenario D: Page reload preserves initial claim evidence and independent Yes/No responses",
+        "Scenario D: Page reload preserves the first report's Yes and the independent Yes/No responses",
         data_d.get("initial_claim_completed") is True
-        and data_d.get("claim") is not None
-        and data_d["claim"]["vaccine_card_url"] == "https://res.cloudinary.com/test/yeye_vax.jpg"
         and tabs_d[0]["owner_confirmation_status"] == "OWNER_CONFIRMED"
         and tabs_d[1]["owner_confirmation_status"] == "OWNER_REJECTED"
         and tabs_d[2]["owner_confirmation_status"] == "OWNER_CONFIRMED"

@@ -3,7 +3,7 @@ Multi-animal reports (MULTI_ANIMAL_REPORT_PLAN.md).
 
 A resident may report several animals in one report. The report stays as the *group incident*; the Subdivision Leader
 adds one *animal record* (a child report, `split_from_report_id` = the group) per animal, each with its own cropped
-photo. Every animal record then goes through holding, AI matching, claims, returns and adoption exactly like a normal
+photo. Every animal record then goes through AI matching, ownership claims and returns exactly like a normal
 one-animal report.
 
 - A split is atomic (one transaction, the group row locked) and idempotent per `client_token`, so a double click or a
@@ -127,7 +127,7 @@ def primary_images(report: Report) -> List[ReportMedia]:
     out = []
     for m in (report.media or []):
         url = (m.file_url or "").lower()
-        if m.history_id or m.holding_log_id or m.is_evidence:
+        if m.history_id or m.is_evidence:
             continue
         if (m.media_type or "Image") != "Image" or url.endswith((".mp4", ".mov", ".webm", ".avi", ".pdf")):
             continue
@@ -229,23 +229,14 @@ def _resolve_group_when_all_animals_closed(session: Session, flush_context, inst
                 ))
 
 
-# --- the animal records follow the group until they are taken into holding -------------------------------------
-# While the animals are still out there (sighted, verified, escalated, rescue on the way, picked up), the rescue is run
-# on the group report. Each animal record follows the group's status, custody and facility until it has its own
-# holding record. Closing statuses (claimed, released, false alarm ...) are never copied: one dog going home must not
-# close the others.
+# --- the animal records follow the group while their case is open ------------------------------------------------
+# While the animals are still out there (sighted, verified, escalated, under observation), the case is run on the group
+# report. Each animal record follows the group's status until its own case is over. Closing statuses (claimed, released,
+# false alarm ...) are never copied: one dog going home must not close the others.
 SYNC_STATUS_IDS = (2, 4, 5, 6, 7, 8, 13, 16)   # Verified, Escalated, Rescue In Progress, Picked Up,
                                                # Under Observation, Impounded, Approved, Under Investigation
 _STATUS_NAMES = {2: "Verified", 4: "Escalated to Barangay", 5: "Rescue In Progress", 6: "Picked Up",
                  7: "Under Observation", 8: "Impounded", 13: "Approved", 16: "Under Investigation"}
-
-
-def _persisted_holding_ids(session: Session, report_ids: List[int]) -> set:
-    """Animal records that already HAVE a holding record (one being created right now still follows the group)."""
-    from app.models.report import HoldingAnimal
-    if not report_ids:
-        return set()
-    return {rid for (rid,) in session.query(HoldingAnimal.report_id).filter(HoldingAnimal.report_id.in_(report_ids)).all()}
 
 
 @_sa_event.listens_for(Session, "before_flush")
@@ -264,10 +255,9 @@ def _animal_records_follow_group(session: Session, flush_context, instances) -> 
             children = active_children(session, obj)
             if not children:
                 continue
-            held = _persisted_holding_ids(session, [c.report_id for c in children])
             for c in children:
-                if c.report_id in held or c.current_status_id in CASE_CLOSED_STATUS_IDS:
-                    continue   # has its own holding record now, or its case is over: it goes its own way
+                if c.current_status_id in CASE_CLOSED_STATUS_IDS:
+                    continue   # its case is over: it goes its own way
                 if not status_moved and c.current_status_id != obj.current_status_id:
                     continue   # a custody / facility change only reaches records that still follow the group
                 changed = c.current_status_id != obj.current_status_id
@@ -280,50 +270,6 @@ def _animal_records_follow_group(session: Session, flush_context, instances) -> 
                         remarks=(f"Status follows group Report #{obj.report_id}: "
                                  f"{_STATUS_NAMES.get(obj.current_status_id, 'updated')}."),
                     ))
-
-
-def intake_group_animals(db: Session, group: Report, intake_staff_id: Optional[int], rescue_id: Optional[int],
-                         extra_condition: str = "") -> List[int]:
-    """
-    The group report reached the holding facility: give each animal record (still following the group, not closed)
-    its own holding record and intake log, instead of one holding record for the whole group. Returns the holding ids.
-    """
-    from app.models.landmark import Landmark
-    from app.models.report import HoldingAnimal, HoldingTimeline
-    from app.utils.case_groups import CASE_CLOSED_STATUS_IDS
-    children = active_children(db, group)
-    held = _persisted_holding_ids(db, [c.report_id for c in children])
-    loc_name = None
-    if group.facility_id:
-        fac = db.get(Landmark, group.facility_id)
-        loc_name = fac.name if fac else None
-    loc_name = loc_name or group.landmark or "Holding Place"
-    created = []
-    for pos, c in enumerate(children, 1):
-        if c.report_id in held or c.current_status_id in CASE_CLOSED_STATUS_IDS:
-            continue
-        text = f"{c.condition or ''} {extra_condition or ''} {c.description or ''}".lower()
-        if "deceased" in text or "dead" in text:
-            fac_status = 4
-        elif any(k in text for k in ("injured", "bleeding", "limping", "weak", "sick", "treatment", "wound", "trapped",
-                                      "fracture", "broken", "infection", "rabid")):
-            fac_status = 1
-        else:
-            fac_status = 2
-        h = HoldingAnimal(report_id=c.report_id, rescue_id=rescue_id,
-                          animal_type=c.animal_type if c.animal_type in ("Dog", "Cat") else "Unknown",
-                          breed=c.animal_breed, color=c.animal_color, estimated_size=c.estimated_size,
-                          facility_status=fac_status, intake_staff_id=intake_staff_id)
-        db.add(h)
-        db.flush()
-        db.add(HoldingTimeline(
-            holding_id=h.holding_id, event_type="intake",
-            title=f"Animal Admitted to Holding Place ({loc_name})",
-            notes=f"Admitted into custody at {loc_name}. Animal {pos} of {len(children)} from group Report #{group.report_id} (record #{c.report_id}).",
-            logged_by=intake_staff_id,
-        ))
-        created.append(h.holding_id)
-    return created
 
 
 # --- who can see the animal records follows the group ---------------------------------------------------------------

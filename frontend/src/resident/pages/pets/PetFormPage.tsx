@@ -53,8 +53,9 @@ function PetForm({ pet }: { pet?: Pet }) {
       markings: v.markings.split(/[,\n]/).map((m) => m.trim()).filter(Boolean).slice(0, 8), description: v.description.trim(),
       photoUrl: media[0]?.url, photoName: media[0]?.name, registeredAt: pet?.registeredAt ?? '',
     };
-    const ok = await run(async () => { await dispatch({ type: 'pet/save', pet: saved }); });
-    if (ok) { toast.success(pet ? 'Pet updated' : `${saved.name} is registered`); navigate(residentPath(`/pets/${saved.id}`), { replace: true }); }
+    let savedId = saved.id;
+    const ok = await run(async () => { const res = await dispatch({ type: 'pet/save', pet: saved, photo: media[0]?.file }); if (res?.petId) savedId = res.petId; });
+    if (ok) { toast.success(pet ? 'Pet updated' : `${saved.name} is registered`); navigate(residentPath(`/pets/${savedId}`), { replace: true }); }
   };
 
   return (

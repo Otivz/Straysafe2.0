@@ -68,7 +68,7 @@ def _build_html_wrapper(
         </p>
         """
 
-    preferences_url = f"{frontend_url}/citizen/settings?tab=notifications"
+    preferences_url = f"{frontend_url}/resident-app/settings"
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -171,7 +171,7 @@ def render_report_submitted_email(
     ]
     
     intro = f"Your stray animal report has been successfully recorded. Subdivision officials and authorized responders have been notified to inspect and verify the case."
-    cta_url = f"/citizen/report/{report_id}"
+    cta_url = "/resident-app/reports"
     
     html_content = _build_html_wrapper(
         header_badge="Report Received",
@@ -217,7 +217,7 @@ def render_report_status_email(
         details.append(("Official Remarks", remarks))
         
     intro = f"The status of your stray report #{report_id} has been updated by authorized officials."
-    cta_url = f"/citizen/report/{report_id}"
+    cta_url = "/resident-app/reports"
     
     html_content = _build_html_wrapper(
         header_badge="Status Update",
@@ -262,7 +262,7 @@ def render_ai_match_alert_email(
         f"Our AI vision system detected a high-confidence look-alike match for your registered pet '{pet_name}' "
         f"in Report #{report_id}. Please review the photo and confirm whether this is your pet."
     )
-    cta_url = f"/citizen/matches"
+    cta_url = "/resident-app/pets"
     
     html_content = _build_html_wrapper(
         header_badge="Pet Match Alert",
@@ -279,58 +279,6 @@ def render_ai_match_alert_email(
         f"Hi {user_name or 'there'},\n\n"
         f"AI detected a {match_score}% look-alike match for your pet '{pet_name}' in Report #{report_id} near {landmark_str}.\n\n"
         f"Review sighting: {get_base_url()}{cta_url}\n\n"
-        "— StraySafe Team"
-    )
-    return subject, text_content, html_content
-
-
-def render_claim_decision_email(
-    user_name: Optional[str],
-    pet_name: str,
-    report_id: int,
-    claim_status: str,
-    remarks: Optional[str],
-) -> Tuple[str, str, str]:
-    """Notification when a pet claim is Approved or Rejected."""
-    is_approved = claim_status == "Approved"
-    badge = "Claim Approved" if is_approved else "Claim Decision"
-    title = f"Pet Claim {claim_status} for '{pet_name}'"
-    subject = f"StraySafe: Pet Claim for '{pet_name}' has been {claim_status}"
-    
-    details = [
-        ("Pet Name", pet_name),
-        ("Report ID", f"#{report_id}"),
-        ("Claim Decision", claim_status),
-        ("Decision Date", datetime.now().strftime("%b %d, %Y %I:%M %p")),
-    ]
-    if remarks:
-        details.append(("Officer Notes", remarks))
-        
-    if is_approved:
-        intro = f"Great news! Your ownership claim for pet '{pet_name}' on Report #{report_id} has been APPROVED by officials. You can coordinate handover and physical pickup."
-        sec_note = "Bring your valid government ID and ownership records when picking up your pet."
-    else:
-        intro = f"Your claim for pet '{pet_name}' on Report #{report_id} was not approved as submitted."
-        sec_note = "You may submit additional distinctive markings, veterinary records, or vaccination proof to request re-evaluation."
-        
-    cta_url = f"/citizen/claims"
-    
-    html_content = _build_html_wrapper(
-        header_badge=badge,
-        title=title,
-        intro_message=intro,
-        details_rows=details,
-        cta_text="View Claim Details",
-        cta_url=cta_url,
-        secondary_note=sec_note,
-        user_name=user_name
-    )
-    
-    text_content = (
-        f"Hi {user_name or 'there'},\n\n"
-        f"Your claim for '{pet_name}' on Report #{report_id} is {claim_status}.\n"
-        f"{'Notes: ' + remarks if remarks else ''}\n\n"
-        f"Check details: {get_base_url()}{cta_url}\n\n"
         "— StraySafe Team"
     )
     return subject, text_content, html_content
@@ -353,7 +301,7 @@ def render_pet_reunited_email(
     ]
     
     intro = f"The physical handover and recovery verification for '{pet_name}' has been successfully completed. Report #{report_id} is now officially closed. Thank you for using StraySafe!"
-    cta_url = f"/citizen/my-pets"
+    cta_url = "/resident-app/pets"
     
     html_content = _build_html_wrapper(
         header_badge="Reunion Complete",
@@ -369,48 +317,6 @@ def render_pet_reunited_email(
         f"Hi {user_name or 'there'},\n\n"
         f"Physical handover for '{pet_name}' on Report #{report_id} is complete and verified!\n"
         f"Case is officially closed.\n\n"
-        "— StraySafe Team"
-    )
-    return subject, text_content, html_content
-
-
-def render_qr_scanned_email(
-    user_name: Optional[str],
-    pet_name: str,
-    landmark: Optional[str],
-    latitude: Optional[float],
-    longitude: Optional[float],
-) -> Tuple[str, str, str]:
-    """Emergency alert when a pet's QR collar tag is scanned by a finder."""
-    subject = f"🚨 StraySafe URGENT: QR Tag Scanned for '{pet_name}'!"
-    loc_str = landmark or "Unknown Location"
-    if latitude and longitude:
-        loc_str += f" ({latitude:.4f}, {longitude:.4f})"
-        
-    details = [
-        ("Pet Name", pet_name),
-        ("Scan Location", loc_str),
-        ("Timestamp", datetime.now().strftime("%b %d, %Y %I:%M %p")),
-        ("Alert Level", "HIGH - Collar Scanned"),
-    ]
-    
-    intro = f"A community member or officer just scanned the official QR collar tag for your pet '{pet_name}'. Check your account immediately to view finder contact details or reported GPS coordinates."
-    cta_url = f"/citizen/my-pets"
-    
-    html_content = _build_html_wrapper(
-        header_badge="QR Tag Scanned",
-        title=f"Collar QR Scanned for '{pet_name}'",
-        intro_message=intro,
-        details_rows=details,
-        cta_text="View Pet QR Location",
-        cta_url=cta_url,
-        secondary_note="If your pet is lost, mark its status as 'Lost' to notify community leaders in the vicinity.",
-        user_name=user_name
-    )
-    
-    text_content = (
-        f"URGENT: The QR collar tag for '{pet_name}' was scanned near {loc_str}.\n"
-        f"View details: {get_base_url()}{cta_url}\n\n"
         "— StraySafe Team"
     )
     return subject, text_content, html_content
@@ -435,7 +341,7 @@ def render_owner_warning_email(
     ]
     
     intro = f"An authorized subdivision or municipal officer has issued an official {warning_level} regarding '{violation_type}'. Please review the details below and log in to acknowledge the notice."
-    cta_url = f"/citizen/settings?tab=account"
+    cta_url = "/resident-app/notifications"
     
     html_content = _build_html_wrapper(
         header_badge="Official Citation",
@@ -479,7 +385,7 @@ def render_leader_new_report_email(
     ]
     
     intro = f"A new resident stray report has been submitted in your subdivision and is awaiting verification and initial assessment."
-    cta_url = f"/subdivision/reports/{report_id}"
+    cta_url = f"/subd-admin/cases/{report_id}"
     
     html_content = _build_html_wrapper(
         header_badge="Action Required",
@@ -517,7 +423,7 @@ def render_unassigned_reminder_email(
     ]
     
     intro = f"Report #{report_id} has been active for {minutes_unassigned} minutes without an assigned leader. Please assign an officer or claim the case to proceed with verification."
-    cta_url = f"/subdivision/reports/{report_id}"
+    cta_url = f"/subd-admin/cases/{report_id}"
     
     html_content = _build_html_wrapper(
         header_badge="Unassigned Alert",
@@ -532,82 +438,5 @@ def render_unassigned_reminder_email(
     text_content = (
         f"Reminder: Report #{report_id} has been unassigned for {minutes_unassigned} minutes.\n"
         f"View report: {get_base_url()}{cta_url}\n"
-    )
-    return subject, text_content, html_content
-
-
-def render_brgy_escalated_report_email(
-    staff_name: Optional[str],
-    report_id: int,
-    animal_type: str,
-    landmark: Optional[str],
-    reason: Optional[str],
-) -> Tuple[str, str, str]:
-    """Notification to Barangay staff when a report is escalated from a subdivision."""
-    subject = f"🚨 Escalated Case #{report_id} Transferred to Barangay Staff"
-    details = [
-        ("Report ID", f"#{report_id}"),
-        ("Animal", animal_type or "Stray"),
-        ("Location", landmark or "Location"),
-        ("Escalation Reason", reason or "Subdivision Referral / Municipal Intervention"),
-        ("Escalated At", datetime.now().strftime("%b %d, %Y %I:%M %p")),
-    ]
-    
-    intro = f"A stray report has been formally escalated to Barangay staff for municipal intervention, rescue dispatch, or holding place intake."
-    cta_url = f"/barangay/reports/{report_id}"
-    
-    html_content = _build_html_wrapper(
-        header_badge="Escalated Case",
-        title=f"Report #{report_id} Escalated to Barangay",
-        intro_message=intro,
-        details_rows=details,
-        cta_text="View Municipal Case",
-        cta_url=cta_url,
-        user_name=staff_name
-    )
-    
-    text_content = (
-        f"Case #{report_id} has been escalated to Barangay.\n"
-        f"Reason: {reason or 'Subdivision Escalation'}\n"
-        f"View: {get_base_url()}{cta_url}\n"
-    )
-    return subject, text_content, html_content
-
-
-def render_rescue_assignment_email(
-    staff_name: Optional[str],
-    rescue_id: int,
-    report_id: int,
-    animal_type: str,
-    landmark: Optional[str],
-    team_name: Optional[str],
-) -> Tuple[str, str, str]:
-    """Notification to personnel assigned to a rescue dispatch."""
-    subject = f"🚑 Rescue Dispatch Assignment: Rescue #{rescue_id} (Report #{report_id})"
-    details = [
-        ("Rescue ID", f"#{rescue_id}"),
-        ("Report ID", f"#{report_id}"),
-        ("Animal", animal_type or "Animal in need"),
-        ("Target Location", landmark or "Dispatched Area"),
-        ("Assigned Team", team_name or "Barangay Animal Response"),
-    ]
-    
-    intro = f"You have been assigned to an animal rescue operation. Review the incident details and location landmarks prior to deployment."
-    cta_url = f"/barangay/rescues/{rescue_id}"
-    
-    html_content = _build_html_wrapper(
-        header_badge="Rescue Dispatch",
-        title=f"Assigned to Rescue #{rescue_id}",
-        intro_message=intro,
-        details_rows=details,
-        cta_text="View Rescue Details",
-        cta_url=cta_url,
-        user_name=staff_name
-    )
-    
-    text_content = (
-        f"You have been assigned to Rescue #{rescue_id} for Report #{report_id}.\n"
-        f"Location: {landmark}\n"
-        f"View: {get_base_url()}{cta_url}\n"
     )
     return subject, text_content, html_content

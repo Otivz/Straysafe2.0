@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowRight, EllipsisVertical, FileQuestion, Flag, Lock, Megaphone, NotebookPen, RefreshCw, RotateCcw } from 'lucide-react';
 import { adminPath } from '../../config';
 import { OutcomeBadge, PriorityMark, StatusBadge } from '../../components/Badge';
 import { Button, LinkButton } from '../../components/Button';
 import { CATEGORY_ICON } from '../../components/icons';
-import { EmptyState, Panel, Tabs } from '../../components/layout';
+import { Callout, EmptyState, ErrorState, PageSkeleton, Panel, Tabs } from '../../components/layout';
 import { Menu } from '../../components/Menu';
 import { useToast } from '../../components/toast';
 import { CATEGORIES } from '../../data/constants';
@@ -28,7 +28,7 @@ const TAB_KEYS: TabKey[] = ['overview', 'assessment', 'actions', 'history'];
 /** A06 Case details: the primary case-management workspace. */
 export default function CaseDetailPage() {
   const { caseId } = useParams();
-  const { state, dispatch } = useAdminData();
+  const { state, dispatch, loadCase, detailStatus } = useAdminData();
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const toast = useToast();
@@ -38,7 +38,16 @@ export default function CaseDetailPage() {
   const c = caseById(state, caseId);
   usePageTitle(c ? `${c.id} · ${c.title}` : 'Case not found');
 
+  // The list holds a short row per case; the full record (assessment, referrals, follow-ups, photos, history) is read when the case
+  // is opened.
+  const load = useRef(loadCase);
+  useEffect(() => { load.current = loadCase; });
+  useEffect(() => { if (caseId) void load.current(caseId); }, [caseId]);
+  const detail = detailStatus(caseId ?? '');
+
   if (!c) {
+    if (detail.status === 'idle' || detail.status === 'loading') return <PageSkeleton />;
+    if (detail.status === 'error') return <ErrorState message={detail.error} onRetry={() => { void loadCase(caseId ?? ''); }} />;
     return (
       <Panel>
         <EmptyState icon={FileQuestion} title="We can’t find that case" action={<LinkButton variant="primary" to={adminPath('/cases')}>Back to cases</LinkButton>}>
@@ -47,6 +56,7 @@ export default function CaseDetailPage() {
       </Panel>
     );
   }
+  const full = detail.status === 'ready';
 
   const requested = params.get('tab') as TabKey | null;
   const tab: TabKey = requested && TAB_KEYS.includes(requested) ? requested : 'overview';
@@ -112,16 +122,23 @@ export default function CaseDetailPage() {
         items={[
           { key: 'overview', label: 'Overview' },
           { key: 'assessment', label: 'Assessment' },
-          { key: 'actions', label: 'Actions & follow-ups', count: actionCount, alert: overdue },
-          { key: 'history', label: 'History', count: c.timeline.length },
+          { key: 'actions', label: 'Actions & follow-ups', count: full ? actionCount : undefined, alert: full && overdue },
+          { key: 'history', label: 'History', count: full ? c.timeline.length : undefined },
         ]}
       />
 
       <div role="tabpanel" id="case-panel" aria-labelledby={`case-tab-${tab}`} className="pt-6">
-        {tab === 'overview' ? <OverviewTab c={c} now={now} openDialog={open} /> : null}
-        {tab === 'assessment' ? <AssessmentTab c={c} openDialog={open} /> : null}
-        {tab === 'actions' ? <ActionsTab c={c} now={now} openDialog={open} /> : null}
-        {tab === 'history' ? <HistoryTab c={c} now={now} /> : null}
+        {detail.status === 'error' ? <ErrorState message={detail.error} onRetry={() => { void loadCase(c.id); }} />
+          : !full ? <PageSkeleton />
+            : (
+              <>
+                {detail.error ? <Callout tone="amber" className="mb-4">{detail.error}</Callout> : null}
+                {tab === 'overview' ? <OverviewTab c={c} now={now} openDialog={open} /> : null}
+                {tab === 'assessment' ? <AssessmentTab c={c} openDialog={open} /> : null}
+                {tab === 'actions' ? <ActionsTab c={c} now={now} openDialog={open} /> : null}
+                {tab === 'history' ? <HistoryTab c={c} now={now} /> : null}
+              </>
+            )}
       </div>
 
       <CaseDialogs c={c} dialog={dialog} onClose={() => setDialog(null)} />

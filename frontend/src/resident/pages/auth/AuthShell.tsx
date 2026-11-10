@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Check, Circle, FlaskConical } from 'lucide-react';
+import { ArrowLeft, Check, Circle } from 'lucide-react';
 import { passwordRules } from '../../../utils/passwordPolicy';
 import { residentPath } from '../../config';
 import { usePageTitle } from '../../lib/hooks';
 
-/** Frame for the signed-out screens: brand, a heading and the form. `back` is a path inside the preview. */
+/** Frame for the signed-out screens: brand, a heading and the form. `back` is a path inside the app. */
 export function AuthShell({ title, lead, back, children, below }: { title: string; lead?: ReactNode; back?: string; children: ReactNode; below?: ReactNode }) {
   usePageTitle(title);
   return (
@@ -26,16 +26,6 @@ export function AuthShell({ title, lead, back, children, below }: { title: strin
         {children}
       </div>
       {below}
-    </div>
-  );
-}
-
-/** Always visible on signed-out screens in the preview, so it can never be mistaken for a real sign-in. */
-export function DevNote({ title = 'Development preview', children }: { title?: string; children: ReactNode }) {
-  return (
-    <div className="rs-devbox" role="note">
-      <p className="rs-devbox__title"><FlaskConical size={15} aria-hidden="true" /><strong>{title}</strong></p>
-      <div className="rs-stack-sm">{children}</div>
     </div>
   );
 }

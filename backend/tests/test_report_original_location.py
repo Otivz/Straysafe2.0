@@ -6,7 +6,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-os.environ.setdefault('DATABASE_URL', 'sqlite://')
+os.environ['DATABASE_URL'] = 'sqlite://'      # assigned, not setdefault: a DATABASE_URL already in the shell must never win
 os.environ.setdefault('JWT_SECRET_KEY', 'original-location-test-secret-0123456789')
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -33,7 +33,7 @@ class OriginalLocationTests(unittest.TestCase):
         response = SimpleNamespace(landmark=report.landmark, latitude=report.latitude, longitude=report.longitude, history=[])
         db = Mock()
         db.query.side_effect = AssertionError('Unexpected database query')
-        populate_location_and_facility_info(response, report, db, holding_map={}, landmarks_map={4: facility})
+        populate_location_and_facility_info(response, report, db, landmarks_map={4: facility})
         db.query.assert_not_called()
         return response
 
@@ -42,7 +42,8 @@ class OriginalLocationTests(unittest.TestCase):
         self.assertIsNone(response.initial_landmark)
         self.assertEqual(response.initial_latitude, 14.80141775)
         self.assertEqual(response.initial_longitude, 121.00406153)
-        self.assertEqual(response.facility['name'], 'Barangay Animal Impound Facility')
+        self.assertIsNone(response.facility)      # holding places are no longer kept: the pin is where the animal was seen
+        self.assertEqual(response.custody_status, 'Sighting')
 
     def test_missing_original_coordinates_stay_missing(self):
         response = self.serialize(initial_latitude=None, initial_longitude=None)

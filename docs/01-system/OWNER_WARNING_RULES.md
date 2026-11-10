@@ -14,8 +14,15 @@ Phase 6 of the restore plan. These rules apply to official owner warnings, repea
 | The recipient is a resident account | `400` |
 | With a known pet, the recipient is that pet's registered owner, and the pet has an owner account | `400` |
 | The chosen pet matches the report's linked pet | `409` |
-| The case isn't escalated to the Barangay | `403` |
+| The case isn't in the retired Barangay rescue workflow (a rescue record, or status 5, 6 or 13). A **referral no longer blocks a warning** (status 4 and an endorsement letter are not a block any more) | `403` |
+| The case is **open** (not Closed) | `409` |
+| Its concern is one an owner can be warned for: Animal Nuisance or Animal Safety Concern (older categories are read as those; a lost-pet, found-animal, injured or other concern is not) | `409` |
+| The owner was **confirmed** with evidence in the case's ownership review, and the warning goes to that owner | `409` |
+| The incident was **verified** (assessment, or the older on-site verification) | `409` |
+| A **confirmed** subdivision policy covers the concern: `policy_id` optional when exactly one applies, required when several do | `409` / `422` / `404` |
 | An inherited pet identity was re-checked first (existing rule) | `409` |
+
+These checks run in this order (the same order the Admin screen explains it) and are enforced on the server, whatever the screen shows ([CASE_WORKFLOW_BACKEND.md](CASE_WORKFLOW_BACKEND.md)). A subdivision with no confirmed policy cannot issue warnings until one is configured.
 
 A pet with no owner account never gets an account warning. The leader logs a **verbal warning** instead (see below). The second-warning action on an observation follows the same rules: it is leader-only and refused (`409`) for an owner without an account. It previously issued the warning to user #1.
 
@@ -28,7 +35,15 @@ An incident is a report. For the same incident, pet and violation:
 
 A **logged repeat incident** is a different report, so it can receive its own warning. A warning on a repeat never opens a second observation for the same pet.
 
-`GET /warnings/suggestion?violation_type=&report_id=` suggests the tier from the pet's (or owner's) history for that violation. It also returns default instructions and a comply-by date (3 days). The leader's warning form is prefilled from it, and the leader can change both the tier and the remarks.
+`GET /warnings/suggestion?violation_type=&report_id=` suggests the tier from the pet's (or owner's) history for that violation. It also returns default instructions, the observation period of the applicable policy (`observation_days`) and the matching comply-by date; both are empty when the policy defines no period. The leader's warning form is prefilled from it, and the leader can change both the tier and the remarks.
+
+## Policy, observation period and fines
+
+- The warning records the policy it was issued under (`policy_id`, `policy_title`, `policy_reference`) and the policy's observation period (`observation_days`, with the due date in `follow_up_at`).
+- **The period is the policy's.** A policy that defines none means **no observation period**: no observation is started and no number of days is assumed. The old fixed 3 days are gone from the warning path; a warning with a period starts an observation of exactly that many days, and the owner is told that number.
+- Warnings issued before policies existed (no `policy_id`) are kept as they were. They read with empty policy fields, and an observation that had to be tracked for one is read as the 3 days that applied then.
+- **No fine is ever worked out by the system.** `fine_amount` is whatever the issuer typed, and 0 otherwise.
+- Issuing a warning is case work: the case moves to In progress (never backward, never out of Closed).
 
 ## Who may read warnings
 

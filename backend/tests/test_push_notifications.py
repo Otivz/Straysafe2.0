@@ -127,7 +127,7 @@ check("send: the queued push is delivered", deliveries(nid)[0].status == "sent" 
 payload = SENT[-1][1]
 check("6 the payload has only title, body, url, tag, notification_id", set(payload) == {"title", "body", "url", "tag", "notification_id"})
 check("6 ttl is 24 hours", SENT[-1][2] == 24 * 3600)
-check("8 a resident's tap opens the resident page", payload["url"] == "/resident-home")
+check("8 a resident's tap opens the Resident app", payload["url"] == "/resident-app/home")
 
 # 6. Safe text
 nid = notify(res, title="Owner contact", message="Call 0917 123 4567 or mail ana.cruz@gmail.com about Brownie, who was seen near the chapel gate this morning and looked hungry and scared")
@@ -170,9 +170,9 @@ check("5 nothing is pushed about a report the person can't see", deliveries(nid)
       and "no longer available" in deliveries(nid)[0].last_error, deliveries(nid)[0].last_error)
 
 # 8. Links per role
-check("8 leader links go to /subd/...", pc.notification_link(2, "status_update", 52) == "/subd/reports/52")
-check("8 resident links go to /resident/...", pc.notification_link(1, "status_update", 52) == "/resident/reports/52")
-check("8 barangay adoption chat opens the conversation", pc.notification_link(3, "adoption_chat", 7) == "/brgy/messages?adoptionId=7")
+check("8 leader links go to the Leader app's case page", pc.notification_link(2, "status_update", 52) == "/subd-admin/cases/52")
+check("8 resident links go to the Resident app's reports", pc.notification_link(1, "status_update", 52) == "/resident-app/reports")
+check("8 retired adoption chat types are no longer pushed", pc.category_for("adoption_chat") is None and pc.category_for("adoption_available_again") is None)
 
 # 10-11. Retries and expiry
 REPLIES[:] = [500]

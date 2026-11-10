@@ -1,15 +1,32 @@
 import axios from 'axios';
-import { recordUserActivity, ACTIVITY_STORAGE_KEY, getAppropriateLoginPath } from './inactivity';
-import { getSavedServer, isNativeApp } from './serverAddress';
+import { Capacitor } from '@capacitor/core';
+import { recordUserActivity, ACTIVITY_STORAGE_KEY } from './inactivity';
+import { readDevBackend } from './devBackend';
 import { isDataMutation, notifyDataChanged, refreshScope } from './dataRefresh';
 
-// In the installed app, an address saved in Server settings (login pages) comes first: the PC's IP changes per Wi-Fi
-const CONFIGURED_API_URL: string = getSavedServer() || import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+// Build kinds (constants defined here, not shared: the bundler folds a constant only within one module, and the folding is what keeps the
+// debug-only code out of a release or web bundle). `vite build --mode android` / `--mode android-debug`: the Android app.
+const ANDROID_BUILD = import.meta.env.MODE === 'android' || import.meta.env.MODE === 'android-debug';
+const ANDROID_DEV_CONNECT = import.meta.env.MODE === 'android-debug';
+
+// The Android Resident app (see docs/05-operations/ANDROID_RESIDENT_APP.md) never guesses its backend:
+//  - `vite build --mode android` (release-style) is tied to the one address it was built with (vite.config.ts refuses to build without
+//    a valid one). It has no localhost fallback and never uses the dev-only /api path.
+//  - `vite build --mode android-debug` (the debug APK) uses the address chosen in its Connection Settings screen (utils/devBackend.ts,
+//    saved on the phone), else the optional address it was built with, else none: the app then opens Connection Settings first.
+// If something is still wrong the app shows its own "can't reach the server" state; it never quietly talks to another server or switches
+// to sample data. Every request below (this client, the sign-in screens, token refresh) reads API_BASE_URL, so one address applies.
+const savedAddress = (): string | null => {
+    if (!ANDROID_DEV_CONNECT) return null;
+    try { return readDevBackend(localStorage); } catch { return null; }
+};
+const CONFIGURED_API_URL: string = savedAddress() || import.meta.env.VITE_API_BASE_URL || (ANDROID_BUILD ? '' : 'http://localhost:8000');
 // Development (npm run dev / dev:https): always call the same-origin /api path, which the Vite dev server
 // forwards to the backend on this PC. A phone then only needs the one address it opened (http(s)://<PC-IP>:5173)
 // and keeps working when the router gives the PC a new IP. Production builds use VITE_API_BASE_URL.
-export const API_BASE_URL =
-    import.meta.env.DEV ||
+export const API_BASE_URL = ANDROID_BUILD
+    ? CONFIGURED_API_URL
+    : import.meta.env.DEV ||
     (typeof window !== 'undefined' && window.location.protocol === 'https:' && CONFIGURED_API_URL.startsWith('http:'))
         ? '/api'
         : CONFIGURED_API_URL;
@@ -18,6 +35,10 @@ export const api = axios.create({
     baseURL: API_BASE_URL,
     withCredentials: true,
 });
+
+const isNativeApp = (): boolean => {
+    try { return Capacitor.isNativePlatform(); } catch { return false; }
+};
 
 // Installed app (APK): its page (http://localhost) and the backend are different sites, so the httpOnly refresh
 // cookie isn't sent. The app marks its requests, keeps the refresh token the backend returns in X-Refresh-Token,
@@ -94,89 +115,6 @@ export const getStoredToken = (): string | null => {
     return null;
 };
 
-/** The user id inside a session token (no verification: only to tell which account a token belongs to). */
-export const tokenUserId = (token: string | null): number | null => {
-    if (!token) return null;
-    try {
-        const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-        const id = Number(payload.user_id ?? payload.sub);
-        return Number.isFinite(id) ? id : null;
-    } catch {
-        return null;
-    }
-};
-
-export interface AuthenticatedUser {
-    user_id: number;
-    id?: number;
-    name?: string;
-    role_id?: number;
-    email?: string;
-    profile_picture?: string;
-    avatar?: string;
-    subdivision_id?: number;
-    barangay_id?: number;
-    subdivision_name?: string;
-    barangay_name?: string;
-    [key: string]: any;
-}
-
-/** Get the currently authenticated user based on active path, access token, and role storage. */
-export const getAuthenticatedUser = (): AuthenticatedUser | null => {
-    const path = typeof window !== 'undefined' ? window.location.pathname : '';
-    let prioritizedKeys = ['admin_user', 'staff_user', 'resident_user'];
-    if (path.startsWith('/admin')) {
-        prioritizedKeys = ['admin_user', 'staff_user', 'resident_user'];
-    } else if (path.startsWith('/staff') || path.startsWith('/subd') || path.startsWith('/brgy')) {
-        prioritizedKeys = ['staff_user', 'admin_user', 'resident_user'];
-    } else if (path.startsWith('/resident') || path.startsWith('/resident-home') || path.startsWith('/login')) {
-        prioritizedKeys = ['resident_user', 'staff_user', 'admin_user'];
-    }
-
-    // 1. Check path-prioritized user storage (highest priority)
-    for (const key of prioritizedKeys) {
-        for (const storage of [sessionStorage, localStorage]) {
-            const raw = storage.getItem(key);
-            if (!raw) continue;
-            try {
-                const parsed = JSON.parse(raw);
-                const uid = Number(parsed?.user_id ?? parsed?.id);
-                if (Number.isFinite(uid) && uid > 0) {
-                    return { ...parsed, user_id: uid };
-                }
-            } catch {
-                // Ignore parse errors
-            }
-        }
-    }
-
-    // 2. Fallback search across all keys if path-based keys weren't found
-    for (const key of ['staff_user', 'resident_user', 'admin_user']) {
-        for (const storage of [sessionStorage, localStorage]) {
-            const raw = storage.getItem(key);
-            if (!raw) continue;
-            try {
-                const parsed = JSON.parse(raw);
-                const uid = Number(parsed?.user_id ?? parsed?.id);
-                if (Number.isFinite(uid) && uid > 0) {
-                    return { ...parsed, user_id: uid };
-                }
-            } catch {
-                // Ignore parse errors
-            }
-        }
-    }
-
-    // 3. Fallback to token payload user_id if token exists
-    const token = getStoredToken();
-    const tUserId = tokenUserId(token);
-    if (tUserId && tUserId > 0) {
-        return { user_id: tUserId, name: 'User', role_id: 1 };
-    }
-
-    return null;
-};
-
 /**
  * Save refreshed profile data into a stored session (resident_user / staff_user / admin_user) without breaking it:
  * only if that session still exists (it may have been signed out by another sign-in in this browser) and is the same
@@ -197,14 +135,10 @@ export const updateStoredSessionUser = (key: 'resident_user' | 'staff_user' | 'a
     }
 };
 
-// Run just before the session is cleared (e.g. push notifications stop on this device at sign-out)
+// Chat messages that earlier versions of the app cached in this browser: purged at every sign-out
 const CHAT_CACHE_PREFIXES = ['straysafe_report_chat_', 'straysafe_match_chat_', 'straysafe_adoption_chat_'];
-const beforeClearAuthHooks: Array<(token: string | null) => void> = [];
-export const onBeforeClearAuth = (hook: (token: string | null) => void) => { beforeClearAuthHooks.push(hook); };
 
 export const clearAuthStorage = () => {
-    const token = getStoredToken();
-    beforeClearAuthHooks.forEach(h => { try { h(token); } catch { /* never block sign-out */ } });
     localStorage.removeItem('access_token');
     sessionStorage.removeItem('access_token');
     localStorage.removeItem('resident_user');
@@ -224,8 +158,8 @@ export const clearAuthStorage = () => {
     } catch { /* storage unavailable */ }
 };
 
-// Fired when the server ends this browser's session (the sign-in could not be renewed). InactivityManager then takes
-// the person to sign in, instead of leaving them on a page whose requests all fail until they open another page.
+// Fired when the server ends this browser's session (the sign-in could not be renewed). The auth providers of the two interfaces
+// then ask the person to sign in again, instead of leaving them on a page whose requests all fail.
 export const SESSION_ENDED_EVENT = 'straysafe:session-ended';
 const endSession = () => {
     const hadSession = !!getStoredToken();
@@ -244,14 +178,6 @@ export const logoutUser = async () => {
         clearAuthStorage();
         forgetAppRefreshToken();
     }
-};
-
-// A password change ends every older session (including this one), so send the person to sign in again.
-export const signOutAfterPasswordChange = async (delayMs = 1800) => {
-    const loginPath = getAppropriateLoginPath();
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
-    await logoutUser();
-    window.location.assign(loginPath);
 };
 
 // Request Interceptor: Automatically attach Bearer token, handle FormData, and record activity

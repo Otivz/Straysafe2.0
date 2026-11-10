@@ -47,6 +47,7 @@ const Row = ({ title, description, children }: { title: string; description?: Re
 // ------------------------------------------------------------------------------------------------------ profile
 function ProfileSection() {
   const { settings, save, pending, error } = useSaveSettings();
+  const { capabilities } = useAdminData();
   const initial = settings.subdivision;
   const [f, setF] = useState(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -57,7 +58,7 @@ function ProfileSection() {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const next: Record<string, string> = {};
-    if (f.name.trim().length < 2) next.name = 'Enter the subdivision’s name.';
+    if (capabilities.editSubdivisionIdentity && f.name.trim().length < 2) next.name = 'Enter the subdivision’s name.';
     if (f.officeEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.officeEmail)) next.officeEmail = 'Enter a valid email address.';
     setErrors(next);
     if (Object.keys(next).length === 0) await save({ ...settings, subdivision: { ...f, name: f.name.trim() } }, 'Subdivision profile saved');
@@ -68,9 +69,9 @@ function ProfileSection() {
       <Panel>
         <Block title="Subdivision profile" description="Shown to residents. The office contact is how neighbours reach you from a notice, so no personal numbers are needed.">
           <div className="flex flex-col gap-5">
-            <Field label="Subdivision name" required error={errors.name}><Input value={f.name} onChange={(e) => set({ name: e.target.value })} /></Field>
+            <Field label="Subdivision name" required error={errors.name} hint={capabilities.editSubdivisionIdentity ? undefined : 'Set by the system administrator.'}><Input value={f.name} disabled={!capabilities.editSubdivisionIdentity} onChange={(e) => set({ name: e.target.value })} /></Field>
             <div className="sa-grid2">
-              <Field label="City or municipality" optional><Input value={f.city} onChange={(e) => set({ city: e.target.value })} /></Field>
+              <Field label="City or municipality" optional hint={capabilities.editSubdivisionIdentity ? undefined : 'Set by the system administrator.'}><Input value={f.city} disabled={!capabilities.editSubdivisionIdentity} onChange={(e) => set({ city: e.target.value })} /></Field>
               <Field label="Office address"><Input value={f.address} onChange={(e) => set({ address: e.target.value })} /></Field>
             </div>
             <div className="sa-grid2">
@@ -94,7 +95,7 @@ function AccountSection() {
   return (
     <Panel>
       <Block title="Administrator account" description="One administrator role covers reviewing reports, coordinating, monitoring and closing cases.">
-        <Kv wide rows={[['Name', state.admin.name], ['Email', state.admin.email], ['Role', state.admin.role], ['Signed in', session ? <span>{fmtDateTime(session.startedAt)} <Badge>Preview session</Badge></span> : '—']]} />
+        <Kv wide rows={[['Name', state.admin.name], ['Email', state.admin.email], ['Role', state.admin.role], ['Signed in', session ? <span>{fmtDateTime(session.startedAt)}</span> : '—']]} />
         <div className="mt-5 flex flex-wrap gap-2"><LinkButton to={adminPath('/profile')} icon={Pencil}>Edit profile and password</LinkButton></div>
       </Block>
       <Block title="Roles"><p className="sa-small sa-text-2 sa-prose">StraySafe starts with a single administrator role. Additional internal roles should only be introduced when your subdivision’s operations genuinely need them. External authorities such as the barangay do not have their own accounts. Record what they tell you under External coordination in a case.</p></Block>

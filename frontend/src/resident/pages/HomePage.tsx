@@ -10,12 +10,14 @@ import { useResidentData } from '../data/context';
 import { feed, latestAdvisory, recentUpdates, unreadCount } from '../data/selectors';
 import { useStartReport } from '../lib/flow';
 import { useNow } from '../lib/hooks';
+import { useSubdivisionName } from '../lib/useOffice';
 
 interface Attention { id: string; icon: LucideIcon; title: string; meta: string; to: string }
 
 /** R07 — Home: what needs attention, quick ways to report, and the latest from the community. */
 export default function HomePage() {
   const { state } = useResidentData();
+  const subdivision = useSubdivisionName();
   const start = useStartReport();
   const navigate = useNavigate();
   const now = useNow();
@@ -43,7 +45,7 @@ export default function HomePage() {
     <PrimaryScreen
       title={`${greeting(now)}, ${first}`}
       docTitle="Home"
-      lead="Selera Homes"
+      lead={subdivision}
       actions={(
         <Link to={residentPath('/notifications')} className="rs-iconbtn rs-bell" aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'} title="Notifications">
           <Bell size={21} strokeWidth={1.9} aria-hidden="true" />

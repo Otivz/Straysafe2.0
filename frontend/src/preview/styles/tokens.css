@@ -127,7 +127,7 @@
     border-collapse: collapse;
   }
 
-  /* the legacy global stylesheet forces dark colours on these tags when <html class="dark">; this UI is light-only */
+  /* this UI is light-only: keep form controls and scrollbars light even when the device prefers dark */
   html:has(.sa-root) {
     color-scheme: light;
   }

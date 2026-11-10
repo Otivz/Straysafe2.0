@@ -11,6 +11,7 @@ import re
 from datetime import datetime
 from typing import Iterable, Optional, Set
 
+from fastapi import HTTPException
 from sqlalchemy import and_, event, inspect, or_
 from sqlalchemy.orm import Session, object_session
 
@@ -28,9 +29,6 @@ VISIBILITY_VALUES = (PUBLIC, PRIVATE, PENDING)
 
 FALSE_STATUS_IDS = (3, 14)            # Rejected, False Alarm / Dismissed
 HIDDEN_STATUS_IDS = (3, 14, 18)       # ...and Merged duplicate: residents see the main case instead
-# Resolved, rejected, dismissed or merged: existing comments stay, new ones are refused
-COMMENTS_CLOSED_STATUS_IDS = (3, 9, 10, 11, 12, 14, 17, 18)
-
 STAFF_ROLE_IDS = (2, 3, 4)
 COMMUNITY_REPORTER = "Community Reporter"
 REGISTERED_OWNER = "Registered Owner"
@@ -63,15 +61,13 @@ def is_publicly_visible(report: Report) -> bool:
 
 def public_block_reason(report: Report) -> Optional[str]:
     """Why the leader can't choose Public right now (None when they can)."""
+    if getattr(report, "is_sensitive", False):
+        return "A private complaint about a neighbour is never made public. Publish a community notice instead."
     if report.current_status_id in FALSE_STATUS_IDS:
         return "A false or rejected report can't be made public."
     if report.current_status_id == 18 or report.duplicate_of_report_id:
         return "A merged duplicate can't be made public. Residents see the main case instead."
     return None
-
-
-def comments_open(report: Report) -> bool:
-    return report.current_status_id not in COMMENTS_CLOSED_STATUS_IDS
 
 
 def _owned_pet_ids(db: Session, user_id: int) -> Set[int]:
@@ -175,6 +171,9 @@ def set_visibility(db: Session, report: Report, value: str, actor: Optional[User
     """
     if value not in VISIBILITY_VALUES:
         raise ValueError(f"Unknown visibility '{value}'")
+    if value == PUBLIC and getattr(report, "is_sensitive", False):
+        # Enforced at the only writer, so no route can publish a private complaint (whatever it sends)
+        raise HTTPException(status_code=409, detail=public_block_reason(report))
     old = report.visibility
     now = datetime.now()
     report.visibility = value
@@ -239,12 +238,8 @@ def scrub(text: Optional[str], names: Iterable[str], replacement: str = "a resid
     return out
 
 
-def first_name(name: Optional[str]) -> str:
-    return (name or "Resident").strip().split(" ")[0] or "Resident"
-
-
 # ---- what each viewer gets (rules 3, 6, 7) ------------------------------------------------------------------------
-_OWNER_PRIVATE = ("owner_phone", "owner_email", "owner_address", "pet_qr_token", "pet_qr_code_hash", "pet_qr_code_url")
+_OWNER_PRIVATE = ("owner_phone", "owner_email", "owner_address")
 # Kept for an owner who only has an AI-suggested match: enough to recognise the animal, nothing about people
 _MATCH_CARD_FIELDS = (
     "report_id", "created_at", "category_id", "animal_type", "animal_breed", "animal_color", "estimated_size",
@@ -254,21 +249,30 @@ _MATCH_CARD_FIELDS = (
 )
 
 
+# Other residents get the AREA of a report or a sighting, never the pin: 3 decimals of a degree is ~110 m, enough to
+# say "near the clubhouse", not which house. Staff, the reporter and the pet's owner keep the exact pin.
+GENERALIZED_DECIMALS = 3
+
+
+def generalize_coord(value, default=None):
+    """A coordinate rounded to the area (~110 m). None stays None (or `default`)."""
+    return round(float(value), GENERALIZED_DECIMALS) if value is not None else default
+
+
 def _match_card(rep_data):
     """The minimum for an owner to say "that may be my pet": photos, looks, rough area and date (rule 6)."""
     from app.schemas.report import ReportResponse
     data = {k: getattr(rep_data, k, None) for k in _MATCH_CARD_FIELDS if hasattr(rep_data, k)}
     # ~100 m: the area, not the house
-    data["latitude"] = round(float(rep_data.latitude), 3) if rep_data.latitude is not None else 0.0
-    data["longitude"] = round(float(rep_data.longitude), 3) if rep_data.longitude is not None else 0.0
+    data["latitude"] = generalize_coord(rep_data.latitude, 0.0)
+    data["longitude"] = generalize_coord(rep_data.longitude, 0.0)
     data["media"] = [m for m in (rep_data.media or []) if not m.is_evidence and not m.history_id]
     data["visibility"] = None
     data["reporter_name"] = COMMUNITY_REPORTER
-    data["comments"], data["history"], data["disputes"], data["merged_reports"] = [], [], [], []
+    data["history"], data["disputes"], data["merged_reports"] = [], [], []
     card = ReportResponse.model_validate(data)
     card.priority_level = rep_data.priority_level
     card.viewer_access = MATCH_OWNER
-    card.comments_open = False
     return card
 
 
@@ -337,12 +341,16 @@ def redact_response(rep_data, viewer: Optional[User], access: str, report: Repor
     get the reporter's identity (rule 3) or the registered owner's details (rule 6); a viewer who is the owner keeps
     their own. Returns the (possibly replaced) response.
     """
+    from app.utils.case_state import case_status_of, closure_of
+    rep_data.case_status = case_status_of(report)   # one of the four, even for a row written before the column existed
+    closure = closure_of(report)
+    rep_data.case_outcome = ({"label": closure["label"], "outcome": closure["outcome"], "closed_at": closure["closed_at"]}
+                             if closure and closure.get("label") else None)
     rep_data.visibility_decided_by = report.visibility_decided_by
     decider = getattr(report, "visibility_decider", None)
     rep_data.visibility_decided_by_name = decider.name if decider is not None else None
     rep_data.visibility_decided_at = report.visibility_decided_at
     rep_data.visible_to_residents = is_publicly_visible(report)
-    rep_data.comments_open = comments_open(report)
     rep_data.viewer_access = access
     rep_data.can_view_owner_details = access == STAFF or bool(
         viewer and rep_data.owner_id and rep_data.owner_id == viewer.user_id)
@@ -373,11 +381,9 @@ def redact_response(rep_data, viewer: Optional[User], access: str, report: Repor
     if not is_owner:
         published = published_lost_pet_contact(rep_data, report)
         if not rep_data.is_owner_report:
-            # A suggested/linked pet's identity and QR tag are not an ownership confirmation for other residents.
+            # A suggested/linked pet's identity is not an ownership confirmation for other residents.
             rep_data.pet_name = None
             rep_data.case_pet_name = None
-            rep_data.pet_qr_code_url = None
-            rep_data.pet_qr_code_hash = None
         if rep_data.owner_name:
             rep_data.owner_name = REGISTERED_OWNER
         rep_data.owner_id = None
@@ -411,7 +417,6 @@ def redact_response(rep_data, viewer: Optional[User], access: str, report: Repor
         rep_data.merged_reports = []
         rep_data.verification_notes = None
         rep_data.false_alarm_reason = None
-        rep_data.endorsement_letter = None
     else:
         rep_data.merged_reports = [
             {
@@ -435,12 +440,6 @@ def redact_response(rep_data, viewer: Optional[User], access: str, report: Repor
             for r in (rep_data.merged_reports or [])
             if isinstance(r, dict)
         ]
-    for c in rep_data.comments or []:
-        if c.user_id == uid:
-            continue
-        c.user_name = COMMUNITY_REPORTER if c.user_id == report.user_id else first_name(c.user_name)
-        c.user_photo = None
-        c.user_id = 0
     from app.utils.push_categories import scrub_contact
     for h in rep_data.history or []:
         h.remarks = scrub(h.remarks, names)
@@ -449,4 +448,57 @@ def redact_response(rep_data, viewer: Optional[User], access: str, report: Repor
         if h.updater_name and h.updater_name in names:
             h.updater_name = COMMUNITY_REPORTER if h.updater_name == reporter_full else REGISTERED_OWNER
             h.updater_photo = None
+    # Another resident gets the area, not the pin (the reporter, the pet's owner and staff keep the exact one)
+    if access in (PUBLIC_VIEW, CASE_REPORTER):
+        _generalize_location(rep_data)
+    if access == PUBLIC_VIEW:
+        # An allow-list, not a deny-list: only what is named below reaches a resident who is not involved in the
+        # report. A field added to the report later stays private until it is added here on purpose.
+        return _resident_safe(rep_data)
     return rep_data
+
+
+# What a resident who is NOT the reporter, the pet's owner or a case reporter may see of a public report.
+# Nothing about the reporter, the owner, the people handling it, the internal assessment, referrals, warnings,
+# observations, follow-ups, claims or AI findings about risk. Photos and comments are filtered above.
+RESIDENT_SAFE_FIELDS = (
+    "report_id", "created_at", "category_id", "animal_type", "animal_breed", "animal_color", "estimated_size", "animal_count",
+    "description", "condition", "custody_status", "landmark", "latitude", "longitude",
+    # Where it was first seen (the pin is already rounded to the area by _generalize_location), whether the reporter
+    # thinks it is owned, and how many animal records a group report was split into: none of these identify anyone
+    "initial_latitude", "initial_longitude", "initial_landmark", "is_possible_owned", "split_children_count",
+    "subdivision_id", "subdivision_name", "barangay_name", "municipality_city", "province",
+    "current_status_id", "status_id", "case_status", "priority_level",
+    # What the leader found on site (the leader chose to make the report public, findings included)
+    "verification_status", "verified_actual_bite", "verified_chasing", "verified_attempted_bite", "verified_injury",
+    "verified_aggressive", "behavior_finding",
+    "ai_animal_type", "ai_dominant_color", "ai_estimated_size", "ai_possible_breed",
+    # owner_name / owner_phone are already sanitized by the redaction above by the time they are read: the label
+    # 'Registered Owner', or (only on an owner's own lost-pet report) the contact the owner chose to publish for finders.
+    # owner_email, owner_address and owner_id stay out.
+    "owner_name", "owner_phone",
+    "media", "history", "reporter_name", "reunion_confirmed_by",
+    # Anonymous activity only (when an owner was notified of a possible match, and how they answered): no names, no pet
+    "owner_notification_events",
+    "visibility", "visible_to_residents", "viewer_access", "can_view_owner_details",
+)
+
+
+def _generalize_location(rep_data) -> None:
+    """Round every pin on the response to the area: the report's, its original pin and the timeline's."""
+    for attr in ("latitude", "longitude", "initial_latitude", "initial_longitude"):
+        value = getattr(rep_data, attr, None)
+        if value is not None:
+            setattr(rep_data, attr, generalize_coord(value))
+    for h in rep_data.history or []:
+        for attr in ("latitude", "longitude"):
+            if getattr(h, attr, None) is not None:
+                setattr(h, attr, generalize_coord(getattr(h, attr)))
+
+
+def _resident_safe(rep_data):
+    from app.schemas.report import ReportResponse
+    kept = {name: getattr(rep_data, name) for name in RESIDENT_SAFE_FIELDS if hasattr(rep_data, name)}
+    safe = ReportResponse.model_validate(kept)
+    safe.can_view_owner_details = False
+    return safe

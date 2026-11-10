@@ -1,7 +1,7 @@
 from decimal import Decimal
 from typing import Optional
 from datetime import datetime
-from sqlalchemy import Integer, String, Text, DECIMAL, TIMESTAMP, ForeignKey, func, Enum
+from sqlalchemy import Integer, String, Text, DECIMAL, DateTime, TIMESTAMP, ForeignKey, func, Enum
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from app.database import Base
 
@@ -38,6 +38,15 @@ class OwnerWarning(Base):
         nullable=False
     )
     acknowledged_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP, nullable=True)
+    # The subdivision policy this warning was issued under (a confirmed policy that applies to the case). NULL on
+    # warnings issued before policies were required; those are kept exactly as they were.
+    policy_id: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
+    policy_title: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    policy_reference: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    # The observation period the policy defines (days), and when the follow-up is due. NULL: the policy defines none,
+    # and none is assumed.
+    observation_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    follow_up_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP, server_default=func.current_timestamp())
     updated_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
 

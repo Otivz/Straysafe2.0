@@ -64,7 +64,7 @@ export default function SightingPage() {
     setErrors(found);
     if (Object.keys(found).length > 0) { invalid(); return; }
     const ok = await run(async () => {
-      await dispatch({ type: 'sighting/add', noticeId: notice.id, observedAt, location: location as GeoPoint, description, onBehalf, photos: media.length });
+      await dispatch({ type: 'sighting/add', noticeId: notice.id, observedAt, location: location as GeoPoint, description, onBehalf, photos: media.length, media });
     });
     if (ok) { toast.success('Sighting shared'); navigate(residentPath(`/community/${notice.id}/sightings`), { replace: true }); }
   };

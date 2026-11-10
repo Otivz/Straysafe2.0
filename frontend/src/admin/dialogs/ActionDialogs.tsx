@@ -120,7 +120,10 @@ const DAY = 86_400_000;
  * The observation period comes from the policy. No universal period is assumed and no fine is ever assessed.
  */
 export function WarningDialog({ c, onClose }: CaseDialogProps) {
-  const { state, dispatch } = useAdminData();
+  const { state, dispatch, capabilities } = useAdminData();
+  // On the real backend a warning is delivered in the app and by email when it is issued, starts then, and its observation period
+  // is the confirmed policy's: none of that is chosen here, so those fields are not offered.
+  const terms = capabilities.warningTerms;
   const toast = useToast();
   const { pending, error, run } = useSubmit();
   const owner = residentById(state, c.ownership.ownerResidentId);
@@ -137,7 +140,7 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const policy = policies.find((p) => p.id === policyId);
-  const observationDays = policy ? (policy.observationDays ?? (noPeriod ? null : Number(days) || null)) : null;
+  const observationDays = policy ? (policy.observationDays ?? (terms && !noPeriod ? Number(days) || null : null)) : null;
   const endLocal = observationDays && isValidLocalInput(start) ? toLocalInput(new Date(new Date(start).getTime() + observationDays * DAY)) : '';
   const followLocal = followOverride || endLocal;
 
@@ -147,8 +150,8 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
     if (!policy || policy.status !== 'confirmed') next.policy = 'Choose a confirmed policy that applies.';
     if (details.trim().length < 20) next.details = 'Describe the violation and what the owner is asked to do (at least 20 characters).';
     if (!established) next.established = 'Confirm that the violation is sufficiently established.';
-    if (policy && policy.observationDays === null && !noPeriod && !(Number(days) >= 1 && Number(days) <= 60)) next.days = 'Enter a period from 1 to 60 days, or tick “No observation period”.';
-    if (!isValidLocalInput(start)) next.start = 'Choose when the warning starts.';
+    if (terms && policy && policy.observationDays === null && !noPeriod && !(Number(days) >= 1 && Number(days) <= 60)) next.days = 'Enter a period from 1 to 60 days, or tick “No observation period”.';
+    if (terms && !isValidLocalInput(start)) next.start = 'Choose when the warning starts.';
     setErrors(next);
     if (Object.keys(next).length || !policy) return;
     const ok = await run(() => dispatch({
@@ -169,22 +172,24 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
       </Field>
       {policy ? <p className="sa-small sa-text-2">{policy.summary}</p> : null}
       <Field label="Warning details" required error={errors.details} hint="State what was observed and what the owner is asked to do. Stick to the facts."><Textarea autoFocus value={details} onChange={(e) => setDetails(e.target.value)} rows={4} /></Field>
-      <div className="sa-grid2">
-        <Field label="How it is delivered"><Select value={delivery} onChange={(e) => setDelivery(e.target.value as WarningDelivery)}>{(Object.keys(WARNING_DELIVERY) as WarningDelivery[]).map((d) => <option key={d} value={d}>{WARNING_DELIVERY[d]}</option>)}</Select></Field>
-        <Field label="Warning starts" required error={errors.start}><Input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} /></Field>
-      </div>
+      {terms ? (
+        <div className="sa-grid2">
+          <Field label="How it is delivered"><Select value={delivery} onChange={(e) => setDelivery(e.target.value as WarningDelivery)}>{(Object.keys(WARNING_DELIVERY) as WarningDelivery[]).map((d) => <option key={d} value={d}>{WARNING_DELIVERY[d]}</option>)}</Select></Field>
+          <Field label="Warning starts" required error={errors.start}><Input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} /></Field>
+        </div>
+      ) : <p className="sa-small sa-text-2">The owner receives this notice in the StraySafe app and by email as soon as you issue it, and the observation period starts then.</p>}
 
-      <FieldGroup label="Observation period" hint={policy?.observationDays != null ? `Set by ${policy.reference}.` : 'This policy does not define one, so none is assumed. Set one only if your procedure calls for it.'} error={errors.days}>
+      <FieldGroup label="Observation period" hint={policy?.observationDays != null ? `Set by ${policy.reference}.` : terms ? 'This policy does not define one, so none is assumed. Set one only if your procedure calls for it.' : 'This policy does not define one, so none is assumed.'} error={errors.days}>
         {policy?.observationDays != null ? (
-          <p className="sa-semibold">{policy.observationDays} {policy.observationDays === 1 ? 'day' : 'days'}{endLocal ? <span className="sa-text-2" style={{ fontWeight: 400 }}> · ends {fmtDateTime(fromLocalInput(endLocal))}</span> : null}</p>
-        ) : (
+          <p className="sa-semibold">{policy.observationDays} {policy.observationDays === 1 ? 'day' : 'days'}{endLocal && terms ? <span className="sa-text-2" style={{ fontWeight: 400 }}> · ends {fmtDateTime(fromLocalInput(endLocal))}</span> : null}</p>
+        ) : terms ? (
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2"><Input type="number" min={1} max={60} className="!w-24" aria-label="Days" disabled={noPeriod} value={days} onChange={(e) => setDays(e.target.value)} /><span className="sa-small">days</span></div>
             <Checkbox label="No observation period" checked={noPeriod} onChange={(e) => setNoPeriod(e.target.checked)} />
           </div>
-        )}
+        ) : <p className="sa-semibold">None</p>}
       </FieldGroup>
-      {observationDays ? <Field label="Follow-up check" hint="Defaults to the end of the observation period."><Input type="datetime-local" value={followLocal} onChange={(e) => setFollowOverride(e.target.value)} /></Field> : null}
+      {terms && observationDays ? <Field label="Follow-up check" hint="Defaults to the end of the observation period."><Input type="datetime-local" value={followLocal} onChange={(e) => setFollowOverride(e.target.value)} /></Field> : null}
 
       <Checkbox label="The violation is sufficiently established and the owner has been appropriately identified." checked={established} onChange={(e) => setEstablished(e.target.checked)} />
       {errors.established ? <p className="sa-error" role="alert">{errors.established}</p> : null}

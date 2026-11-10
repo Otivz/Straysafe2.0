@@ -2,8 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { adminPath } from '../../config';
 import { useAuth } from '../../auth/context';
-import { PREVIEW_ACCOUNT } from '../../auth/gateway';
-import { AuthShell, DevPreviewNote } from '../../components/AuthShell';
+import { AuthShell } from '../../components/AuthShell';
 import { Button } from '../../components/Button';
 import { Field, Input, PasswordInput } from '../../components/form';
 import { Callout, FormError } from '../../components/layout';
@@ -42,20 +41,13 @@ export default function LoginPage() {
   };
 
   return (
-    <AuthShell
-      below={(
-        <DevPreviewNote>
-          <p>No server is needed. Sign in with the sample account to explore the interface with sample data.</p>
-          <p className="mt-2">Email <code>{PREVIEW_ACCOUNT.email}</code><br />Password <code>{PREVIEW_ACCOUNT.password}</code></p>
-          <Button className="mt-3" size="sm" disabled={pending} onClick={() => void go(PREVIEW_ACCOUNT.email, PREVIEW_ACCOUNT.password)}>Sign in with the sample account</Button>
-        </DevPreviewNote>
-      )}
-    >
+    <AuthShell>
       <h1 className="sa-auth__title">Welcome back</h1>
       <p className="sa-text-2 mt-1">Sign in to manage animal concerns in your subdivision.</p>
 
       <form className="sa-auth__form" onSubmit={submit} noValidate>
         {notice === 'expired' ? <Callout tone="amber">Your session expired. Sign in again to continue.</Callout> : null}
+        {notice === 'password_changed' ? <Callout tone="amber">Your password was changed and you were signed out everywhere. Sign in with the new one.</Callout> : null}
         {error ? <FormError message={error} /> : null}
         <Field label="Email" error={errors.email}>
           <Input type="email" name="email" autoComplete="username" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" />

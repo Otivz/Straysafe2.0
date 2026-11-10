@@ -79,3 +79,7 @@ ai_test_set/photos/**
 !ai_test_set/photos/*/
 !ai_test_set/photos/*/.gitkeep
 ai_test_set/disagreements.csv
+
+# Android app packages: the APK is built by GitHub Actions and downloaded; never commit one
+*.apk
+*.aab

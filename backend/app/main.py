@@ -28,20 +28,19 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Local imports (now safe to import after path fix)
 from app.database import engine, Base, SessionLocal
-from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches, landmarks, adoptions, admin, adoption_chat, adoption_tasks, adoption_certificates, report_returns, pet_ownership, analytics, owner_followups
+from app.routes import auth, users, reports, pets, notifications, announcements, chat, warnings, matches, landmarks, admin, report_returns, pet_ownership, analytics, owner_followups
 from app.routes import audit_logs as audit_logs_router
 from app.routes import push as push_routes
-from app.routes import sidebar as sidebar_routes
 from app.services.push_service import start_push_queue_worker  # also registers the push hook
 from app.routes import ai_jobs as ai_jobs_routes
 from app.routes import manual_matching as manual_matching_routes  # also registers manual_match_decisions for create_all
 from app.routes import pet_match_confirmations as pet_match_confirmation_routes  # owner-first pet matching (owner side)
 from app.routes import leader_identity as leader_identity_routes  # Phase 6 leader identity verification
-from app.routes import claim_assessments as claim_assessment_routes  # pet claiming fees (also registers its tables)
 from app.routes import lost_pet_alerts as lost_pet_alert_routes  # neighbor-to-neighbor lost pet sightings
-from app.models.pet_qr import PetQRCode, PetQRScan
+from app.routes import cases as case_routes  # Subdivision Admin case workflow (status, assessment, closure, referrals, ...)
+from app.routes import ownership_claims as ownership_claim_routes  # resident ownership claims on found animals
+from app.models.case_records import CaseFollowUp, CaseContactLog, CaseLink, OwnershipClaim  # noqa: F401 — tables for create_all
 from app.models.audit_log import AuditLog  # noqa: F401 — ensures table is in Base.metadata
-from app.models.pet_claim import PetClaim  # noqa: F401 — ensures table is in Base.metadata
 from app.models.revoked_token import RevokedToken  # noqa: F401 — ensures table is in Base.metadata
 from app.models.report_dispute import ReportDispute  # noqa: F401
 from app.models.chat import ChatThread, ChatMessage  # noqa: F401
@@ -57,7 +56,6 @@ from app.models.notification_preference import UserNotificationPreference  # noq
 from app.models.email_log import EmailLog  # noqa: F401
 from app.tasks.unassigned_checker import start_unassigned_reports_watcher
 from app.services.email_service import start_email_queue_worker
-from app.utils import holding_stay as _holding_stay  # noqa: E402,F401  (each holding facility has its own stay clock)
 
 
 def ensure_report_media_status_column():
@@ -183,7 +181,7 @@ def ensure_pet_vaccine_card_url_column():
 def ensure_report_status_rows():
     """Insert missing report_status rows that the application logic depends on.
     The original DB seed only had status IDs 1-10.
-    The rescue workflow requires 11 (Incident Resolved), 12 (Deceased), 13 (Approved by Barangay).
+    The case workflow uses 11 (Incident Resolved), 12 (Deceased), 13 (Approved by Barangay).
     Inserts each row only if the status_id does not already exist.
     """
     required_statuses = {
@@ -249,100 +247,6 @@ def ensure_report_priority_enum():
             print(f"Error migrating reports.priority_level: {e}")
 
 
-def ensure_holding_tables():
-    """Create Holding Facility tables and seed facility_status lookup rows."""
-    with engine.begin() as conn:
-        # facility_status lookup
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS facility_status (
-                status_id   INT AUTO_INCREMENT PRIMARY KEY,
-                status_name VARCHAR(50) UNIQUE NOT NULL
-            )
-        """))
-
-        # Seed the 5 facility statuses
-        statuses = [
-            (1, 'Need Treatment'),
-            (2, 'Healthy'),
-            (3, 'Claimed by Owner'),
-            (4, 'Deceased'),
-            (5, 'Transferred to Shelter'),
-        ]
-        for sid, sname in statuses:
-            conn.execute(text(
-                "INSERT INTO facility_status (status_id, status_name) "
-                "SELECT :id, :name FROM DUAL "
-                "WHERE NOT EXISTS (SELECT 1 FROM facility_status WHERE status_id = :id)"
-            ), {"id": sid, "name": sname})
-
-        # holding_animals
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS holding_animals (
-                holding_id      INT AUTO_INCREMENT PRIMARY KEY,
-                report_id       INT NOT NULL,
-                rescue_id       INT NULL,
-                animal_type     ENUM('Dog','Cat','Unknown') DEFAULT 'Unknown',
-                animal_name     VARCHAR(100) NULL,
-                breed           VARCHAR(100) NULL,
-                color           VARCHAR(100) NULL,
-                estimated_size  VARCHAR(50) NULL,
-                facility_status INT NOT NULL DEFAULT 1,
-                kennel_slot     VARCHAR(50) NULL,
-                medical_notes   TEXT NULL,
-                intake_date     DATETIME DEFAULT CURRENT_TIMESTAMP,
-                discharge_date  DATETIME NULL,
-                intake_staff_id INT NULL,
-                created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (report_id)       REFERENCES reports(report_id)       ON DELETE CASCADE,
-                FOREIGN KEY (rescue_id)       REFERENCES rescues(rescue_id)       ON DELETE SET NULL,
-                FOREIGN KEY (facility_status) REFERENCES facility_status(status_id),
-                FOREIGN KEY (intake_staff_id) REFERENCES users(user_id)           ON DELETE SET NULL
-            )
-        """))
-
-        # holding_timeline
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS holding_timeline (
-                log_id     INT AUTO_INCREMENT PRIMARY KEY,
-                holding_id INT NOT NULL,
-                event_type VARCHAR(50) NOT NULL DEFAULT 'observation',
-                title      VARCHAR(255) NOT NULL,
-                notes      TEXT NULL,
-                logged_by  INT NULL,
-                logged_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (holding_id) REFERENCES holding_animals(holding_id) ON DELETE CASCADE,
-                FOREIGN KEY (logged_by)  REFERENCES users(user_id)              ON DELETE SET NULL
-            )
-        """)
-        )
-
-def ensure_pet_claims_status_enum():
-    """Modify the ENUM values of pet_claims.status to include new statuses expected by frontend."""
-    with engine.begin() as conn:
-        try:
-            conn.execute(text(
-                "ALTER TABLE pet_claims MODIFY COLUMN status "
-                "ENUM('Potential Owner Match', 'Possible Match Found', 'Pending Review', 'Approved', 'Rejected', 'Evidence Requested', 'Handover Complete', 'Pet Received', 'Merged', 'Not Needed') "
-                "DEFAULT 'Potential Owner Match' NOT NULL"
-            ))
-            print("Successfully migrated pet_claims.status ENUM values.")
-        except Exception as e:
-            print(f"Error migrating pet_claims.status ENUM: {e}")
-    # Phase 7 claim eligibility columns (non-destructive: only added when missing)
-    with engine.begin() as conn:
-        for col_name, col_def in [("status_before_approval", "INT NULL"), ("owner_whereabouts", "VARCHAR(20) NULL"),
-                                  ("owner_whereabouts_note", "TEXT NULL"), ("owner_whereabouts_at", "DATETIME NULL"),
-                                  ("closed_reason", "TEXT NULL"), ("closed_by", "INT NULL"), ("closed_at", "DATETIME NULL")]:
-            try:
-                exists = conn.execute(text(
-                    "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
-                    f"AND TABLE_NAME = 'pet_claims' AND COLUMN_NAME = '{col_name}'"
-                )).scalar()
-                if not exists:
-                    conn.execute(text(f"ALTER TABLE pet_claims ADD COLUMN {col_name} {col_def}"))
-            except Exception as e:
-                print(f"Notice in pet_claims Phase 7 columns ({col_name}): {e}")
-
 def ensure_pet_side_photos_columns():
     """Add photo_front_url, photo_left_url, photo_right_url, chase_incident_count columns to pets table if missing."""
     with engine.begin() as conn:
@@ -389,88 +293,11 @@ def ensure_user_default_address_columns():
             if result.scalar() == 0:
                 conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type} NULL"))
 
-def ensure_qr_tables_exist():
-    with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS pet_qr_codes (
-                qr_id INT AUTO_INCREMENT PRIMARY KEY,
-                pet_id INT NOT NULL UNIQUE,
-                qr_token VARCHAR(255) UNIQUE NOT NULL,
-                qr_image_url VARCHAR(255) NULL,
-                is_active BOOLEAN DEFAULT TRUE,
-                scan_count INT DEFAULT 0,
-                last_scanned_at TIMESTAMP NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(pet_id) REFERENCES pets(pet_id) ON DELETE CASCADE
-            )
-        """))
-        result_sc = conn.execute(text(
-            "SELECT COUNT(*) FROM information_schema.COLUMNS "
-            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pet_qr_codes' "
-            "AND COLUMN_NAME = 'scan_count'"
-        ))
-        if result_sc.scalar() == 0:
-            conn.execute(text("ALTER TABLE pet_qr_codes ADD COLUMN scan_count INT DEFAULT 0"))
-        result_la = conn.execute(text(
-            "SELECT COUNT(*) FROM information_schema.COLUMNS "
-            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pet_qr_codes' "
-            "AND COLUMN_NAME = 'last_scanned_at'"
-        ))
-        if result_la.scalar() == 0:
-            conn.execute(text("ALTER TABLE pet_qr_codes ADD COLUMN last_scanned_at TIMESTAMP NULL"))
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS pet_qr_scans (
-                scan_id INT AUTO_INCREMENT PRIMARY KEY,
-                qr_id INT NOT NULL,
-                pet_id INT NOT NULL,
-                scanned_by INT NULL,
-                finder_name VARCHAR(100) NULL,
-                finder_contact VARCHAR(20) NULL,
-                scan_lat DECIMAL(10,8) NULL,
-                scan_lng DECIMAL(11,8) NULL,
-                street_address VARCHAR(255) NULL,
-                barangay VARCHAR(100) NULL,
-                city VARCHAR(100) NULL,
-                landmark VARCHAR(255) NULL,
-                location_type ENUM('Found Location', 'Barangay Hall', 'Temporary Shelter') DEFAULT 'Found Location',
-                notes VARCHAR(255) NULL,
-                scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(qr_id) REFERENCES pet_qr_codes(qr_id) ON DELETE CASCADE,
-                FOREIGN KEY(pet_id) REFERENCES pets(pet_id) ON DELETE CASCADE,
-                FOREIGN KEY(scanned_by) REFERENCES users(user_id) ON DELETE SET NULL
-            )
-        """))
-        
-        # Ensure all columns in pet_qr_scans exist for backward compatibility
-        scan_columns = [
-            ("pet_id", "INT NOT NULL"),
-            ("scanned_by", "INT NULL"),
-            ("finder_name", "VARCHAR(100) NULL"),
-            ("finder_contact", "VARCHAR(20) NULL"),
-            ("street_address", "VARCHAR(255) NULL"),
-            ("barangay", "VARCHAR(100) NULL"),
-            ("city", "VARCHAR(100) NULL"),
-            ("landmark", "VARCHAR(255) NULL"),
-            ("location_type", "ENUM('Found Location', 'Barangay Hall', 'Temporary Shelter') DEFAULT 'Found Location'"),
-        ]
-        for col_name, col_def in scan_columns:
-            res = conn.execute(text(
-                "SELECT COUNT(*) FROM information_schema.COLUMNS "
-                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pet_qr_scans' "
-                f"AND COLUMN_NAME = '{col_name}'"
-            ))
-            if res.scalar() == 0:
-                try:
-                    conn.execute(text(f"ALTER TABLE pet_qr_scans ADD COLUMN {col_name} {col_def}"))
-                except Exception as e:
-                    print(f"Error adding {col_name} to pet_qr_scans: {e}")
-
 def ensure_announcement_tables_columns():
     with engine.begin() as conn:
         for col_name, col_type in [
             ("barangay_id", "INT NULL"),
-            ("cover_image", "VARCHAR(255) NULL"),
-            ("allow_comments", "TINYINT(1) DEFAULT 1")
+            ("cover_image", "VARCHAR(255) NULL")
         ]:
             result = conn.execute(text(
                 "SELECT COUNT(*) FROM information_schema.COLUMNS "
@@ -521,89 +348,12 @@ def ensure_announcement_tables_columns():
                 "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'announcement_media' "
                 f"AND COLUMN_NAME = '{col_name}'"
             ))
-def ensure_endorsement_letters_columns():
-    with engine.begin() as conn:
-        for col_name, col_type in [
-            ("title", "VARCHAR(255) NULL"),
-            ("letter_content", "TEXT NULL"),
-            ("file_url", "VARCHAR(255) NULL"),
-            ("issued_at", "DATETIME DEFAULT CURRENT_TIMESTAMP")
-        ]:
-            result = conn.execute(text(
-                "SELECT COUNT(*) FROM information_schema.COLUMNS "
-                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'endorsement_letters' "
-                f"AND COLUMN_NAME = '{col_name}'"
-            ))
-            if result.scalar() == 0:
-                conn.execute(text(f"ALTER TABLE endorsement_letters ADD COLUMN {col_name} {col_type}"))
 
-def ensure_rescue_tables_columns():
-    with engine.begin() as conn:
-        for col_name, col_type in [
-            ("staff_id", "INT NULL"),
-            ("leader_id", "INT NULL"),
-            ("started_at", "DATETIME NULL")
-        ]:
-            result = conn.execute(text(
-                "SELECT COUNT(*) FROM information_schema.COLUMNS "
-                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rescues' "
-                f"AND COLUMN_NAME = '{col_name}'"
-            ))
-            if result.scalar() == 0:
-                conn.execute(text(f"ALTER TABLE rescues ADD COLUMN {col_name} {col_type}"))
 
-        for col_name, col_type in [
-            ("staff_id", "INT NULL"),
-            ("assigned_by", "INT NULL"),
-            ("assignment_status", "ENUM('Assigned', 'In Transit', 'On Site', 'Completed', 'Cancelled') DEFAULT 'Assigned'"),
-            ("remarks", "TEXT NULL")
-        ]:
-            result = conn.execute(text(
-                "SELECT COUNT(*) FROM information_schema.COLUMNS "
-                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rescue_assignments' "
-                f"AND COLUMN_NAME = '{col_name}'"
-            ))
-            if result.scalar() == 0:
-                conn.execute(text(f"ALTER TABLE rescue_assignments ADD COLUMN {col_name} {col_type}"))
-
-def ensure_report_verifications_columns():
-    with engine.begin() as conn:
-        for col_name, col_type in [
-            ("verified_by", "INT NULL"),
-            ("leader_id", "INT NULL"),
-            ("is_valid", "TINYINT(1) DEFAULT 1"),
-            ("status_id", "INT NULL")
-        ]:
-            result = conn.execute(text(
-                "SELECT COUNT(*) FROM information_schema.COLUMNS "
-                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'report_verifications' "
-                f"AND COLUMN_NAME = '{col_name}'"
-            ))
-            if result.scalar() == 0:
-                conn.execute(text(f"ALTER TABLE report_verifications ADD COLUMN {col_name} {col_type}"))
-
-def ensure_pet_recovery_and_history_tables():
-    """Ensure pet_qr_scans has recovery workflow columns and pet_history table exists."""
+def ensure_pet_history_table():
+    """Ensure the pet_history table exists (the create_all call below also creates it from the model)."""
     with engine.begin() as conn:
         try:
-            # 1. pet_qr_scans columns
-            cols = [
-                ("status", "VARCHAR(20) NOT NULL DEFAULT 'PENDING'"),
-                ("confirmed_at", "DATETIME NULL"),
-                ("confirmed_by", "INT NULL"),
-                ("rejection_reason", "VARCHAR(255) NULL"),
-                ("pet_status_at_scan", "VARCHAR(50) NULL"),
-            ]
-            for col_name, col_def in cols:
-                res = conn.execute(text(
-                    "SELECT COUNT(*) FROM information_schema.COLUMNS "
-                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pet_qr_scans' "
-                    f"AND COLUMN_NAME = '{col_name}'"
-                ))
-                if res.scalar() == 0:
-                    conn.execute(text(f"ALTER TABLE pet_qr_scans ADD COLUMN {col_name} {col_def}"))
-            
-            # 2. pet_history table
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS pet_history (
                     history_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -612,7 +362,6 @@ def ensure_pet_recovery_and_history_tables():
                     title VARCHAR(150) NOT NULL,
                     description TEXT NULL,
                     recovery_method VARCHAR(50) NULL,
-                    scan_id INT NULL,
                     actor_id INT NULL,
                     actor_name VARCHAR(100) NULL,
                     actor_role VARCHAR(50) NULL,
@@ -622,13 +371,12 @@ def ensure_pet_recovery_and_history_tables():
                     latitude DECIMAL(10, 8) NULL,
                     longitude DECIMAL(11, 8) NULL,
                     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    INDEX idx_pet_history_pet (pet_id),
-                    INDEX idx_pet_history_scan (scan_id)
+                    INDEX idx_pet_history_pet (pet_id)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             """))
-            print("Successfully ensured pet_qr_scans recovery columns and pet_history table.")
+            print("Successfully ensured the pet_history table.")
         except Exception as e:
-            print(f"Notice in ensure_pet_recovery_and_history_tables: {e}")
+            print(f"Notice in ensure_pet_history_table: {e}")
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -641,14 +389,10 @@ ensure_report_condition_column()
 ensure_pet_vaccine_card_url_column()
 ensure_report_status_rows()
 ensure_audit_logs_columns()
-ensure_qr_tables_exist()
-ensure_pet_recovery_and_history_tables()
+ensure_pet_history_table()
 ensure_report_priority_enum()
-ensure_holding_tables()
-ensure_pet_claims_status_enum()
 ensure_pet_side_photos_columns()
 ensure_pet_declared_behavior_columns()
-ensure_endorsement_letters_columns()
 
 def ensure_owner_followup_tables():
     """Ensure owner_followups and followup_contact_logs tables exist (non-destructive)."""
@@ -837,11 +581,6 @@ def ensure_owner_observation_update_tables():
 
 ensure_owner_observation_update_tables()
 
-try:
-    from scripts.migrate_adoption_9_stages import migrate_adoption_workflow
-    migrate_adoption_workflow()
-except Exception as e:
-    print(f"Notice in migrate_adoption_workflow: {e}")
 
 def ensure_notification_archived_column():
     with engine.begin() as conn:
@@ -858,7 +597,7 @@ def ensure_chat_tables():
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS chat_threads (
                 thread_id INT NOT NULL AUTO_INCREMENT,
-                thread_type ENUM('Report', 'Pet_Claim', 'Direct') NOT NULL DEFAULT 'Report',
+                thread_type ENUM('Report', 'Direct') NOT NULL DEFAULT 'Report',
                 related_id INT DEFAULT NULL,
                 created_by INT NOT NULL,
                 recipient_id INT NOT NULL,
@@ -887,24 +626,6 @@ def ensure_chat_tables():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
         """))
 
-def ensure_chat_adoption_thread_type():
-    """Allow adoption-application chat threads (thread_type='Adoption') and index thread lookups."""
-    with engine.begin() as conn:
-        col_type = conn.execute(text(
-            "SELECT COLUMN_TYPE FROM information_schema.COLUMNS "
-            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chat_threads' AND COLUMN_NAME = 'thread_type'"
-        )).scalar()
-        if col_type and "'Adoption'" not in str(col_type):
-            conn.execute(text(
-                "ALTER TABLE chat_threads MODIFY COLUMN thread_type "
-                "ENUM('Report','Pet_Claim','Direct','Adoption') NOT NULL DEFAULT 'Report'"
-            ))
-        has_idx = conn.execute(text(
-            "SELECT COUNT(*) FROM information_schema.STATISTICS "
-            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chat_threads' AND INDEX_NAME = 'idx_chat_threads_type_related'"
-        )).scalar()
-        if not has_idx:
-            conn.execute(text("CREATE INDEX idx_chat_threads_type_related ON chat_threads (thread_type, related_id)"))
 
 def ensure_warning_tables():
     with engine.begin() as conn:
@@ -990,17 +711,6 @@ def ensure_ai_jobs_table():
     )
 
 
-def ensure_claim_photos_column():
-    """pet_claims.additional_photos_url holds several photo/video links now: VARCHAR(255) -> TEXT."""
-    with engine.begin() as conn:
-        col_type = conn.execute(text(
-            "SELECT DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
-            "AND TABLE_NAME = 'pet_claims' AND COLUMN_NAME = 'additional_photos_url'"
-        )).scalar()
-        if col_type and col_type.lower() == "varchar":
-            conn.execute(text("ALTER TABLE pet_claims MODIFY COLUMN additional_photos_url TEXT NULL"))
-
-
 def ensure_case_pet_identity_columns():
     """Inherited pet identity across a merged case (reports) and covered suggestions (report_matches)."""
     with engine.begin() as conn:
@@ -1015,8 +725,6 @@ def ensure_case_pet_identity_columns():
                                      ("report_matches", "owner_verification_answer", "VARCHAR(10) NULL"),
                                      ("report_matches", "owner_verification_answer_note", "TEXT NULL"),
                                      ("report_matches", "owner_verification_answered_at", "DATETIME NULL"),
-                                     ("pet_claims", "merged_into_claim_id", "INT NULL"),
-                                     ("pet_claims", "status_before_merge", "VARCHAR(30) NULL"),
                                      ("reports", "separate_incident_reason", "TEXT NULL"),
                                      ("reports", "separate_incident_by", "INT NULL"),
                                      ("reports", "separate_incident_at", "DATETIME NULL"),
@@ -1245,14 +953,14 @@ def ensure_landmarks_table():
         except Exception as e:
             print(f"Error checking category column on landmarks: {e}")
 
-        # Seed initial landmarks if empty
+        # Seed initial landmarks if empty. The community holding pen is not seeded: StraySafe keeps no holding place (docs/01-system/overview.md),
+        # and its contact was a person's name and phone number.
         try:
             res = conn.execute(text("SELECT COUNT(*) FROM landmarks"))
             if res.scalar() == 0:
                 conn.execute(text("""
                     INSERT INTO landmarks (landmark_id, name, category, description, subdivision_id, barangay_id, latitude, longitude, is_holding_facility, facility_type, capacity, contact_person, contact_number, status) VALUES
                     (1, 'Selera Homes Main Entrance Gate', 'gate', 'Main guardhouse and security station at the entrance of Selera Homes', 1, 1, 14.80149600, 121.00517400, 0, NULL, NULL, 'Chief Guard Reyes', '09171112233', 'Active'),
-                    (2, 'Selera Homes Temporary Holding Pen', 'facility', 'Community temporary animal shelter and kennel cages near HOA office', 1, 1, 14.80180000, 121.00280000, 1, 'Temporary Holding Pen', 6, 'Kyla Joy Arriola', '09192223344', 'Active'),
                     (3, 'Selera Community Park & Clubhouse', 'park', 'Recreation grounds and event center', 1, 1, 14.80063400, 121.00222800, 0, NULL, NULL, 'HOA Secretariat', '09172223344', 'Active'),
                     (4, 'Barangay San Vicente Animal Impound Facility', 'facility', 'Official municipal holding shelter and veterinary holding cages', NULL, 1, 14.80690600, 121.00392970, 1, 'Barangay Main Shelter', 20, 'Barangay Animal Welfare Desk', '09123456789', 'Active');
                 """))
@@ -1305,11 +1013,10 @@ def ensure_report_location_columns():
         except Exception:
             pass
 
-        # Clean up any resolved, impounded, or discharged reports so their location reflects original incident origin and not holding facility
+        # Clean up any resolved or closed reports so their location reflects the original incident origin and not a facility
         try:
             conn.execute(text("""
                 UPDATE reports r
-                LEFT JOIN holding_animals ha ON ha.report_id = r.report_id
                 SET 
                     r.facility_id = NULL,
                     r.latitude = COALESCE(r.initial_latitude, r.latitude),
@@ -1323,8 +1030,6 @@ def ensure_report_location_columns():
                         ELSE COALESCE((SELECT s.subdivision_name FROM subdivisions s WHERE s.subdivision_id = r.subdivision_id LIMIT 1), 'Incident Sighting Location')
                     END
                 WHERE r.current_status_id IN (9, 10, 11, 12, 14, 17, 18)
-                   OR ha.facility_status IN (3, 4, 5, 7, 8)
-                   OR ha.discharge_date IS NOT NULL
             """))
         except Exception as e:
             print(f"Error restoring resolved report origins: {e}")
@@ -1359,65 +1064,14 @@ def ensure_report_location_columns():
         except Exception:
             pass
 
-def ensure_holding_animals_columns():
-    with engine.begin() as conn:
-        res = conn.execute(text(
-            "SELECT COUNT(*) FROM information_schema.COLUMNS "
-            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'holding_animals' "
-            "AND COLUMN_NAME = 'overdue_notified'"
-        ))
-        if res.scalar() == 0:
-            try:
-                conn.execute(text("ALTER TABLE holding_animals ADD COLUMN overdue_notified BOOLEAN DEFAULT FALSE"))
-            except Exception as e:
-                print(f"Error adding overdue_notified to holding_animals: {e}")
-
-def ensure_adoption_tables_and_columns():
-    with engine.begin() as conn:
-        cols = [
-            ("id_type", "VARCHAR(100) NULL"),
-            ("id_number", "VARCHAR(100) NULL"),
-            ("id_photo_url", "VARCHAR(255) NULL"),
-            ("is_handed_over", "BOOLEAN DEFAULT FALSE"),
-            ("handover_date", "DATETIME NULL"),
-            ("staff_handed_over", "BOOLEAN DEFAULT FALSE"),
-            ("staff_handover_date", "DATETIME NULL"),
-            ("staff_handover_by", "INT NULL"),
-            ("created_pet_id", "INT NULL"),
-            ("cancellation_reason", "TEXT NULL"),
-            ("cancelled_at", "DATETIME NULL"),
-        ]
-        for cname, ctype in cols:
-            try:
-                res = conn.execute(text(
-                    "SELECT COUNT(*) FROM information_schema.COLUMNS "
-                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'adoptions' "
-                    f"AND COLUMN_NAME = '{cname}'"
-                ))
-                if res.scalar() == 0:
-                    conn.execute(text(f"ALTER TABLE adoptions ADD COLUMN {cname} {ctype}"))
-            except Exception as e:
-                print(f"Error adding {cname} to adoptions: {e}")
-        try:
-            conn.execute(text("ALTER TABLE adoptions MODIFY COLUMN status ENUM('Pending', 'Approved', 'Rejected', 'Cancelled') NOT NULL DEFAULT 'Pending'"))
-        except Exception as e:
-            print(f"Error updating status column enum in adoptions: {e}")
-        try:
-            conn.execute(text("ALTER TABLE adoptions MODIFY COLUMN id_number VARCHAR(255) NULL"))
-        except Exception as e:
-            print(f"Error updating id_number column width in adoptions: {e}")
 
 ensure_announcement_tables_columns()
-ensure_rescue_tables_columns()
-ensure_report_verifications_columns()
 ensure_notification_archived_column()
 ensure_chat_tables()
-ensure_chat_adoption_thread_type()
 ensure_warning_tables()
 ensure_report_matches_tables()
 ensure_report_match_dispute_column()
 ensure_case_pet_identity_columns()
-ensure_claim_photos_column()
 ensure_identity_dispute_columns()
 ensure_ai_jobs_table()
 ensure_pet_reference_codes()
@@ -1518,17 +1172,10 @@ def ensure_system_settings_table():
             """))
 
 
-def ensure_adoption_tasks_schema():
-    """
-    Adoption case ownership, task assignments, structured assessments and certificate status.
-    New tables (adoption_assignments, adoption_ownership_history) are created by create_all from the models;
-    this adds the new columns/foreign keys to the existing tables. Safe to run on every start.
-    """
-    U = "users(user_id) ON DELETE SET NULL"
-    A = "adoption_assignments(assignment_id) ON DELETE SET NULL"
+def ensure_supporting_columns():
+    """Columns of kept tables added after the first release (users, pets, report_returns, reports). Additive only."""
     columns = [
         # (table, column, definition, fk_name, fk_reference)
-        ("holding_animals", "sex", "ENUM('Male','Female','Unknown') DEFAULT 'Unknown'", None, None),
         ("users", "password_changed_at", "DATETIME NULL", None, None),
         ("pets", "photo_check_status", "VARCHAR(30) NULL", None, None),
         ("pets", "photo_check_details", "TEXT NULL", None, None),
@@ -1537,64 +1184,12 @@ def ensure_adoption_tasks_schema():
         ("report_returns", "ownership_verified_by_record", "TINYINT(1) NOT NULL DEFAULT 0", None, None),
         ("report_returns", "handover_photo_url", "VARCHAR(255) NULL", None, None),
         ("report_returns", "ownership_proof_urls", "JSON NULL", None, None),
-        ("holding_animals", "estimated_age", "VARCHAR(50) NULL", None, None),
-        ("adoptions", "case_owner_id", "INT NULL", "fk_adoptions_owner", U),
-        ("adoptions", "case_owner_assigned_at", "DATETIME NULL", None, None),
-        ("adoptions", "case_owner_assigned_by", "INT NULL", "fk_adoptions_owner_by", U),
-        ("adoption_interviews", "assignment_id", "INT NULL", "fk_adopt_interview_assign", A),
-        ("adoption_interviews", "evaluated_by", "INT NULL", "fk_adopt_interview_eval", U),
-        ("adoption_interviews", "interview_result", "VARCHAR(50) NULL", None, None),
-        ("adoption_interviews", "questions_discussed", "TEXT NULL", None, None),
-        ("adoption_interviews", "applicant_responses", "TEXT NULL", None, None),
-        ("adoption_interviews", "additional_observations", "TEXT NULL", None, None),
-        ("adoption_home_visits", "assignment_id", "INT NULL", "fk_adopt_visit_assign", A),
-        ("adoption_home_visits", "evaluated_by", "INT NULL", "fk_adopt_visit_eval", U),
-        ("adoption_home_visits", "reschedule_count", "INT NOT NULL DEFAULT 0", None, None),
-        ("adoption_home_visits", "last_rescheduled_at", "DATETIME NULL", None, None),
-        ("adoption_home_visits", "reschedule_reason", "TEXT NULL", None, None),
-        ("adoption_home_visits", "residence_condition", "VARCHAR(100) NULL", None, None),
-        ("adoption_home_visits", "available_living_space", "VARCHAR(100) NULL", None, None),
-        ("adoption_home_visits", "environment_safety", "VARCHAR(100) NULL", None, None),
-        ("adoption_home_visits", "cleanliness_sanitation", "VARCHAR(100) NULL", None, None),
-        ("adoption_home_visits", "presence_of_hazards", "VARCHAR(255) NULL", None, None),
-        ("adoption_home_visits", "existing_pets", "VARCHAR(255) NULL", None, None),
-        ("adoption_home_visits", "overall_suitability", "VARCHAR(50) NULL", None, None),
-        ("adoption_home_visits", "recommendations", "TEXT NULL", None, None),
-        ("adoption_home_visits", "additional_observations", "TEXT NULL", None, None),
-        ("adoption_monitoring_logs", "entry_type", "VARCHAR(30) NOT NULL DEFAULT 'Adopter_Checkin'", None, None),
-        ("adoption_monitoring_logs", "assignment_id", "INT NULL", "fk_adopt_mon_assign", A),
-        ("adoption_monitoring_logs", "assessed_by", "INT NULL", "fk_adopt_mon_assessor", U),
-        ("adoption_monitoring_logs", "assessed_at", "DATETIME NULL", None, None),
-        ("adoption_monitoring_logs", "assessment_result", "VARCHAR(50) NULL", None, None),
-        ("adoption_monitoring_logs", "animal_condition", "VARCHAR(100) NULL", None, None),
-        ("adoption_monitoring_logs", "living_condition", "VARCHAR(100) NULL", None, None),
-        ("adoption_monitoring_logs", "food_and_water", "VARCHAR(100) NULL", None, None),
-        ("adoption_monitoring_logs", "shelter_condition", "VARCHAR(100) NULL", None, None),
-        ("adoption_monitoring_logs", "vaccination_status", "VARCHAR(100) NULL", None, None),
-        ("adoption_monitoring_logs", "assessment_notes", "TEXT NULL", None, None),
-        ("adoption_monitoring_logs", "assessment_photos", "JSON NULL", None, None),
-        ("adoption_certificates", "certificate_status", "ENUM('Valid','Revoked') NOT NULL DEFAULT 'Valid'", None, None),
-        ("adoption_certificates", "revoked_at", "DATETIME NULL", None, None),
-        ("adoption_certificates", "revoked_by", "INT NULL", "fk_adopt_cert_revoker", U),
-        ("adoption_certificates", "revoked_reason", "TEXT NULL", None, None),
-        ("adoption_certificates", "signatory_id", "INT NULL", "fk_adopt_cert_signatory", U),
-        ("adoption_certificates", "signatory_name", "VARCHAR(150) NULL", None, None),
-        ("adoption_certificates", "signatory_position", "VARCHAR(150) NULL", None, None),
-        ("adoption_certificates", "snapshot", "JSON NULL", None, None),
         # per-animal records split from a multi-animal group report (MULTI_ANIMAL_REPORT_PLAN.md)
         ("reports", "split_from_report_id", "INT NULL", "fk_reports_split_from", "reports(report_id) ON DELETE SET NULL"),
     ]
-    indexes = [
-        ("adoptions", "idx_adoptions_owner", "(case_owner_id)"),
-        ("adoptions", "idx_adoptions_holding_status", "(holding_id, status)"),
-        ("adoption_assignments", "idx_assign_adoption_task", "(adoption_id, task_type, status)"),
-        ("adoption_assignments", "idx_assign_user_status", "(assigned_to, status)"),
-        ("adoption_ownership_history", "idx_own_hist_adoption", "(adoption_id, created_at)"),
-    ]
     with engine.begin() as conn:
         def exists(sql, **params) -> bool:
-            count = conn.execute(text(sql), params).scalar()
-            return (count or 0) > 0
+            return (conn.execute(text(sql), params).scalar() or 0) > 0
 
         for table, column, ddl, fk_name, fk_ref in columns:
             try:
@@ -1610,19 +1205,9 @@ def ensure_adoption_tasks_schema():
                     conn.execute(text(f"ALTER TABLE `{table}` ADD CONSTRAINT `{fk_name}` FOREIGN KEY (`{column}`) REFERENCES {fk_ref}"))
             except Exception as e:
                 print(f"Error migrating {table}.{column}: {e}")
-        for table, name, cols in indexes:
-            try:
-                if not exists(
-                    "SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() "
-                    "AND TABLE_NAME = :t AND INDEX_NAME = :n", t=table, n=name
-                ):
-                    conn.execute(text(f"CREATE INDEX `{name}` ON `{table}` {cols}"))
-            except Exception as e:
-                print(f"Error creating index {name}: {e}")
 
-ensure_holding_animals_columns()
-ensure_adoption_tables_and_columns()
-ensure_adoption_tasks_schema()
+
+ensure_supporting_columns()
 ensure_revoked_tokens_table()
 ensure_coverage_settings_table()
 ensure_otp_verifications_table()
@@ -1642,13 +1227,12 @@ def ensure_performance_indexes():
         ("report_matches", "idx_rep_matches_src_status", "CREATE INDEX idx_rep_matches_src_status ON report_matches (source_report_id, status)"),
         ("report_matches", "idx_rep_matches_mat_status", "CREATE INDEX idx_rep_matches_mat_status ON report_matches (matched_report_id, status)"),
         ("report_matches", "idx_rep_matches_status_score", "CREATE INDEX idx_rep_matches_status_score ON report_matches (status, similarity_score)"),
-        ("holding_animals", "idx_holding_status_intake", "CREATE INDEX idx_holding_status_intake ON holding_animals (facility_status, intake_date)"),
-        ("holding_timeline", "idx_holding_tl_holding_logged", "CREATE INDEX idx_holding_tl_holding_logged ON holding_timeline (holding_id, logged_at)"),
         ("notifications", "idx_notif_user_arch_created", "CREATE INDEX idx_notif_user_arch_created ON notifications (user_id, is_archived, created_at)"),
         ("notifications", "idx_notif_type_related", "CREATE INDEX idx_notif_type_related ON notifications (type, related_id)"),
         ("audit_logs", "idx_audit_tbl_id_time", "CREATE INDEX idx_audit_tbl_id_time ON audit_logs (target_table, target_id, created_at)"),
         ("report_disputes", "idx_disputes_rep_status", "CREATE INDEX idx_disputes_rep_status ON report_disputes (report_id, status)"),
         ("chat_messages", "idx_chat_msg_th_sent", "CREATE INDEX idx_chat_msg_th_sent ON chat_messages (thread_id, sent_at)"),
+        ("chat_threads", "idx_chat_threads_type_related", "CREATE INDEX idx_chat_threads_type_related ON chat_threads (thread_type, related_id)"),
         ("pets", "idx_pets_status_type", "CREATE INDEX idx_pets_status_type ON pets (status, pet_type)"),
         ("audit_logs", "idx_audit_type_created", "CREATE INDEX idx_audit_type_created ON audit_logs (log_type, created_at)"),
         ("owner_warnings", "idx_warnings_user_status", "CREATE INDEX idx_warnings_user_status ON owner_warnings (user_id, status)"),
@@ -1735,27 +1319,6 @@ def ensure_manual_match_pet_column():
 ensure_manual_match_pet_column()
 
 
-def ensure_claim_assessment_cat_charge_columns():
-    """Manual cat claiming charge (docs/01-system/CLAIM_FEE_ASSESSMENT_RULES.md): charge description and the
-    "no charge applicable" flag on claim_assessments, for databases created before them. Non-destructive."""
-    columns = {
-        "charge_description": "ALTER TABLE claim_assessments ADD COLUMN charge_description VARCHAR(200) NULL",
-        "no_charge_applicable": "ALTER TABLE claim_assessments ADD COLUMN no_charge_applicable TINYINT(1) NOT NULL DEFAULT 0",
-    }
-    with engine.begin() as conn:
-        try:
-            for name, ddl in columns.items():
-                exists = conn.execute(text(
-                    "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
-                    "AND TABLE_NAME = 'claim_assessments' AND COLUMN_NAME = :c"), {"c": name}).scalar()
-                if not exists:
-                    conn.execute(text(ddl))
-        except Exception as e:
-            logger.warning(f"ensure_claim_assessment_cat_charge_columns: {e}")
-
-ensure_claim_assessment_cat_charge_columns()
-
-
 def ensure_push_tables():
     """Push notifications (PUSH_NOTIFICATION_IMPLEMENTATION.md): device subscriptions, the outbox, push preferences."""
     from app.models.push import PushDelivery, PushSubscription
@@ -1816,6 +1379,13 @@ def ensure_report_visibility_review():
             logger.warning(f"ensure_report_visibility_review: {e}")
 
 ensure_report_visibility_review()
+
+# Case workflow alignment (Subdivision Admin): new columns, tables, the six categories and the backfill. Idempotent, never
+# drops or rewrites existing data (app/db_migrations/case_alignment.py). strict=True: if the schema still cannot support the
+# case workflow code afterwards, this raises CaseAlignmentError and the application does NOT start, instead of running
+# against tables its own queries cannot read. A merely degraded schema (a missing index, say) starts, with an ERROR line per gap.
+from app.db_migrations.case_alignment import run_case_alignment  # noqa: E402
+_case_alignment = run_case_alignment(engine, strict=True)
 
 async def backfill_ai_suggestions_background():
     """Run in background after startup to backfill missing AI suggestions without blocking HTTP requests."""
@@ -1980,28 +1550,16 @@ os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Include routes
-# Retired Barangay workflows: reads stay as history, writes refused (app/utils/retired.py; Subdivision-only plan, Phase 1)
-from fastapi import Depends as _Depends  # noqa: E402
-from app.utils.retired import retired_workflow  # noqa: E402
-_RETIRED = [_Depends(retired_workflow)]
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(reports.router)
 from app.routes import report_split as _report_split  # noqa: E402
 app.include_router(_report_split.router)
-app.include_router(rescue.router, dependencies=_RETIRED)
-app.include_router(rescue.rescue_alias_router, dependencies=_RETIRED)
 app.include_router(pets.router)
-app.include_router(pet_qr.router)
 app.include_router(notifications.router)
 app.include_router(announcements.router)
 app.include_router(audit_logs_router.router)
-app.include_router(holding.router, dependencies=_RETIRED)
-app.include_router(claims.router, dependencies=_RETIRED)
 app.include_router(chat.router)
-app.include_router(adoption_chat.router, dependencies=_RETIRED)
-app.include_router(adoption_tasks.router, dependencies=_RETIRED)
-app.include_router(adoption_certificates.router, dependencies=_RETIRED)
 app.include_router(report_returns.router)
 app.include_router(pet_ownership.router)
 app.include_router(warnings.router)
@@ -2010,16 +1568,15 @@ app.include_router(matches.router)
 app.include_router(manual_matching_routes.router)
 app.include_router(pet_match_confirmation_routes.router)
 app.include_router(leader_identity_routes.router)
-app.include_router(claim_assessment_routes.router, dependencies=_RETIRED)
 app.include_router(lost_pet_alert_routes.router)
 from app.routes import barangay_referrals as barangay_referral_routes  # noqa: E402  (Subdivision-only referral log; registers its tables)
 app.include_router(barangay_referral_routes.router)
+app.include_router(case_routes.router)
+app.include_router(ownership_claim_routes.router)
 app.include_router(landmarks.router)
-app.include_router(adoptions.router, dependencies=_RETIRED)
 app.include_router(admin.router)
 app.include_router(ai_jobs_routes.router)
 app.include_router(push_routes.router)
-app.include_router(sidebar_routes.router)
 app.include_router(analytics.router)
 
 @app.get("/")

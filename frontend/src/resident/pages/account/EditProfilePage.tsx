@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Field, Input, Select } from '../../components/form';
+import { Field, Input } from '../../components/form';
 import { Screen } from '../../components/Screen';
 import { DiscardSheet } from '../../components/Sheet';
 import { useToast } from '../../components/toast';
@@ -9,7 +9,6 @@ import { residentPath } from '../../config';
 import { useResidentData } from '../../data/context';
 import { useFormFocus, useLeaveGuard, useSubmit } from '../../lib/hooks';
 
-const STREETS = ['Acacia St.', 'Molave St.', 'Narra Ave.', 'Mahogany Ln.', 'Kamagong St.'];
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PH_MOBILE = /^(?:\+?63|0)9\d{9}$/;
 
@@ -38,12 +37,12 @@ export default function EditProfilePage() {
     if (!EMAIL.test(v.email.trim())) found.email = 'Enter a valid email address, like name@example.com.';
     if (!PH_MOBILE.test(v.phone.replace(/[\s-]/g, ''))) found.phone = 'Enter a mobile number like 0917 123 4567.';
     if (!v.unit.trim()) found.unit = 'Enter your block and lot.';
-    if (!v.street) found.street = 'Choose your street.';
+    if (!v.street.trim()) found.street = 'Enter your street.';
     setErrors(found);
     if (Object.keys(found).length > 0) { invalid(); return; }
     if (!dirty) { navigate(residentPath('/profile'), { replace: true }); return; }
     const ok = await run(async () => {
-      await dispatch({ type: 'profile/update', patch: { name: v.name.trim(), email: v.email.trim(), phone: v.phone.trim(), unit: v.unit.trim(), street: v.street } });
+      await dispatch({ type: 'profile/update', patch: { name: v.name.trim(), email: v.email.trim(), phone: v.phone.trim(), unit: v.unit.trim(), street: v.street.trim() } });
     });
     if (ok) { toast.success('Profile updated'); navigate(residentPath('/profile'), { replace: true }); }
   };
@@ -66,7 +65,7 @@ export default function EditProfilePage() {
           <Field label="Full name" required error={errors.name}>
             <Input value={v.name} onChange={(e) => set('name', e.target.value)} autoComplete="name" />
           </Field>
-          <Field label="Email" required error={errors.email} hint="In the real app, changing your email asks you to verify the new address.">
+          <Field label="Email" required error={errors.email} hint="This is the address you sign in with.">
             <Input type="email" inputMode="email" value={v.email} onChange={(e) => set('email', e.target.value)} autoComplete="email" />
           </Field>
           <Field label="Mobile number" required error={errors.phone}>
@@ -76,11 +75,7 @@ export default function EditProfilePage() {
             <Input value={v.unit} onChange={(e) => set('unit', e.target.value)} autoComplete="off" />
           </Field>
           <Field label="Street" required error={errors.street}>
-            <Select value={v.street} onChange={(e) => set('street', e.target.value)}>
-              <option value="">Choose your street</option>
-              {STREETS.includes(v.street) ? null : <option value={v.street}>{v.street}</option>}
-              {STREETS.map((s) => <option key={s} value={s}>{s}</option>)}
-            </Select>
+            <Input value={v.street} onChange={(e) => set('street', e.target.value)} autoComplete="street-address" />
           </Field>
         </div>
       </form>

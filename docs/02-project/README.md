@@ -12,7 +12,7 @@ StraySafe 2.0 is a capstone project (first commit 2026-05-22; 207 commits and pu
 | Reporting | Residents report strays or lost pets with photos or video, inside a configurable reporting radius; reports carry a status timeline and can be disputed, merged, split per animal, and hidden or shown by visibility rules | `backend/app/routes/reports.py`, `report_split.py`, [REPORT visibility tests](../../backend/tests/test_report_visibility.py), [MULTI_ANIMAL_REPORT_PLAN](../../MULTI_ANIMAL_REPORT_PLAN.md) |
 | AI assistance | AI suggests, staff decide: animal detection, photo authenticity, attributes, duplicate sightings, pet look-alikes | [AI_TECHNOLOGIES](../AI_TECHNOLOGIES.md), [AI_TODO](../../AI_TODO.md) |
 | Rescue and holding | Dispatch, holding facility records, stay limits, care logs | `backend/app/routes/rescue.py`, `holding.py` |
-| Pet registry | Pet records, QR tags, scan history, ownership requests, de-duplicated records | [PET_RECORD_DUPLICATE_PREVENTION_PLAN](../../PET_RECORD_DUPLICATE_PREVENTION_PLAN.md) |
+| Pet registry | Pet records, ownership requests, de-duplicated records (QR tags and scan history retired 2026-11-09) | [PET_RECORD_DUPLICATE_PREVENTION_PLAN](../../PET_RECORD_DUPLICATE_PREVENTION_PLAN.md) |
 | Claims | Owner claims with proof; staff approval links the pet record | `backend/app/routes/claims.py`, `backend/app/utils/claim_identity.py` |
 | Adoption | Catalog, applications, staged review, home assessment, certificates, monitoring | `backend/app/routes/adoptions.py`, `adoption_tasks.py`, `adoption_certificates.py` |
 | Communication | Chat, announcements, notifications, email, web push | [PUSH_NOTIFICATION_IMPLEMENTATION](../../PUSH_NOTIFICATION_IMPLEMENTATION.md), [NOTIFICATION_UI_IMPROVEMENTS](../NOTIFICATION_UI_IMPROVEMENTS.md) |
@@ -51,7 +51,7 @@ These are visible in the code or in a plan document; none was recorded as a form
 - **Done and tested locally:** the capabilities in the table above, with 95 backend test scripts in `backend/tests/` and browser checks in `frontend/tests/`. How many pass today is **Unverified** (the full suite was not run for this baseline).
 - **In the working tree, not committed:** many changes, including pet-record custody permissions, claim identity, notifications and the sign-out fix ([CLAUDE_HANDOFF](../../CLAUDE_HANDOFF.md)). Their state on `main` is **Unverified**.
 - **Planned, not built:** Android push through FCM (phase 2 of the push plan), live GPS responder tracking ([plan](../../LIVE_GPS_RESPONDER_TRACKING_PLAN.md), plan only), and public deployment ([DEPLOYMENT_GUIDE](../../DEPLOYMENT_GUIDE.md), plan: Aiven, Cloudinary, Render, Vercel; not started).
-- **Open questions:** whether `Database3.3.txt` matches the ORM; whether the Gemini free quota (20 requests per model per day) suffices for a demonstration ([AI_TODO](../../AI_TODO.md)); whether the YOLO step fits the chosen host's memory ([DEPLOYMENT_GUIDE](../../DEPLOYMENT_GUIDE.md)).
+- **Open questions:** whether the Gemini free quota (20 requests per model per day) suffices for a demonstration ([AI_TODO](../../AI_TODO.md)); whether the YOLO step fits the chosen host's memory ([DEPLOYMENT_GUIDE](../../DEPLOYMENT_GUIDE.md)).
 
 ## Stale or conflicting records
 
@@ -59,7 +59,6 @@ These are visible in the code or in a plan document; none was recorded as a form
 |---|---|
 | `tech_stack_details.txt` | Names Cloudflare R2, OpenRouter/Groq and PostgreSQL; the code uses Cloudinary, Gemini and MySQL |
 | `architectural_design.txt` | Names Jose and `routers/` / `core/` folders; the code uses PyJWT and `routes/`, `utils/`, `services/` |
-| `setup.md` | Names `STRAYSAFE_DB_URL` and `Database.txt`; the API reads `DATABASE_URL`, and the schema file is `Database3.3.txt`. It also lists seed accounts and a shared seed password in a tracked file, which should be reviewed before the repository is made public |
 | Root-level `*.md` plans and audits | Not yet indexed under `docs/`; see [docs/README.md](../README.md) for where they are referenced |
 
 None of these was edited in this pass; each needs an owner decision (update, move to `docs/archive/`, or delete).

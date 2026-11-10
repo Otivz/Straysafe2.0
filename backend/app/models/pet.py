@@ -94,7 +94,6 @@ class Pet(Base):
 
     owner = relationship("User", foreign_keys=[owner_id])
     registered_by = relationship("User", foreign_keys=[registered_by_user_id])
-    vaccinations = relationship("PetVaccination", back_populates="pet", cascade="all, delete-orphan")
 
 
     @property
@@ -115,21 +114,3 @@ def _assign_reference_code(mapper, connection, target):
     if not target.reference_code:
         from app.utils.pet_labels import next_reference_code
         target.reference_code = next_reference_code(connection)
-
-
-class PetVaccination(Base):
-    __tablename__ = "pet_vaccinations"
-
-    vaccination_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    pet_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("pets.pet_id", ondelete="CASCADE"), nullable=False
-    )
-    vaccine_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    administered_date: Mapped[date] = mapped_column(Date, nullable=False)
-    expiry_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    clinic_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    veterinarian: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-
-    pet = relationship("Pet", back_populates="vaccinations")

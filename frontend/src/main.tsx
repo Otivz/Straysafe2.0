@@ -1,13 +1,12 @@
 import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import axios from 'axios'
 import 'leaflet/dist/leaflet.css'
-import App from './App.tsx'
-import { ADMIN_BASE } from './admin/config'
-import { RESIDENT_BASE } from './resident/config'
+import './index.css'
+import { ADMIN_LIVE_BASE, RESIDENT_LIVE_BASE } from './live/config'
+import { Redirect } from './live/Redirect'
 import { API_BASE_URL } from './utils/api'
-import './utils/pwaInstall'   // catch the browser's install prompt early (Install App button)
 import './utils/geolocationDefaults'   // every location request gets a time limit (never "locating…" forever)
 
 // Global Axios interceptor — attaches the logged-in user's ID as X-User-Id
@@ -47,27 +46,39 @@ axios.interceptors.request.use((config) => {
   return config;
 });
 
-// Subdivision Admin UI (mock-data preview). DEVELOPMENT BUILDS ONLY.
-// `import.meta.env.DEV` is written out here, not read from a shared constant, on purpose: Vite replaces it with the
-// literal `false` in `vite build`, the bundler then drops the dead branch, and the lazy chunk (sample sign-in, mock
-// data) is not emitted at all. To verify, run `npm run build` and confirm dist/assets has no AdminRoot-*.js file.
-// It is mounted outside <App /> so none of the legacy session guards, theme sync or API calls run for it.
-// See src/admin/config.ts.
-const AdminRoot = import.meta.env.DEV ? lazy(() => import('./admin/AdminRoot')) : null
+// StraySafe 2.0 has exactly two interfaces, both on the real API and both role-guarded (src/live/config.ts):
+//   /resident-app  residents (role 1)             /subd-admin  Subdivision Leaders (role 2)
+// The previous portals (the old landing page, /login, /staff/login, /resident/*, /subd/*, /admin/* ...) no longer exist as screens.
+//
+// ANDROID APP (Capacitor; `vite build --mode android` and `--mode android-debug`, see docs/05-operations/ANDROID_RESIDENT_APP.md): the
+// Resident interface and nothing else. ANDROID_BUILD is a constant defined in THIS file on purpose: the bundler folds a constant like it
+// only within one module (not one imported from another), and the folding is what keeps the Leader interface out of the app.
+const ANDROID_BUILD = import.meta.env.MODE === 'android' || import.meta.env.MODE === 'android-debug'
 
-// Resident mobile UI (mock-data preview). DEVELOPMENT BUILDS ONLY, gated exactly like the Admin preview above: the
-// condition is written inline so Vite folds it to `false` in `vite build` and the whole chunk (sample resident, mock
-// data) is not emitted. To verify, run `npm run build` and confirm dist/assets has no ResidentRoot-*.js file.
-// See src/resident/config.ts.
-const ResidentRoot = import.meta.env.DEV ? lazy(() => import('./resident/ResidentRoot')) : null
+const AdminLiveRoot = ANDROID_BUILD ? null : lazy(() => import('./admin/AdminLiveRoot'))
+// eslint-disable-next-line react-refresh/only-export-components -- the entry file: nothing hot-reloads from here
+const ResidentLiveRoot = lazy(() => import('./resident/ResidentLiveRoot'))
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
-        {AdminRoot ? <Route path={`${ADMIN_BASE}/*`} element={<Suspense fallback={null}><AdminRoot /></Suspense>} /> : null}
-        {ResidentRoot ? <Route path={`${RESIDENT_BASE}/*`} element={<Suspense fallback={null}><ResidentRoot /></Suspense>} /> : null}
-        <Route path="*" element={<App />} />
+        {AdminLiveRoot ? <Route path={`${ADMIN_LIVE_BASE}/*`} element={<Suspense fallback={null}><AdminLiveRoot /></Suspense>} /> : null}
+        <Route path={`${RESIDENT_LIVE_BASE}/*`} element={<Suspense fallback={null}><ResidentLiveRoot /></Suspense>} />
+        {/* Addresses the retired portals used (bookmarks, e-mails and notifications sent earlier still carry them). The web app only:
+            the Android app has no Leader interface, and its catch-all below already leads every address to the Resident app. */}
+        {ANDROID_BUILD ? null : (
+          <>
+            <Route path="/login" element={<Redirect to={`${RESIDENT_LIVE_BASE}/login`} />} />
+            <Route path="/resident-home" element={<Redirect to={RESIDENT_LIVE_BASE} />} />
+            <Route path="/resident/*" element={<Redirect to={RESIDENT_LIVE_BASE} />} />
+            <Route path="/staff/login" element={<Redirect to={`${ADMIN_LIVE_BASE}/login`} />} />
+            <Route path="/staff/*" element={<Redirect to={ADMIN_LIVE_BASE} />} />
+            <Route path="/subd/*" element={<Redirect to={ADMIN_LIVE_BASE} />} />
+            <Route path="/subd-messages" element={<Redirect to={ADMIN_LIVE_BASE} />} />
+          </>
+        )}
+        <Route path="*" element={<Navigate to={RESIDENT_LIVE_BASE} replace />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,

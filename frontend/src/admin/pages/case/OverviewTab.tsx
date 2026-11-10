@@ -43,7 +43,7 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
             <figure className="mt-5 flex flex-col">
               <LocationMapPreview pin={pin} height={200} label={`Map of the reported location: ${c.location.area}`} />
               <MapLegend items={[{ kind: 'pin', label: 'Reported location' }, { kind: 'outline', label: 'Approximate subdivision outline' }]} />
-              <figcaption className="sa-meta mt-1.5">Sample coordinates. The outline is approximate and unverified. Only authorized administrators see the exact spot.</figcaption>
+              <figcaption className="sa-meta mt-1.5">The outline is approximate and unverified. Only authorized administrators see the exact spot.</figcaption>
             </figure>
           ) : null}
         </Block>
@@ -117,7 +117,9 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
 
         <Panel>
           <Block tight title={<span className="flex items-center gap-2"><Lock size={14} aria-hidden="true" />Reporter</span>} description="Visible to authorized administrators only.">
-            <Kv stack rows={[['Name', c.reporter.name], ['Unit', c.reporter.unit], ['Phone', c.reporter.phone], ['Email', <span className="break-all">{c.reporter.email}</span>], ['Prefers', { phone: 'Phone call', email: 'Email', in_app: 'In-app message' }[c.reporter.preferredContact]]]} />
+            <Kv stack rows={[
+              ['Name', c.reporter.name], ['Unit', c.reporter.unit], ['Phone', c.reporter.phone], ['Email', <span className="break-all">{c.reporter.email}</span>],
+            ]} />
             {c.reporter.residentId ? <p className="sa-small mt-3"><Link to={adminPath(`/residents/${c.reporter.residentId}`)} className="font-semibold">View resident profile</Link></p> : null}
           </Block>
         </Panel>

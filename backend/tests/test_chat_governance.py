@@ -219,18 +219,15 @@ after = client.get("/chat/unread-count", headers=H(leader)).json().get("unread_c
 check("T4 ...and it counts as unread like any message (system notices don't)", after == before + 1, (before, after))
 
 # --- Match chats end too: open while the owner collects the pet, closed once the handover is recorded ----------------
-from app.models.pet_claim import PetClaim  # noqa: E402
+from app.models.report import ReportReturn  # noqa: E402
 R9, M9b = match_on(9)
 r = client.get(f"/chat/matches/{M9b}/thread", headers=H(owner))
 check("match chat: open while the case is Claimed by Owner and the pet isn't handed over yet", r.json().get("is_closed") is False, r.text[:150])
 check("...owner and leader can still arrange the pickup", client.post(f"/chat/matches/{M9b}/messages", json={"message_text": "I can pick him up at 3pm"}, headers=H(owner)).status_code == 200)
-db.add(PetClaim(report_id=R9, pet_id=pet.pet_id, status="Approved"))
-db.commit()
-check("...an approved claim (not collected yet) keeps it open", client.get(f"/chat/matches/{M9b}/thread", headers=H(owner)).json().get("is_closed") is False)
-db.query(PetClaim).filter(PetClaim.report_id == R9).update({"status": "Handover Complete"})
+db.add(ReportReturn(report_id=R9, pet_id=pet.pet_id, has_account=True, owner_user_id=owner.user_id, owner_name=owner.name))
 db.commit()
 r = client.get(f"/chat/matches/{M9b}/thread", headers=H(owner))
-check("match chat: closes once the handover is complete", r.json().get("is_closed") is True, r.text[:150])
+check("match chat: closes once the owner return is recorded", r.json().get("is_closed") is True, r.text[:150])
 r = client.post(f"/chat/matches/{M9b}/messages", json={"message_text": "thanks!"}, headers=H(owner))
 check("...and nobody can post in it any more (owner or leader)", r.status_code == 400
       and client.post(f"/chat/matches/{M9b}/messages", json={"message_text": "ok"}, headers=H(leader)).status_code == 400, r.text[:150])

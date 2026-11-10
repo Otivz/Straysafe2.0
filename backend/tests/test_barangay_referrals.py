@@ -1,8 +1,9 @@
 """
 Barangay Referral log (SUBDIVISION_ONLY_RESTRUCTURING_PLAN.md, Phase 2).
 
-Access scope, audit entries, no custody or holding change, the outcome closes the report once, another subdivision
-is refused, and no Rescue row is created.
+Access scope, audit entries, no custody or holding change, a reported outcome is RECORDED and never closes the case
+(updated 2026-11-09: it used to close the report), several referrals per case, no animal record needed, another
+subdivision is refused. The referral log is the only record (no endorsement letter, rescue or holding row exists).
 
 Run: .venv/Scripts/python.exe backend/tests/test_barangay_referrals.py  (throwaway SQLite, never the app database)
 """
@@ -27,8 +28,7 @@ from app.models.audit_log import AuditLog  # noqa: E402
 from app.models.barangay_referral import BarangayReferral, BarangayReferralUpdate  # noqa: E402
 from app.models.notification import Notification  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
-from app.models.report import (EndorsementLetter, HoldingAnimal, Report, ReportCategory, ReportStatus,  # noqa: E402
-                               Rescue, StatusHistory)
+from app.models.report import Report, ReportCategory, ReportStatus, StatusHistory  # noqa: E402
 from app.models.user import Barangay, Role, Subdivision, User  # noqa: E402
 from app.routes import barangay_referrals  # noqa: E402
 from app.utils.auth import create_access_token  # noqa: E402
@@ -123,16 +123,14 @@ with patch("app.services.email_service._deliver_email_sync", return_value=True):
     hist = db.query(StatusHistory).filter(StatusHistory.report_id == rid).all()
     check("one history entry naming the Barangay and the leader",
           len(hist) == 1 and "Referred to Barangay San Vicente by Leader One" in (hist[0].remarks or ""))
-    check("endorsement letter kept", db.query(EndorsementLetter).filter(EndorsementLetter.report_id == rid).count() == 1)
-    check("response carries the letter title", body["letter_title"] == f"Endorsement for Report #{rid}")
-    check("no Rescue row created", db.query(Rescue).count() == 0)
+    check("the referral log is the only record (no letter fields in the response)", "letter_title" not in body and "letter_file_url" not in body)
     check("audit entry for the referral",
           db.query(AuditLog).filter(AuditLog.action == "Create Barangay Referral").count() == 1)
     check("reporter notified", db.query(Notification).filter(Notification.user_id == resident.user_id,
                                                              Notification.related_id == rid).count() >= 1)
     check("Barangay account not notified", db.query(Notification).filter(Notification.user_id == brgy.user_id).count() == 0)
     r = client.post(f"/reports/{rid}/referral", json=REFERRAL, headers=H(leader))
-    check("a second referral is refused (409)", r.status_code == 409, r.text)
+    check("a second referral to the Barangay is refused while the first is still open (409)", r.status_code == 409, r.text)
 
     # Read
     check("leader reads the referral", client.get(f"/reports/{rid}/referral", headers=H(leader)).status_code == 200)
@@ -153,8 +151,9 @@ with patch("app.services.email_service._deliver_email_sync", return_value=True):
     check("'held' update does not touch custody, facility or pin",
           rep.custody_status == "Sighting" and rep.facility_id is None
           and rep.latitude == Decimal("14.80000000") and rep.longitude == Decimal("121.00000000"))
-    check("no holding record created", db.query(HoldingAnimal).count() == 0)
     check("report status unchanged by an update", rep.current_status_id == 4)
+    check("the Barangay taking the referral up moves the REFERRAL (not the case) to in progress",
+          r.json()["referral_status"] == "in_progress" and rep.case_status == "in_progress")
     check("audit entry for the update", db.query(AuditLog).filter(AuditLog.action == "Record Barangay Update").count() == 1)
     r = client.post(f"/referrals/{ref_id}/updates", json={**upd, "evidence_url": "http://insecure.example/x.jpg"}, headers=H(leader))
     check("non-https evidence refused (422)", r.status_code == 422, r.text)
@@ -172,18 +171,25 @@ with patch("app.services.email_service._deliver_email_sync", return_value=True):
     r = client.post(f"/referrals/{ref_id}/outcome", json=out, headers=H(leader))
     check("leader records the outcome (200)", r.status_code == 200, r.text)
     rep = fresh(Report, rid)
-    check("outcome closes the report as status 9", rep.current_status_id == 9)
-    check("closing does not touch custody or facility", rep.custody_status == "Sighting" and rep.facility_id is None)
+    check("the outcome is recorded as reported and completes the referral",
+          r.json()["final_outcome"] == "claimed" and r.json()["referral_status"] == "completed")
+    check("the outcome does NOT close or change the case: still status 4, In progress, no closure",
+          rep.current_status_id == 4 and rep.case_status == "in_progress" and rep.closed_at is None and rep.closure_disposition is None)
+    check("recording it does not touch custody or facility", rep.custody_status == "Sighting" and rep.facility_id is None)
     last = db.query(StatusHistory).filter(StatusHistory.report_id == rid).order_by(StatusHistory.history_id.desc()).first()
-    check("closing history entry is marked as reported by the Barangay",
-          last.report_status_id == 9 and (last.remarks or "").startswith("Reported by Barangay San Vicente on"))
+    check("the timeline entry is marked as reported by the Barangay, with the case's status as it was",
+          last.report_status_id == 4 and (last.remarks or "").startswith("Reported by Barangay San Vicente on"))
     check("audit entry for the outcome", db.query(AuditLog).filter(AuditLog.action == "Record Barangay Outcome").count() == 1)
     r = client.post(f"/referrals/{ref_id}/outcome", json={**out, "final_outcome": "deceased"}, headers=H(leader))
     check("a second outcome is refused (409)", r.status_code == 409, r.text)
-    check("status still 9 after the refused second outcome", fresh(Report, rid).current_status_id == 9)
+    check("status still 4 after the refused second outcome", fresh(Report, rid).current_status_id == 4)
     r = client.post(f"/referrals/{ref_id}/updates", json=upd, headers=H(leader))
     check("no updates after the outcome (409)", r.status_code == 409, r.text)
-    check("open-only list excludes closed referrals", client.get("/referrals/?open_only=true", headers=H(leader)).json() == [])
+    check("open-only list excludes completed referrals", client.get("/referrals/?open_only=true", headers=H(leader)).json() == [])
+    r = client.post(f"/reports/{rid}/referral", json={**REFERRAL, "reason": "Second attempt after the first was completed"}, headers=H(leader))
+    check("once the first is completed, a new referral can be made on the same case (several per case)", r.status_code == 201, r.text)
+    check("...and the first referral's history is intact", db.query(BarangayReferral).filter(BarangayReferral.report_id == rid).count() == 2
+          and fresh(BarangayReferral, ref_id).final_outcome == "claimed" and fresh(BarangayReferral, ref_id).outcome_note.startswith("Owner picked it up"))
 
     # Other cases
     rejected = make_report(status_id=3)
@@ -203,7 +209,10 @@ with patch("app.services.email_service._deliver_email_sync", return_value=True):
     db.add(stray)
     db.commit()
     r = client.post(f"/reports/{stray.report_id}/referral", json=REFERRAL, headers=H(leader))
-    check("a case without an animal record cannot be referred yet (400)", r.status_code == 400 and "animal record" in r.text, r.text)
+    check("a case WITHOUT an animal record can be referred: no registered animal is needed (201)", r.status_code == 201, r.text)
+    watched = make_report(status_id=7)
+    r = client.post(f"/reports/{watched}/referral", json=REFERRAL, headers=H(leader))
+    check("a case under observation can be referred too, and keeps its status (201)", r.status_code == 201 and fresh(Report, watched).current_status_id == 7, r.text)
     check("updates table holds only the one accepted update", db.query(BarangayReferralUpdate).count() == 1)
 
 db.close()

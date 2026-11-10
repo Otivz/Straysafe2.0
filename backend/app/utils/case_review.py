@@ -2,7 +2,7 @@
 Who reviews a report, and when an animal record is required.
 
 - Subdivision Leaders own the review work (duplicates, potential matches, animal records).
-- Barangay Staff only monitor, except for a case the Barangay is already handling (escalated / rescue under way)
+- Barangay Staff only monitor, except for a case the Barangay is already handling (referred to it)
   or a subdivision that has no active leader to do it.
 - A report can't be escalated to the Barangay or resolved until the animal has a record.
 """
@@ -11,7 +11,8 @@ from typing import Optional
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.report import HoldingAnimal, Report, Rescue
+from app.models.barangay_referral import BarangayReferral
+from app.models.report import Report
 from app.models.user import User
 
 # Statuses where the case is in the Barangay's hands
@@ -26,29 +27,7 @@ ESCALATED_STATUS = 4
 def barangay_handles_report(report: Report, db: Session) -> bool:
     if report.current_status_id in BARANGAY_HANDLED_STATUSES:
         return True
-    return db.query(Rescue.rescue_id).filter(Rescue.report_id == report.report_id).first() is not None
-
-
-def escalated_to_barangay(report: Report, db: Session) -> bool:
-    """
-    The case reached the Barangay at some point: it is being handled there now, or it was escalated / endorsed / given a
-    rescue before (so a resolved case the Barangay handled stays in the Barangay's records). Judged on the case's root.
-    """
-    from app.models.report import EndorsementLetter, StatusHistory
-    root = report
-    seen = set()
-    while root is not None and root.duplicate_of_report_id and root.report_id not in seen:
-        seen.add(root.report_id)
-        nxt = db.get(Report, root.duplicate_of_report_id)
-        if nxt is None:
-            break
-        root = nxt
-    if barangay_handles_report(root, db):
-        return True
-    if db.query(EndorsementLetter.report_id).filter(EndorsementLetter.report_id == root.report_id).first() is not None:
-        return True
-    return db.query(StatusHistory.history_id).filter(
-        StatusHistory.report_id == root.report_id, StatusHistory.report_status_id.in_((4, 13))).first() is not None
+    return db.query(BarangayReferral.referral_id).filter(BarangayReferral.report_id == report.report_id).first() is not None
 
 
 def subdivision_has_active_leader(subdivision_id: Optional[int], db: Session) -> bool:
@@ -99,9 +78,7 @@ def require_review_permission(user: User, report: Report, db: Session) -> None:
 
 
 def _own_animal_record(report: Report, db: Session) -> bool:
-    if report.pet_id is not None:
-        return True
-    return db.query(HoldingAnimal.holding_id).filter(HoldingAnimal.report_id == report.report_id).first() is not None
+    return report.pet_id is not None
 
 
 def _group_animals_missing_record(report: Report, db: Session) -> Optional[list]:
@@ -121,7 +98,7 @@ def report_has_animal_record(report: Report, db: Session) -> bool:
 
 
 def require_animal_record(report: Report, db: Session, action: str) -> None:
-    """Block escalating/resolving a report whose animal isn't in Pet Records or Holding records yet."""
+    """Block escalating/resolving a report whose animal isn't in Pet Records yet."""
     if report_has_animal_record(report, db):
         return
     missing = _group_animals_missing_record(report, db)
@@ -131,7 +108,7 @@ def require_animal_record(report: Report, db: Session, action: str) -> None:
             status_code=400,
             detail=f"Add an animal record for each animal first: {len(missing)} animal record"
                    f"{'s' if len(missing) != 1 else ''} of this group ({ids}) "
-                   f"{'are' if len(missing) != 1 else 'is'} not yet in Pet Records or Holding, so the report can't be {action}. "
+                   f"{'are' if len(missing) != 1 else 'is'} not yet in Pet Records, so the report can't be {action}. "
                    "Open each animal's record and use \"Add Record for this Animal\".",
         )
     animal = (report.animal_type or getattr(report, "ai_animal_type", "") or "").strip().capitalize()

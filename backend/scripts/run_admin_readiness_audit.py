@@ -1,3 +1,4 @@
+import getpass
 import time
 import requests
 import sys
@@ -11,6 +12,15 @@ def log_test(step_num: int, title: str, passed: bool, duration_ms: float, detail
         print(f"   -> {details}")
 
 def run_readiness_audit():
+    # The Admin to sign in with is asked for, never read from a file or the environment, and nothing is built in.
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        print("Run this in a terminal: it asks for the e-mail address and password of an Admin account that already exists.")
+        sys.exit(2)
+    admin_email = input("E-mail address of an existing Admin account: ").strip()
+    admin_password = getpass.getpass("Password (hidden): ")
+    if not admin_email or not admin_password:
+        print("Both are required.")
+        sys.exit(2)
     print("=" * 75)
     print("  STRAYSAFE 2.0 — CAPSTONE DEFENSE READINESS & ADMIN E2E INTEGRATION AUDIT")
     print("=" * 75)
@@ -26,7 +36,7 @@ def run_readiness_audit():
     try:
         login_res = requests.post(
             f"{BASE_URL}/auth/login",
-            json={"email": "admin@straysafe.com", "password": "password123"},
+            json={"email": admin_email, "password": admin_password},
             timeout=5
         )
         dur = (time.time() - start) * 1000
@@ -112,46 +122,6 @@ def run_readiness_audit():
         results.append(False)
 
     # -------------------------------------------------------------
-    # 5. Holding Facility Animal Intake & Observation Timeline
-    # -------------------------------------------------------------
-    start = time.time()
-    try:
-        holding_res = requests.get(f"{BASE_URL}/holding/metrics", headers=admin_headers, timeout=5)
-        dur = (time.time() - start) * 1000
-        if holding_res.status_code == 200:
-            data = holding_res.json()
-            passed = isinstance(data, dict)
-            log_test(5, "Holding Facility Intake & Observation Timeline", passed, dur, f"Facility capacity: {data.get('total_holding', 0)} in custody, {data.get('claimed_count', 0)} claimed")
-            results.append(passed)
-        else:
-            log_test(5, "Holding Facility Intake & Observation Timeline", False, dur, f"Status: {holding_res.status_code}")
-            results.append(False)
-    except Exception as e:
-        dur = (time.time() - start) * 1000
-        log_test(5, "Holding Facility Intake & Observation Timeline", False, dur, str(e))
-        results.append(False)
-
-    # -------------------------------------------------------------
-    # 6. Adoption Application Review & Ephemeral Signed ID Inspection
-    # -------------------------------------------------------------
-    start = time.time()
-    try:
-        adoptions_res = requests.get(f"{BASE_URL}/adoptions/applications", headers=admin_headers, timeout=5)
-        dur = (time.time() - start) * 1000
-        if adoptions_res.status_code == 200:
-            adoptions = adoptions_res.json()
-            passed = isinstance(adoptions, list)
-            log_test(6, "Adoption Review & Ephemeral Government ID Security", passed, dur, f"{len(adoptions)} applications loaded with zero plaintext government ID numbers")
-            results.append(passed)
-        else:
-            log_test(6, "Adoption Review & Ephemeral Government ID Security", False, dur, f"Status: {adoptions_res.status_code}")
-            results.append(False)
-    except Exception as e:
-        dur = (time.time() - start) * 1000
-        log_test(6, "Adoption Review & Ephemeral Government ID Security", False, dur, str(e))
-        results.append(False)
-
-    # -------------------------------------------------------------
     # 7. Gemini Vision / Biometric Matching Status & Toggle
     # -------------------------------------------------------------
     start = time.time()
@@ -169,21 +139,6 @@ def run_readiness_audit():
     except Exception as e:
         dur = (time.time() - start) * 1000
         log_test(7, "AI Gemini Vision & Biometric Sighting Match Engine", False, dur, str(e))
-        results.append(False)
-
-    # -------------------------------------------------------------
-    # 8. QR Collar Lookup & Community Recovery Workflow
-    # -------------------------------------------------------------
-    start = time.time()
-    try:
-        qr_res = requests.get(f"{BASE_URL}/pet-qr/lookup/DEMO-NONEXISTENT", timeout=5)
-        dur = (time.time() - start) * 1000
-        passed = qr_res.status_code in [200, 404, 400]
-        log_test(8, "QR Collar Public Scan & Fast Recovery Gateway", passed, dur, f"QR endpoint verified (HTTP {qr_res.status_code})")
-        results.append(passed)
-    except Exception as e:
-        dur = (time.time() - start) * 1000
-        log_test(8, "QR Collar Public Scan & Fast Recovery Gateway", False, dur, str(e))
         results.append(False)
 
     print("=" * 75)

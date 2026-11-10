@@ -1,7 +1,6 @@
 """
 Analytics accuracy (docs/01-system/ANALYTICS_RULES.md): status groups that add up, no Barangay analytics,
-rescue counts by status, a current custody snapshot that never counts returned
-animals as available for adoption, successful adoptions = completed handovers, observations, claims, locations.
+observations, referrals, locations (the retired rescue, custody, adoption and claim-fee sections are gone).
 Run from the backend folder:  python tests/test_analytics_accuracy.py
 """
 import os
@@ -23,9 +22,7 @@ from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models.owner_followup import OwnerFollowUp  # noqa: E402
 from app.models.barangay_referral import BarangayReferral, BarangayReferralUpdate, OUTCOME_STATUS  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
-from app.models.pet_claim import PetClaim  # noqa: E402
-from app.models.report import (Adoption, EndorsementLetter, HoldingAnimal, Report, ReportCategory, ReportReturn,  # noqa: E402
-                               ReportStatus, Rescue, StatusHistory)
+from app.models.report import Report, ReportCategory, ReportStatus, StatusHistory  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
 from app.models.warning import OwnerWarning  # noqa: E402
 from app.routes import analytics  # noqa: E402
@@ -84,7 +81,6 @@ nostatus = report(None, landmark="gate 1")
 review = report(16)
 verified = report(2, landmark="Clubhouse")
 endorsed = report(4)                               # status 4 = Barangay-handled
-db.add(EndorsementLetter(report_id=endorsed.report_id, leader_id=leader.user_id, letter_content="Endorsed"))
 in_progress = report(8, escalated=True)            # impounded at the Barangay
 resolved = report(11, escalated=True)
 rejected = report(3)
@@ -120,63 +116,20 @@ db.add(Pet(owner_id=res.user_id, pet_name="Registry pet", pet_type="Dog", status
 db.commit()
 check("subdivision: its own registry counted", client.get("/analytics/subdivision", headers=H(leader)).json()["pet_compliance"]["total_pets"] == 1)
 
-# ── Rescue counts by status (cohort = report filing date) ──
-db.add_all([Rescue(report_id=endorsed.report_id, status_id=1),
-            Rescue(report_id=in_progress.report_id, status_id=5, started_at=NOW + timedelta(minutes=30)),
-            Rescue(report_id=resolved.report_id, status_id=6, started_at=NOW + timedelta(hours=1), completed_at=NOW + timedelta(hours=2)),
-            Rescue(report_id=resolved.report_id, status_id=3)])
-db.commit()
-rs = client.get("/analytics/admin", headers=H(admin)).json()["rescue_summary"]
-check("rescues: total, pending, active, completed, cancelled", (rs["total"], rs["pending"], rs["active"], rs["completed"], rs["cancelled"])
-      == (4, 1, 1, 1, 1), rs)
-check("rescues: report-to-start time only from real timestamps", rs["response_samples"] == 2 and rs["avg_report_to_start_hours"] == 0.8, rs)
-check("rescues: KPI total counts every request (not only completed ones)",
-      client.get("/analytics/admin", headers=H(admin)).json()["kpis"]["total_rescues"] == 4)
+# ── The retired sections are not in the payload ──
+gone = client.get("/analytics/admin", headers=H(admin), params={"days": 30}).json()
+check("retired: no rescue, custody, holding, adoption or claim-fee section",
+      not ({"rescue_summary", "custody_snapshot", "claims_summary", "holding_summary", "holding_and_adoption"} & set(gone)), sorted(gone))
+check("retired: no rescue or adoption KPI", not ({"total_rescues", "completed_rescues", "total_adoptions", "total_intake"} & set(gone["kpis"])), gone["kpis"])
 
-# ── Custody snapshot: current, and returned animals never 'available for adoption' ──
-old = report(8, days_ago=100, escalated=True)      # intake long before the 30-day window
-db.add(HoldingAnimal(report_id=old.report_id, animal_type="Dog", facility_status=2, intake_date=NOW - timedelta(days=100)))
-listed = HoldingAnimal(report_id=in_progress.report_id, animal_type="Dog", facility_status=6, intake_date=NOW)
-returned_listed = HoldingAnimal(report_id=resolved.report_id, animal_type="Dog", facility_status=6, intake_date=NOW)
-db.add_all([listed, returned_listed])
-db.flush()
-db.add(ReportReturn(report_id=resolved.report_id, holding_id=returned_listed.holding_id, has_account=True, owner_name="Res",
-                    relationship_to_animal="Owner"))
-adopted = HoldingAnimal(report_id=endorsed.report_id, animal_type="Cat", facility_status=7, intake_date=NOW)
-db.add(adopted)
-db.commit()
-bd = client.get("/analytics/admin", headers=H(admin), params={"days": 30}).json()
-cs = bd["custody_snapshot"]
-check("custody: animals held now are counted even if they arrived before the period", cs["in_custody_now"] == 2, cs)
-check("custody: a returned animal is not available for adoption", cs["available_for_adoption_now"] == 1, cs)
-check("custody: returned to owner counted from the return record", cs["returned_to_owner_total"] == 1, cs)
-check("custody: adopted counted", cs["adopted_total"] == 1, cs)
-check("holding cohort: returned-to-owner counts the return record too", bd["holding_summary"]["returned_to_owner"] == 1, bd["holding_summary"])
-
-# ── Adoptions: only completed handovers are successful ──
-for status, handed in (("Pending", False), ("Approved", False), ("Approved", True)):
-    db.add(Adoption(holding_id=adopted.holding_id, applicant_id=res.user_id, status=status, full_name="A", address="X", contact_no="1",
-                    reason="R", staff_handed_over=handed, is_handed_over=handed, created_at=NOW))
-db.commit()
-ha = client.get("/analytics/admin", headers=H(admin)).json()
-check("adoptions: pending and approved-only applications are not successful adoptions",
-      ha["holding_and_adoption"]["successful_adoptions"] == 1 and ha["kpis"]["total_adoptions"] == 1
-      and ha["holding_and_adoption"]["approved_adoptions"] == 2 and ha["holding_and_adoption"]["pending_adoptions"] == 1, ha["holding_and_adoption"])
-
-# ── Claims and observations ──
+# ── Observations ──
 pet = db.query(Pet).filter(Pet.pet_name == "Registry pet").one()
-db.add_all([PetClaim(report_id=endorsed.report_id, pet_id=pet.pet_id, status="Approved"),
-            PetClaim(report_id=resolved.report_id, pet_id=pet.pet_id, status="Handover Complete"),
-            PetClaim(report_id=in_progress.report_id, pet_id=pet.pet_id, status="Rejected")])
 fu_open = OwnerFollowUp(report_id=verified.report_id, pet_id=pet.pet_id, subdivision_id=1, leader_id=leader.user_id,
                         owner_name="Res", status="observing", duration_days=3, due_at=NOW + timedelta(days=3))
 fu_done = OwnerFollowUp(report_id=review.report_id, pet_id=pet.pet_id, subdivision_id=1, leader_id=leader.user_id,
                         owner_name="Res", status="complied", duration_days=3, due_at=NOW, closed_at=NOW)
 db.add_all([fu_open, fu_done])
 db.commit()
-cl = client.get("/analytics/admin", headers=H(admin)).json()["claims_summary"]
-check("claims: submitted, awaiting handover, handed over, rejected", (cl["submitted"], cl["approved_pending_handover"], cl["handed_over"], cl["rejected"])
-      == (3, 1, 1, 1), cl)
 ob = client.get("/analytics/subdivision", headers=H(leader)).json()["observations"]
 check("observations: open now and resolved in the period", ob["active_now"] == 1 and ob["resolved_in_period"] == 1, ob)
 
@@ -262,7 +215,6 @@ db.commit()
 legacy_after = client.get("/analytics/admin", headers=H(admin)).json()
 check("history: legacy 5, 6, 7, 8 and 13 still count", legacy_after["kpis"]["total_reports"] == legacy_before["kpis"]["total_reports"] + 5)
 check("history: status groups still add up", sum(row["count"] for row in legacy_after["status_distribution"]) == legacy_after["kpis"]["total_reports"])
-check("history: legacy rescue and custody counts unchanged by referrals", legacy_after["rescue_summary"] == legacy_before["rescue_summary"] and legacy_after["custody_snapshot"] == legacy_before["custody_snapshot"])
 check("labels: status 4 group is Referred to Barangay", next(row for row in leader_data["status_distribution"] if row["key"] == "endorsed")["label"] == "Referred to Barangay")
 
 print(f"\n{sum(results)}/{len(results)} checks passed")

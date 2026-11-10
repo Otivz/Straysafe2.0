@@ -5,13 +5,15 @@ import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
 import { MapLegend } from '../../../preview/map/MapLegend';
 import { PhotoStrip, SightingCard } from '../../components/Cards';
 import { Screen } from '../../components/Screen';
-import { Callout, ClaimPill, LinkButton, NotFoundState, Pill, Section, UpdateTimeline } from '../../components/ui';
+import { Callout, ClaimPill, ErrorState, LinkButton, ListSkeleton, NotFoundState, Pill, Section, UpdateTimeline } from '../../components/ui';
 import { residentPath } from '../../config';
-import { ANIMAL_TYPES, NOTICE_TYPES, SAMPLE_OFFICE } from '../../data/constants';
+import { ANIMAL_TYPES, NOTICE_TYPES } from '../../data/constants';
 import { useResidentData } from '../../data/context';
 import { claimForNotice, latestSighting, noticeById, reportById } from '../../data/selectors';
 import type { Notice } from '../../data/types';
 import { useNow } from '../../lib/hooks';
+import { useLoadNotice } from '../../lib/useLoadNotice';
+import { useOffice } from '../../lib/useOffice';
 
 /**
  * The only map a community notice may show: a general area (a rounded position with a circle around it), never the exact
@@ -65,7 +67,7 @@ function LostView({ notice }: { notice: Notice }) {
     >
       <Head notice={notice} />
       {notice.status === 'recovered' ? <Callout tone="sage" title={`${name} is home.`}>Thank you to everyone who helped look.</Callout> : null}
-      <PhotoStrip count={notice.photos} media={report?.media} />
+      <PhotoStrip count={notice.photos} media={report?.media} urls={notice.photoUrls} />
       <p className="rs-prose">{notice.description}</p>
       <GeneralAreaMap notice={notice} what="last seen" />
       <dl className="rs-kv">
@@ -110,7 +112,7 @@ function FoundView({ notice }: { notice: Notice }) {
     >
       <Head notice={notice} />
       {notice.status === 'recovered' ? <Callout tone="sage" title="This animal is back with its owner.">The subdivision closed this notice, so it no longer appears in Community.</Callout> : null}
-      <PhotoStrip count={notice.photos} media={report?.media} />
+      <PhotoStrip count={notice.photos} media={report?.media} urls={notice.photoUrls} />
       <p className="rs-prose">{notice.description}</p>
       <GeneralAreaMap notice={notice} what="found" />
       <dl className="rs-kv">
@@ -155,6 +157,7 @@ function FoundView({ notice }: { notice: Notice }) {
 /** R28 — Safety advisory published by the administrators. */
 function AdvisoryView({ notice }: { notice: Notice }) {
   const now = useNow();
+  const { office } = useOffice();
   return (
     <Screen title="Safety advisory" back="/community" footer={<LinkButton variant="primary" block to={residentPath('/report')}>Report a concern</LinkButton>}>
       <Head notice={notice} />
@@ -180,7 +183,7 @@ function AdvisoryView({ notice }: { notice: Notice }) {
       ) : null}
 
       <Callout tone="info" title="Need help or saw the animal?">
-        Tell the guardhouse or the HOA office: <span className="rs-nowrap">{SAMPLE_OFFICE.phone}</span> (sample number). You can also send a private report.
+        Tell the guardhouse{office?.phone ? <> or the HOA office: <span className="rs-nowrap">{office.phone}</span></> : ' or the HOA office'}. You can also send a private report.
       </Callout>
     </Screen>
   );
@@ -189,8 +192,18 @@ function AdvisoryView({ notice }: { notice: Notice }) {
 /** R27 — One community notice. The layout follows the type: lost pet, found animal or safety advisory. */
 export default function NoticePage() {
   const { state } = useResidentData();
-  const notice = noticeById(state, useParams().noticeId);
-  if (!notice) return <Screen title="Notice" back="/community"><NotFoundState what="notice" to="/community" label="Go to Community" /></Screen>;
+  const { noticeId } = useParams();
+  const notice = noticeById(state, noticeId);
+  const detail = useLoadNotice(noticeId);
+  const waiting = detail.status === 'idle' || detail.status === 'loading';
+  if (!notice) {
+    if (waiting) return <Screen title="Notice" back="/community"><ListSkeleton rows={3} /></Screen>;
+    if (detail.status === 'error') return <Screen title="Notice" back="/community"><ErrorState onRetry={detail.retry}>{detail.error}</ErrorState></Screen>;
+    return <Screen title="Notice" back="/community"><NotFoundState what="notice" to="/community" label="Go to Community" /></Screen>;
+  }
+  // A lost-pet or found-animal notice is shown with its sightings, so it waits for them rather than saying "none yet".
+  if (notice.type !== 'safety_advisory' && waiting) return <Screen title={notice.type === 'lost_pet' ? 'Lost pet' : 'Found animal'} back="/community"><ListSkeleton rows={3} /></Screen>;
+  if (notice.type !== 'safety_advisory' && detail.status === 'error') return <Screen title="Notice" back="/community"><ErrorState onRetry={detail.retry}>{detail.error}</ErrorState></Screen>;
   if (notice.type === 'lost_pet') return <LostView notice={notice} />;
   if (notice.type === 'found_animal') return <FoundView notice={notice} />;
   return <AdvisoryView notice={notice} />;

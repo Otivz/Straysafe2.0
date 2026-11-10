@@ -26,7 +26,7 @@ const ACTIONS: Record<Resident['status'], { label: string; icon: typeof ShieldOf
 /** A19 — Resident details. Shows only what an administrator needs, and never who complained about a resident's animal. */
 export default function ResidentDetailsPage() {
   const { residentId } = useParams();
-  const { state, dispatch } = useAdminData();
+  const { state, dispatch, capabilities } = useAdminData();
   const toast = useToast();
   const now = useNow();
   const [action, setAction] = useState<(typeof ACTIONS)['active'][number] | null>(null);
@@ -39,7 +39,9 @@ export default function ResidentDetailsPage() {
   const stats = residentStats(state.cases, resident);
   const pets = resident.petIds.map((id) => petById(state, id)).filter((p) => p !== undefined);
   const s = RESIDENT_STATUS[resident.status];
-  const actions = ACTIONS[resident.status];
+  // Suspending, reactivating or verifying an account is the system administrator's on the real backend, so a Leader is not offered it.
+  const actions = capabilities.changeResidentStatus ? ACTIONS[resident.status] : [];
+  const where = [resident.unit, resident.street].filter(Boolean);
   const refs = (cases: { id: string }[]) => (cases.length ? <span className="flex flex-wrap gap-x-3 gap-y-1">{cases.slice(0, 4).map((c) => <Link key={c.id} to={adminPath(`/cases/${c.id}`)} className="sa-ref">{c.id}</Link>)}{cases.length > 4 ? <span className="sa-meta">+{cases.length - 4} more</span> : null}</span> : null);
 
   return (
@@ -50,20 +52,22 @@ export default function ResidentDetailsPage() {
           <Avatar name={resident.name} size="lg" />
           <div>
             <h1 className="sa-h1">{resident.name}</h1>
-            <p className="sa-text-2 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">{resident.unit} · {resident.street}<Badge tone={s.tone} dot>{s.label}</Badge></p>
+            <p className="sa-text-2 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">{where.join(' · ')}<Badge tone={s.tone} dot>{s.label}</Badge></p>
           </div>
         </div>
-        <Menu
-          width={230}
-          trigger={(p) => <Button className="sa-btn--icon" aria-label="Account actions" {...p}><EllipsisVertical size={17} aria-hidden="true" /></Button>}
-          items={actions.map((a) => ({ label: a.label, icon: a.icon, danger: a.danger, onSelect: () => setAction(a) }))}
-        />
+        {actions.length > 0 ? (
+          <Menu
+            width={230}
+            trigger={(p) => <Button className="sa-btn--icon" aria-label="Account actions" {...p}><EllipsisVertical size={17} aria-hidden="true" /></Button>}
+            items={actions.map((a) => ({ label: a.label, icon: a.icon, danger: a.danger, onSelect: () => setAction(a) }))}
+          />
+        ) : null}
       </header>
 
       <div className="sa-case" style={{ marginTop: 0 }}>
         <Panel>
           <Block title={<span className="flex items-center gap-2"><Lock size={14} aria-hidden="true" />Contact information</span>} description="Visible to administrators only. Share it only when a case needs it.">
-            <Kv wide rows={[['Phone', resident.phone], ['Email', resident.email], ['Address', `${resident.unit}, ${resident.street}`]]} />
+            <Kv wide rows={[['Phone', resident.phone], ['Email', resident.email], ['Address', where.join(', ')]]} />
           </Block>
           <Block title="Registered pets" description={pets.length ? `${plural(pets.length, 'pet')} registered by this resident` : undefined}>
             {pets.length === 0 ? <p className="sa-small sa-text-2">No pets registered.</p> : (
@@ -83,8 +87,10 @@ export default function ResidentDetailsPage() {
               ['Last active', relative(resident.lastActiveAt, now)],
               ['Reports submitted', stats.reported.length ? <span className="flex flex-col gap-1"><span>{stats.reported.length}</span>{refs(stats.reported)}</span> : '0'],
               ['Confirmed owner in', stats.asOwner.length ? <span className="flex flex-col gap-1"><span>{plural(stats.asOwner.length, 'case')}</span>{refs(stats.asOwner)}</span> : 'None'],
-              ['Warnings on record', stats.warnings.length ? `${stats.warnings.length} (${stats.warnings.filter((w) => w.status === 'active').length} active)` : 'None'],
-              ['Ownership claims', stats.claims.length ? String(stats.claims.length) : 'None'],
+              // The list holds only the OPEN warnings and claims of cases not opened yet, so the screen says exactly that
+              // rather than a total it cannot know.
+              ['Active warnings', String(stats.warnings.filter((w) => w.status === 'active').length || 'None')],
+              ['Open ownership claims', String(stats.claims.filter((c) => c.status === 'submitted' || c.status === 'under_review' || c.status === 'needs_info').length || 'None')],
             ]} />
           </Block>
         </Panel>
@@ -95,6 +101,7 @@ export default function ResidentDetailsPage() {
               <p className="mb-2"><Badge tone={s.tone} dot large>{s.label}</Badge></p>
               <p className="sa-small sa-text-2">{s.description}</p>
               {actions.map((a) => <Button key={a.label} className="mt-3" size="sm" variant={a.danger ? 'danger' : 'secondary'} icon={a.icon} onClick={() => setAction(a)}>{a.label}</Button>)}
+              {capabilities.changeResidentStatus ? null : <p className="sa-meta mt-3">Only the system administrator can suspend, reactivate or verify an account.</p>}
             </Block>
           </Panel>
           <Callout icon={Lock} title="Privacy.">Who reported a complaint about this resident’s animals is never shown on this page, and private complaints are never published.</Callout>

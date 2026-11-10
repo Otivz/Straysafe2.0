@@ -9,13 +9,16 @@ from app.database import get_db
 from app.models.warning import OwnerWarning
 from app.models.user import User
 from app.models.pet import Pet
-from app.models.report import Report, StatusHistory, Rescue
+from app.models.report import Report, StatusHistory
 from app.models.notification import Notification
 from app.schemas.warning import WarningCreate, WarningResponse
 from app.utils.auth import get_current_user, verify_subdivision_scope
 from app.utils.audit import log_activity
 from app.utils.case_groups import require_case_pet
-from app.utils.warning_rules import check_tier_for_incident, require_can_issue, visible_warnings, suggest_tier, followup_incidents
+from app.utils.warning_rules import (check_tier_for_incident, require_can_issue, require_warning_eligible,
+                                     observation_days_for, visible_warnings, suggest_tier, followup_incidents)
+from app.utils import case_state
+from app.utils import case_vocab as V
 from app.utils.notification_dispatcher import dispatch_notification
 from app.services import email_templates
 
@@ -59,6 +62,11 @@ def enrich_warning_dict(warning: OwnerWarning, db: Session) -> dict:
         "acknowledged_at": warning.acknowledged_at,
         "created_at": warning.created_at,
         "issued_at": warning.created_at,
+        "policy_id": warning.policy_id,
+        "policy_title": warning.policy_title,
+        "policy_reference": warning.policy_reference,
+        "observation_days": warning.observation_days,
+        "follow_up_at": warning.follow_up_at,
         "owner_name": owner.name if owner else "Unknown Owner",
         "owner_phone": owner.phone if owner else None,
         "pet_name": pet.display_name if pet else (getattr(report, 'pet_name', None) if report else None),
@@ -97,14 +105,10 @@ def issue_warning(
         if not rep:
             raise HTTPException(status_code=404, detail="Associated incident report not found")
 
-        # A subdivision warning can't be issued once the case is escalated to the Barangay
-        rescue_record = db.query(Rescue).filter(Rescue.report_id == warning_in.report_id).first()
-        is_escalated = (
-            rep.endorsement_letter is not None or
-            rescue_record is not None or
-            rep.current_status_id in [4, 5, 6, 13]
-        )
-        if is_escalated:
+        # A case in the operating statuses of the retired Barangay rescue workflow (rescue in progress, picked up,
+        # approved) is no longer the subdivision's to warn on. A referral is NOT that: it is a case detail, so a case
+        # referred to the Barangay or anyone else can still be warned (status 4 does not block a warning).
+        if rep.current_status_id in [5, 6, 13]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Cannot issue subdivision warning for an animal case that has already been escalated to Barangay."
@@ -128,12 +132,17 @@ def issue_warning(
         raise HTTPException(status_code=409, detail="This report is linked to a different registered pet.")
     # Leader of this subdivision, handling the report, warning the registered pet's actual owner
     require_can_issue(db, current_user, owner, rep, pet)
+    # The case must qualify: open, a concern an owner can be warned for, a verified incident, a confirmed owner and a
+    # confirmed policy. Enforced here whatever the screen shows.
+    policy = require_warning_eligible(db, rep, owner, warning_in.policy_id)
     # One warning per incident, pet, violation and tier (a logged repeat incident is its own report)
     check_tier_for_incident(db, rep.report_id, warning_in.violation_type, warning_in.pet_id, warning_in.warning_level)
     if pet is not None and not rep.pet_id:
         require_case_pet(db, rep, pet.pet_id)
         rep.pet_id = pet.pet_id
 
+    # The observation period is the policy's. A policy that defines none means no observation period: none is assumed.
+    observation_days = policy.observation_days
     new_warning = OwnerWarning(
         user_id=warning_in.user_id,
         pet_id=warning_in.pet_id,
@@ -143,7 +152,11 @@ def issue_warning(
         violation_type=warning_in.violation_type,
         description=warning_in.description,
         fine_amount=warning_in.fine_amount or 0.0,
-        status="Pending"
+        status="Pending",
+        policy_id=policy.id,
+        policy_title=policy.title,
+        policy_reference=policy.reference,
+        observation_days=observation_days,
     )
     db.add(new_warning)
     db.flush()
@@ -161,9 +174,11 @@ def issue_warning(
         )
         db.add(warning_history)
 
-        # Automatic Under Observation integration upon First Warning
+        # Under Observation upon the First Warning, for the period the confirmed policy defines. A policy that defines
+        # no period means no observation: nothing is started and no number of days is assumed.
         from app.models.owner_followup import OwnerFollowUp
         from datetime import timedelta
+        days_label = (f"{observation_days} day{'s' if observation_days != 1 else ''}") if observation_days else None
 
         existing_followup = db.query(OwnerFollowUp).filter(
             OwnerFollowUp.report_id == rep.report_id
@@ -176,7 +191,7 @@ def issue_warning(
         is_first_warning = (warning_in.warning_level in ("1st Warning", "Notice")) or (prior_warnings_count == 0)
 
         # The warning's time is on the database clock (local); follow-up due dates are kept in UTC like _now() (F18)
-        from app.utils.holding_stay import db_now
+        from app.utils.db_clock import db_now
         from app.utils.owner_followups import db_local_to_utc
         warning_ts = new_warning.created_at or db_now(db)
         warning_ts_utc = db_local_to_utc(db, warning_ts)
@@ -187,9 +202,10 @@ def issue_warning(
             OwnerFollowUp.pet_id == pet_for_obs, OwnerFollowUp.status == "observing"
         ).first() if pet_for_obs else None
 
-        if not existing_followup and is_first_warning and open_for_pet is None:
-            followup_due = warning_ts_utc + timedelta(days=3)
-            followup_due_local = warning_ts + timedelta(days=3)  # for the message, on the clock the owner reads
+        if observation_days and not existing_followup and is_first_warning and open_for_pet is None:
+            followup_due = warning_ts_utc + timedelta(days=observation_days)
+            followup_due_local = warning_ts + timedelta(days=observation_days)  # for the message, on the clock the owner reads
+            new_warning.follow_up_at = followup_due_local
             auto_followup = OwnerFollowUp(
                 report_id=rep.report_id,
                 pet_id=rep.pet_id or warning_in.pet_id,
@@ -200,9 +216,9 @@ def issue_warning(
                 owner_phone=getattr(owner, 'phone', None),
                 owner_address=getattr(owner, 'address', None) or getattr(rep, 'landmark', None),
                 status="observing",
-                duration_days=3,
+                duration_days=observation_days,
                 due_at=followup_due,
-                notes=f"Automatic 3-day community observation initiated upon issuance of First Warning ({warning_in.violation_type}): {warning_in.description}",
+                notes=f"Automatic {days_label} observation under {policy.reference}, started with the First Warning ({warning_in.violation_type}): {warning_in.description}",
                 created_at=warning_ts
             )
             db.add(auto_followup)
@@ -215,18 +231,20 @@ def issue_warning(
                 db=db,
                 user_id=warning_in.user_id,
                 related_id=rep.report_id,
-                title="🐾 3-Day Observation Period Started",
+                title=f"🐾 {observation_days}-Day Observation Period Started",
                 message=(
-                    f"Because a First Warning was issued for Report #{rep.report_id}, your animal is now under a 3-day observation "
+                    f"Because a First Warning was issued for Report #{rep.report_id}, your animal is now under a {days_label} observation "
                     f"until {followup_due_local.strftime('%b %d, %Y %I:%M %p')}. Please address the reported violation and submit "
                     "observation updates with photo evidence from your account (Observation Updates)."
                 ),
                 notification_type="followup_started",
             )
-        elif existing_followup and is_first_warning and existing_followup.status != "observing":
+        elif observation_days and existing_followup and is_first_warning and existing_followup.status != "observing":
             existing_followup.status = "observing"
             existing_followup.created_at = warning_ts
-            existing_followup.due_at = warning_ts_utc + timedelta(days=existing_followup.duration_days or 3)
+            existing_followup.duration_days = observation_days
+            existing_followup.due_at = warning_ts_utc + timedelta(days=observation_days)
+            new_warning.follow_up_at = warning_ts + timedelta(days=observation_days)
             rep.current_status_id = 7
             from app.utils.owner_followups import record_observation_event
             record_observation_event(db, existing_followup, "started", current_user.user_id)
@@ -239,6 +257,8 @@ def issue_warning(
                 remarks=f"⚠️ Second Warning Issued by {current_user.name}: {warning_in.violation_type} - {warning_in.description}. Eligible for Barangay Endorsement.",
             )
             db.add(obs_history)
+        # A warning is case work: the case moves to In progress (never backward, never out of Closed)
+        case_state.advance_status(rep, V.IN_PROGRESS)
 
     # Send in-app notification & official citation email to pet owner
     pet_info = f" for pet '{pet.display_name}'" if pet else ""
@@ -305,23 +325,28 @@ def get_tier_suggestion(
     report_id: Optional[int] = None,
     pet_id: Optional[int] = None,
     owner_id: Optional[int] = None,
+    policy_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """The suggested tier for a new warning, from this pet's (or owner's) existing warning history."""
     if current_user.role_id not in (2, 3, 4):
         raise HTTPException(status_code=403, detail="Access denied")
+    observation_days = None
     if report_id:
         rep = db.query(Report).filter(Report.report_id == report_id).first()
         if not rep:
             raise HTTPException(status_code=404, detail="Report not found")
         verify_subdivision_scope(current_user, rep.subdivision_id, db=db)
         pet_id = pet_id or rep.pet_id
+        observation_days = observation_days_for(db, rep, policy_id)
     from datetime import date, timedelta as _td
-    from app.utils.warning_rules import COMPLIANCE_DAYS, INSTRUCTIONS
+    from app.utils.warning_rules import INSTRUCTIONS
+    # comply_by is the end of the policy's observation period; with no period defined there is no date to suggest
     return {**suggest_tier(db, violation_type, pet_id, owner_id, report_id),
             "instructions": INSTRUCTIONS.get(violation_type, INSTRUCTIONS["Other"]),
-            "comply_by": (date.today() + _td(days=COMPLIANCE_DAYS)).isoformat()}
+            "observation_days": observation_days,
+            "comply_by": (date.today() + _td(days=observation_days)).isoformat() if observation_days else None}
 
 
 @router.get("/followup/{followup_id}/incidents")

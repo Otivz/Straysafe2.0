@@ -1,30 +1,8 @@
-from pydantic import BaseModel, field_serializer, field_validator, model_validator
+from pydantic import BaseModel, field_serializer, field_validator
 from typing import Optional, Any, List, Literal, Union
 from datetime import datetime
 from app.schemas.landmark import LandmarkResponse
 from app.utils.owner_returns import OwnerReturnInfo
-
-
-class LiveLocationPing(BaseModel):
-    latitude: float
-    longitude: float
-    accuracy: Optional[float] = None
-    heading: Optional[float] = None
-    speed: Optional[float] = None
-
-
-class LiveLocationResponse(BaseModel):
-    report_id: int
-    rescue_id: Optional[int] = None
-    user_id: Optional[int] = None
-    responder_name: Optional[str] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    accuracy: Optional[float] = None
-    heading: Optional[float] = None
-    speed: Optional[float] = None
-    updated_at: Optional[datetime] = None
-    is_active: bool = False
 
 
 class ReportBase(BaseModel):
@@ -50,6 +28,9 @@ class ReportBase(BaseModel):
     priority_level: Optional[str] = 'Medium'
     # Ignored on create: every report starts 'Pending Review' and the Subdivision Leader decides after verifying
     visibility: Optional[str] = None
+    # A private complaint about a neighbour: never published, and never offered as a notice. Chosen by the reporter when
+    # filing (an "Animal Nuisance" report is sensitive unless said otherwise); staff can change it in the assessment.
+    is_sensitive: Optional[bool] = None
     is_possible_owned: Optional[bool] = False
     ai_animal_type: Optional[str] = None
     ai_dominant_color: Optional[str] = None
@@ -85,29 +66,6 @@ class ReportCreate(ReportBase):
     pass
 
 
-class CommentBase(BaseModel):
-    # DB column is "comment" (not "message")
-    comment: str
-
-
-class CommentCreate(CommentBase):
-    user_id: Optional[int] = None  # ignored: the commenter is the signed-in user
-    parent_comment_id: Optional[int] = None
-
-
-class CommentResponse(CommentBase):
-    comment_id: int
-    report_id: int
-    user_id: int
-    parent_comment_id: Optional[int] = None
-    created_at: datetime
-    user_name: Optional[str] = None
-    user_photo: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-
 class ReportMediaResponse(BaseModel):
     media_id: int
     file_url: str
@@ -116,7 +74,6 @@ class ReportMediaResponse(BaseModel):
     dominant_color: str | None = None
     history_id: Optional[int] = None
     status_id: Optional[int] = None
-    holding_log_id: Optional[int] = None
     is_evidence: Optional[bool] = False
     uploaded_at: datetime
     # AI Suggestions
@@ -144,7 +101,6 @@ class ReportMediaResponse(BaseModel):
 class StatusHistoryResponse(BaseModel):
     history_id: int
     report_status_id: Optional[int] = None
-    rescue_status_id: Optional[int] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     landmark: Optional[str] = None
@@ -155,22 +111,6 @@ class StatusHistoryResponse(BaseModel):
     updater_name: Optional[str] = None
     updater_photo: Optional[str] = None
     media: Optional[list[ReportMediaResponse]] = []
-
-    class Config:
-        from_attributes = True
-
-
-class EndorsementLetterResponse(BaseModel):
-    letter_id: int
-    report_id: int
-    title: Optional[str] = None
-    leader_id: int
-    letter_content: str
-    file_url: Optional[str] = None
-    status_id: Optional[int] = None
-    issued_at: datetime
-    leader_name: Optional[str] = None
-    leader_position: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -203,13 +143,16 @@ class ReportResponse(ReportBase):
     ai_description_confidence: Optional[dict] = None
     report_id: int
     created_at: datetime
+    # One of reported / under_review / in_progress / closed (utils/case_vocab.py), filled in by redact_response
+    case_status: Optional[str] = None
+    # How a closed case ended, in the neutral words a resident may read ({label, outcome, closed_at}); None while it is open.
+    # Never the officer's reason. Public viewers do not get it (RESIDENT_SAFE_FIELDS is an allow-list).
+    case_outcome: Optional[dict] = None
     reporter_name: Optional[str] = None
     reporter_photo: Optional[str] = None
     facility: Optional[Union[LandmarkResponse, dict, Any]] = None
     media: Optional[list[ReportMediaResponse]] = []
-    comments: Optional[list[CommentResponse]] = []
     history: Optional[list[StatusHistoryResponse]] = []
-    endorsement_letter: Optional[EndorsementLetterResponse] = None
     
     # AI Suggestions
     ai_animal_type: Optional[str] = None
@@ -222,9 +165,6 @@ class ReportResponse(ReportBase):
 
     # Owner & Pet Details (for Lost Pet Reports)
     pet_name: Optional[str] = None
-    pet_qr_code_url: Optional[str] = None
-    pet_qr_code_hash: Optional[str] = None
-    pet_qr_token: Optional[str] = None
     owner_id: Optional[int] = None
     owner_name: Optional[str] = None
     owner_phone: Optional[str] = None
@@ -335,78 +275,10 @@ class ReportResponse(ReportBase):
     visible_to_residents: Optional[bool] = None
     visibility_needs_review: Optional[bool] = None
     public_block_reason: Optional[str] = None
-    comments_open: Optional[bool] = None
     # How much of the report this viewer gets: staff / reporter / owner / case_reporter / public / match_owner
     viewer_access: Optional[str] = None
     can_view_owner_details: bool = False
     owner_notification_events: List[OwnerNotificationEvent] = []
-
-    # Pickup Location Tracking (Status 6)
-    pickup_latitude: Optional[float] = None
-    pickup_longitude: Optional[float] = None
-    pickup_landmark: Optional[str] = None
-    pickup_at: Optional[datetime] = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def resolve_pickup_metadata(cls, data: Any) -> Any:
-        history = getattr(data, "history", None)
-        if history is None and isinstance(data, dict):
-            history = data.get("history")
-
-        if history:
-            pickup_entry = None
-            for h in history:
-                st_id = getattr(h, "report_status_id", None) if not isinstance(h, dict) else h.get("report_status_id")
-                if st_id == 6:
-                    pickup_entry = h
-
-            if pickup_entry:
-                def _get(obj, key):
-                    return getattr(obj, key, None) if not isinstance(obj, dict) else obj.get(key)
-
-                lat = _get(pickup_entry, "latitude")
-                lng = _get(pickup_entry, "longitude")
-                lmk = _get(pickup_entry, "landmark")
-                cat = _get(pickup_entry, "created_at")
-
-                if isinstance(data, dict):
-                    if lat is not None and data.get("pickup_latitude") is None:
-                        try:
-                            data["pickup_latitude"] = float(lat)
-                        except (ValueError, TypeError):
-                            pass
-                    if lng is not None and data.get("pickup_longitude") is None:
-                        try:
-                            data["pickup_longitude"] = float(lng)
-                        except (ValueError, TypeError):
-                            pass
-                    if lmk is not None and data.get("pickup_landmark") is None:
-                        data["pickup_landmark"] = str(lmk)
-                    if cat is not None and data.get("pickup_at") is None:
-                        data["pickup_at"] = cat
-                else:
-                    if lat is not None and getattr(data, "pickup_latitude", None) is None:
-                        try:
-                            data.pickup_latitude = float(lat)
-                        except Exception:
-                            pass
-                    if lng is not None and getattr(data, "pickup_longitude", None) is None:
-                        try:
-                            data.pickup_longitude = float(lng)
-                        except Exception:
-                            pass
-                    if lmk is not None and getattr(data, "pickup_landmark", None) is None:
-                        try:
-                            data.pickup_landmark = str(lmk)
-                        except Exception:
-                            pass
-                    if cat is not None and getattr(data, "pickup_at", None) is None:
-                        try:
-                            data.pickup_at = cat
-                        except Exception:
-                            pass
-        return data
 
     @field_validator("merged_reports", mode="before")
     @classmethod

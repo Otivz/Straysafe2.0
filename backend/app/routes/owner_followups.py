@@ -1,12 +1,12 @@
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Response, Form, File, UploadFile, Request
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy import or_, and_, desc, func
+from sqlalchemy import or_, desc, func
 
 from app.database import get_db
 from app.models.owner_followup import OwnerFollowUp, FollowUpContactLog, OwnerObservationUpdate, OwnerObservationUpdatePhoto
@@ -32,13 +32,15 @@ from app.schemas.owner_followup import (
     OwnerFollowUpResolveRequest,
     OwnerFollowUpSecondWarningRequest
 )
-from app.models.report import Report, EndorsementLetter, StatusHistory
+from app.models.barangay_referral import BarangayReferral
+from app.models.report import Report, StatusHistory
 from app.utils.auth import get_current_user
 from app.utils.owner_followups import (
     _now,
     db_local_to_utc,
     get_default_duration_days,
     set_default_duration_days,
+    warning_observation_days,
     validate_followup_start,
     record_observation_event,
     enrich_and_redact_followup,
@@ -51,7 +53,7 @@ from app.utils.owner_followups import (
 from app.utils.uploads import read_and_validate_upload
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.audit import log_activity
-from app.utils.holding_stay import db_now
+from app.utils.db_clock import db_now
 from app.utils.notification_dispatcher import dispatch_notification
 from app.utils.observation_resolution import notify_case_resolved, require_resolvable, resolve_observation_case
 
@@ -281,7 +283,10 @@ def get_under_observation_dashboard(
             first_w = db.query(OwnerWarning).filter(
                 OwnerWarning.report_id == rep.report_id
             ).order_by(OwnerWarning.created_at.asc()).first()
-            if first_w:
+            # The warning's own observation period (its policy's; the 3 days of the pre-policy era for older warnings).
+            # A policy that defines none means no observation to track.
+            period = warning_observation_days(first_w) if first_w else None
+            if first_w and period:
                 # The warning's time is on the database clock (local); due dates are kept in UTC like _now() (F18)
                 w_time = first_w.created_at or db_now(db)
                 w_time_utc = db_local_to_utc(db, w_time)
@@ -296,8 +301,8 @@ def get_under_observation_dashboard(
                     owner_phone=getattr(owner_user, 'phone', None),
                     owner_address=getattr(owner_user, 'address', None) or getattr(rep, 'landmark', None),
                     status="observing",
-                    duration_days=3,
-                    due_at=w_time_utc + timedelta(days=3),
+                    duration_days=period,
+                    due_at=w_time_utc + timedelta(days=period),
                     notes=f"Observation automatically tracked from First Warning ({first_w.violation_type}): {first_w.description}",
                     created_at=w_time
                 )
@@ -485,13 +490,13 @@ def issue_second_warning_for_observation(
     if current_user.role_id == 2 and current_user.subdivision_id != followup.subdivision_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied outside your subdivision.")
 
-    # Validate that 3-day observation has expired or is overdue
+    # Validate that the observation has expired or is overdue
     now_utc = _now()
     due_naive = followup.due_at.replace(tzinfo=None) if followup.due_at.tzinfo is not None else followup.due_at
     if now_utc < due_naive and followup.status == "observing":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="The 3-day observation period is still active. A Second Warning requires the observation period to expire with unresolved non-compliance."
+            detail=f"The {followup.duration_days}-day observation period is still active. A Second Warning requires the observation period to expire with unresolved non-compliance."
         )
 
     # Check if a 2nd Warning was already issued
@@ -600,7 +605,7 @@ def endorse_observation_to_barangay(
     if not has_second_w:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Barangay endorsement requires a Second Warning to be issued first after the 3-day observation period."
+            detail="Barangay endorsement requires a Second Warning to be issued first after the observation period."
         )
 
     report = db.query(Report).filter(Report.report_id == followup.report_id).first()
@@ -612,19 +617,27 @@ def endorse_observation_to_barangay(
             detail="Case has already been endorsed to Barangay San Vicente."
         )
 
-    # Create / update EndorsementLetter record
-    end_letter = db.query(EndorsementLetter).filter(EndorsementLetter.report_id == followup.report_id).first()
-    if not end_letter:
-        end_letter = EndorsementLetter(
+    # The referral log is the record of this endorsement (one open referral to the Barangay per case)
+    open_referral = (db.query(BarangayReferral)
+                     .filter(BarangayReferral.report_id == followup.report_id, BarangayReferral.barangay_id.isnot(None))
+                     .order_by(BarangayReferral.referral_id.desc()).first())
+    if open_referral is None or open_referral.final_outcome:
+        subdivision = db.query(Subdivision).filter(Subdivision.subdivision_id == followup.subdivision_id).first()
+        barangay = subdivision.barangay if subdivision is not None else None
+        db.add(BarangayReferral(
             report_id=followup.report_id,
-            leader_id=current_user.user_id,
-            title=f"Community Observation Escalation — Report #{followup.report_id}",
-            letter_content=payload.endorsement_reason,
-            status_id=1
-        )
-        db.add(end_letter)
+            barangay_id=subdivision.barangay_id if subdivision is not None else None,
+            referred_by=current_user.user_id,
+            reason=payload.endorsement_reason,
+            contact_method="other",
+            org_type="barangay",
+            org_name=f"Barangay {barangay.barangay_name}" if barangay is not None else "Barangay",
+            referral_status="sent",
+            status_updated_at=_now(),
+            status_updated_by=current_user.user_id,
+        ))
     else:
-        end_letter.letter_content = payload.endorsement_reason
+        open_referral.reason = payload.endorsement_reason
 
     followup.status = "escalated"
     record_observation_event(db, followup, "ended", current_user.user_id)

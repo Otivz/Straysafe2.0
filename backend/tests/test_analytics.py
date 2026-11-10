@@ -22,7 +22,7 @@ from sqlalchemy.pool import StaticPool
 import app.models  # noqa: F401
 from app.database import Base, get_db
 from app.models.user import Barangay, Role, Subdivision, User
-from app.models.report import Adoption, HoldingAnimal, Report, ReportCategory, Rescue
+from app.models.report import Report, ReportCategory
 from app.models.pet import Pet
 from app.models.report_match import ReportMatch
 from app.models.warning import OwnerWarning
@@ -74,19 +74,7 @@ class AnalyticsTests(unittest.TestCase):
             Pet(pet_id=4, owner_id=1, pet_name='Archived', pet_type='Dog', status='Archived'),
         ])
         cls.db.add(OwnerWarning(warning_id=1, user_id=1, issued_by=2, violation_type='Free-Roaming Unleashed', description='Test warning', created_at=datetime(2026, 10, 22)))
-        cls.db.add_all([
-            HoldingAnimal(holding_id=1, report_id=5, animal_name='Child animal', animal_type='Dog', facility_status=6, intake_date=datetime(2026, 10, 23)),
-            HoldingAnimal(holding_id=2, report_id=2, animal_name='Impounded', animal_type='Dog', facility_status=8, intake_date=datetime(2026, 10, 23)),
-            HoldingAnimal(holding_id=3, report_id=4, animal_name='Claimed', animal_type='Cat', facility_status=3, intake_date=datetime(2026, 10, 23), discharge_date=datetime(2026, 10, 24)),
-        ])
-        cls.db.add_all([
-            Rescue(rescue_id=1, report_id=2, status_id=6, started_at=datetime(2026, 10, 23, 8), completed_at=datetime(2026, 10, 23, 10)),
-            Rescue(rescue_id=2, report_id=1, status_id=6, started_at=datetime(2026, 10, 23, 10), completed_at=datetime(2026, 10, 23, 9)),
-            Rescue(rescue_id=3, report_id=3, status_id=3, started_at=datetime(2026, 10, 23, 8), completed_at=datetime(2026, 10, 23, 10)),
-        ])
         cls.db.flush()
-        for aid, handed in [(1, False), (2, True)]:
-            cls.db.add(Adoption(adoption_id=aid, holding_id=1, applicant_id=1, status='Approved', full_name='Test Adopter', address='Test', contact_no='123', reason='Test', staff_handed_over=handed, is_handed_over=handed, created_at=datetime(2026, 10, 23)))
         cls.db.commit()
 
     @classmethod
@@ -130,7 +118,6 @@ class AnalyticsTests(unittest.TestCase):
         self.assertEqual(data['kpis']['total_reports'], 1)
         self.assertEqual(sum(data['animal_distribution'].values()), 1)
         self.assertEqual(data['category_breakdown'][0]['category'], 'Aggressive')
-        self.assertEqual(data['sla_metrics']['total_completed_rescues'], 1)
         self.assertEqual(len(data['subdivisions_comparison']), 1)
 
     def test_zero_filled_daily_weekly_and_monthly_timeline(self):
@@ -174,19 +161,13 @@ class AnalyticsTests(unittest.TestCase):
         self.assertEqual(filtered['pet_compliance']['total_pets'], 2)
         self.assertEqual(filtered['pet_compliance']['vaccinated'], 1)
 
-    def test_holding_child_animals_and_all_active_custody_states(self):
+    def test_retired_workflow_sections_are_gone(self):
         data = self.get(days=7).json()
-        self.assertEqual(data['holding_summary']['total_intake'], 3)
-        self.assertEqual(data['holding_summary']['currently_held'], 2)
-        self.assertEqual(data['holding_summary']['returned_to_owner'], 1)
-
-    def test_only_valid_completed_rescue_durations_and_real_handovers(self):
-        data = self.get(days=7).json()
-        self.assertEqual(data['sla_metrics']['total_completed_rescues'], 1)
-        self.assertEqual(data['sla_metrics']['avg_rescue_hours'], 2)
-        self.assertEqual(data['sla_metrics']['avg_verification_hours'], 1.5)
-        self.assertEqual(data['holding_and_adoption']['approved_adoptions'], 2)
-        self.assertEqual(data['holding_and_adoption']['completed_handovers'], 1)
+        for key in ('holding_summary', 'holding_and_adoption', 'rescue_summary', 'custody_snapshot', 'claims_summary'):
+            self.assertNotIn(key, data)
+        for key in ('total_rescues', 'completed_rescues', 'total_adoptions', 'total_intake'):
+            self.assertNotIn(key, data['kpis'])
+        self.assertEqual(data['sla_metrics'], {'avg_verification_hours': 1.5, 'total_verified_cases': data['kpis']['verified_reports']})
 
     def test_ai_review_rate_is_not_reunion_or_precision(self):
         self.db.add_all([ReportMatch(source_report_id=1, status='CONFIRMED_MATCH', similarity_score=90, created_at=datetime(2026, 10, 23)), ReportMatch(source_report_id=2, status='NOT_A_MATCH', similarity_score=70, created_at=datetime(2026, 10, 23))])

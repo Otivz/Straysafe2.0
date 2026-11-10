@@ -2,7 +2,7 @@ import type { PathOptions } from 'leaflet';
 import { SELERA_BOUNDARY_PATH_OPTIONS } from '../../utils/coverageArea';
 
 /**
- * Path options for the overlays. The outline reuses the legacy dash pattern and weight (`SELERA_BOUNDARY_PATH_OPTIONS`);
+ * Path options for the overlays. The outline reuses the dash pattern and weight (`SELERA_BOUNDARY_PATH_OPTIONS`);
  * the colours come from the design tokens through the `pv-*` classes in map.css, so no colour is written here. None of
  * them is interactive, so a tap on an overlay still reaches the map.
  */

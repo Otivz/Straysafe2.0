@@ -20,11 +20,3 @@ export const passwordRules = (password: string): PasswordRule[] => [
 ];
 
 export const isPasswordValid = (password: string): boolean => passwordRules(password).every((r) => r.met);
-
-export const passwordError = (password: string): string | null => {
-    if (isPasswordValid(password)) return null;
-    const missing = passwordRules(password)
-        .filter((r) => !r.met)
-        .map((r) => r.label);
-    return `Your password needs: ${missing.join(', ')}.`;
-};

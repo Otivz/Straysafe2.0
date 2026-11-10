@@ -5,7 +5,7 @@
  *
  * Only four global statuses exist. Warnings, referrals, ownership claims and follow-ups are case DETAILS, never
  * additional statuses. Incident verification, animal identity and ownership are three independent questions.
- * Everything here is JSON-serialisable (ISO strings, no Dates) so the preview store can live in sessionStorage.
+ * Everything here is JSON-serialisable (ISO strings, no Dates).
  */
 
 export type CaseStatus = 'reported' | 'under_review' | 'in_progress' | 'closed';
@@ -56,6 +56,8 @@ export interface Evidence {
   capturedAt: string;
   source: 'reporter' | 'admin' | 'resident' | 'external';
   note?: string;
+  /** The stored file, when the server has one; the screens show a placeholder otherwise. */
+  url?: string;
 }
 
 /** Private to authorized administration. Never copied into notices. */
@@ -215,7 +217,7 @@ export interface Case {
   title: string;
   description: string;
   animal: { type: AnimalType; description: string; count: number };
-  /** Words for the place, plus the pin when the reporter placed one. Coordinates are SAMPLE values in the preview. */
+  /** Words for the place, plus the pin when the reporter placed one. */
   location: { area: string; detail: string; lat?: number; lng?: number };
   observedAt: string;
   reportedAt: string;
@@ -265,6 +267,8 @@ export interface Pet {
   markings: string[];
   description: string;
   photos: number;
+  /** The stored photos, when the server has them. */
+  photoUrls?: string[];
   ownerId: string;
   registeredAt: string;
   vaccination: 'up_to_date' | 'overdue' | 'unknown';
@@ -276,8 +280,10 @@ export type NoticeStatus = 'draft' | 'published' | 'archived';
 export interface NoticeMedia {
   id: string;
   name: string;
-  /** Object URL; exists only in the tab that added it (never persisted). */
+  /** Object URL in the tab that added the photo (never persisted), or the stored file's address when it came from the server. */
   url?: string;
+  /** The file the person just chose, kept in memory until the notice is saved (live mode uploads it). Never persisted. */
+  file?: File;
 }
 export interface Notice {
   id: string;
@@ -348,6 +354,6 @@ export interface AdminState {
   notices: Notice[];
   notifications: AdminNotification[];
   settings: Settings;
-  /** Deterministic id counter (keeps the reducer pure under StrictMode). */
+  /** Id counter (not used by the connected data layer). */
   seq: number;
 }

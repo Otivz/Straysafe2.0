@@ -16,7 +16,16 @@ export type Visibility = 'private' | 'published' | 'pending_review';
 export type NoticeType = 'lost_pet' | 'found_animal' | 'safety_advisory';
 export type ClaimStatus = 'submitted' | 'under_review' | 'needs_info' | 'approved' | 'rejected';
 
-export interface Media { id: string; name: string; kind: 'photo' | 'video'; size: number; /** object URL, this tab only */ url?: string }
+export interface Media {
+  id: string;
+  name: string;
+  kind: 'photo' | 'video';
+  size: number;
+  /** An object URL in the tab that picked the file (never persisted), or the stored file's address when it came from the server. */
+  url?: string;
+  /** The file the person just chose, kept in memory until it is sent (live mode uploads it). Never persisted. */
+  file?: File;
+}
 export interface GeoPoint { label: string; lat: number | null; lng: number | null; /** typed by the resident rather than picked on the map */ manual: boolean }
 
 export interface ReportUpdate {
@@ -77,11 +86,15 @@ export interface Notice {
   approx?: GeneralArea;
   animalType?: AnimalType;
   photos: number;
+  /** The stored photo(s) of the animal, when the server has them. */
+  photoUrls?: string[];
   publishedAt: string;
   source: 'admin' | 'owner';
   /** Published from one of this resident's own reports. */
   mine: boolean;
   reportId?: string;
+  /** The number of the report the notice was made from (live mode): what an ownership claim is filed against. */
+  reportNumber?: number;
   lastSeenAt?: string;
   /** 'recovered' means resolved (the pet is home, or the case closed): the notice no longer appears in Community. */
   status: 'active' | 'recovered';
@@ -124,11 +137,14 @@ export interface Notification {
   body: string;
   at: string;
   read: boolean;
-  /** Path inside the resident preview, e.g. /reports/SS-2026-0161 */
+  /** Path inside the resident app, e.g. /reports/SS-2026-0161 */
   to: string;
 }
 
 export interface Profile { id: string; name: string; email: string; phone: string; unit: string; street: string; memberSince: string }
+
+/** How to reach the subdivision office: the office's own details, set by the Leader. */
+export interface Office { name: string; phone: string; email: string; hours: string; address: string }
 
 export interface Settings {
   notifications: { reportUpdates: boolean; sightings: boolean; claims: boolean; community: boolean; advisories: boolean };
@@ -152,6 +168,12 @@ export interface Draft {
 
 export interface ResidentState {
   profile: Profile;
+  /** Where the Contact screens say to reach the office. Absent until the office has recorded how (live). */
+  office?: Office | null;
+  /** The subdivision's own name, once the server has told it. */
+  subdivisionName?: string | null;
+  /** How the subdivision publishes each kind of notice (the server's publication setting). Absent until it has been read. */
+  publication?: { lost_pet: 'immediate' | 'review'; found_animal: 'immediate' | 'review' };
   settings: Settings;
   reports: Report[];
   notices: Notice[];

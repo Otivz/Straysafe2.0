@@ -1,12 +1,15 @@
+# Runs on a throwaway SQLite file, never on the application database (see _isolated_db.py). app.main cannot be imported in a
+# test (its start-up is MySQL only and changes the configured database), so the app is rebuilt from the routers under test,
+# which is the wiring app.main uses.
 import sys
 import os
 import io
 from PIL import Image
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _isolated_db  # noqa: E402,F401  (FIRST: throwaway SQLite, no outside services, MySQL disabled)
 
 from fastapi.testclient import TestClient
-from app.main import app
 from app.database import SessionLocal
 from app.models.system_setting import SystemSetting
 from app.utils.ai_suggestions import is_gemini_enabled_in_db, generate_ai_suggestions
@@ -14,6 +17,8 @@ from app.utils.ai_matching import compare_animals_vision
 import app.utils.ai_suggestions as ai_sugg_module
 import app.routes.reports as reports_module
 
+app = _isolated_db.build_app(reports_module.router)
+_isolated_db.create_schema_and_seed()
 client = TestClient(app)
 
 

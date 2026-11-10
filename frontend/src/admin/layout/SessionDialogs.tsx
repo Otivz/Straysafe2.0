@@ -12,7 +12,7 @@ export function LogoutDialog({ onClose }: { onClose: () => void }) {
   return (
     <ConfirmDialog
       title="Sign out of StraySafe?"
-      message="You will need to sign in again to manage cases. Sample changes made in this preview stay in this browser tab until you reset them."
+      message="You will need to sign in again to manage cases. Everything you have recorded is saved."
       confirmLabel="Sign out"
       onClose={onClose}
       onConfirm={async () => {

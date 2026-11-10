@@ -4,10 +4,10 @@ import { CircleCheck, MailCheck } from 'lucide-react';
 import { useAuth } from '../../auth/context';
 import { Field, Input } from '../../components/form';
 import { useToast } from '../../components/toast';
-import { Button, EmptyState, FormError, LinkButton } from '../../components/ui';
-import { PREVIEW_CODE, residentPath } from '../../config';
+import { Button, Callout, EmptyState, FormError, LinkButton } from '../../components/ui';
+import { residentPath } from '../../config';
 import { useCountdown, useSubmit } from '../../lib/hooks';
-import { AuthShell, DevNote } from './AuthShell';
+import { AuthShell } from './AuthShell';
 
 const maskEmail = (email: string) => {
   const [name, domain] = email.split('@');
@@ -16,11 +16,12 @@ const maskEmail = (email: string) => {
 
 /** R03 — Verify the account with the code that was sent. */
 export default function VerifyPage() {
-  const { pendingSignup, verify, resendCode } = useAuth();
+  const { pendingSignup, verify, resendCode, codeNotice } = useAuth();
   const navigate = useNavigate();
   const origin = ((useLocation().state ?? null) as { from?: string } | null)?.from;
   const toast = useToast();
   const [signup] = useState(() => pendingSignup());
+  const [notice] = useState(() => codeNotice());
   const [code, setCode] = useState('');
   const [codeError, setCodeError] = useState<string>();
   const [done, setDone] = useState(false);
@@ -43,8 +44,9 @@ export default function VerifyPage() {
     return (
       <AuthShell title="Verify your account" back="/welcome">
         <EmptyState icon={MailCheck} title="Nothing to verify yet" action={<LinkButton variant="primary" to={residentPath('/register')}>Create an account</LinkButton>}>
-          Start by creating an account. We will send you a code afterwards.
+          Start by creating an account, or sign in if you already have one: we will send you a code if it still needs verifying.
         </EmptyState>
+        <p className="rs-center rs-sub">Already registered? <Link to={residentPath('/login')}>Sign in</Link></p>
       </AuthShell>
     );
   }
@@ -64,6 +66,7 @@ export default function VerifyPage() {
   return (
     <AuthShell title="Verify your account" lead={<>Enter the 6-digit code we sent to <strong>{maskEmail(signup.email)}</strong>.</>} back="/register">
       <form className="rs-stack" onSubmit={(e) => void submit(e)} noValidate>
+        {notice ? <Callout tone="amber">{notice}</Callout> : null}
         {check.error ? <FormError message={check.error} /> : null}
         {resend.error ? <FormError message={resend.error} /> : null}
         <Field label="Verification code" error={codeError}>
@@ -84,10 +87,6 @@ export default function VerifyPage() {
         </div>
         <p className="rs-center rs-sub">Wrong address? <Link to={residentPath('/register')}>Start again</Link></p>
       </form>
-      <DevNote>
-        <p>No message is sent in this preview. The code is <code>{PREVIEW_CODE}</code>.</p>
-        <Button size="sm" onClick={() => { setCode(PREVIEW_CODE); setCodeError(undefined); }}>Fill in the code</Button>
-      </DevNote>
     </AuthShell>
   );
 }

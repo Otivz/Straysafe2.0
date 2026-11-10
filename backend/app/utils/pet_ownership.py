@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.notification import Notification
@@ -121,3 +122,31 @@ def serialize(conf: PetOwnerConfirmation) -> dict:
         "created_at": conf.created_at.isoformat() if conf.created_at else None,
         "responded_at": conf.responded_at.isoformat() if conf.responded_at else None,
     }
+
+
+def became_owner_after(db: Session, pet_id: Optional[int], user_id: int, since) -> bool:
+    """
+    Did user_id become this pet's owner after `since` (for example, after a report was filed)?
+
+    Ownership can change later: staff assign an owner who accepts, an ownership claim is approved, or the pet is
+    returned to someone. That later owner must not inherit what happened before the animal was theirs: the reporter's
+    private conversation, an old look-alike chat, or the old case's actions. An owner who has owned the pet since it
+    was registered (before the report) is not affected, and neither is a report filed after they became the owner.
+    The start of ownership is the last accepted ownership confirmation for that account (a transfer to them), else the
+    pet record's creation. A resident who registered the pet themselves, with no transfer to them, is its original owner.
+    """
+    if not pet_id:
+        return False
+    owner_since = db.query(func.max(PetOwnerConfirmation.responded_at)).filter(
+        PetOwnerConfirmation.pet_id == pet_id,
+        PetOwnerConfirmation.proposed_owner_id == user_id,
+        PetOwnerConfirmation.status == "Accepted",
+    ).scalar()
+    if owner_since is None:
+        created_at, registered_by = db.query(Pet.created_at, Pet.registered_by_user_id).filter(Pet.pet_id == pet_id).first() or (None, None)
+        if registered_by == user_id:
+            return False  # they registered it themselves: the original owner, not a later one
+        owner_since = created_at
+    if since is None or owner_since is None:
+        return True  # can't tell when: don't open the older case
+    return owner_since > since

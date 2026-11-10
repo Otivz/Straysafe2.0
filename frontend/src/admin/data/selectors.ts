@@ -1,12 +1,24 @@
 /** Pure, derived views over AdminState. Nothing here mutates; nothing here knows about React. */
-import { CATEGORIES, DISPOSITIONS, DISPOSITION_IDS, OUTCOME_GROUPS, PRIORITIES, REFERRAL_STATUS, REFERRAL_STATUS_IDS, STATUSES } from './constants';
+import { CATEGORIES, DISPOSITIONS, DISPOSITION_IDS, OUTCOME_GROUPS, PRIORITIES, REFERRAL_STATUS, REFERRAL_STATUS_IDS } from './constants';
 import type {
   AdminState, Case, CaseStatus, CategoryId, DispositionId, FollowUp, OutcomeGroup, Pet, Priority, ReferralStatus, Resident, TimelineEvent,
 } from './types';
 import { addDays, daysSince, dueInfo, fmtDay, median, relative, remaining, startOfDay, startOfWeek } from '../../preview/lib/format';
 
 export const isOpen = (c: Case) => c.status !== 'closed';
-export const caseById = (s: AdminState, id: string | undefined) => s.cases.find((c) => c.id === id);
+/** The number inside a case reference (`SS-2026-0158` -> 158). */
+const caseNumber = (id: string) => /(\d+)$/.exec(id)?.[1].replace(/^0+/, '') ?? '';
+/**
+ * A case by its reference. A reference made from another year (a link to an older report) still finds the case by its number,
+ * which is what identifies it; the year in the reference is only for reading.
+ */
+export const caseById = (s: AdminState, id: string | undefined) => {
+  if (!id) return undefined;
+  const exact = s.cases.find((c) => c.id === id);
+  if (exact) return exact;
+  const n = caseNumber(id);
+  return n ? s.cases.find((c) => caseNumber(c.id) === n) : undefined;
+};
 export const residentById = (s: AdminState, id: string | null | undefined) => s.residents.find((r) => r.id === id);
 export const petById = (s: AdminState, id: string | null | undefined) => s.pets.find((p) => p.id === id);
 export const pendingFollowUpsOf = (c: Case) => c.followUps.filter((f) => f.status === 'pending');
@@ -250,4 +262,3 @@ export function analytics(cases: Case[], range: DateRange) {
 }
 
 export type Analytics = ReturnType<typeof analytics>;
-export const statusLabel = (s: CaseStatus) => STATUSES[s].label;

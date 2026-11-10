@@ -6,20 +6,20 @@ Only a local development setup is documented and has been used. Hosting, monitor
 
 ## Setup (local)
 
-The step-by-step instructions are in [setup.md](../../setup.md). Verified against the code on 2026-10-25, these parts of it are **stale**: it tells you to set `STRAYSAFE_DB_URL` (the API reads `DATABASE_URL`) and to import `Database.txt` (the schema file in the repository is `Database3.3.txt`; the API also creates missing tables itself at startup with `create_all`). Follow `setup.md` for the Python, Node and phone-testing steps, and use the names below for configuration.
+The step-by-step instructions are in [setup.md](../../setup.md). Its database, `.env` and first-account sections were corrected on 2026-11-10: they load `Database3.4_subdivision.sql` (51 tables and reference data, no account) and set `DATABASE_URL`; the API also creates missing tables itself at startup with `create_all`. Use the names below for the full list of configuration values.
 
 | Item | Requirement | Evidence |
 |---|---|---|
 | Python | 3.12+ in a root `.venv`; `pip install -r backend/requirements.txt` | `setup.md`, `backend/requirements.txt` |
 | Node | 20+ (the APK workflow uses 22); `npm install` in `frontend/` | `setup.md`, `.github/workflows/build-apk.yml` |
-| MySQL | Local server and an empty database; schema from `Database3.3.txt` or created by the API at startup | `backend/app/database/session.py`, `backend/app/main.py` |
+| MySQL | Local server and an empty database; schema from `Database3.4_subdivision.sql` or created by the API at startup; use an account of its own, not `root` ([account and password](database/DATABASE_ACCOUNT_AND_CREDENTIALS.md)) | `backend/app/database/session.py`, `backend/app/main.py` |
 | Configuration | One root `.env` (git-ignored; the frontend reads it too through `envDir: '../'`); a template is `.env.example` | `.gitignore`, `frontend/vite.config.ts` |
 
 ### Configuration names
 
 Values are never recorded here. `.env.example` lists the names it knows; the code reads more, so a deployment needs the second list as well.
 
-- **In `.env.example`:** `DATABASE_URL` (or `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`), `JWT_SECRET_KEY`, `SECRET_KEY`, `CLOUDINARY_*`, `GEMINI_API_KEY`, `GOOGLE_CLIENT_ID`, `SMTP_*`, `OTP_DEBUG`, `COOKIE_SECURE`, `VAPID_*`, `AI_WORKER_EMBEDDED`, seed-account names, and the browser-side `VITE_*` values.
+- **In `.env.example`:** `DATABASE_URL` (the only database setting the code reads; `DB_HOST`, `DB_USER`, `DB_PASSWORD` and `DB_NAME` are listed too, but nothing reads them), `JWT_SECRET_KEY`, `SECRET_KEY`, `CLOUDINARY_*`, `GEMINI_API_KEY`, `GOOGLE_CLIENT_ID`, `SMTP_*`, `OTP_DEBUG`, `COOKIE_SECURE`, `VAPID_*`, `AI_WORKER_EMBEDDED`, and the browser-side `VITE_*` values. No account setting is configured here.
 - **Read by the code but missing from `.env.example`:** `CORS_ALLOWED_ORIGINS`, `FRONTEND_URL`, `ID_ENCRYPTION_KEY`, `RESEND_API_KEY`, `GEMINI_TIMEOUT_SECONDS`, `GEMINI_TOTAL_BUDGET_SECONDS`, `AI_TORCH_THREADS`, `AI_IMAGE_CACHE_DIR`, `AI_JOB_FILES_DIR`, `AI_JOB_STALE_MINUTES`, `AI_FOLLOW_UP_DELAY_SECONDS`, `REPORTS_DEFAULT_PAGE_SIZE`, `REPORTS_MAX_PAGE_SIZE`, `SMTP_FROM_EMAIL`, `VAPID_SUBJECT`. Evidence: `grep os.getenv backend/app`.
 - `ID_ENCRYPTION_KEY` protects stored identity data. Losing it makes that data unreadable. Its backup is **Unverified** (it is not described anywhere in the repository).
 
@@ -31,7 +31,7 @@ Three processes ([setup.md](../../setup.md)):
 2. AI worker: from `backend/`, `..\.venv\Scripts\python.exe -m app.ai_worker`. If it is not running, the API runs AI jobs itself, more slowly (`AI_WORKER_EMBEDDED` controls this).
 3. Web client: from `frontend/`, `npm run dev`, or `npm run dev:https` for phones (camera, QR scanner and GPS need https). The dev server forwards `/api/*` to port 8000.
 
-Seed accounts: `backend/scripts/seed_admin.py` (account names and the shared password it prints come from `setup.md` and `.env`; do not use them outside local development).
+First accounts: the database holds no account and no seed password exists. Residents sign up in the app; the first Subdivision Leader is created with `backend/scripts/seed_admin.py --leader`, which asks for the e-mail address and password (nothing is created without the option and nothing is kept in `.env`; see [setup.md](../../setup.md), section 4).
 
 Mobile testing & IP setup guide: [LOCAL_NETWORK_IP_AND_APK_SETUP_GUIDE.md](LOCAL_NETWORK_IP_AND_APK_SETUP_GUIDE.md) (steps for finding PC Wi-Fi IP and updating the installed APK without rebuilding).
 

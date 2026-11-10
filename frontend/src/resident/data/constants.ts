@@ -57,10 +57,3 @@ export const NOTICE_TYPES: Record<NoticeType, { label: string; plural: string }>
   safety_advisory: { label: 'Safety advisory', plural: 'Safety advisories' },
 };
 
-export const SAMPLE_OFFICE = {
-  name: 'Selera Homes HOA office (sample information)',
-  phone: '(02) 5555 0142',
-  email: 'office@selera-homes.example',
-  hours: 'Mon–Sat, 8:00 AM – 5:00 PM',
-  address: 'HOA Office, Clubhouse, Acacia Street',
-};

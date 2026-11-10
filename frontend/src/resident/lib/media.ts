@@ -17,9 +17,9 @@ export function takeFiles(files: File[], existing: number, opts: { accept: 'phot
     if (!isImage && !(isVideo && opts.accept === 'both')) { errors.push(`“${file.name}” is not ${opts.accept === 'both' ? 'a photo or video' : 'a photo'}.`); continue; }
     if (isImage && file.size > MAX_IMAGE_BYTES) { errors.push(`“${file.name}” is larger than 10 MB. Try a smaller photo.`); continue; }
     if (isVideo && file.size > MAX_VIDEO_BYTES) { errors.push(`“${file.name}” is larger than 50 MB. Try a shorter video.`); continue; }
-    added.push({ id: `m-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name: file.name, kind: isVideo ? 'video' : 'photo', size: file.size, url: URL.createObjectURL(file) });
+    added.push({ id: `m-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name: file.name, kind: isVideo ? 'video' : 'photo', size: file.size, url: URL.createObjectURL(file), file });
   }
   return { added, errors: Array.from(new Set(errors)) };
 }
 
-export const revoke = (m: Media) => { if (m.url) URL.revokeObjectURL(m.url); };
+export const revoke = (m: Media) => { if (m.url && m.file) URL.revokeObjectURL(m.url); };      // only an object URL made here, never a stored file's address

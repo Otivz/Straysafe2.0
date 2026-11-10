@@ -1,8 +1,7 @@
-"""Custody, jurisdiction and physical handover govern staff profile/photo edits."""
+"""An open case and jurisdiction govern staff profile/photo edits (holding records and adoptions are retired)."""
 import os
 import sys
 import unittest
-from datetime import datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -20,7 +19,7 @@ import app.models  # noqa: F401
 from app.database import Base, get_db
 from app.models.landmark import Landmark
 from app.models.pet import Pet
-from app.models.report import Adoption, HoldingAnimal, Report, ReportCategory, ReportStatus
+from app.models.report import Report, ReportCategory, ReportStatus
 from app.models.user import Barangay, Subdivision, User
 from app.routes import pets
 from app.utils import uploads
@@ -74,8 +73,6 @@ class PetRecordAccessTests(unittest.TestCase):
                         Pet(pet_id=2, pet_name='Private Pet', pet_type='Cat', owner_id=1, registered_by_user_id=1, status='Active')])
             db.flush()
             db.add(self.report(1, pet_id=1))
-            db.flush()
-            db.add(HoldingAnimal(holding_id=1, report_id=1, animal_type='Dog', facility_status=6, intake_staff_id=3))
             db.commit()
 
     @staticmethod
@@ -86,12 +83,6 @@ class PetRecordAccessTests(unittest.TestCase):
 
     def photo(self, uid=3, pid=1, suffix='photo'):
         return self.client.post(f'/pets/{pid}/{suffix}', data={'url': PHOTO}, headers=self.headers[uid])
-
-    def adoption(self, **kwargs):
-        with self.Session() as db:
-            db.add(Adoption(holding_id=1, applicant_id=1, full_name='Adopter', address='Street',
-                            contact_no='09123456789', reason='Adoption', status=kwargs.pop('status', 'Approved'), **kwargs))
-            db.commit()
 
     def test_barangay_and_subdivision_can_edit_photos_registered_by_other_staff(self):
         for uid in (2, 3):
@@ -120,39 +111,57 @@ class PetRecordAccessTests(unittest.TestCase):
             db.commit()
         self.assertEqual(self.photo(pid=2).status_code, 403)
 
-    def test_pending_or_approved_application_does_not_lock_photo_before_handover(self):
-        for status in ('Pending', 'Approved'):
-            self.adoption(status=status)
-            self.assertEqual(self.photo().status_code, 200)
+    def set_case(self, **fields):
+        with self.Session() as db:
+            for key, value in fields.items():
+                setattr(db.get(Report, 1), key, value)
+            db.commit()
 
-    def test_physical_handover_locks_staff_even_before_receipt_confirmation(self):
-        self.adoption(staff_handed_over=True, is_handed_over=False)
+    def test_a_closed_case_makes_the_record_read_only_to_staff(self):
+        for status in (9, 10, 11, 12, 14, 17):
+            self.set_case(current_status_id=status)
+            self.assertEqual(self.photo().status_code, 403, status)
+            self.assertEqual(self.photo(uid=2).status_code, 403, status)
+        self.set_case(current_status_id=7)
+        self.assertEqual(self.photo().status_code, 200)
+
+    def test_an_animal_returned_to_its_owner_is_read_only_to_staff(self):
+        self.set_case(custody_status='Claimed by Owner')
         response = self.photo()
         self.assertEqual(response.status_code, 403)
-        self.assertIn('handed over', response.json()['detail'])
+        self.assertIn('open case', response.json()['detail'])
         self.assertEqual(self.client.put('/pets/1', json={'breed': 'Aspin'}, headers=self.headers[3]).status_code, 403)
 
-    def test_adopter_receipt_and_completed_handover_also_lock_staff(self):
-        self.adoption(is_handed_over=True, staff_handed_over=True)
-        self.assertEqual(self.photo(uid=2).status_code, 403)
-        self.assertEqual(self.photo(uid=3).status_code, 403)
-
-    def test_released_animals_are_read_only_to_staff(self):
-        for state in (3, 4, 5, 7, 8):
-            with self.Session() as db:
-                db.get(HoldingAnimal, 1).facility_status = state
-                db.commit()
-            self.assertEqual(self.photo().status_code, 403)
+    def test_an_open_case_does_not_let_staff_edit_a_residents_pet(self):
+        # pet 2 belongs to resident 1 and is now linked to an open case in the staff members' own area
         with self.Session() as db:
-            animal = db.get(HoldingAnimal, 1)
-            animal.facility_status, animal.discharge_date = 6, datetime.now()
+            db.add(self.report(2, pet_id=2))
             db.commit()
-        self.assertEqual(self.photo().status_code, 403)
+        for uid in (2, 3):
+            response = self.photo(uid=uid, pid=2)
+            self.assertEqual(response.status_code, 403, response.text)
+            self.assertIn('resident account', response.json()['detail'])
+            self.assertEqual(self.client.put('/pets/2', json={'breed': 'Aspin'}, headers=self.headers[uid]).status_code, 403)
+        listed = {p['pet_id']: p for p in self.client.get('/pets/', headers=self.headers[3]).json()}
+        self.assertFalse(listed[2]['can_edit_record'])
+        self.assertIn('resident account', listed[2]['record_edit_restriction'])
+        # the owner and an administrator can; the ownerless community record of the same kind of case still can be edited by staff
+        self.assertEqual(self.photo(uid=1, pid=2).status_code, 200)
+        self.assertEqual(self.photo(uid=4, pid=2).status_code, 200)
+        self.assertEqual(self.photo(uid=3, pid=1).status_code, 200)
+
+    def test_a_pet_that_gets_an_owner_leaves_staff_hands(self):
+        self.assertEqual(self.photo(uid=3, pid=1).status_code, 200)
+        with self.Session() as db:
+            db.get(Pet, 1).owner_id = 9
+            db.commit()
+        self.assertEqual(self.photo(uid=3, pid=1).status_code, 403)
+        self.assertEqual(self.photo(uid=9, pid=1).status_code, 200)
 
     def test_owner_and_admin_permissions_are_preserved(self):
         self.assertEqual(self.photo(uid=1, pid=2).status_code, 200)
         self.assertEqual(self.photo(uid=4, pid=2).status_code, 200)
-        self.adoption(staff_handed_over=True, is_handed_over=True)
+        self.set_case(current_status_id=11)
         self.assertEqual(self.photo(uid=4).status_code, 200)
 
     def test_profile_edit_preserves_original_registrant_and_blocks_owner_bypass(self):
@@ -170,29 +179,22 @@ class PetRecordAccessTests(unittest.TestCase):
         permissions = {p['pet_id']: p['can_edit_record'] for p in records}
         self.assertEqual(permissions, {1: True, 2: False})
         self.assertTrue(self.client.get('/pets/1', headers=self.headers[3]).json()['can_edit_record'])
-        self.adoption(staff_handed_over=True)
+        self.set_case(current_status_id=11)
         data = self.client.get('/pets/1', headers=self.headers[3]).json()
         self.assertFalse(data['can_edit_record'])
-        self.assertIn('handed over', data['record_edit_restriction'])
+        self.assertIn('open case', data['record_edit_restriction'])
 
-    def test_unverified_inherited_identity_is_not_proof_of_custody(self):
+    def test_unverified_inherited_identity_is_not_proof_of_a_case(self):
         with self.Session() as db:
             db.get(Report, 1).pet_inherited_from_match_id = 999
             db.commit()
         self.assertEqual(self.photo().status_code, 403)
 
-    def test_merged_case_holding_can_use_trusted_sighting_identity(self):
+    def test_merged_case_can_use_trusted_sighting_identity(self):
         with self.Session() as db:
             db.get(Report, 1).pet_id = None
             db.add(self.report(2, pet_id=1, duplicate_of_report_id=1))
             db.commit()
-        self.assertEqual(self.photo().status_code, 200)
-
-    def test_legacy_adoption_pet_link_works_without_inventing_a_report_link(self):
-        with self.Session() as db:
-            db.get(Report, 1).pet_id = None
-            db.commit()
-        self.adoption(created_pet_id=1)
         self.assertEqual(self.photo().status_code, 200)
 
     def test_facility_scope_controls_access_after_transfer(self):
@@ -204,7 +206,7 @@ class PetRecordAccessTests(unittest.TestCase):
         self.assertEqual(self.photo(uid=2).status_code, 403)
         self.assertEqual(self.photo(uid=6).status_code, 200)
 
-    def test_cats_in_care_can_also_be_edited(self):
+    def test_cats_in_an_open_case_can_also_be_edited(self):
         with self.Session() as db:
             db.get(Pet, 1).pet_type = 'Cat'
             db.commit()

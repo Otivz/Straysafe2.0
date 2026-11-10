@@ -1,7 +1,7 @@
 # Barangay Referral log
 
 - **Status:** Current (backend). The screens come in Phase 3 of the [Subdivision-only plan](../06-future-proposals/SUBDIVISION_ONLY_RESTRUCTURING_PLAN.md).
-- **Since:** 2026-11-05.
+- **Since:** 2026-11-05. **Reworked 2026-11-09:** a case can have several referrals, to any outside organisation, and a reported outcome never closes the case (see [Any organisation](#any-organisation-2026-11-09) and [CASE_WORKFLOW_BACKEND.md](CASE_WORKFLOW_BACKEND.md)).
 - **Code:** `backend/app/models/barangay_referral.py`, `backend/app/schemas/barangay_referral.py`, `backend/app/routes/barangay_referrals.py`. Tests: `backend/tests/test_barangay_referrals.py`.
 
 ## Purpose
@@ -12,10 +12,10 @@ StraySafe serves the subdivision only. The Barangay is an external party with no
 
 | Table | One row per | Main fields |
 |---|---|---|
-| `barangay_referrals` | report (unique) | Barangay (the subdivision's own Barangay, San Vicente), referred by and when, reason, reference number, contact method (call, visit, message, letter, other), final outcome with its date, note, recorder and time |
+| `barangay_referrals` | referral (several per report) | the organisation (`org_type`, `org_name`; for a Barangay referral also `barangay_id`, the subdivision's own Barangay, San Vicente), referred by and when, reason, reference number, contact method (call, visit, message, letter, other) and contact person, urgency, its own status (`referral_status`), what the organisation reported (`external_outcome`, `remaining_follow_up`, `follow_up_at`), and the older Barangay outcome with its date, note, recorder and time |
 | `barangay_referral_updates` | update | type (acknowledged, dispatched, picked up, held, impounded, claimed, adopted, not found, other), source (`barangay_reported` or `straysafe_user`), the date the Barangay reported it, note, evidence link (https), recorder and time |
 
-Both tables are created by the backend at startup (`create_all`) and are listed in `Database3.3.txt`.
+Both tables are created by the backend at startup (`create_all`) and are listed in `Database3.4_subdivision.sql`.
 
 ## Endpoints
 
@@ -25,19 +25,24 @@ Only the Subdivision Leader of the report's subdivision and the Administrator. R
 |---|---|
 | `GET /referrals/?open_only=` | Referrals the user may see, newest first |
 | `GET /reports/{id}/referral` | The referral of one report, with its updates |
-| `POST /reports/{id}/referral` | Refers the case. Statuses 1 and 2 move to 4 (Referred to Barangay) with a history entry; an older status-4 case only gets its referral record. Keeps or writes the endorsement letter. No rescue request is created and no Barangay account is notified. The reporter is notified. |
+| `POST /reports/{id}/referral` | Refers the case to the Barangay. Statuses 1 and 2 move to 4 (Referred to Barangay) with a history entry; a case in any other open status keeps its status (and moves forward to In progress); an older status-4 case only gets its referral record. Keeps or writes the endorsement letter. No rescue request is created and no Barangay account is notified. The reporter is notified. **No registered animal and no earlier assessment is needed.** |
 | `POST /referrals/{id}/updates` | Records one Barangay update |
-| `POST /referrals/{id}/outcome` | Records the final outcome and closes the report once |
+| `POST /referrals/{id}/outcome` | Records what the Barangay reported happened and completes the referral. **It does not close or change the case.** |
 
 ## Rules
 
-- One referral per report. Merged reports (status 18) and reports in other statuses cannot be referred. A case needs an animal record (a Pet Record) before it can be referred, as before.
+- A case can have several referrals. A second referral to the Barangay is refused only while an earlier one is still open (`409`). Merged reports (status 18) and closed cases cannot be referred; any other open case can. **No animal record (Pet Record) is needed**: an urgent safety referral can go first.
 - An update never changes the report status, custody, the facility, the pin, or any holding record. A "held" or "impounded" update is only what the Barangay said; StraySafe never shows the animal as held (the location rule).
 - Dates the Barangay reported cannot be in the future or before the referral.
-- The final outcome maps to a closing status: claimed 9, released 10, resolved 11, deceased 12, not found 17. It is accepted only while the report is at status 4, only once, and its history entry starts "Reported by Barangay San Vicente on <date>, recorded by <leader>".
+- The final outcome (claimed, released, resolved, deceased, not found) is **recorded as reported and never applied**: the case keeps its status and stays open until the Subdivision Admin closes it with a documented disposition (`POST /cases/{id}/close`). It is accepted once per referral, and its timeline entry starts "Reported by Barangay San Vicente on <date>, recorded by <leader>", with the case's status as it was. (Until 2026-11-09 it closed the report with status 9, 10, 11, 12 or 17; reports closed that way keep those statuses.)
+- An update from the Barangay moves the **referral** from `sent` to `in_progress`; the outcome completes it. The case is unaffected.
 - No updates after the outcome.
 - Every write adds an audit entry (`Create Barangay Referral`, `Record Barangay Update`, `Record Barangay Outcome`).
 - The three endorsement letters and rescues that existed before are left as they are; a leader or the Administrator can open a referral record for an older status-4 case to log its updates.
+
+## Any organisation (2026-11-09)
+
+`GET/POST /cases/{id}/referrals` and `POST /cases/{id}/referrals/{rid}/updates` (Leader of the subdivision or Administrator) refer a case to **any outside organisation** (`barangay`, `animal_control`, `veterinary`, `animal_welfare`, `wildlife`, `other`) and record its updates. Each referral has its own status (`sent`, `acknowledged`, `in_progress`, `completed`, `declined`, `no_response`). The organisation finishing its part completes the referral and never closes the case; a date for what is left becomes a follow-up linked to the referral. An open referral to the same organisation is not duplicated. These routes create no endorsement letter and move the case to In progress (legacy status 7, not 4). Both families of routes write the same records. There are no new roles or portals for the organisations.
 
 ## Admin letter preview and print
 

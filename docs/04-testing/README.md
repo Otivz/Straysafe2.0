@@ -2,13 +2,17 @@
 
 Status: Current inventory (written 2026-10-25 from repository evidence). **Pass/fail results are not recorded here**; a full run of every suite was not done for this baseline.
 
+## Update 2026-11-10: frontend suites of the legacy portals removed
+
+The legacy portals were removed ([change record](../05-operations/agents/feature-updates/2026-11-10_1456_final-legacy-repository-cleanup.md)), and with them 14 frontend unit-test files, 23 browser runners and the `fixtures/` folder that mounted legacy components. The dated sections below that name `frontend/tests/*.browser.mjs` runners or the removed unit tests describe suites that **no longer exist**; they stay as the record of what was checked then. What remains is in the table below. The backend scripts were not removed: five of the older ones (`test_manual_matching`, `test_admin_003_admin_create_user`, `test_owner_warning_rules`, `test_case_review`, `test_false_alarm_auth`) still assert behavior of the retired Barangay accounts and pass only with `BARANGAY_WORKFLOWS_ENABLED=1` (default mode fails them; checked 2026-11-10).
+
 ## What exists
 
 | Suite | Location | How it runs | Covers (from file names and headers) |
 |---|---|---|---|
-| Backend scripts | `backend/tests/` (109 `test_*.py` files) | `.venv\Scripts\python.exe backend/tests/<file>.py`, one at a time; each prints its own pass count | sessions and sign-in (`test_session_security`, `test_app_stay_signed_in`), report visibility and edit authorization (`test_report_visibility`, `test_report_edit_auth`), AI pipeline and matching, claims, adoption stages and authority, pet records and ownership, admin controls, notifications, analytics |
-| Frontend unit | `frontend/tests/*.test.mjs` (10 files) | `node --test frontend/tests/*.test.mjs` | claim evidence, data refresh, original sighting, personnel availability, heatmap rules, follow-up rules, monitoring logs, observation updates, pet registration, case stages with owner observation |
-| Frontend browser | `frontend/tests/*.browser.mjs` (12 files) with `fixtures/*.tsx` | `node frontend/tests/<file>.browser.mjs`; needs local Vite (port per file, or the file's `*_TEST_URL` variable) and local Chrome | claim evidence, match-review location, notifications, pet claim records, pet photo access, adoption details, Phase 1 maps, Phase 2 holding, Phase 5 pets, Phases 6–8 (manual matching, owner confirmation, repeat incidents, leader identity, notices, claims, timeline) |
+| Backend scripts | `backend/tests/` (106 `test_*.py` files) | `.venv\Scripts\python.exe backend/tests/<file>.py`, one at a time; each prints its own pass count | sessions and sign-in (`test_session_security`, `test_app_stay_signed_in`), report visibility and edit authorization (`test_report_visibility`, `test_report_edit_auth`), AI pipeline and matching, claims, adoption stages and authority, pet records and ownership, admin controls, notifications, analytics |
+| Frontend unit | `frontend/tests/*.test.mjs` (8 files) | `node --test frontend/tests/*.test.mjs` | the two live interfaces' adapters (`adminLiveAdapters`, `residentLiveAdapters`), live helpers (dates, references, errors), data refresh, and the Android backend-address rules and Connection Settings page (`androidApiUrl`, `devBackend`, `devBackendApi`, `devConnectionPage`) |
+| Frontend browser | `frontend/tests/liveInterfaces.browser.mjs` with `_liveHarness.mjs` | `node frontend/tests/liveInterfaces.browser.mjs`; starts and stops its own isolated API (port 8780), Vite dev server (5190) and Chrome | the Subdivision Leader (`/subd-admin`) and Resident (`/resident-app`) interfaces on the real routers and a throwaway SQLite file (43 steps when last run on 2026-11-09) |
 | Type check and build | `frontend/` | `npm --prefix frontend run build` | TypeScript and Vite build |
 | Lint | `frontend/` | `npm --prefix frontend run lint` | ESLint; 2026-11-01: 2,013 problems (1,887 errors, 126 warnings) across the frontend, mostly pre-existing; see the Phase 9 section |
 
@@ -91,7 +95,7 @@ runpy.run_path('backend/tests/test_adoption_catalog_handover.py', run_name='__ma
 
 `node frontend/tests/phase2Holding.browser.mjs` uses the same local Vite setup as the Phase 1 suite, defaulting to port 5174. Its 18 scenarios cover 390/1280 px, same-Barangay read-only rows, earlier pens, dashboard counts, resident/held custody choices, submitted custody fields, single/multiple-animal panels, new-landmark settings and Barangay adoption controls. The fixture also checks both historical and current holding wording. All application APIs are mocked; backend and external requests are blocked.
 
-The existing Phase 1 browser suite still passes 14 scenarios. The production build and scoped ESLint on `tests/fixtures/phase2Holding.tsx` pass. `PHASE2_HOLDING_TEST_URL` and `CHROME_BIN` configure the browser runner. Existing deprecation/build-size warnings remain; native-device and live-data checks are unverified. Current behavior: [Holding place and custody rules](../01-system/HOLDING_PLACE_AND_CUSTODY_RULES.md).
+The existing Phase 1 browser suite still passes 14 scenarios. The production build and scoped ESLint on `tests/fixtures/phase2Holding.tsx` pass. `PHASE2_HOLDING_TEST_URL` and `CHROME_BIN` configure the browser runner. Existing deprecation/build-size warnings remain; native-device and live-data checks are unverified. Current behavior: [Holding place and custody rules](../archive/legacy-retirement/HOLDING_PLACE_AND_CUSTODY_RULES.md).
 
 ## Phase 5 pet registration and match review - 2026-10-30
 
@@ -180,7 +184,7 @@ npm --prefix frontend run dev -- --host 127.0.0.1 --port 5175 --strictPort
 node frontend/tests/claimFees.browser.mjs
 ```
 
-Current behavior: [Claim fee assessment rules](../01-system/CLAIM_FEE_ASSESSMENT_RULES.md). Not verified: real payments and receipts, and the legal citations themselves.
+Earlier behavior (the subsystem was retired 2026-11-10): [Claim fee assessment rules](../archive/legacy-retirement/CLAIM_FEE_ASSESSMENT_RULES.md). Not verified: real payments and receipts, and the legal citations themselves.
 
 ## Improvement pass: access, performance, build, accessibility - 2026-11-02
 

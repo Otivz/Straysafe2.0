@@ -1,5 +1,7 @@
 # Subdivision-only restructuring: guide and checklist
 
+> **Update 2026-11-10:** the legacy retirement this plan prepared is done in the code and the database snapshot: the endorsement-letter, adoption, holding, rescue and legacy claim and fee subsystems and their 21 tables are gone (72 to 51 tables). The sections below describe the plan as it was written; see [the change record](../05-operations/agents/feature-updates/) of 2026-11-10 and `docs/archive/legacy-retirement/` for the retired rule documents.
+
 - **Status:** Approved direction. **Phases 1 (backend gate), 2 (referral log) and 3 (screens, parts 3a to 3d) implemented 2026-11-05; Phase 4 (statuses, analytics and wording) implemented 2026-11-06.** Phases 5 and 6 are not started and need the developer's go-ahead one at a time.
 - **Written:** 2026-11-05. File and line references are as of commit `73f0ebf` on branch `subdivision-only` (`main` after PR #102). Function and route names are stable; re-grep a line number before editing.
 - **Deadline:** 2026-11-16. Estimated effort: 5 to 6 working days (approximate, from the line and test counts below).

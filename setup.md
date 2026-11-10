@@ -8,30 +8,29 @@
 
 ## 1. Database
 
-1. Open MySQL and run:
-   ```sql
-   CREATE DATABASE straysafe_db;
-   ```
-2. Import the schema:
-   ```powershell
-   mysql -u root -p straysafe_db < Database.txt
-   ```
+Load the schema and the reference data from the project root. The file creates the database `straysafe_subdivision` itself (it **drops and re-creates it**, so never load it into a database you want to keep):
+
+```powershell
+cmd /c "mysql -u root -p --default-character-set=utf8mb4 < Database3.4_subdivision.sql"
+```
+
+(`cmd /c` is only needed in PowerShell, which has no `<` redirection; in Command Prompt run the `mysql ...` part on its own.)
+
+It creates the 51 tables and fills only the reference data (roles, positions, the barangay and the subdivision, landmarks, report categories and statuses, announcement categories). **It creates no account**: see section 4. (`Database3.4_subdivision.txt` is an identical copy.)
 
 ---
 
 ## 2. Environment File
 
-Create a `.env` file in the **project root** (next to `backend/`):
+Copy `.env.example` to `.env` in the **project root** (next to `backend/`) and replace every placeholder with your own values. Never commit `.env`. At minimum the backend needs:
 
 ```env
-STRAYSAFE_DB_URL="mysql://root:yourpassword@localhost:3306/straysafe_db"
-SECRET_KEY="any-random-secret-string"
-ADMIN_EMAIL=admin@straysafe.com
-ADMIN_PASSWORD=password123
-DEBUG=true
+DATABASE_URL=mysql+pymysql://root:<your MySQL password>@localhost/straysafe_subdivision
+JWT_SECRET_KEY=<a long random secret>
+SECRET_KEY=<a long random secret>
 ```
 
-> Replace `root` and `yourpassword` with your actual MySQL credentials.
+> Use the database name from section 1 (`straysafe_subdivision`), not the `straysafe_db` placeholder in `.env.example`. Where you can, give StraySafe a MySQL account of its own instead of `root` (see [docs/05-operations/database/DATABASE_ACCOUNT_AND_CREDENTIALS.md](docs/05-operations/database/DATABASE_ACCOUNT_AND_CREDENTIALS.md)). No account setting belongs in `.env`: section 4 asks for what it needs.
 
 ---
 
@@ -89,26 +88,22 @@ Admins can check the queue at `GET /admin/ai-jobs`.
 
 ---
 
-## 4. Seed Test Accounts (First Time Only)
+## 4. First accounts (first time only)
 
-With the backend running, open a **new terminal** in the project root and run:
+The database starts with **no account**: nothing is seeded and no default password exists.
 
-```powershell
-.venv\Scripts\activate
-cd backend
-..\.venv\Scripts\python scripts/seed_admin.py
-# (Or simply run "python scripts/seed_admin.py" since the venv is active)
-```
+- **Residents** sign up in the app (`/login` on the website).
+- **The first Subdivision Leader** is created with the seed script. Run it from `backend/` with the virtual environment active (the backend does not need to be running):
 
-This creates these accounts (all passwords: `password123`):
+  ```powershell
+  ..\.venv\Scripts\python scripts/seed_admin.py --leader
+  ```
 
-| Role               | Email                                    |
-| ------------------ | ---------------------------------------- |
-| Citizen 1          | `emmanuelvitocruz@gmail.com`           |
-| Citizen 2          | `resident2@straysafe.com`              |
-| Subdivision Leader | `kylajoyarriola@gmail.com`             |
-| Barangay Staff     | `kylabiancafrias@gmail.com`            |
-| Admin              | *(your `ADMIN_EMAIL` from `.env`)* |
+  It asks for the Leader's e-mail address and a password (typed twice, never shown). Never reuse a password from this repository; it needs at least 12 characters, with an uppercase letter, a lowercase letter, a number and a special character. Nothing is read from `.env` and nothing is kept except the bcrypt hash in the database, so there is nothing to add to `.env`.
+
+  The Leader signs in at `/subd-admin/login`. The script creates nothing without `--leader` or `--admin`, refuses a weak password, never changes or resets an account that already exists, and prints no password.
+- **Admin** (a role reserved for a future implementation, not needed for current development): `--admin` instead, the same way.
+- **Barangay Staff** is retired: no account of that role is created.
 
 ---
 

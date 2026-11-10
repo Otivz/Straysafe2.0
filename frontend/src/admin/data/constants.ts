@@ -1,4 +1,3 @@
-import { REGISTERED_LANDMARKS, landmarkLabel } from '../../preview/geo';
 import type {
   AnimalType, CaseStatus, CategoryId, ClaimStatus, ComplianceResult, ContactMethod, DispositionId, EvidenceSufficiency,
   FollowUpKind, IdentityStatus, IncidentVerification, NoticeStatus, NoticeType, OutcomeGroup, OwnershipStatus, Priority,
@@ -23,7 +22,6 @@ export const STATUSES: Record<CaseStatus, { label: string; description: string; 
   in_progress: { label: 'In progress', description: 'Action, coordination or monitoring is ongoing.', tone: 'brand', rank: 2 },
   closed: { label: 'Closed', description: 'A documented outcome has been recorded.', tone: 'ink', rank: 3 },
 };
-export const STATUS_IDS = Object.keys(STATUSES) as CaseStatus[];
 
 export const PRIORITIES: Record<Priority, { label: string; description: string; rank: number }> = {
   urgent: { label: 'Urgent', description: 'Possible immediate risk to people or the animal. Coordinate safety first.', rank: 3 },
@@ -157,14 +155,6 @@ export const NOTICE_STATUS: Record<NoticeStatus, { label: string; tone: Tone }> 
   published: { label: 'Published', tone: 'sage' },
   archived: { label: 'Archived', tone: 'neutral' },
 };
-
-/** General locations to suggest for a notice (never exact addresses): the registered landmarks. Replace with GET /landmarks when connected. */
-export const GENERAL_LOCATIONS = REGISTERED_LANDMARKS.map(landmarkLabel);
-
-export const NOTIFICATION_KINDS = {
-  new_report: 'New report', urgent: 'Urgent incident', follow_up: 'Follow-up reminder',
-  ownership_claim: 'Ownership claim', case_activity: 'Case activity', referral: 'Referral update',
-} as const;
 
 export const RESIDENT_STATUS: Record<'active' | 'pending' | 'suspended', { label: string; tone: Tone; description: string }> = {
   active: { label: 'Active', tone: 'sage', description: 'Can sign in and use StraySafe.' },

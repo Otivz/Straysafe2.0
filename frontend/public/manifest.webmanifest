@@ -1,7 +1,7 @@
 {
   "name": "StraySafe",
   "short_name": "StraySafe",
-  "description": "Report stray animals, find lost pets and follow rescues in your barangay.",
+  "description": "Report stray animals, find lost pets and follow your reports in your subdivision.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -1,6 +1,6 @@
 """
 Returned to Owner / Reunited: owner with a StraySafe account (linked user_id) or without one (manual details),
-for the report status flow (Subdivision Leader / Barangay) and the holding-facility 'Claimed by Owner' flow.
+for the report status flow (Subdivision Leader / Admin).
 Throwaway SQLite DB, real JWT auth.  Run from the backend folder:  python tests/test_owner_return.py
 """
 import os
@@ -21,16 +21,16 @@ import app.models  # noqa: E402,F401
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.limiter import limiter  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
-from app.models.report import ReportMedia, FacilityStatus, HoldingAnimal, Rescue, RescueStatus, Report, ReportReturn, ReportStatus, StatusHistory  # noqa: E402
+from app.models.report import ReportMedia, Report, ReportReturn, ReportStatus, StatusHistory  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
-from app.routes import holding, pet_ownership, report_returns, reports, rescue  # noqa: E402
+from app.routes import pet_ownership, report_returns, reports  # noqa: E402
 from app.utils.auth import create_access_token  # noqa: E402
 
 Base.metadata.create_all(bind=engine)
 api = FastAPI()
 api.state.limiter = limiter
 api.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-for r in (reports.router, holding.router, report_returns.router, rescue.router, pet_ownership.router):
+for r in (reports.router, report_returns.router, pet_ownership.router):
     api.include_router(r)
 client = TestClient(api, raise_server_exceptions=False)
 db = SessionLocal()
@@ -41,10 +41,6 @@ db.add(Subdivision(subdivision_id=1, barangay_id=1, subdivision_name="S1"))
 db.add(Subdivision(subdivision_id=2, barangay_id=1, subdivision_name="S2"))
 for sid in (1, 2, 3, 4, 7, 9, 11, 13):
     db.add(ReportStatus(status_id=sid, status_name=f"S{sid}"))
-for sid in (1, 2, 3, 4, 5, 6):
-    db.add(RescueStatus(status_id=sid, status_name=f"R{sid}"))
-for sid, nm in ((1, "Need Treatment"), (2, "Healthy"), (3, "Claimed"), (4, "Deceased")):
-    db.add(FacilityStatus(status_id=sid, status_name=nm))
 db.flush()
 
 
@@ -168,60 +164,22 @@ check("an unrelated resident is refused", client.get(f"/report-returns/by-report
 R3 = mk_report()
 check("resolving (11) needs no owner info", resolve(R3, leader, None, sid=11).status_code == 200)
 
-# ── Holding facility: Claimed by Owner ──────────────────────────────────────
+# ── Closing a case that is under observation (7): the owner return is recorded the same way ──
 R4 = mk_report(status=7)
-h = HoldingAnimal(report_id=R4, animal_type="Dog", facility_status=2)
-db.add(h)
-db.commit()
-hid = h.holding_id
-check("holding: Claimed by Owner without owner info is rejected",
-      client.patch(f"/holding/{hid}", json={"facility_status": 3}, headers=H(head)).status_code == 400)
-check("holding: other status changes need no owner info",
-      client.patch(f"/holding/{hid}", json={"facility_status": 1}, headers=H(head)).status_code == 200)
-res = client.patch(f"/holding/{hid}", json={"facility_status": 3, "owner_return": proof(R4, {"has_account": True, "owner_user_id": owner.user_id})}, headers=H(head))
-check("holding: Claimed by Owner with an account succeeds", res.status_code == 200, res.text[:200])
+res = resolve(R4, head, {"has_account": True, "owner_user_id": owner.user_id})
 db.expire_all()
 rec4 = db.query(ReportReturn).filter_by(report_id=R4).first()
-check("holding: record linked to the report, holding animal and account",
-      rec4 and rec4.owner_user_id == owner.user_id and rec4.holding_id == hid and db.query(Report).get(R4).current_status_id == 11)
-check("holding: history mentions the owner", any("Maria Owner" in (x.remarks or "") for x in db.query(StatusHistory).filter_by(report_id=R4)))
-
+check("observation case: the return with an account is recorded and the report closes as 9",
+      res.status_code == 200 and rec4 and rec4.owner_user_id == owner.user_id and db.query(Report).get(R4).current_status_id == 9, res.text[:200])
+check("observation case: the history names the owner", any("Maria Owner" in (x.remarks or "") for x in db.query(StatusHistory).filter_by(report_id=R4)))
 R5 = mk_report(status=7)
-h5 = HoldingAnimal(report_id=R5, animal_type="Cat", facility_status=2)
-db.add(h5)
-db.commit()
-res = client.patch(f"/holding/{h5.holding_id}", json={"facility_status": 3, "owner_return": proof(R5, {"has_account": False, "owner_name": "Juan Manual", "owner_phone": "0999"})}, headers=H(head))
-check("holding: Claimed by Owner with manual details succeeds", res.status_code == 200, res.text[:200])
+res = resolve(R5, head, {"has_account": False, "owner_name": "Juan Manual", "owner_phone": "0999"})
 db.expire_all()
 rec5 = db.query(ReportReturn).filter_by(report_id=R5).first()
-check("holding: manual record has no account and no user was created", rec5 and rec5.owner_user_id is None and db.query(User).count() == users_before)
-
-# ── Barangay rescue-request flow ────────────────────────────────────────────
+check("observation case: manual details are recorded, no account and no user is created",
+      res.status_code == 200 and rec5 and rec5.owner_user_id is None and db.query(User).count() == users_before, res.text[:200])
 R6 = mk_report(status=6)
-resc = Rescue(report_id=R6, leader_id=head.user_id, staff_id=head.user_id, status_id=5, title="t")
-db.add(resc)
-db.commit()
-rid6 = resc.rescue_id
-check("rescue: status 9 without owner info is rejected",
-      client.patch(f"/rescue-requests/{rid6}", json={"status_id": 9, "remarks": "returned"}, headers=H(head)).status_code == 400)
-res = client.patch(f"/rescue-requests/{rid6}", json={"status_id": 9, "remarks": "Returned at the barangay hall.",
-                    "owner_return": proof(R6, {"has_account": False, "owner_name": "Ana Walkin", "owner_address": "Purok 3"})}, headers=H(head))
-check("rescue: status 9 with manual owner succeeds", res.status_code == 200, res.text[:300])
-db.expire_all()
-rec6 = db.query(ReportReturn).filter_by(report_id=R6).first()
-check("rescue: record saved, report closed as 9, history names the owner",
-      rec6 and rec6.owner_name == "Ana Walkin" and rec6.owner_user_id is None and db.query(Report).get(R6).current_status_id == 9
-      and any("Ana Walkin" in (x.remarks or "") for x in db.query(StatusHistory).filter_by(report_id=R6)))
-R7 = mk_report(status=7)
-h7 = HoldingAnimal(report_id=R7, animal_type="Dog", facility_status=2, kennel_slot="K1")
-db.add(h7)
-db.commit()
-res = resolve(R7, head, {"has_account": True, "owner_user_id": owner.user_id})
-db.expire_all()
-h7 = db.query(HoldingAnimal).get(h7.holding_id)
-check("report status 9 on a held animal discharges it from the facility",
-      res.status_code == 200 and h7.facility_status == 3 and h7.discharge_date is not None and h7.kennel_slot is None, res.text[:200])
-check("rescue: still no user accounts created", db.query(User).count() == users_before)
+check("report status 9 without owner info is rejected on any open case", resolve(R6, head, None).status_code == 400)
 
 # ── Proof requirements ──────────────────────────────────────────────────────
 P = mk_report()

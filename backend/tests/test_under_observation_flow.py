@@ -28,6 +28,7 @@ from app.models.warning import OwnerWarning
 from app.models.owner_followup import OwnerFollowUp
 from app.routes import owner_followups, warnings
 from app.utils.auth import create_access_token
+from _case_helpers import make_warning_ready  # what an owner warning now requires
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 Session = sessionmaker(bind=engine)
@@ -126,7 +127,8 @@ def check(condition: bool, desc: str):
 
 print("\n--- Running Under Observation Integration Tests ---")
 
-# 1. Issue First Warning for Report #1
+# 1. Issue First Warning for Report #1 (the case first needs a verified incident, a confirmed owner and a confirmed policy)
+make_warning_ready(db, 1, 1, observation_days=3)
 with patch("app.utils.notification_dispatcher.dispatch_notification"):
     with patch("app.services.email_templates.render_owner_warning_email", return_value=("Subj", "Body", "<b>Body</b>")):
         res_warn = client.post("/warnings/", json={
@@ -198,6 +200,7 @@ rep3 = Report(
 )
 db.add(rep3)
 db.commit()
+make_warning_ready(db, 3, 1, observation_days=3)
 
 with patch("app.utils.notification_dispatcher.dispatch_notification"):
     with patch("app.services.email_templates.render_owner_warning_email", return_value=("Subj", "Body", "<b>Body</b>")):

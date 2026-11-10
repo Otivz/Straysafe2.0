@@ -37,7 +37,7 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
       <Field label="New password" error={errors.next}><PasswordInput autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} /></Field>
       <PasswordRules password={next} />
       <Field label="Confirm new password" error={errors.confirm}><PasswordInput autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} /></Field>
-      <Callout>Preview only: the change is checked, but the sample account keeps its sample password.</Callout>
+      <Callout>For your security you will be signed out everywhere, including on this device, and asked to sign in with the new password.</Callout>
       {error ? <FormError message={error} /> : null}
     </Dialog>
   );

@@ -3,10 +3,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_
+from sqlalchemy import or_
 
 from app.models.owner_followup import OwnerFollowUp, FollowUpContactLog, OwnerObservationUpdate
-from app.models.report import Report, HoldingAnimal
+from app.models.report import Report
 from app.models.pet import Pet
 from app.models.user import User, Subdivision, Barangay
 from app.models.barangay_referral import BarangayReferral
@@ -30,13 +30,25 @@ def db_local_to_utc(db: Session, value: Optional[datetime]) -> Optional[datetime
     The offset is measured, not assumed, and rounded to 15 minutes."""
     if value is None:
         return None
-    from app.utils.holding_stay import db_now
+    from app.utils.db_clock import db_now
     offset_seconds = (db_now(db) - _now()).total_seconds()
     return value - timedelta(minutes=round(offset_seconds / 900) * 15)
 
 
+# Warnings issued before subdivision policies existed (no policy_id) were all observed for 3 days. This is only how
+# those historical warnings are read; nothing issued now assumes it (the policy defines the period, or none).
+LEGACY_WARNING_OBSERVATION_DAYS = 3
+
+
+def warning_observation_days(warning) -> Optional[int]:
+    """The observation period that applied to a warning: its policy's, none, or the 3 days of the pre-policy era."""
+    if getattr(warning, "policy_id", None):
+        return warning.observation_days
+    return LEGACY_WARNING_OBSERVATION_DAYS
+
+
 def get_default_duration_days(db: Session) -> int:
-    """Read the administrator-configured default observation duration, or 3 days if unset."""
+    """The administrator-configured default for a manually started observation (PUT /owner-followups/settings/duration); 3 until one is set."""
     setting = db.query(SystemSetting).filter(SystemSetting.setting_key == SETTING_KEY_DURATION).first()
     if setting and setting.setting_value:
         try:
@@ -159,16 +171,6 @@ def validate_followup_start(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot start owner observation: animal is currently recorded in a holding place."
-        )
-
-    active_holding = db.query(HoldingAnimal).filter(
-        HoldingAnimal.report_id == report.report_id,
-        HoldingAnimal.facility_status.in_([1, 2, 6, 8])
-    ).first()
-    if active_holding:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot start owner observation: animal has an active holding place intake."
         )
 
     # 5. Rabies check
@@ -366,14 +368,15 @@ def enrich_and_redact_followup(followup: OwnerFollowUp, user: Optional[User], db
             if cat:
                 category_name = cat.category_name
 
-    # 3-Day Observation Countdown & Progress (starts from First Warning date)
+    # Observation countdown & progress for this follow-up's own period (starts from the First Warning date)
     start_time = first_warning.created_at if first_warning else followup.created_at
     if start_time and start_time.tzinfo is None:
         start_time = start_time.replace(tzinfo=timezone.utc)
     now_tz = now_val if now_val.tzinfo is not None else now_val.replace(tzinfo=timezone.utc)
     due_tz = followup.due_at if followup.due_at.tzinfo is not None else followup.due_at.replace(tzinfo=timezone.utc)
 
-    total_days = (followup.duration_days or 3) + (followup.extension_days or 0 if followup.is_extended else 0)
+    # The follow-up's own period (set from the policy when it started); never zero, because progress divides by it
+    total_days = max(followup.duration_days or 0, 1) + (followup.extension_days or 0 if followup.is_extended else 0)
     total_hours = float(total_days * 24)
     elapsed_seconds = max(0.0, (now_tz - start_time).total_seconds()) if start_time else 0.0
     elapsed_hours = elapsed_seconds / 3600.0
@@ -422,9 +425,9 @@ def enrich_and_redact_followup(followup: OwnerFollowUp, user: Optional[User], db
         if barangay_name:
             referral_label = f"Referred to Barangay {barangay_name}"
 
-    # Endorsement record
-    from app.models.report import EndorsementLetter
-    end_letter = db.query(EndorsementLetter).filter(EndorsementLetter.report_id == followup.report_id).first()
+    # The referral recorded for this case (its reason is the text sent to the Barangay)
+    referral = (db.query(BarangayReferral).filter(BarangayReferral.report_id == followup.report_id)
+                .order_by(BarangayReferral.referral_id.desc()).first())
 
     # Resolution verifier
     resolved_by_user = None
@@ -547,14 +550,13 @@ def enrich_and_redact_followup(followup: OwnerFollowUp, user: Optional[User], db
         "resolved_by_name": resolved_by_user.name if resolved_by_user else None,
         "resolved_at": followup.closed_at,
         "resolved_notes": followup.compliance_notes or followup.close_reason,
-        "endorsement_date": end_letter.issued_at if end_letter else (followup.closed_at if followup.status == "escalated" else None),
-        "endorsement_letter_content": end_letter.letter_content if end_letter else None,
+        "endorsement_date": referral.referred_at if referral else (followup.closed_at if followup.status == "escalated" else None),
+        "referral_reason": referral.reason if referral else None,
         "endorsement_status": referral_label if (followup.status == "escalated" or (report and report.current_status_id in (4, 13))) else None,
         "current_observation_day": current_obs_day,
         "observation_day_display": day_display,
         "remaining_time_display": rem_display,
         "progress_percent": progress_pct,
-        "endorsement_letter": getattr(report, 'endorsement_letter', None) if report else None,
         "is_escalated": bool(followup.status == "escalated" or (report and report.current_status_id in (4, 13))),
         "created_at": followup.created_at,
         "updated_at": followup.updated_at
@@ -574,7 +576,7 @@ def check_and_notify_due_followups(db: Session) -> int:
 
     for f in active_followups:
         # 0. Reminder to submit an observation update when the owner has sent none yet
-        started_at = f.created_at or (f.due_at - timedelta(days=f.duration_days or 3))
+        started_at = f.created_at or (f.due_at - timedelta(days=f.duration_days or 0))
         if (
             f.owner_id
             and f.update_reminder_sent_at is None
@@ -587,7 +589,7 @@ def check_and_notify_due_followups(db: Session) -> int:
                     db=db,
                     user_id=f.owner_id,
                     title="Submit Your Observation Update",
-                    message=f"Your pet is under a 3-day observation for Report #{f.report_id}. Please submit an observation update with photos showing the steps you have taken before {f.due_at.strftime('%Y-%m-%d %H:%M')}.",
+                    message=f"Your pet is under a {f.duration_days}-day observation for Report #{f.report_id}. Please submit an observation update with photos showing the steps you have taken before {f.due_at.strftime('%Y-%m-%d %H:%M')}.",
                     notification_type="followup_update_reminder",
                     related_id=f.report_id
                 )
@@ -621,7 +623,7 @@ def check_and_notify_due_followups(db: Session) -> int:
                     db=db,
                     user_id=f.leader_id,
                     title="Observation Expired: Non-Compliant",
-                    message=f"The 3-day observation for Report #{f.report_id} ended without verified resolution. The case is flagged Non-Compliant and is eligible for Second Warning review.",
+                    message=f"The {f.duration_days}-day observation for Report #{f.report_id} ended without verified resolution. The case is flagged Non-Compliant and is eligible for Second Warning review.",
                     notification_type="followup_due",
                     related_id=f.report_id
                 )

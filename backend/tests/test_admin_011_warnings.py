@@ -1,14 +1,20 @@
+# Runs on a throwaway SQLite file, never on the application database (see _isolated_db.py). app.main cannot be imported in a
+# test (its start-up is MySQL only and changes the configured database), so the app is rebuilt from the routers under test,
+# which is the wiring app.main uses.
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _isolated_db  # noqa: E402,F401  (FIRST: throwaway SQLite, no outside services, MySQL disabled)
 
 from fastapi.testclient import TestClient
-from app.main import app
+from app.routes import admin, warnings
 from app.database import SessionLocal
 from app.models.user import User
 from app.models.warning import OwnerWarning
 from app.utils.auth import get_current_user
 
+app = _isolated_db.build_app(admin.router, warnings.router)
+_isolated_db.create_schema_and_seed()
 client = TestClient(app)
 
 def test_admin_011_warnings_view():

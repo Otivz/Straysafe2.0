@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session, joinedload, aliased
 from typing import List, cast, Any, Optional
 from sqlalchemy import or_, and_
 from app.database import get_db
-from app.utils.pet_adoption import attach_adoption_info, ownership_blocked_by_adoption
 from app.utils.pet_record_access import attach_record_edit_permissions, require_pet_record_edit
 from app.models.pet import Pet
 from app.models.report import Report
@@ -181,7 +180,6 @@ def get_pets(
         )
     query = query.order_by(Pet.created_at.desc(), Pet.pet_id.desc())
     pets = query.all()
-    attach_adoption_info(db, pets)  # "in the adoption process" indicator for Pet Records
     attach_record_edit_permissions(db, pets, current_user)
     return pets
 
@@ -457,7 +455,6 @@ def get_pet(
     if not pet:
         raise HTTPException(status_code=404, detail="Pet not found")
     check_pet_access(current_user, pet, db, for_write=False)
-    attach_adoption_info(db, pet)
     attach_record_edit_permissions(db, pet, current_user)
     return pet
 
@@ -559,7 +556,6 @@ def assign_pet_owner(
     pet_id: int, 
     owner_id: int, 
     req: Request, 
-    verified_claim: Optional[bool] = None,
     process_type: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -586,10 +582,6 @@ def assign_pet_owner(
 
     check_pet_access(current_user, pet, db, for_write=True)
     verify_subdivision_scope(current_user, owner.subdivision_id, resource_barangay_id=owner.barangay_id, db=db)
-    # An approved or completed adoption decides who owns this animal
-    blocked = ownership_blocked_by_adoption(db, pet.pet_id)
-    if blocked:
-        raise HTTPException(status_code=409, detail=blocked)
     
     actor = current_user
     actor_role = actor.role_id
@@ -629,7 +621,7 @@ def assign_pet_owner(
         )
         return pet
 
-    # CASE 2: Pet has NO registered owner yet -> INITIAL ASSIGNMENT (Claim / Adoption)
+    # CASE 2: Pet has NO registered owner yet -> INITIAL ASSIGNMENT
     if old_owner_id is None:
         if actor and actor_role == 1:
             raise HTTPException(
@@ -637,32 +629,15 @@ def assign_pet_owner(
                 detail="Residents cannot directly assign pet ownership. Authorized officer or administrator approval is required."
             )
         
-        # Check claim or adoption status
-        from app.models.pet_claim import PetClaim
-        existing_claims = db.query(PetClaim).filter(PetClaim.pet_id == pet_id).all()
-        approved_claim = next((c for c in existing_claims if c.status in ["Approved", "Handover Complete", "Pet Received"]), None)
-        
-        # If there are pending claims that have not been approved, require approval first
-        if existing_claims and not approved_claim and actor_role in (2, 3) and not verified_claim:
-            pending = any(c.status in ["Pending Review", "Under Review", "Potential Owner Match"] for c in existing_claims)
-            if pending:
-                raise HTTPException(
-                    status_code=400,
-                    detail="This pet has pending claims under review. Please approve the official claim before assigning the owner."
-                )
-
         # The resident must accept before they become the owner (protects against picking the wrong account)
         propose_owner(db, pet, owner, actor, source="assign")
-
-        if approved_claim and approved_claim.status == "Approved":
-            approved_claim.status = "Handover Complete"
 
         db.commit()
         db.refresh(pet)
 
         actor_title = "Admin" if actor_role == 4 else ("Subdivision Leader" if actor_role == 2 else ("Barangay Staff" if actor_role == 3 else "Authorized Officer"))
         actor_name = actor.name if actor else actor_title
-        process_label = f" via {process_type}" if process_type else " via official claim/adoption turnover"
+        process_label = f" via {process_type}" if process_type else " via official turnover"
 
         log_activity(
             db=db,
@@ -889,15 +864,6 @@ def create_pet(
                      user_id=current_user.user_id, log_type="operation",
                      new_values={"previous_pet_id": from_photo_of}, request=req)
     
-    # Automatically generate QR Code for the pet on registration
-    try:
-        from app.routes.pet_qr import generate_qr_for_pet_internal
-        generate_qr_for_pet_internal(db_pet.pet_id, db)
-    except Exception as e:
-        # Avoid blocking registration if QR generation encounters an issue
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Failed to auto-generate QR code for registered pet {db_pet.pet_id}: {e}")
 
     log_activity(
         db=db,
@@ -955,7 +921,6 @@ def update_pet(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.pet_claim import PetClaim
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
@@ -988,16 +953,8 @@ def update_pet(
     for key, value in update_data.items():
         setattr(db_pet, key, value)
     
-    # If pet status is updated to 'Deceased', immediately invalidate/remove any active AI match claims
-    if update_data.get("status") == "Deceased":
-        db.query(PetClaim).filter(
-            PetClaim.pet_id == pet_id,
-            PetClaim.status.in_(["Potential Owner Match", "Possible Match Found", "Pending Review"])
-        ).delete(synchronize_session=False)
-
     db.commit()
     db.refresh(db_pet)
-    attach_adoption_info(db, db_pet)
     attach_record_edit_permissions(db, db_pet, current_user)
 
     log_activity(
@@ -1240,16 +1197,6 @@ def restore_pet_by_id(
     db.commit()
     db.refresh(db_pet)
     
-    # Auto-ensure QR Code exists
-    try:
-        from app.models.pet_qr import PetQRCode
-        existing_qr = db.query(PetQRCode).filter(PetQRCode.pet_id == pet_id).first()
-        if not existing_qr:
-            from app.routes.pet_qr import generate_qr_for_pet_internal
-            generate_qr_for_pet_internal(pet_id, db)
-    except Exception as e:
-        print(f"Warning checking QR code during pet restore: {e}")
-        
     log_activity(
         db=db,
         action="RESTORE_PET",
@@ -1299,16 +1246,6 @@ def restore_pet(
             db.commit()
             db.refresh(existing_pet)
             
-            # Ensure QR code exists
-            try:
-                from app.models.pet_qr import PetQRCode
-                existing_qr = db.query(PetQRCode).filter(PetQRCode.pet_id == existing_pet.pet_id).first()
-                if not existing_qr:
-                    from app.routes.pet_qr import generate_qr_for_pet_internal
-                    generate_qr_for_pet_internal(existing_pet.pet_id, db)
-            except Exception as e:
-                print(f"Warning generating QR for restored pet {existing_pet.pet_id}: {e}")
-                
             log_activity(
                 db=db,
                 action="RESTORE_PET",
@@ -1409,13 +1346,6 @@ def restore_pet(
     db.commit()
     db.refresh(new_pet)
     
-    # Auto-generate QR code
-    try:
-        from app.routes.pet_qr import generate_qr_for_pet_internal
-        generate_qr_for_pet_internal(new_pet.pet_id, db)
-    except Exception as e:
-        print(f"Failed to generate QR for restored pet {new_pet.pet_id}: {e}")
-
     log_activity(
         db=db,
         action="RESTORE_PET",
@@ -1445,11 +1375,10 @@ class PetMergeRequest(BaseModel):
 def merge_pet_records(db: Session, dup: Pet, keep: Pet, actor: User, reason: str, req: Optional[Request] = None,
                       actor_role: str = "Staff") -> dict:
     """
-    Move everything linked to the duplicate record (reports, suggestions, claims, history, vaccinations, warnings...)
+    Move everything linked to the duplicate record (reports, suggestions, claims, history, warnings...)
     onto the record that is kept, fill gaps on the kept record, and archive the duplicate with a pointer so the AI
     stops suggesting it. Nothing is deleted. Logged. No commit. Callers check permissions and eligibility.
     """
-    from app.models.pet_claim import PetClaim
     from app.models.pet_history import PetHistory
     from app.models.report_match import ReportMatch
     from app.utils.case_groups import PENDING_MATCH_STATUSES, SUPERSEDED_STATUS, case_root, refresh_pet_behavior, resync_case_pet_identity
@@ -1475,23 +1404,17 @@ def merge_pet_records(db: Session, dup: Pet, keep: Pet, actor: User, reason: str
                                                        Report.report_id.in_(db.query(ReportMatch.source_report_id).filter(
                                                            ReportMatch.matched_pet_id == keep.pet_id)))).all()]
     move(Report, "pet_id", "reports")
-    move(PetClaim, "pet_id", "claims")
     move(PetHistory, "pet_id", "history entries")
-    from app.models.pet import PetVaccination
-    move(PetVaccination, "pet_id", "vaccinations")
     from app.models.warning import OwnerWarning
     move(OwnerWarning, "pet_id", "warnings")
     from app.models.report_dispute import ReportDispute
     move(ReportDispute, "pet_id", "disputes")
     move(ReportDispute, "contested_pet_id", "disputes")
-    from app.models.pet_qr import PetQRScan
-    move(PetQRScan, "pet_id", "QR scans")
     from app.models.pet_owner_confirmation import PetOwnerConfirmation
     move(PetOwnerConfirmation, "pet_id", "owner confirmations")
     from app.models.pet_match_confirmation import PetMatchConfirmationRequest
     move(PetMatchConfirmationRequest, "pet_id", "pet match confirmation requests")
-    from app.models.report import Adoption, ReportReturn
-    move(Adoption, "created_pet_id", "adoptions")
+    from app.models.report import ReportReturn
     move(ReportReturn, "pet_id", "owner returns")
 
     # Fill gaps on the kept record from the duplicate (never overwrite what the kept record has)
@@ -1540,7 +1463,7 @@ def merge_pet_record(
 ):
     """
     Staff: this pet record is a duplicate of another one (e.g. "No Name" is really Kippy). Everything linked to it
-    (reports, look-alike suggestions, claims, history, vaccinations, warnings...) moves to the record that is kept; this
+    (reports, look-alike suggestions, claims, history, warnings...) moves to the record that is kept; this
     one is archived with a pointer, so the AI stops suggesting it. Nothing is deleted. Reason required, logged.
     """
     if current_user.role_id not in (2, 3, 4):
@@ -1587,7 +1510,6 @@ def remove_pet(
     Does NOT hard-delete from the database.
     Preserves all reports, vaccination logs, QR records, and audit history.
     """
-    from app.models.pet_claim import PetClaim
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
@@ -1614,12 +1536,6 @@ def remove_pet(
 
     # Soft-remove: mark pet as Archived
     db_pet.status = "Archived"
-
-    # Invalidate any pending active AI match claims
-    db.query(PetClaim).filter(
-        PetClaim.pet_id == pet_id,
-        PetClaim.status.in_(["Potential Owner Match", "Possible Match Found", "Pending Review"])
-    ).delete(synchronize_session=False)
 
     db.commit()
     db.refresh(db_pet)
@@ -1930,23 +1846,15 @@ def delete_pet_record(
         raise HTTPException(status_code=404, detail="Pet not found")
 
     try:
-        # 1. Clean up QR Codes
-        from app.models.pet_qr import PetQRCode
-        db.query(PetQRCode).filter(PetQRCode.pet_id == pet_id).delete(synchronize_session=False)
-
-        # 2. Clean up AI Matches
+        # 1. Clean up AI Matches
         from app.models.report_match import ReportMatch
         db.query(ReportMatch).filter(ReportMatch.matched_pet_id == pet_id).delete(synchronize_session=False)
 
-        # 3. Clean up Pet Claims
-        from app.models.pet_claim import PetClaim
-        db.query(PetClaim).filter(PetClaim.pet_id == pet_id).delete(synchronize_session=False)
-
-        # 4. Unlink Reports pointing to this pet
+        # 2. Unlink Reports pointing to this pet
         from app.models.report import Report
         db.query(Report).filter(Report.pet_id == pet_id).update({"pet_id": None}, synchronize_session=False)
 
-        # 5. Delete the pet
+        # 3. Delete the pet
         pet_name = db_pet.pet_name
         db.delete(db_pet)
         db.commit()

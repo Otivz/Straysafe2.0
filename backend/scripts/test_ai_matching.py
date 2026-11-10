@@ -7,7 +7,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.database import engine, Base, SessionLocal
-from app.models.report import Report, HoldingAnimal
+from app.models.report import Report
 from app.models.pet import Pet
 from app.models.user import User
 from app.models.report_match import ReportMatch
