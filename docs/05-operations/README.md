@@ -51,7 +51,7 @@ Backend tests use throwaway SQLite files, not the application database. Do not p
 
 ## Build and release
 
-- **Android app:** [`.github/workflows/build-apk.yml`](../../.github/workflows/build-apk.yml) builds a **debug** APK on manual run and on pushes that change `frontend/`. It needs the repository variable `VITE_API_BASE_URL` and the secrets for the browser-side keys. The APK is an artifact kept for 30 days. A signed release build and store publishing: **none**.
+- **Android app:** [`.github/workflows/build-apk.yml`](../../.github/workflows/build-apk.yml) builds a **debug** APK only when started by hand (Actions → Build Android APK → Run workflow); a push never starts it. Nothing has to be set first: the repository variable `VITE_API_BASE_URL` is optional (unset or blank, the app asks for the backend address the first time it opens; a LAN `http://` address or a tunnel address is typed into the app, not built in), a value that is set must be a plain `https://` address (the first step stops the run and shows the value otherwise), and the secrets for the browser-side keys (Cloudinary) are optional too. The APK is the artifact `StraySafe-Resident-debug-apk`, kept for 14 days; see [ANDROID_RESIDENT_APP](ANDROID_RESIDENT_APP.md). A signed release build and store publishing: **none**.
 - **Web client and API:** no pipeline, container image or hosting configuration exists in the repository. Release is **manual and undocumented** beyond [DEPLOYMENT_GUIDE](../../DEPLOYMENT_GUIDE.md) (a plan).
 - **Branching:** work is merged through pull requests (up to #92 on 2026-10-24). Branch protection and required checks: **Unverified** (a GitHub setting, not visible in the repository).
 

@@ -12,7 +12,8 @@
 #
 # Optional settings (GitHub -> Settings -> Secrets and variables -> Actions):
 #   Variables tab: VITE_API_BASE_URL   an HTTPS address the app starts with, e.g. https://api.example.org (no trailing slash; not
-#                                      localhost). Leave it unset to have the app ask for an address the first time it opens.
+#                                      localhost). Leave it unset (a blank value counts as unset) to have the app ask for an address
+#                                      the first time it opens.
 #   Secrets tab:   VITE_CLOUDINARY_CLOUD_NAME, VITE_CLOUDINARY_UPLOAD_PRESET   (photos added to a report's case chat and to ownership
 #                  claims go straight to Cloudinary; same values as in your .env; without them the app builds but those uploads fail)
 # These are browser-side values (they end up inside the app anyway); keeping them in GitHub settings keeps .env out of git.
@@ -38,7 +39,7 @@ jobs:
       run:
         working-directory: frontend
     env:
-      VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+      # VITE_API_BASE_URL is passed on by the "Check the settings" step: cleaned, and only when it holds an address.
       VITE_CLOUDINARY_CLOUD_NAME: ${{ secrets.VITE_CLOUDINARY_CLOUD_NAME }}
       VITE_CLOUDINARY_UPLOAD_PRESET: ${{ secrets.VITE_CLOUDINARY_UPLOAD_PRESET }}
       STRAYSAFE_ANDROID_DEBUG: "true"      # read by capacitor.config.ts (the app's page is served as http://localhost so it may call an http LAN address)
@@ -47,14 +48,25 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check the settings
+        env:
+          RAW_API_URL: ${{ vars.VITE_API_BASE_URL }}      # as saved in GitHub; cleaned below, then passed on as VITE_API_BASE_URL
         run: |
-          if [ -z "$VITE_API_BASE_URL" ]; then
+          # No variable, an empty one, or one that holds only blanks (a stray space or line break) means "no address built in": the debug
+          # app opens Connection Settings the first time and the address is typed on the phone. Only a value that is really there is checked.
+          url="${RAW_API_URL#"${RAW_API_URL%%[![:space:]]*}"}"
+          url="${url%"${url##*[![:space:]]}"}"
+          if [ -z "$url" ]; then
             echo "No VITE_API_BASE_URL variable: the app will open Connection Settings the first time, and the address is typed on the phone."
           else
-            case "$VITE_API_BASE_URL" in
-              https://*) echo "The app will start with: $VITE_API_BASE_URL (changeable on the phone)" ;;
+            case "$url" in
+              *[[:space:]]*)
+                echo "::error::VITE_API_BASE_URL (\"$url\") has a space or a line break inside it. Use one address, or delete the variable."
+                exit 1 ;;
+              https://*)
+                echo "The app will start with: $url (changeable on the phone)"
+                echo "VITE_API_BASE_URL=$url" >> "$GITHUB_ENV" ;;
               *)
-                echo "::error::VITE_API_BASE_URL must start with https:// (or be removed: a plain-http address for your own network is typed into the app, not built in)."
+                echo "::error::VITE_API_BASE_URL is set to \"$url\", but it must start with https:// (or be removed: a plain-http address for your own network is typed into the app, not built in). It is in Settings -> Secrets and variables -> Actions -> Variables."
                 exit 1 ;;
             esac
           fi
