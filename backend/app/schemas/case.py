@@ -13,14 +13,14 @@ CaseStatusId = Literal["reported", "under_review", "in_progress", "closed"]
 OpenStatusId = Literal["reported", "under_review", "in_progress"]
 PriorityId = Literal["urgent", "high", "normal", "low"]
 DispositionId = Literal["resolved_intervention", "owner_compliance", "pet_recovered", "handed_off",
-                        "no_further_sightings", "unresolved_other", "invalid_report", "duplicate_report"]
+                        "no_further_sightings", "unresolved_other", "invalid_report", "duplicate_report", "withdrawn_by_reporter"]
 IncidentId = Literal["not_reviewed", "verified", "partial", "unverified", "invalid"]
 SufficiencyId = Literal["not_assessed", "sufficient", "needs_more"]
 UrgencyId = Literal["not_assessed", "immediate", "possible", "none"]
 IdentityId = Literal["unidentified", "possible_match", "identified"]
 OwnershipId = Literal["unknown", "claimed", "under_review", "confirmed", "disputed", "unconfirmed"]
 OrgTypeId = Literal["barangay", "animal_control", "veterinary", "animal_welfare", "wildlife", "other"]
-ReferralStatusId = Literal["sent", "acknowledged", "in_progress", "completed", "declined", "no_response"]
+ReferralStatusId = Literal["to_contact", "sent", "acknowledged", "in_progress", "completed", "declined", "no_response"]
 ContactMethodId = Literal["in_person", "phone", "message", "letter"]
 ContactOutcomeId = Literal["cooperative", "denied_ownership", "no_response", "other"]
 FollowUpKindId = Literal["follow_up", "site_check", "reporter_update", "referral_check", "warning_end", "post_closure"]
@@ -107,6 +107,8 @@ class ReferralIn(BaseModel):
     is_urgent: bool = False
     referred_at: Optional[datetime] = None
     notes: Optional[str] = Field(None, max_length=2000)
+    # False: the assistance is written down but nobody has been contacted yet (status to_contact). True (the default): it was sent.
+    contacted: bool = True
 
 
 class ReferralUpdateIn(BaseModel):
@@ -117,6 +119,10 @@ class ReferralUpdateIn(BaseModel):
     follow_up_at: Optional[datetime] = None
     update_date: Optional[datetime] = None
     evidence_url: Optional[str] = Field(None, max_length=500)
+    # The contact attempt itself (how and who), when this update records one
+    contact_method: Optional[ContactMethodId] = None
+    contact_person: Optional[str] = Field(None, max_length=150)
+    contact_detail: Optional[str] = Field(None, max_length=255)
 
     @field_validator("evidence_url")
     @classmethod

@@ -87,7 +87,7 @@ from app.utils.case_review import (
     review_permission,
 )
 from app.utils.auth import get_current_staff_or_admin, get_current_user, verify_subdivision_scope
-from app.utils import case_policy, case_vocab
+from app.utils import case_policy, case_vocab, lost_pet_rules, public_text
 from app.utils.pet_ownership import became_owner_after
 from app.utils.staff_assignment import require_active_assignee
 from app.limiter import limiter
@@ -2144,6 +2144,20 @@ def validate_report_images(
     return {"valid": True, "status": "success"}
 
 
+def _report_response(db: Session, db_report: Report) -> ReportResponse:
+    """The answer for a report that already exists (a retried submission): the same shape create_report answers with."""
+    rep = ReportResponse.model_validate(db_report)
+    rep.status_id = db_report.current_status_id  # type: ignore[assignment]
+    rep.reporter_name = db_report.reporter.name if db_report.reporter else "Unknown User"
+    rep.reporter_photo = db_report.reporter.profile_picture if db_report.reporter else None
+    populate_pet_and_owner_info(rep, db_report, db)
+    populate_handler_info(rep, db_report)
+    populate_verification_and_disputes(rep, db_report, db)
+    populate_duplicate_and_merge_info(rep, db_report, db)
+    populate_warning_info(rep, db_report, db)
+    return rep
+
+
 @router.post("/", response_model=ReportResponse)
 @limiter.limit("20/minute")
 def create_report(
@@ -2164,6 +2178,8 @@ def create_report(
             )
 
         report_data = report_in.model_dump()
+        last_seen_at = report_data.pop("last_seen_at", None)     # not a report column: it goes into the Lost Pet snapshot
+        client_request_id = report_data.pop("client_request_id", None)     # a Lost Pet submission's retry key (kept on a Lost Pet report only)
 
         # Any kind of animal can be reported (dog, cat, bird, small mammal, reptile, livestock, wildlife, other): the
         # report needs no pet registration. Given as an id ('small_mammal') or a label ('Small mammal').
@@ -2177,8 +2193,9 @@ def create_report(
                 )
             report_data["animal_type"] = normalized_animal
 
-        # Hard validation: Prevent deceased pets from being reported as Lost or linked to lost reports
-        if report_data.get("pet_id"):
+        # A pet named on a report. A resident names one only on a Lost Pet report, and only their own registered pet (checked below,
+        # once the kind of report is known). Staff naming a pet on another kind of report keep the older checks.
+        if report_data.get("pet_id") and current_user.role_id != 1:
             pet_to_check = db.query(Pet).filter(Pet.pet_id == report_data["pet_id"]).first()
             if not pet_to_check:
                 raise HTTPException(status_code=404, detail="Selected pet not found.")
@@ -2187,9 +2204,11 @@ def create_report(
                     status_code=400,
                     detail="This pet is marked as deceased and cannot be reported as lost."
                 )
-            # Mark the pet status as 'Lost' if creating a lost pet report
-            if report_data.get("category_id") == 6:
-                pet_to_check.status = "Lost"
+        if current_user.role_id == 1:
+            # What the Leader decides is never taken from a resident's request
+            for flag in lost_pet_rules.RESIDENT_IGNORED_REPORT_FIELDS:
+                report_data.pop(flag, None)
+            lost_pet_rules.refuse_marker(report_data.get("description"))
 
         # Map frontend "status_id" → DB "current_status_id"
         raw_status_id = report_data.pop("status_id", 1) or 1
@@ -2227,6 +2246,33 @@ def create_report(
         if report_data.get("is_sensitive") is None:
             report_data["is_sensitive"] = bool(chosen_category and chosen_category.category_name == case_vocab.CATEGORY_FAMILIES[case_vocab.NUISANCE])
 
+        # Registration-first Lost Pet rule (utils/lost_pet_rules.py): a Lost Pet report is a resident's own registered pet, one
+        # active report per pet (the pet row is locked, so two requests together cannot both pass). What the report says about
+        # the animal comes from the pet record, never from the request.
+        lost_pet = None
+        if chosen_family == case_vocab.LOST_PET:
+            # Retry ids are scoped to the resident, including submissions about different pets. Serialize before the pet
+            # lock so the same key cannot create two cases by taking two different pet locks concurrently.
+            db.query(User.user_id).filter(User.user_id == current_user.user_id).with_for_update().first()
+            lost_pet = lost_pet_rules.require_own_pet_for_lost_report(db, current_user, report_data.get("pet_id"))
+            # A retry of a submission that already went through (same id, same resident, same pet) is answered with the FIRST report
+            # instead of a second one. The pet row is locked above, so two copies arriving together cannot both pass this point.
+            if client_request_id:
+                first = db.query(Report).filter(Report.user_id == current_user.user_id,
+                                                Report.client_request_id == client_request_id).with_for_update().first()
+                if first is not None:
+                    if first.pet_id != lost_pet.pet_id:
+                        raise HTTPException(status_code=409, detail="This submission id was already used for another pet. Start a new report.")
+                    return _report_response(db, first)
+            lost_pet_rules.refuse_if_active_report(db, lost_pet)
+            report_data.update(lost_pet_rules.report_columns_from_pet(lost_pet))
+            last_seen_at = lost_pet_rules.clean_last_seen(last_seen_at)
+            # What the owner writes is published in the notice neighbors read: the server checks it, not only the form
+            report_data["description"] = public_text.require_public_text(report_data.get("description"), "What you wrote about your pet", 1000)
+            report_data["client_request_id"] = client_request_id
+        elif current_user.role_id == 1:
+            report_data["pet_id"] = None
+
         # Preserve initial found location
         report_data["initial_latitude"] = report_data.get("latitude")
         report_data["initial_longitude"] = report_data.get("longitude")
@@ -2241,6 +2287,10 @@ def create_report(
         db_report = Report(**report_data)
         db.add(db_report)
         db.flush()  # Get report_id before committing
+        if lost_pet is not None:
+            # The pet as it is now, frozen with the report (the registry can be edited later without changing this report's history)
+            db_report.pet_snapshot = lost_pet_rules.build_snapshot(db, lost_pet, db_report, last_seen_at)
+            lost_pet.status = "Lost"
 
         # Generate initial AI suggestions based on report details
         from app.utils.ai_suggestions import generate_ai_suggestions
@@ -2303,6 +2353,14 @@ def create_report(
                     is_evidence=False
                 )
                 db.add(pet_media)
+
+        # A Lost Pet report publishes its Community notice in THIS transaction: there is no approval step and no acknowledgment, and a
+        # report that was filed never exists without its notice (any failure here undoes the whole submission). Found-animal notices
+        # keep their own request and the subdivision's publication setting.
+        if lost_pet is not None:
+            from app.services import lost_pet_lifecycle as LP
+            LP.publish_lost_pet_notice(db, db_report, current_user, last_seen_at=last_seen_at, last_seen_location=db_report.landmark,
+                                       last_seen_lat=db_report.latitude, last_seen_lng=db_report.longitude, owner_note=db_report.description, req=req)
 
         db.commit()
         db.refresh(db_report)
@@ -3054,9 +3112,11 @@ def cancel_report_by_citizen(
     if report.user_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Not authorized to cancel this report")
     
-    # Status 14 is False Alarm / Dismissed, we can use it as cancelled.
+    # Withdrawn by the person who filed it: closed with that reason (never as an invalid report by someone's decision). The central
+    # closure hook ends the notice as withdrawn and puts a missing pet back to Active.
+    from app.services import case_lifecycle as _L
     old_status = report.current_status_id
-    report.current_status_id = 14
+    _L.withdraw_case(db, report, current_user, ip=req.client.host if req.client else None, user_agent=req.headers.get("user-agent"))
     
     try:
         db.commit()
@@ -3106,6 +3166,20 @@ def confirm_reunited_by_citizen(
 
     if not (is_reporter or is_owner or is_staff):
         raise HTTPException(status_code=403, detail="Not authorized to confirm reunion for this report.")
+    if is_staff:
+        verify_subdivision_scope(current_user, report.subdivision_id, db=db)       # another subdivision's Leader cannot close this one
+    from app.utils.case_vocab import is_lost_pet_report as _is_lost
+    if _is_lost(report):
+        # A missing pet is recovered by the OWNER's confirmation, through the one recovery operation (services/lost_pet_lifecycle.py)
+        if is_staff and not (is_reporter or is_owner):
+            raise HTTPException(status_code=403, detail="Only the owner can confirm that the pet is home. A Leader records the owner's confirmation from the case screen.")
+        from app.models.lost_pet_alert import LostPetAlert
+        from app.services import lost_pet_lifecycle as LP
+        _alert = db.query(LostPetAlert).filter(LostPetAlert.report_id == report.report_id, LostPetAlert.alert_type == "lost_pet").first()
+        if _alert is not None:
+            _done = LP.confirm_recovery(db, _alert, source="owner_app", actor=current_user, note=(payload.notes or "").strip() or None, req=req)
+            db.commit()
+            return {"message": "Pet recovery confirmed successfully. The notice and the case are closed.", "alert_id": _alert.alert_id, "already": _done["already"]}
 
     # Phase 7: "Pet Recovered" is for an actual lost-pet report. A roaming owned-pet complaint stays on its
     # complaint / observation path (the owner can still file a dispute); a resident can't close it as reunited.
@@ -3353,6 +3427,12 @@ def update_report(
         verify_subdivision_scope(current_user, db_report.subdivision_id, db=db)
     else:
         raise HTTPException(status_code=403, detail="Not authorized to edit this report.")
+
+    # A report can't become a Lost Pet report (or stop being one) by being re-categorised: that would skip the registration-first rules
+    if "category_id" in update_data and update_data["category_id"] != db_report.category_id:
+        lost_pet_rules.refuse_category_change(db, db_report, update_data["category_id"])
+    if current_user.role_id == 1 and "description" in update_data:
+        lost_pet_rules.refuse_marker(update_data["description"])
 
     # Visibility is changed only through PATCH /reports/{id}/visibility (leader decision + audit log), never here
     for key in ("visibility", "visibility_decided_by", "visibility_decided_at", "visibility_reason"):
@@ -3690,6 +3770,13 @@ def update_report_status(
         raise HTTPException(status_code=404, detail="Report not found")
 
     verify_subdivision_scope(current_user, report.subdivision_id, db=db)
+
+    from app.utils.case_vocab import is_lost_pet_report as _is_lost_report
+    if _is_lost_report(report):
+        from app.services import lost_pet_lifecycle as LP
+        report = LP.lock_case(db, report.report_id)
+    if _is_lost_report(report) and status_update.status_id == 9:
+        raise HTTPException(status_code=409, detail="A missing pet is recovered by the owner's confirmation. Record it from the case screen (Record owner confirmation).")
 
     require_barangay_approval(report, current_user, status_update.status_id)
     if current_user.role_id == 2:

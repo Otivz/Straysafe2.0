@@ -8,8 +8,8 @@ import { residentPath } from '../config';
 import { CATEGORIES } from '../data/constants';
 import { useResidentData } from '../data/context';
 import { accepts } from '../data/entries';
-import { feed, latestAdvisory, recentUpdates, unreadCount } from '../data/selectors';
-import { useStartReport } from '../lib/flow';
+import { feed, latestAdvisory, recentUpdates, reportablePets, unreadCount } from '../data/selectors';
+import { registerForLostPath, useStartReport } from '../lib/flow';
 import { useNow } from '../lib/hooks';
 import { useSubdivisionName } from '../lib/useOffice';
 
@@ -24,10 +24,15 @@ export default function HomePage() {
   const now = useNow();
   const unread = unreadCount(state);
   const advisory = latestAdvisory(state);
+  // Lost Pet is for a registered pet of this resident: with none, the shortcut leads to registering one first
+  const noPets = reportablePets(state).length === 0;
 
   const attention: Attention[] = [];
   for (const c of state.claims) {
     if (c.status === 'needs_info') attention.push({ id: c.id, icon: UserCheck, title: 'More information requested', meta: 'About your ownership claim', to: `/claims/${c.id}` });
+  }
+  for (const o of state.ownershipRequests ?? []) {
+    attention.push({ id: `pet-${o.id}`, icon: Dog, title: `Is ${o.petName} your pet?`, meta: 'Your subdivision office linked this pet to you', to: '/pets' });
   }
   for (const r of state.reports) {
     if (r.status !== 'closed' && r.updates[0]?.kind === 'message') attention.push({ id: r.id, icon: MessageSquare, title: 'Message from the subdivision', meta: `${r.id} · ${r.title}`, to: `/reports/${r.id}` });
@@ -35,7 +40,8 @@ export default function HomePage() {
   for (const n of state.notices) {
     if (!n.mine || n.type !== 'lost_pet' || n.status !== 'active') continue;
     const name = state.reports.find((r) => r.noticeId === n.id)?.petName ?? 'Your pet';
-    attention.push({ id: n.id, icon: Footprints, title: `${name} is still missing`, meta: `${n.sightings.length} ${n.sightings.length === 1 ? 'sighting' : 'sightings'} so far`, to: `/community/${n.id}/sightings` });
+    const count = n.sightingCount ?? n.sightings.length;
+    attention.push({ id: n.id, icon: Footprints, title: `${name} is still missing`, meta: `${count} ${count === 1 ? 'sighting' : 'sightings'} so far`, to: `/community/${n.id}/sightings` });
   }
 
   const updates = recentUpdates(state, 3);
@@ -65,7 +71,9 @@ export default function HomePage() {
 
       <div className="rs-tiles" role="group" aria-label="Quick actions">
         <Link to={residentPath('/report')} className="rs-tile rs-tile--primary"><Plus size={22} aria-hidden="true" /><span>Report a concern</span></Link>
-        {accepts(state.accepting, 'lost_pet') ? <button type="button" className="rs-tile" onClick={() => start('lost_pet')}><Search size={22} aria-hidden="true" /><span>My pet is lost</span></button> : null}
+        {accepts(state.accepting, 'lost_pet') ? (noPets
+          ? <Link to={registerForLostPath()} className="rs-tile rs-tile--muted"><Search size={22} aria-hidden="true" /><span>My pet is lost<span className="rs-tile__hint">Register your pet first</span></span></Link>
+          : <button type="button" className="rs-tile" onClick={() => start('lost_pet')}><Search size={22} aria-hidden="true" /><span>My pet is lost</span></button>) : null}
         {accepts(state.accepting, 'found_animal') ? <button type="button" className="rs-tile" onClick={() => start('found_animal')}><PawPrint size={22} aria-hidden="true" /><span>I found an animal</span></button> : null}
         <Link to={residentPath('/pets')} className="rs-tile"><Dog size={22} aria-hidden="true" /><span>My pets</span></Link>
       </div>

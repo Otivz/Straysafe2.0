@@ -8,6 +8,8 @@
 // session expiry and a lost connection; and for the resident: sign-in, My reports, filing a report, community notices, an
 // ownership claim, a sighting and registering a new account with its emailed code.
 import assert from 'node:assert/strict';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { ACCOUNTS, PASSWORD, apiLogin, delay, openBrowser, startStack } from './_liveHarness.mjs';
 
 const ADMIN = '';
@@ -70,8 +72,39 @@ const ref = (id) => `SS-${new Date().getFullYear()}-${String(id).padStart(4, '0'
 const SAFETY = 2;
 const INJURED = 3;
 const FOUND = 5;
+const LOST = 4;
 /** Scopes a helper to the open dialog (the page behind it can have a control of the same name). */
 const DIALOG = `document.querySelector('dialog[open]')`;
+
+/** Check the changed screens at both supported widths; optional screenshots contain only this run's synthetic fixtures. */
+async function checkResponsive(name, screenshot = false) {
+  try {
+    for (const [form, width, height] of [['mobile', 390, 844], ['desktop', 1280, 900]]) {
+      await page.command('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: form === 'mobile' });
+      await delay(200);
+      const layout = await page.evaluate(`(() => ({
+        viewport: innerWidth, document: document.documentElement.scrollWidth,
+        overflowing: [...document.querySelectorAll('main *')].filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.right > innerWidth + 1; }).slice(0, 5).map((el) => el.tagName + '.' + el.className),
+      }))()`);
+      assert(layout.document <= layout.viewport + 1, `${name} ${form} overflows: ${JSON.stringify(layout)}`);
+      if (screenshot && form === 'mobile' && process.env.E2E_SCREENSHOT_DIR) {
+        await mkdir(process.env.E2E_SCREENSHOT_DIR, { recursive: true });
+        const { data } = await page.command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+        await writeFile(join(process.env.E2E_SCREENSHOT_DIR, `${name}-${form}.png`), Buffer.from(data, 'base64'));
+      }
+    }
+  } finally {
+    await page.command('Emulation.clearDeviceMetricsOverride');
+  }
+}
+// Reports and records the lost-pet steps make, which later steps read (the full run creates them in this order)
+let mochiReport = null;
+let pepperReport = null;
+let bruno = null;
+// the Lost Pet end-to-end steps
+let mochiAlert = null;
+let lead = null;
+let coordination = null;
 
 try {
   stack = await startStack();
@@ -110,8 +143,12 @@ try {
     await page.waitText('Needs your attention');
     await page.waitText('Selera Homes');
     const counts = await page.evaluate(`[...document.querySelectorAll('.sa-stat')].map((s) => s.innerText.replace(/\\s+/g, ' ').trim())`);
-    // Five seeded cases are open: the nuisance, safety and lost-pet reports are new; the injured and found cases are under review.
-    assert(counts.some((c) => /^3 New reports/.test(c)), `new reports: ${counts}`);
+    // Five seeded cases are open. The nuisance and safety reports are new; the lost-pet report is not a report waiting for review (its notice is
+    // published by itself); the injured and found cases are under review.
+    assert(counts.some((c) => /^2 New reports/.test(c)), `new reports: ${counts}`);
+    assert((await page.text()).includes('Missing pets'), 'the missing pet is listed on its own');
+    const attention = await page.evaluate(`document.querySelector('#attention')?.innerText || ''`);
+    assert(!attention.includes(ref(LOST)), 'and it is not a task for being new');
     assert(counts.some((c) => /^5 Active cases/.test(c)), `active cases: ${counts}`);
     assert.equal(await page.evaluate('!!sessionStorage.getItem("access_token") && !!sessionStorage.getItem("staff_user")'), true);
     // What the Admin read from the server to build it (the case maps use the server's own reporting area, not a sample one)
@@ -350,11 +387,14 @@ try {
 
       await page.goto(`${ADMIN}/settings?section=privacy`);
       await page.waitText('Community publication');
-      await page.click('Publish as soon as it is ready', { selector: 'label' });             // the first group: lost-pet notices
+      await page.waitText('Published at once, always.');                                      // a missing pet's notice is not a choice any more
+      await page.click('Publish as soon as it is ready', { selector: 'label' });             // the only group left: found-animal notices
       await page.click('Save rules');
       await page.waitText('Privacy and access rules saved');
       s = (await leaderApi.get('/cases/settings/1')).body;
-      assert.deepEqual(s.publication, { lost_pet: 'immediate', found_animal: 'review' });
+      assert.equal(s.publication.found_animal, 'immediate');
+      assert.equal(s.publication.lost_pet, original.publication.lost_pet, 'the old stored value is left as it was');
+      assert.equal((await leaderApi.get('/cases/categories')).body.publication.lost_pet, 'immediate', 'what residents are told: published at once, whatever an older value says');
 
       await page.goto(`${ADMIN}/settings?section=profile`);
       await page.waitText('Subdivision profile');
@@ -534,39 +574,77 @@ try {
     await page.waitText('A tan dog keeps knocking over the bins by Gate 3 every evening.');
   });
 
-  await step('resident: a lost-pet report waits for the Leader\'s review under the subdivision\'s setting, and every screen says so', async () => {
-    // The seeded subdivision keeps the default publication setting (review, for lost-pet and for found-animal notices).
+  await step('resident: a lost-pet report is about a registered pet, and the report itself publishes its notice: nothing waits for the Leader', async () => {
     await page.goto(`${RESIDENT}/report`);
     await page.waitText('What would you like to report?');
     await page.click('Lost pet');
     await page.waitText('About your pet');
-    await page.waitText('An administrator reviews this before a notice is shown to neighbours');    // the note on the first step follows the setting
-    await page.click('Dog', { selector: 'label' });
-    await page.fill('Pet’s name', 'Biscuit');
-    await page.fill('Describe your pet', 'Small tan puppy with a blue collar, very friendly and answers to Biscuit.');
+    await page.waitText('After you submit, a notice with your pet’s photo, description and the general area is visible to neighbours');    // the note says it goes out
+    await page.waitText('Which pet is missing?');
+    await page.waitText('Mochi’s registered profile');                       // her one registered pet is chosen for her, and its profile is read-only
+    let text = await page.text();
+    assert(text.includes('White and gold') && text.includes('Shih Tzu'), 'the profile is read from the registration');
+    assert(!text.includes('Pet’s name') && !text.includes('Describe your pet'), 'nothing about the pet is typed again');
+    assert(!text.includes('An administrator reviews this'), 'no review is promised');
+    await page.fill('Anything else that may help?', 'Slipped out of the gate this morning. Answers to Mochi and loves the clubhouse lawn.');
     await page.click('Continue', { selector: 'button[type=submit]' });
     await page.waitText('Where was the animal?');
     await page.click('Selera Homes Main Entrance Gate', { selector: 'button' });
     await page.waitText('Pin placed, inside the reporting area');
     await page.click('Confirm location');
     await page.waitText('Review and submit');
-    await page.waitText('Reviewed before sharing');
-    assert(!(await page.text()).includes('Publish notice and submit'), 'no promise that the notice goes out at once');
-    await page.click('Submit for review');
-    await page.waitText('Please confirm to send the notice');                                         // consent is still asked for, worded for the review
-    await page.click('I understand this notice and photo will be visible to my neighbours in Community once an administrator approves it', { selector: 'label' });
-    await page.click('Submit for review');
-    await page.waitText('An administrator reviews your notice');
-    const text = await page.text();
-    assert(text.includes('Report submitted') && !text.includes('Your notice is live'), 'the confirmation does not claim the notice is live');
+    await page.waitText('Visible to neighbours');
+    text = await page.text();
+    assert(text.includes('Mochi'), 'the review names her pet');
+    assert(!text.includes('Reviewed before sharing') && !text.includes('Submit for review'), 'nothing is held back for review');
+    await page.click('Publish notice and submit');
+    await page.waitText('Please confirm to publish the notice');                                     // consent is still asked for: the notice and photo become visible
+    await page.click('I understand this notice and photo will be visible to my neighbours in Community.', { selector: 'label' });
+    await page.click('Publish notice and submit');
+    await page.waitText('Your notice is live');
+    text = await page.text();
+    assert(text.includes('Visible to neighbours') && !text.includes('administrator reviews'), 'the confirmation says the notice is visible to neighbours, not waiting for a review');
     const owner = await apiLogin(stack.apiUrl, ACCOUNTS.resident, PASSWORD);
-    const filed = (await owner.get('/reports/?mine=true')).body.find((r) => String(r.description).includes('Small tan puppy'));
-    assert(filed, 'the lost-pet report is on the server');
+    const pets = (await owner.get('/pets/')).body;
+    const mochi = pets.find((p) => p.pet_name === 'Mochi');
+    mochiReport = (await owner.get('/reports/?mine=true')).body.find((r) => String(r.description).includes('clubhouse lawn'));
+    assert(mochiReport, 'the lost-pet report is on the server');
+    assert.equal(mochiReport.pet_id, mochi.pet_id, 'and it names her registered pet');
+    // the case, the notice and the pet's missing state were made in one step
     const alerts = (await owner.get('/lost-pet-alerts/mine')).body.results;
-    assert.equal(alerts.find((a) => a.report_id === filed.report_id)?.status, 'requested', 'the notice was requested and is waiting for the Leader');
+    const alert = alerts.find((a) => a.report_id === mochiReport.report_id);
+    assert.equal(alert?.status, 'active', 'the notice is live as soon as the report is filed');
+    assert.equal(mochi.status, 'Lost', 'the pet is marked missing in the registry');
     const neighbour = await apiLogin(stack.apiUrl, ACCOUNTS.owner, PASSWORD);
-    const active = (await neighbour.get('/lost-pet-alerts/active')).body.results;
-    assert(!active.some((a) => a.report_id === filed.report_id), 'neighbours cannot see it before it is approved');
+    assert((await neighbour.get('/lost-pet-alerts/active')).body.results.some((a) => a.report_id === mochiReport.report_id), 'neighbours see it at once');
+    // nothing for the Leader to approve or acknowledge
+    assert(!(await leaderApi.get('/lost-pet-alerts/all')).body.results.some((a) => a.status === 'requested'), 'no notice is waiting for review');
+    assert(!(await leaderApi.get('/notifications/me')).body.some((n) => n.type === 'lost_pet_alert_request'), 'no request to approve was sent to the Leader');
+    // What the Leader's own view of the case holds: the pet as it was when the report was filed, and that only the reporter linked it so far
+    const seen = (await leaderApi.get(`/cases/${mochiReport.report_id}`)).body;
+    assert.equal(seen.pet?.as_reported?.name, 'Mochi');
+    assert(String(seen.pet.last_seen.as_filed.location).includes('Selera Homes Main Entrance Gate'), `where it was last seen is kept: ${seen.pet.last_seen.as_filed.location}`);
+    assert.deepEqual([seen.identity.status, seen.identity.decided, seen.pet.linked_by_reporter], ['identified', false, true], 'linked by the reporter, not decided by anyone');
+  });
+
+  await step('resident: a pet that is already reported missing is not offered again, and the server refuses a second report for it', async () => {
+    await page.goto(`${RESIDENT}/report`);
+    await page.waitText('What would you like to report?');
+    await page.click('Lost pet');
+    await page.waitText('Each of your pets already has an active lost-pet report.');            // Mochi is her only pet so far
+    await page.waitText('Already reported missing');
+    assert.equal(await page.evaluate(`[...document.querySelectorAll('button')].find((b) => b.innerText.trim() === 'Continue')?.disabled`), true, 'there is nothing to continue with');
+    await page.click('View report', { selector: 'a' });
+    await page.waitText('Report received');                                                      // it leads to the report itself
+    // the server refuses it as well, whatever a screen offers
+    const rita = await apiLogin(stack.apiUrl, ACCOUNTS.resident, PASSWORD);
+    const mochi = (await rita.get('/pets/')).body.find((p) => p.pet_name === 'Mochi');
+    const lostCategory = (await rita.get('/cases/categories')).body.categories.find((c) => c.id === 'lost_pet');
+    const again = await rita.post('/reports/', { category_id: lostCategory.category_id, animal_type: 'Dog', description: 'Asking a second time.', latitude: 14.8012, longitude: 121.004, landmark: 'Gate 2', animal_count: 1, pet_id: mochi.pet_id });
+    assert.equal(again.status, 409, JSON.stringify(again.body));
+    assert.equal(again.body.detail.code, 'LOST_REPORT_EXISTS');
+    assert.equal(again.body.detail.report_id, mochiReport.report_id, 'and it points at the report that is already open');
+    assert.equal((await rita.get('/reports/?mine=true')).body.filter((r) => r.pet_id === mochi.pet_id).length, 1, 'still one report for the pet');
   });
 
   await step('resident: when the Leader chooses to publish found-animal notices at once, the screens say so and the notice is live', async () => {
@@ -789,7 +867,7 @@ try {
     await page.click('Selera Homes Main Entrance Gate', { selector: 'button' });
     await page.waitText('Pin placed, inside the reporting area');
     await page.click('Use this place');
-    await page.fill('What did you see?', 'Sitting under a parked car near the carport, looked calm and well.');
+    await page.fill('What did you see?', 'Sitting under a parked car near the clubhouse, looked calm and well.');
     await page.click('Share this sighting', { selector: 'button[type=submit]' });
     await page.waitText('Sighting shared');
     const alerts = (await (await apiLogin(stack.apiUrl, ACCOUNTS.resident, PASSWORD)).get('/lost-pet-alerts/mine')).body.results;
@@ -822,6 +900,44 @@ try {
     await page.waitText('Selera Homes');
     const nina = await apiLogin(stack.apiUrl, email, PASSWORD);
     assert(nina.user.access_token && !nina.user.requires_otp, 'the new resident is verified and signs in without another code');
+  });
+
+  await step('resident: with no registered pet, Lost pet says so and offers to register one; registering takes her straight back, and she can file at once without any approval', async () => {
+    // Nina Newcomer, who registered in the step above, has no pet yet
+    await page.goto(`${RESIDENT}/home`);
+    await page.waitText('Register your pet first');                                // the Home shortcut says what is missing
+    await page.goto(`${RESIDENT}/report`);
+    await page.waitText('What would you like to report?');
+    const text = await page.text();
+    assert(text.includes('Lost pet') && text.includes('Register your pet first to report it missing.'), 'Lost pet is shown, switched off, with the reason');
+    await page.click('Register a pet');                                            // the action beside the switched-off choice
+    await page.waitText('Then you go straight back to your report');
+    await page.fill('Name', 'Pepper');
+    await page.click('Cat', { selector: 'label' });
+    await page.fill('Colour or coat', 'Black with white paws');
+    await page.click('Register pet', { selector: 'button[type=submit]' });
+    await page.waitText('Pepper is registered');
+    await page.waitText('Pepper’s registered profile');                            // back in the lost-pet report, with the new pet chosen
+    await page.fill('Anything else that may help?', 'Pepper slipped out of the back door while the gate was open.');
+    await page.click('Continue', { selector: 'button[type=submit]' });
+    await page.waitText('Where was the animal?');
+    await page.click('Selera Homes Main Entrance Gate', { selector: 'button' });
+    await page.waitText('Pin placed, inside the reporting area');
+    await page.click('Confirm location');
+    await page.waitText('Review and submit');
+    await page.click('Publish notice and submit');
+    await page.waitText('Please confirm to publish the notice');
+    await page.click('I understand this notice and photo will be visible to my neighbours in Community.', { selector: 'label' });
+    await page.click('Publish notice and submit');
+    await page.waitText('Your notice is live');
+    const nina = await apiLogin(stack.apiUrl, 'nina@e2e-straysafe.com', PASSWORD);
+    pepperReport = (await nina.get('/reports/?mine=true')).body.find((r) => String(r.description).includes('back door'));
+    assert(pepperReport, 'filed at once, with no approval and no ownership check first');
+    const seen = (await leaderApi.get(`/cases/${pepperReport.report_id}`)).body;
+    assert.equal(seen.case_status, 'reported');
+    assert.equal(seen.pet.registry.name, 'Pepper');
+    assert.deepEqual([seen.pet.registration.declared_by_owner, seen.pet.registration.verified], [true, false], 'a registration is declared by its owner, never verified by itself');
+    assert.equal(seen.ownership.status, 'unknown', 'filing a report confirms nothing about ownership');
   });
 
   // The Leader now sees the claim from the Admin side
@@ -881,33 +997,398 @@ try {
     await page.waitText('Your claim was approved');                                   // what the claimant sees
   });
 
-  await step('admin: the lost-pet notice a resident asked for is published and neighbours see it; then the owner marks the pet home', async () => {
-    const rita = await apiLogin(stack.apiUrl, ACCOUNTS.resident, PASSWORD);
-    const filed = (await rita.get('/reports/?mine=true')).body.find((r) => String(r.description).includes('Small tan puppy'));
-    const alert = (await rita.get('/lost-pet-alerts/mine')).body.results.find((a) => a.report_id === filed.report_id);
-    assert.equal(alert.status, 'requested');
+  await step('admin: a lost-pet case shows the registered pet, the owner to contact and when and where it was last seen, and the reporter\'s link is not a confirmed identity', async () => {
     await page.clearSession();
     await signInAdmin(ACCOUNTS.leader, PASSWORD);
     await page.waitText('Needs your attention');
-    await page.goto(`${ADMIN}/community/alert-${alert.alert_id}/edit`);
-    await page.waitText('Review and publish');
-    await page.click('Review and publish', { selector: 'button[type=submit]' });
-    await page.click('Publish notice');
-    await page.waitText('Notice published');
-    const owen = await apiLogin(stack.apiUrl, ACCOUNTS.owner, PASSWORD);
-    assert((await owen.get('/lost-pet-alerts/active')).body.results.some((a) => a.alert_id === alert.alert_id), 'neighbours can see it now');
+    await page.goto(`${ADMIN}/cases/${ref(mochiReport.report_id)}`);
+    await page.waitText('Registered owner');
+    let text = await page.text();
+    for (const shown of ['Registered pet', 'Mochi', 'Shih Tzu', 'Declared by the owner', 'Linked by the reporter', 'Rita Reporter', 'rita@e2e-straysafe.com', 'Last seen', 'Selera Homes Main Entrance Gate',
+      'A registration is declared, not verified.', 'The registry still matches what was reported.', 'The owner is the person who filed this report.']) assert(text.includes(shown), `${shown} is shown`);
+    assert(!text.includes('Identity confirmed'), 'a reporter naming her own pet is not a confirmed identity');
 
+    // The owner edits the record after filing: the case still shows what the report was filed with, and says what changed
+    const rita = await apiLogin(stack.apiUrl, ACCOUNTS.resident, PASSWORD);
+    const mochi = (await rita.get('/pets/')).body.find((p) => p.pet_name === 'Mochi');
+    const edited = await rita.put(`/pets/${mochi.pet_id}`, { color_markings: 'White and gold, with a pink bow' });
+    assert.equal(edited.status, 200, JSON.stringify(edited.body));
+    await page.goto(`${ADMIN}/cases/${ref(mochiReport.report_id)}`);
+    await page.waitText('The registry has changed since this report was filed: colour.');
+    // (the page being left can already say this, so wait for the freshly loaded page to show both parts)
+    await page.waitFor(`document.body.innerText.includes('As reported') && document.body.innerText.includes('pink bow')`, 'the record today beside what was reported');
+    text = await page.text();
+    assert(text.includes('As reported') && text.includes('pink bow'), 'the record today is shown');
+
+    // The team decides the identity itself, with how it checked
+    await page.click('Assessment', { selector: '[role=tab]' });
+    await page.waitText('Linked by the reporter. You have not decided yet.');
+    await page.fill('Identification notes', 'The guard recognised Mochi at the gate and the collar matches the registry photo.');
+    await page.click('Save identity');
+    await page.waitText('Animal identity saved');
+    const after = (await leaderApi.get(`/cases/${mochiReport.report_id}`)).body;
+    assert.deepEqual([after.identity.status, after.identity.decided, after.pet.linked_by_reporter], ['identified', true, false], 'now it is the team\'s decision');
+    await page.click('Missing pet', { selector: '[role=tab]' });
+    await page.waitText('Identity confirmed');
+    assert(!(await page.text()).includes('Linked by the reporter'), 'no longer only the reporter\'s link');
+  });
+
+  await step('admin: an older lost-pet report with no registered pet says so, with no empty panel', async () => {
+    await page.goto(`${ADMIN}/cases/${ref(LOST)}`);
+    await page.waitText('No registered pet is linked to this report.');
+    const text = await page.text();
+    assert(!text.includes('Registered owner') && !text.includes('Declared by the owner'), 'nothing is made up for it');
+  });
+
+  await step('admin: the Leader links a pet record the office entered to a resident, and nothing moves until the resident confirms', async () => {
+    const office = await leaderApi.post('/pets/', { pet_name: 'Bruno', pet_type: 'Dog', breed: 'Aspin', color_markings: 'Brown with a white chest', emergency_contact_name: 'Mang Tony', emergency_contact_phone: '09170002222' });
+    assert.equal(office.status, 200, JSON.stringify(office.body));
+    bruno = office.body;
+    assert.equal(bruno.owner_id, null, 'an office record has no owner account');
+    await page.goto(`${ADMIN}/pets/${bruno.pet_id}`);
+    await page.waitText('Entered by the office.');
+    await page.waitText('No resident account is linked to this pet record.');
+    await page.click('Link to a resident');
+    await page.waitText('Ask the resident who owns Bruno to confirm it.');
+    await page.fill('Find the resident', 'rita', { within: DIALOG });
+    await page.click('Rita Reporter', { selector: 'label' });
+    await page.fill('How did you check this is the owner?', 'short', { within: DIALOG });
+    await page.click('Send request', { selector: 'button[type=submit]' });
+    await page.waitText('Say how you checked that this resident is the owner');                    // refused before anything is sent
+    const rita = await apiLogin(stack.apiUrl, ACCOUNTS.resident, PASSWORD);
+    assert.equal((await rita.get('/pet-ownership/mine')).body.length, 0, 'no request was sent');
+    await page.fill('How did you check this is the owner?', 'The phone number on the record is hers and she knows his tag.', { within: DIALOG });
+    await page.click('Send request', { selector: 'button[type=submit]' });
+    await page.waitText('Request sent to Rita Reporter');
+    assert.equal((await leaderApi.get(`/pets/${bruno.pet_id}`)).body.owner_id, null, 'ownership has not moved: she has to say yes');
+    const mine = (await rita.get('/pet-ownership/mine')).body;
+    assert(mine.length === 1 && mine[0].pet_name === 'Bruno', JSON.stringify(mine));
+  });
+
+  await step('resident: the pet the office linked is added only when she says yes, and the report picker then offers each free pet as a card', async () => {
+    await page.clearSession();
+    await signInResident(ACCOUNTS.resident, PASSWORD);
+    await page.waitText('Is Bruno your pet?');                                                      // Home asks too
+    await page.goto(`${RESIDENT}/pets`);
+    await page.waitText('Is Bruno your pet?');
+    await page.waitText('Lena Leader linked this pet record to your account.');
+    const rita = await apiLogin(stack.apiUrl, ACCOUNTS.resident, PASSWORD);
+    assert(!(await rita.get('/pets/')).body.some((p) => p.pet_name === 'Bruno'), 'not hers before she says yes');
+    await page.click('Yes, it’s mine');
+    await page.waitText('Bruno is now in your pets');
+    const bruno = (await rita.get('/pets/')).body.find((p) => p.pet_name === 'Bruno');
+    assert.equal(bruno?.owner_id, ids.resident, 'hers now');
+    // Mochi has an open lost-pet report; Bantay and Bruno are free
+    await page.goto(`${RESIDENT}/report`);
+    await page.waitText('What would you like to report?');
+    await page.click('Lost pet');
+    await page.waitText('Which pet is missing?');
+    const text = await page.text();
+    for (const shown of ['Mochi', 'Already reported missing', 'Bantay', 'Bruno']) assert(text.includes(shown), `${shown} is shown`);
+    assert.equal(await page.evaluate(`document.querySelectorAll('input[name="missing-pet"]').length`), 2, 'the two free pets can be chosen');
+    await page.click('Continue', { selector: 'button[type=submit]' });
+    await page.waitText('Choose which pet is missing.');                                            // with a choice to make, nothing is picked for her
+  });
+
+  // =============================================================================================== LOST PET, END TO END
+  // Mochi's notice is live (published by her report); a neighbour reported an ordinary sighting earlier. From here: the Community, a possible
+  // recovery, how the owner and the neighbour get in touch, the Leader's part, the Barangay, and the two ways a pet is recorded as home.
+  await step('resident: the Community overview is short, and its directory is searched and read a page at a time by the server', async () => {
+    const rita = await apiLogin(stack.apiUrl, ACCOUNTS.resident, PASSWORD);
+    mochiAlert = (await rita.get('/lost-pet-alerts/mine')).body.results.find((a) => a.report_id === mochiReport.report_id);
+    assert.equal(mochiAlert?.status, 'active', 'Mochi\'s notice is live');
     await page.clearSession();
     await signInResident(ACCOUNTS.resident, PASSWORD);
     await page.waitText('Selera Homes');
-    await page.goto(`${RESIDENT}/reports/${ref(filed.report_id)}/recovered`);
+    await page.goto(`${RESIDENT}/community`);
+    await page.waitText('Rabies vaccination reminder');
+    let text = await page.text();
+    for (const shown of ['Lost pets', 'Found animals', 'View all', 'Safety advisories']) assert(text.includes(shown), `${shown} is on the overview`);
+    assert(!text.includes('barks all night'), 'a private complaint is never in Community');
+    assert(page.requests.some((u) => u.includes('/lost-pet-alerts/community/summary')), 'the overview asks for a short preview and the totals');
+    await checkResponsive('community-overview', true);
+    await page.click('View all', { selector: 'a' });                                   // the first one is the lost pets'
+    // (the overview already shows these notices, so wait for what only the directory says: how many there are)
+    await page.waitFor(`/[0-9]+ notices?/.test(document.body.innerText)`, 'the directory to show how many notices it holds');
+    assert((await page.path()).includes('/community/lost'), await page.path());
+    text = await page.text();
+    assert(text.includes('Lost cat: Pepper'), 'Pepper\'s notice, published by her report, is listed too');
+    await page.fill('Search lost pets', 'Pepper');
+    await page.gone('Lost dog: Mochi');
+    assert(page.requests.some((u) => u.includes('/lost-pet-alerts/active') && u.includes('q=Pepper') && u.includes('alert_type=lost_pet')), 'the server did the searching');
+    await page.fill('Search lost pets', '');
+    await page.waitText('Lost dog: Mochi');
+    await page.click('Cats', { selector: 'button' });
+    await page.gone('Lost dog: Mochi');
+    await page.waitText('Lost cat: Pepper');                                              // (the list is empty while the new search is read)
+    assert(!(await page.text()).includes('Lost dog: Mochi'), 'the animal filter keeps the cat and drops the dogs');
+    await checkResponsive('community-directory');
+    // the list is bounded by the server, not by the screen
+    const first = (await rita.get('/lost-pet-alerts/active?alert_type=lost_pet&limit=1')).body;
+    assert(first.total >= 3 && first.results.length === 1, JSON.stringify([first.total, first.results.length]));
+  });
+
+  await step('resident: an ordinary sighting tells the owner and nothing else: no conversation, nothing for the Leader, and its notification opens the sightings', async () => {
+    const rita = await apiLogin(stack.apiUrl, ACCOUNTS.resident, PASSWORD);
+    const detail = (await rita.get(`/lost-pet-alerts/${mochiAlert.alert_id}`)).body;
+    assert.deepEqual([detail.sightings.length, detail.sightings[0].sighting_type, detail.coordinations.length], [1, 'seen', 0]);
+    assert.equal(detail.sightings[0].reported_by, 'A neighbor', 'the owner is not given the neighbour\'s name');
+    assert(!JSON.stringify(detail).includes('Owen'), 'nor anything else that names the neighbour');
+    assert.equal((await leaderApi.get('/cases/work-queue')).body.coordinations.length, 0, 'nothing for the Leader to do');
+    const leaderNotes = (await leaderApi.get('/notifications/me')).body;
+    assert(!leaderNotes.some((n) => n.type === 'lost_pet_leader' || n.type === 'lost_pet_secured'), 'the Leader was not asked for anything');
+    assert((await rita.get('/notifications/me')).body.some((n) => n.type === 'lost_pet_sighting' && n.related_id === mochiAlert.alert_id), 'the owner was told');
+    const history = (await leaderApi.get(`/reports/${mochiReport.report_id}`)).body.history.map((h) => String(h.remarks));
+    assert(history.some((t) => /neighbor reported seeing the pet/i.test(t)), `the sighting is on the case activity: ${history}`);
+    // the notification opens the sightings of HER notice (an alert's number is never read as a report's)
+    await page.goto(`${RESIDENT}/notifications`);
+    await page.waitText('New Lost Pet Sighting!');
+    await page.click('New Lost Pet Sighting!', { selector: 'button' });
+    await page.waitText('The most recent is at the top.');                               // only the sightings screen says this
+    assert((await page.path()).endsWith(`/community/alert-${mochiAlert.alert_id}/sightings`), await page.path());
+    assert(!(await page.text()).includes('Owen'), 'the sightings never name the neighbour');
+  });
+
+  await step('resident: a neighbour says she may have the pet safely; it is a possible recovery and never a recovery, and only the owner and the Leader can see it', async () => {
+    await page.clearSession();
+    await signInResident(ACCOUNTS.owner, PASSWORD);
+    await page.waitText('Selera Homes');
+    await page.goto(`${RESIDENT}/community/alert-${mochiAlert.alert_id}`);
+    await page.waitText('I may have this pet safely with me');
+    await page.click('I may have this pet safely with me');
+    await page.waitText('Thank you for helping.');
+    await page.click('Choose the place', { selector: 'button' });
+    await page.click('Selera Homes Main Entrance Gate', { selector: 'button' });
+    await page.waitText('Pin placed, inside the reporting area');
+    await page.click('Use this place');
+    await page.fill('What can you tell the owner?', 'A white and gold shih tzu came to my gate this morning. I gave it water and it is calm.');
+    await page.fill('Where is it now?', 'In my carport with water and a blanket.');
+    await page.click('Let us message each other in the app', { selector: 'label' });
+    await page.click('Tell the owner', { selector: 'button[type=submit]' });
+    await page.waitText('You may have this pet');
+    let text = await page.text();
+    assert(text.includes('You agreed to message Rita.'), 'she chose to message in the app; nothing is shared until the owner agrees too');
+    assert(!text.includes('Rita Reporter') && !text.replace(/[^0-9]/g, '').includes('09175550188'), 'no surname and no phone number');
+
+    const rita = await apiLogin(stack.apiUrl, ACCOUNTS.resident, PASSWORD);
+    const detail = (await rita.get(`/lost-pet-alerts/${mochiAlert.alert_id}`)).body;
+    lead = detail.sightings.find((s) => s.sighting_type === 'secured');
+    assert(lead, 'recorded as a possible recovery');
+    assert.equal(lead.reported_by, 'Owen', 'the owner is given the first name only');
+    assert(lead.care_note.includes('carport'), 'and where the pet is being kept');
+    assert.deepEqual([detail.status, detail.recovered_at], ['active', null], 'a possible recovery never marks the pet recovered');
+    assert.notEqual((await rita.get(`/reports/${mochiReport.report_id}`)).body.case_status, 'closed');
+    coordination = detail.coordinations[0];
+    assert.deepEqual([coordination.you_are, coordination.mode, coordination.owner_consent, coordination.finder_consent], ['owner', 'none', false, true]);
+    assert(!JSON.stringify(detail).includes('09179998888') && !JSON.stringify(detail).includes('Blk 7 Lot 3'), 'no phone number and no address');
+    assert((await rita.get('/notifications/me')).body.some((n) => n.type === 'lost_pet_secured' && n.related_id === mochiAlert.alert_id), 'the owner was told');
+    assert(!(await leaderApi.get('/notifications/me')).body.some((n) => n.type === 'lost_pet_leader'), 'a lead is not a task for the Leader');
+    const nina = await apiLogin(stack.apiUrl, 'nina@e2e-straysafe.com', PASSWORD);
+    const seenByNina = (await nina.get(`/lost-pet-alerts/${mochiAlert.alert_id}`)).body;
+    assert(!seenByNina.sightings.some((s) => s.sighting_type === 'secured') && !JSON.stringify(seenByNina).includes('carport'), 'other neighbours never see a possible recovery or where the pet is kept');
+    assert.equal((await rita.post(`/lost-pet-alerts/${mochiAlert.alert_id}/sightings`, {})).status, 422, 'a sighting still needs its pin and time');
+  });
+
+  await step('resident: the owner opens the notification, agrees to message, and the two exchange private messages the Leader cannot read', async () => {
+    await page.clearSession();
+    await signInResident(ACCOUNTS.resident, PASSWORD);
+    await page.waitText('Selera Homes');
+    await page.goto(`${RESIDENT}/notifications`);
+    await page.waitText('Someone may have Mochi safely!');
+    await page.click('Someone may have Mochi safely!', { selector: 'button' });
+    await page.waitText('Someone may have your pet');
+    assert((await page.path()).endsWith(`/community/alert-${mochiAlert.alert_id}`), await page.path());
+    let text = await page.text();
+    assert(text.includes('Only you and the Subdivision Leader see these.') && text.includes('In my carport with water and a blanket.'), 'the owner sees the report and where it is being kept');
+    assert(text.includes('Owen agreed to message you.'), 'and that the neighbour agreed first');
+    await page.click('Message Owen', { selector: 'button' });
+    await page.waitText('You and Owen can message each other.');
+    await checkResponsive('lost-pet-coordination', true);
+    await page.fill('Write to Owen', 'Thank you! Is he wearing a pink collar? I can come over in ten minutes.');
+    await page.click('Send', { selector: 'button[type=submit]' });
+    await page.waitText('Is he wearing a pink collar?');
+    const rita = await apiLogin(stack.apiUrl, ACCOUNTS.resident, PASSWORD);
+    const owen = await apiLogin(stack.apiUrl, ACCOUNTS.owner, PASSWORD);
+    coordination = (await rita.get(`/lost-pet-alerts/${mochiAlert.alert_id}`)).body.coordinations[0];
+    assert.equal(coordination.mode, 'direct', 'both agreed');
+    const path = `/lost-pet-alerts/coordinations/${coordination.coordination_id}/messages`;
+    assert.equal((await rita.get(path)).body.results.length, 1);
+    assert.equal((await owen.get(path)).body.results.length, 1, 'the neighbour reads it too');
+    assert.equal((await leaderApi.get(path)).status, 404, 'the Leader does not read private messages');
+    assert.equal((await (await apiLogin(stack.apiUrl, 'nina@e2e-straysafe.com', PASSWORD)).get(path)).status, 404, 'nobody else does');
+    // either of them can ask the Leader to help instead, with no reason: messaging is then over
+    await page.click('Ask the Subdivision Leader to help instead', { selector: 'button' });
+    await page.waitText('Your Subdivision Leader is helping.');
+    text = await page.text();
+    assert(text.includes('You asked the Subdivision Leader to help you and Owen get in touch.'), 'she is told her request was made');
+    assert(!text.includes('Write to Owen'), 'and the message box is closed');
+    const after = (await rita.get(`/lost-pet-alerts/${mochiAlert.alert_id}`)).body.coordinations[0];
+    assert.deepEqual([after.mode, after.mediation_requested, after.mediation_requested_by_you], ['leader', true, true]);
+    assert.equal((await owen.post(path, { text: 'Hello?' })).status, 409, 'direct messaging stops once the Leader is asked');
+    const again = await rita.post(`/lost-pet-alerts/coordinations/${coordination.coordination_id}/mediation`);
+    assert.equal(again.status, 200, JSON.stringify(again.body));
+    const asked = (await leaderApi.get('/notifications/me')).body.filter((n) => n.type === 'lost_pet_leader' && n.related_id === mochiReport.report_id);
+    assert.equal(asked.length, 1, 'asking again reuses the request: the Leader is told once');
+    assert.equal((await leaderApi.get('/cases/work-queue')).body.coordinations.length, 1, 'one actionable request');
+    assert(!JSON.stringify((await leaderApi.get(`/cases/${mochiReport.report_id}`)).body).includes('pink collar'), 'the Leader still has not read the messages');
+  });
+
+  await step('admin: the Leader is asked for help, sees both people to call, records the contact and finishes the request, with no status steps to click', async () => {
+    await page.clearSession();
+    await signInAdmin(ACCOUNTS.leader, PASSWORD);
+    await page.waitText('Needs your attention');
+    let text = await page.text();
+    assert(text.includes('Rita Reporter and Owen Owner asked you to help them get in touch'), 'the request is on the dashboard');
+    assert(text.includes('waiting for your help to get in touch'), 'and in its opening sentence');
+    await page.goto(`${ADMIN}/cases/${ref(mochiReport.report_id)}`);
+    await page.waitText('Getting in touch');
+    text = await page.text();
+    for (const shown of ['Waiting for you', 'Rita Reporter and Owen Owner', 'Rita Reporter asked you to help', 'Record owner confirmation', 'Possible recoveries', 'Where it was last seen']) assert(text.includes(shown), `${shown} is shown`);
+    const digits = text.replace(/[^0-9]/g, '');
+    assert(digits.includes('09175550188') && digits.includes('09179998888'), 'both people\'s phone numbers are shown, now that one of them asked for help');
+    assert(!text.includes('Start review') && !text.includes('Mark in progress'), 'there is no review or progress step to click for a missing pet');
+    assert(!text.includes('Create notice') && text.includes('Published automatically'), 'the notice was published by the report: nothing to create or approve');
+    assert(!text.includes('pink collar'), 'the Leader does not see the private messages');
+    await checkResponsive('leader-lost-pet-case', true);
+    // the Leader records the contact work with the existing contact log, then finishes the request
+    await page.click('Record contact', { selector: 'button' });
+    await page.waitText('Record owner coordination');
+    await page.fill('Who you spoke with', 'Rita Reporter (owner) and Owen Owner (neighbour)', { within: DIALOG });
+    await page.fill('What was discussed', 'Called both. Owen keeps the dog in his carport and Rita is on her way to collect it.', { within: DIALOG });
+    await page.click('Record coordination', { selector: 'button[type=submit]' });
+    await page.waitText('Owner coordination recorded');
+    assert((await leaderApi.get(`/cases/${mochiReport.report_id}`)).body.contacts.length >= 1, 'the contact is in the case\'s contact log');
+    // the Leader decides whether the neighbour's report checks out
+    await page.click('Review', { selector: 'button' });                                  // the possible recovery comes first in the list
+    await page.waitText('Review this possible recovery');
+    await page.click('It looks like the missing pet', { selector: 'label' });
+    await page.fill('Note', 'Owen sent a photo and the collar matches.', { within: DIALOG });
+    await page.click('Save review', { selector: 'button[type=submit]' });
+    await page.waitText('Review saved');
+    const reviewed = (await leaderApi.get(`/lost-pet-alerts/${mochiAlert.alert_id}`)).body.sightings.find((s) => s.sighting_type === 'secured');
+    assert.deepEqual([reviewed.status, reviewed.reviewed_by], ['verified', 'Lena Leader'], 'who reviewed it and what they decided is kept');
+    assert.equal((await leaderApi.get(`/lost-pet-alerts/${mochiAlert.alert_id}`)).body.status, 'active', 'a verified lead still does not recover the pet');
+    await page.click('Mark as finished', { selector: 'button' });
+    await page.waitText('Mark this request as finished');
+    await page.fill('What was the result?', 'Both were reached; the owner is collecting the pet.', { within: DIALOG });
+    await page.click('Mark as finished', { selector: 'button[type=submit]' });
+    await page.waitText('Marked as finished');
+    const done = (await leaderApi.get(`/lost-pet-alerts/${mochiAlert.alert_id}`)).body.coordinations[0];
+    assert.deepEqual([done.status, done.resolution_note], ['resolved', 'Both were reached; the owner is collecting the pet.']);
+    assert.equal((await leaderApi.get('/cases/work-queue')).body.coordinations.length, 0, 'it is no longer waiting for the Leader');
+    // the resident who asked sees that it is finished
+    const owen = await apiLogin(stack.apiUrl, ACCOUNTS.owner, PASSWORD);
+    assert((await owen.get('/notifications/me')).body.some((n) => n.type === 'lost_pet_coordination' && /finished helping/i.test(n.title)), 'both were told');
+  });
+
+  await step('admin: asking the Barangay for help is written down without claiming contact; only a recorded attempt counts as contact', async () => {
+    await page.click('Ask for help', { selector: 'button' });
+    await page.waitText('Write down who can help look for the pet');
+    await page.click('Not yet', { selector: 'label' });
+    await page.click('Write it down', { selector: 'button[type=submit]' });
+    await page.waitText('Nobody has been contacted yet');
+    let referral = (await leaderApi.get(`/cases/${mochiReport.report_id}`)).body.referrals[0];
+    assert.equal(referral.status, 'to_contact', 'saving a referral is not proof the Barangay was contacted');
+    assert.equal(referral.updates.length, 0, 'no contact is recorded');
+    await page.waitText('Not contacted yet');
+    await page.goto(`${ADMIN}/dashboard`);
+    await page.waitText('written down but nobody has contacted them yet');                // it is a task until someone makes the call
+    await page.goto(`${ADMIN}/cases/${ref(mochiReport.report_id)}`);
+    await page.click('Record contact attempt', { selector: 'button' });
+    await page.waitText('not contacted yet');
+    await page.fill('Who you spoke with', 'Duty officer', { within: DIALOG });
+    await page.choose('What came of it', 'Tried, no answer');
+    await page.fill('What happened', 'Rang the hall twice at noon; nobody answered.', { within: DIALOG });
+    await page.click('Record attempt', { selector: 'button[type=submit]' });
+    await page.waitText('Contact attempt recorded');
+    referral = (await leaderApi.get(`/cases/${mochiReport.report_id}`)).body.referrals[0];
+    assert.deepEqual([referral.status, referral.contact_person], ['no_response', 'Duty officer'], 'the attempt, who and what came of it are recorded');
+    assert.equal(referral.updates.length, 1);
+  });
+
+  await step('admin: the Leader records that the owner confirmed by phone: one operation resolves the notice, closes the case and restores the pet', async () => {
+    await page.click('Record owner confirmation', { selector: 'button' });
+    await page.waitText('Only the owner can say the pet is home.');
+    await page.click('By phone', { selector: 'label' });
+    await page.fill('Notes', 'She called me from the carport: Mochi is with her.', { within: DIALOG });
+    await page.click('Rita Reporter told me that Mochi is home.', { selector: 'label' });
+    await page.click('Record and close the case', { selector: 'button[type=submit]' });
+    await page.waitText('The pet is home');
+    const rita = await apiLogin(stack.apiUrl, ACCOUNTS.resident, PASSWORD);
+    const owen = await apiLogin(stack.apiUrl, ACCOUNTS.owner, PASSWORD);
+    const view = (await leaderApi.get(`/lost-pet-alerts/${mochiAlert.alert_id}`)).body;
+    assert.deepEqual([view.status, view.close_outcome, view.recovery.source], ['closed', 'recovered', 'phone']);
+    assert.deepEqual([view.recovery.recorded_by, view.recovery.confirmed_by], [ids.leader, ids.resident], 'the Leader recorded what the OWNER confirmed');
+    assert.match(view.recovery.note, /Mochi is with her/);
+    assert.equal((await leaderApi.get(`/cases/${mochiReport.report_id}`)).body.case_status, 'closed');
+    assert.equal((await leaderApi.get(`/cases/${mochiReport.report_id}`)).body.closure.disposition, 'pet_recovered');
+    assert.equal((await rita.get('/pets/')).body.find((p) => p.pet_name === 'Mochi').status, 'Active', 'the pet is back to Active in the registry');
+    assert(!(await owen.get('/lost-pet-alerts/active')).body.results.some((a) => a.alert_id === mochiAlert.alert_id), 'the notice is gone from Community');
+    const helperNotes = (await owen.get('/notifications/me')).body.filter((n) => n.type === 'lost_pet_recovered');
+    assert.equal(helperNotes.length, 1, 'the neighbour who helped was thanked once');
+    // asking again changes nothing and tells nobody again
+    const countHistory = async () => (await leaderApi.get(`/reports/${mochiReport.report_id}`)).body.history.filter((h) => /Missing pet recovered/.test(String(h.remarks))).length;
+    assert.equal(await countHistory(), 1);
+    const twice = await leaderApi.post(`/lost-pet-alerts/${mochiAlert.alert_id}/record-recovery`, { source: 'in_person', note: 'A second try.' });
+    assert.deepEqual([twice.status, twice.body.already], [200, true]);
+    assert.equal(await countHistory(), 1, 'the history has one line');
+    assert.equal((await owen.get('/notifications/me')).body.filter((n) => n.type === 'lost_pet_recovered').length, 1, 'nobody was told again');
+    assert.equal((await leaderApi.get(`/lost-pet-alerts/${mochiAlert.alert_id}`)).body.recovery.source, 'phone', 'the first confirmation stands');
+  });
+
+  await step('resident: the owner confirms in the app that her pet is home, after an explicit confirmation: the same operation, recorded as hers', async () => {
+    const nina = await apiLogin(stack.apiUrl, 'nina@e2e-straysafe.com', PASSWORD);
+    const pepperAlert = (await nina.get('/lost-pet-alerts/mine')).body.results.find((a) => a.report_id === pepperReport.report_id);
+    assert.equal(pepperAlert?.status, 'active', 'Pepper\'s notice was published by her report');
+    await page.clearSession();
+    await signInResident('nina@e2e-straysafe.com', PASSWORD);
+    await page.waitText('Selera Homes');
+    await page.goto(`${RESIDENT}/reports/${ref(pepperReport.report_id)}/recovered`);
     await page.waitText('come home?');
-    await page.click('A neighbour brought them back', { selector: 'label' });
+    await page.click('Came home on their own', { selector: 'label' });
     await page.click('Mark as recovered');
+    await page.waitText('as recovered?');                                                            // the explicit confirmation
+    assert.equal((await leaderApi.get(`/lost-pet-alerts/${pepperAlert.alert_id}`)).body.status, 'active', 'nothing is recorded until she confirms');
     await page.click('Yes, mark as recovered');
-    await page.waitText('Biscuit is home');
-    assert.equal((await rita.get(`/reports/${filed.report_id}`)).body.case_status, 'closed');
-    assert(!(await owen.get('/lost-pet-alerts/active')).body.results.some((a) => a.alert_id === alert.alert_id), 'the notice is gone from Community');
+    await page.waitText('The notice was removed from Community and the report is closed');
+    const view = (await leaderApi.get(`/lost-pet-alerts/${pepperAlert.alert_id}`)).body;
+    assert.deepEqual([view.status, view.close_outcome, view.recovery.source], ['closed', 'recovered', 'owner_app']);
+    assert.equal(view.recovery.recorded_by, view.recovery.confirmed_by, 'she confirmed it herself');
+    assert.equal((await leaderApi.get(`/cases/${pepperReport.report_id}`)).body.case_status, 'closed');
+    assert.equal((await nina.get('/pets/')).body.find((p) => p.pet_name === 'Pepper').status, 'Active');
+    assert((await leaderApi.get('/notifications/me')).body.some((n) => n.type === 'lost_pet_leader' && n.related_id === pepperReport.report_id), 'the Leader was told, for information');
+  });
+
+  await step('a withdrawn report closes its notice as withdrawn and never as recovered; no sighting, lead or closure can record a recovery; a retried filing returns the first report', async () => {
+    const rita = await apiLogin(stack.apiUrl, ACCOUNTS.resident, PASSWORD);
+    const kiko = (await rita.post('/pets/', { pet_name: 'Kiko', pet_type: 'Cat', breed: 'Puspin', color_markings: 'Grey tabby', gender: 'Male', confirm_new_pet: true })).body;
+    assert(kiko.pet_id, JSON.stringify(kiko));
+    const lostCategory = (await rita.get('/cases/categories')).body.categories.find((c) => c.id === 'lost_pet');
+    const filing = { category_id: lostCategory.category_id, animal_type: 'Cat', description: 'Kiko slipped out of the back door.', latitude: 14.8012, longitude: 121.004, landmark: 'Gate 2', animal_count: 1,
+      pet_id: kiko.pet_id, last_seen_at: new Date(Date.now() - 3_600_000).toISOString().slice(0, 19), client_request_id: 'e2e-retry-kiko' };
+    const first = await rita.post('/reports/', filing);
+    assert.equal(first.status, 200, JSON.stringify(first.body));
+    const retried = await rita.post('/reports/', filing);                                               // the answer was lost on the way, so it is sent again
+    assert.equal(retried.body.report_id, first.body.report_id, 'the retry returns the first report');
+    assert.equal((await rita.get('/reports/?mine=true')).body.filter((r) => r.pet_id === kiko.pet_id).length, 1, 'one report');
+    const mine = (await rita.get('/lost-pet-alerts/mine')).body.results.filter((a) => a.report_id === first.body.report_id);
+    assert.deepEqual([mine.length, mine[0].status], [1, 'active'], 'one notice, published once');
+    assert.equal((await rita.post('/reports/', { ...filing, client_request_id: 'e2e-someone-else' })).status, 409, 'a different filing for the same pet is refused');
+    // withdrawing is the reporter's own act
+    const withdrawn = await rita.patch(`/reports/${first.body.report_id}/cancel`);
+    assert.equal(withdrawn.status, 200, JSON.stringify(withdrawn.body));
+    const kikoAlert = (await leaderApi.get(`/lost-pet-alerts/${mine[0].alert_id}`)).body;
+    assert.deepEqual([kikoAlert.status, kikoAlert.close_outcome, kikoAlert.recovered_at], ['closed', 'withdrawn', null], 'withdrawn, not recovered');
+    assert.equal((await leaderApi.get(`/cases/${first.body.report_id}`)).body.closure.disposition, 'withdrawn_by_reporter');
+    assert.equal((await rita.get('/pets/')).body.find((p) => p.pet_name === 'Kiko').status, 'Active');
+    // a Leader cannot close a missing pet as "recovered", or record a confirmation as if the owner had given it in the app
+    const generic = await leaderApi.post(`/cases/${LOST}/close`, { disposition: 'pet_recovered', reason: 'The guard says it is home.', end_open_items: true });
+    assert.equal(generic.status, 409, JSON.stringify(generic.body));
+    assert.match(JSON.stringify(generic.body), /owner/i);
+    const seeded = (await leaderApi.get('/lost-pet-alerts/all')).body.results.find((a) => a.report_id === LOST);
+    assert.equal((await leaderApi.post(`/lost-pet-alerts/${seeded.alert_id}/record-recovery`, { source: 'owner_app' })).status, 422, 'a Leader can only record a phone or in-person confirmation');
+    const owen = await apiLogin(stack.apiUrl, ACCOUNTS.owner, PASSWORD);
+    assert.equal((await owen.post(`/lost-pet-alerts/${seeded.alert_id}/recovered`, {})).status, 403, 'and nobody else can confirm for the owner');
   });
 
   console.log(`\n${passed} steps passed${skipped ? ` (${skipped} skipped by E2E_ONLY: this is not a full run)` : ''}.`);

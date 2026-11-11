@@ -9,14 +9,19 @@ Why it lives here and not in main.py: importing app.main changes the configured 
 tested safely. This module takes the engine as an argument, so the tests run it against throwaway databases.
 
 What it does (docs/05-operations/database/DATABASE_FILES_AND_MIGRATIONS.md lists the same):
-  reports               + case_status, assessment, identity, ownership, closure, reopen and sensitivity columns;
+  reports               + case_status, assessment, identity, ownership, closure, reopen and sensitivity columns, and
+                        pet_snapshot (2026-11-11: the pet of a Lost Pet report as it was when filed) and client_request_id
+                        (2026-11-11: a Lost Pet submission's retry key);
                         animal_type accepts more animals (MySQL: ENUM members appended in place)
   barangay_referrals    + organisation, contact, urgency, own status and outcome columns; barangay_id may be empty;
                         the "one referral per report" unique key is replaced by a plain index (MySQL)
   barangay_referral_updates  + status_after
   owner_warnings        + policy and observation columns
-  lost_pet_alerts       + alert_type (existing rows are 'lost_pet')
-  case_followups, case_contact_logs, case_links, ownership_claims   new tables (created from the models)
+  lost_pet_alerts       + alert_type (existing rows are 'lost_pet'), and (2026-11-11) the recovery record: recovered_at,
+                        recovery_source, recovery_confirmed_by, recovery_recorded_by, recovery_recorded_at, recovery_note
+  lost_pet_sightings    + (2026-11-11) sighting_type (existing rows are 'seen') and care_note
+  case_followups, case_contact_logs, case_links, ownership_claims   new tables (created from the models), and (2026-11-11)
+                        lost_pet_coordinations, lost_pet_coordination_messages
   report_categories     the six categories are added by name when missing (existing rows are kept)
   data                  case_status and identity_status are filled from what the rows already say; referral rows get an
                         organisation and a status. Only rows where the new column is still empty are touched.
@@ -86,6 +91,10 @@ REPORT_COLUMNS: List[Tuple[str, str]] = [
     ("last_reopened_by", "INT NULL"),
     ("last_reopen_reason", "TEXT NULL"),
     ("is_sensitive", "BOOLEAN NOT NULL DEFAULT 0"),
+    # Registration-first Lost Pet reports (2026-11-11): the pet as it was when the report was filed + the last-seen details
+    ("pet_snapshot", "JSON NULL"),
+    # Lost Pet submissions are retry-safe (2026-11-11)
+    ("client_request_id", "VARCHAR(64) NULL"),
 ]
 REPORT_USER_FKS = ("assessed_by", "ownership_owner_id", "ownership_decided_by", "closed_by", "last_reopened_by")
 
@@ -111,8 +120,26 @@ WARNING_COLUMNS: List[Tuple[str, str]] = [
     ("observation_days", "INT NULL"),
     ("follow_up_at", "DATETIME NULL"),
 ]
-ALERT_COLUMNS: List[Tuple[str, str]] = [("alert_type", "VARCHAR(20) NOT NULL DEFAULT 'lost_pet'")]
-CASE_TABLES = ("case_followups", "case_contact_logs", "case_links", "ownership_claims")
+ALERT_COLUMNS: List[Tuple[str, str]] = [
+    ("alert_type", "VARCHAR(20) NOT NULL DEFAULT 'lost_pet'"),
+    # The owner's confirmation that the pet is home (2026-11-11): who, how and when (services/lost_pet_lifecycle.py)
+    ("recovered_at", "DATETIME NULL"),
+    ("recovery_source", "VARCHAR(20) NULL"),
+    ("recovery_confirmed_by", "INT NULL"),
+    ("recovery_recorded_by", "INT NULL"),
+    ("recovery_recorded_at", "DATETIME NULL"),
+    ("recovery_note", "TEXT NULL"),
+]
+ALERT_USER_FKS = ("recovery_confirmed_by", "recovery_recorded_by")
+# 2026-11-11: a possible-recovery report ("I may have this pet safely with me") is a sighting of another type
+SIGHTING_COLUMNS: List[Tuple[str, str]] = [
+    ("sighting_type", "VARCHAR(20) NOT NULL DEFAULT 'seen'"),
+    ("on_behalf", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("care_note", "TEXT NULL"),
+]
+COORDINATION_MESSAGE_COLUMNS: List[Tuple[str, str]] = [("client_request_id", "VARCHAR(64) NULL")]
+CASE_TABLES = ("case_followups", "case_contact_logs", "case_links", "ownership_claims",
+               "lost_pet_coordinations", "lost_pet_coordination_messages")
 
 
 # ------------------------------------------------------------------------------------------------------- helpers
@@ -386,6 +413,25 @@ def ensure_warning_policy_columns(conn) -> List[str]:
 def ensure_alert_type_column(conn) -> List[str]:
     actions: List[str] = []
     _add_columns(conn, "lost_pet_alerts", ALERT_COLUMNS, actions)
+    _add_user_fks(conn, "lost_pet_alerts", ALERT_USER_FKS, actions)
+    return actions
+
+
+def ensure_sighting_columns(conn) -> List[str]:
+    """A sighting's type (seen or secured) and the private care note. Existing sightings read 'seen'."""
+    actions: List[str] = []
+    _add_columns(conn, "lost_pet_sightings", SIGHTING_COLUMNS, actions)
+    return actions
+
+
+def ensure_coordination_message_columns(conn) -> List[str]:
+    """Also supports an existing partial implementation; no message is rewritten or removed."""
+    actions: List[str] = []
+    table = "lost_pet_coordination_messages"
+    _add_columns(conn, table, COORDINATION_MESSAGE_COLUMNS, actions)
+    if _has_table(conn, table) and not _index_exists(conn, table, "uq_lost_pet_coordination_message_request"):
+        conn.execute(text("CREATE UNIQUE INDEX uq_lost_pet_coordination_message_request ON lost_pet_coordination_messages (client_request_id)"))
+        actions.append("lost_pet_coordination_messages request-id unique index added")
     return actions
 
 
@@ -425,6 +471,8 @@ STEPS = (
     ("referral_columns", ensure_referral_columns),
     ("warning_policy_columns", ensure_warning_policy_columns),
     ("alert_type_column", ensure_alert_type_column),
+    ("sighting_columns", ensure_sighting_columns),
+    ("coordination_message_columns", ensure_coordination_message_columns),
     ("case_categories", seed_case_categories),
 )
 
@@ -436,6 +484,8 @@ REQUIRED_COLUMNS: Tuple[Tuple[str, List[Tuple[str, str]]], ...] = (
     ("barangay_referral_updates", REFERRAL_UPDATE_COLUMNS),
     ("owner_warnings", WARNING_COLUMNS),
     ("lost_pet_alerts", ALERT_COLUMNS),
+    ("lost_pet_sightings", SIGHTING_COLUMNS),
+    ("lost_pet_coordination_messages", COORDINATION_MESSAGE_COLUMNS),
 )
 
 

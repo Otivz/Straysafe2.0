@@ -5,9 +5,11 @@
 - **Edited 2026-11-09 (case workflow alignment):** the sections of `reports`, `barangay_referrals`, `barangay_referral_updates`, `owner_warnings` and `lost_pet_alerts` were changed, and `case_followups`, `case_contact_logs`, `case_links` and `ownership_claims` were added, by hand from the models and `backend/app/db_migrations/case_alignment.py` (a MySQL server was not available to regenerate it). Rows marked **new** are those changes. See [CASE_WORKFLOW_BACKEND.md](CASE_WORKFLOW_BACKEND.md).
 - **Edited 2026-11-09 (legacy cleanup, batch 1):** the sections of `report_verifications`, `pet_vaccinations`, `behavior_tags`, `comments`, `announcement_comments`, `announcement_reactions`, `pet_qr_codes` and `pet_qr_scans` were removed (80 to 72 tables), and the columns `announcements.allow_comments` and `pet_history.scan_id` (with its foreign key).
 - **Edited 2026-11-10 (legacy retirement, batch 2):** the sections of the 21 tables of the retired endorsement-letter, adoption, holding, rescue and legacy claim and fee subsystems were removed (72 to 51 tables), and `report_media.holding_log_id`, `report_returns.holding_id`, `status_history.rescue_id` and `status_history.rescue_status_id` were dropped. `chat_threads.thread_type` is now `('Report','Direct')`. The list is in [DATABASE_FILES_AND_MIGRATIONS](../05-operations/database/DATABASE_FILES_AND_MIGRATIONS.md).
+- **Edited 2026-11-11 (Lost Pet end to end):** `reports.client_request_id` (varchar(64), nullable: a Lost Pet filing's retry key); on `lost_pet_alerts` the recovery record (`recovered_at`, `recovery_source`, `recovery_confirmed_by`, `recovery_recorded_by`, `recovery_recorded_at`, `recovery_note`, with two foreign keys to `users`); on `lost_pet_sightings` `sighting_type` (default `seen`), `on_behalf` (default false: second-hand observation) and `care_note`; and two new tables, `lost_pet_coordinations` and `lost_pet_coordination_messages` (51 to 53 tables). By hand from the models and `backend/app/db_migrations/case_alignment.py`, and mirrored in `Database3.4_subdivision.sql` and its `.txt`. The live database gets all of it at the next backend start; nothing was run against it. See [LOST_PET_LIFECYCLE.md](LOST_PET_LIFECYCLE.md).
+- **Edited 2026-11-11 (registration-first Lost Pet reports):** one column was added to `reports`, `pet_snapshot` (json, nullable), by hand from the model and `backend/app/db_migrations/case_alignment.py` (a MySQL server was not available to regenerate it). It holds the pet's details and the last-seen details as they were when a Lost Pet report was filed. The live database gets it at the next backend start. See [CASE_WORKFLOW_BACKEND.md](CASE_WORKFLOW_BACKEND.md).
 - **Regenerate** after any schema change; the SQLAlchemy models in `backend/app/models/` are the source of truth.
 
-51 tables.
+53 tables.
 
 ## Tables
 
@@ -32,6 +34,8 @@
 - `landmarks`
 - `leader_identity_verifications`
 - `lost_pet_alerts`
+- `lost_pet_coordination_messages`
+- `lost_pet_coordinations`
 - `lost_pet_sightings`
 - `manual_match_decisions`
 - `notifications`
@@ -294,6 +298,7 @@ Foreign keys: `linked_by` → `users.user_id`, `related_report_id` → `reports.
 | message_text | text | NO |  |  |  |
 | media_url | varchar(255) | YES |  |  |  |
 | is_read | tinyint(1) | NO |  | 0 |  |
+
 | is_system | tinyint(1) | NO |  | 0 |  |
 | sent_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
@@ -457,9 +462,61 @@ Foreign keys: `leader_id` → `users.user_id`, `match_id` → `report_matches.ma
 | close_reason | text | YES |  |  |  |
 | closed_by | int | YES | MUL |  |  |
 | closed_at | datetime | YES |  |  |  |
+| recovered_at | datetime | YES |  |  |  |
+| recovery_source | varchar(20) | YES |  |  |  |
+| recovery_confirmed_by | int | YES | MUL |  |  |
+| recovery_recorded_by | int | YES | MUL |  |  |
+| recovery_recorded_at | datetime | YES |  |  |  |
+| recovery_note | text | YES |  |  |  |
 | updated_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
 
-Foreign keys: `activated_by` → `users.user_id`, `closed_by` → `users.user_id`, `owner_id` → `users.user_id`, `pet_id` → `pets.pet_id`, `report_id` → `reports.report_id`, `requested_by` → `users.user_id`, `subdivision_id` → `subdivisions.subdivision_id`
+Foreign keys: `activated_by` → `users.user_id`, `closed_by` → `users.user_id`, `owner_id` → `users.user_id`, `pet_id` → `pets.pet_id`, `recovery_confirmed_by` → `users.user_id`, `recovery_recorded_by` → `users.user_id`, `report_id` → `reports.report_id`, `requested_by` → `users.user_id`, `subdivision_id` → `subdivisions.subdivision_id`
+
+**Changed 2026-11-11:** the six `recovery_*` / `recovered_at` columns are new. They are filled only by the one recovery operation (the owner's confirmation, in the app, or recorded by the Leader after a phone call or a visit): `recovery_source` is `owner_app`, `phone` or `in_person`; `recovery_confirmed_by` is the owner who confirmed; `recovery_recorded_by` is who recorded it; `close_outcome = 'recovered'` means it happened. See [LOST_PET_LIFECYCLE.md](LOST_PET_LIFECYCLE.md).
+
+## lost_pet_coordinations
+
+**New 2026-11-11.** How the owner and a neighbour who may have the pet get in touch, one row per possible recovery (`lost_pet_sightings.sighting_type = 'secured'`). `mode`: `none` (nobody agreed), `direct` (both agreed to message in the app), `leader` (either asked the Subdivision Leader to help, with no reason). Kept after it is resolved. See [LOST_PET_LIFECYCLE.md](LOST_PET_LIFECYCLE.md).
+
+| Column | Type | Null | Key | Default | Extra |
+|---|---|---|---|---|---|
+| coordination_id | int | NO | PRI |  | auto_increment |
+| alert_id | int | NO | MUL |  |  |
+| report_id | int | NO | MUL |  |  |
+| sighting_id | int | NO | UNI |  |  |
+| owner_id | int | YES | MUL |  |  |
+| finder_id | int | YES | MUL |  |  |
+| mode | varchar(10) | NO |  | none |  |
+| owner_consent | tinyint(1) | NO |  | 0 |  |
+| finder_consent | tinyint(1) | NO |  | 0 |  |
+| mediation_requested_by | int | YES | MUL |  |  |
+| mediation_requested_at | datetime | YES |  |  |  |
+| status | varchar(10) | NO | MUL | open |  |
+| resolved_at | datetime | YES |  |  |  |
+| resolved_by | int | YES | MUL |  |  |
+| resolution_note | text | YES |  |  |  |
+| created_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| updated_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
+
+Foreign keys: `alert_id` → `lost_pet_alerts.alert_id` (cascade), `report_id` → `reports.report_id` (cascade), `sighting_id` → `lost_pet_sightings.sighting_id` (cascade), `owner_id`, `finder_id`, `mediation_requested_by`, `resolved_by` → `users.user_id` (set null)
+
+## lost_pet_coordination_messages
+
+**New 2026-11-11.** A private text message between the owner and the neighbour of one coordination. Only while both agreed (`mode = direct`); readable only by the two of them (the Leader does not read them).
+
+| Column | Type | Null | Key | Default | Extra |
+|---|---|---|---|---|---|
+| message_id | int | NO | PRI |  | auto_increment |
+| coordination_id | int | NO | MUL |  |  |
+| sender_id | int | YES | MUL |  |  |
+| message_text | text | NO |  |  |  |
+| sent_at | datetime | NO | MUL | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| is_read | tinyint(1) | NO |  | 0 |  |
+| client_request_id | varchar(64) | YES | UNI |  |  |
+
+Foreign keys: `coordination_id` → `lost_pet_coordinations.coordination_id` (cascade), `sender_id` → `users.user_id` (set null)
+
+The unique index `uq_lost_pet_coordination_message_request` makes private-message retries safe. The same sender and coordination receive the original message; conflicting key reuse is refused.
 
 ## lost_pet_sightings
 
@@ -483,8 +540,13 @@ Foreign keys: `activated_by` → `users.user_id`, `closed_by` → `users.user_id
 | reviewed_by | int | YES | MUL |  |  |
 | reviewed_at | datetime | YES |  |  |  |
 | client_request_id | varchar(64) | YES | UNI |  |  |
+| sighting_type | varchar(20) | NO |  | seen |  |
+| on_behalf | tinyint(1) | NO |  | 0 |  |
+| care_note | text | YES |  |  |  |
 
 Foreign keys: `alert_id` → `lost_pet_alerts.alert_id`, `reporter_id` → `users.user_id`, `report_id` → `reports.report_id`, `reviewed_by` → `users.user_id`
+
+**Changed 2026-11-11:** `sighting_type` is new (`seen`: "I saw this pet"; `secured`: "I may have this pet safely with me", a possible recovery; every earlier row is `seen`), `on_behalf` preserves second-hand provenance (false for older rows whose source was not recorded), and `care_note` holds where a secured pet is being kept (private to the owner, the Leader and the writer).
 
 ## manual_match_decisions
 
@@ -1054,10 +1116,16 @@ Foreign keys: `report_id` → `reports.report_id`, `pet_id` → `pets.pet_id`, `
 | last_reopened_by | int | YES | MUL |  |  |
 | last_reopen_reason | text | YES |  |  |  |
 | is_sensitive | tinyint(1) | NO |  | 0 |  |
+| pet_snapshot | json | YES |  |  |  |
+| client_request_id | varchar(64) | YES |  |  |  |
 
 Foreign keys: `assigned_leader_id` → `users.user_id`, `category_id` → `report_categories.category_id`, `duplicate_of_report_id` → `reports.report_id`, `facility_id` → `landmarks.landmark_id`, `merged_by` → `users.user_id`, `pending_transfer_from_id` → `users.user_id`, `pending_transfer_to_id` → `users.user_id`, `pet_id` → `pets.pet_id`, `split_from_report_id` → `reports.report_id`, `current_status_id` → `report_status.status_id`, `subdivision_id` → `subdivisions.subdivision_id`, `user_id` → `users.user_id`, `verified_by_user_id` → `users.user_id`, `visibility_decided_by` → `users.user_id`
 
 **Changed 2026-11-09:** `animal_type` accepts Bird, Small mammal, Reptile, Livestock, Wildlife and Other (members appended after `Unknown`, so MySQL changes the ENUM in place); the columns from `case_status` on are new (case workflow: the four global statuses, assessment, identity, ownership, closure, reopening and the sensitive flag; see [CASE_WORKFLOW_BACKEND.md](CASE_WORKFLOW_BACKEND.md)). New foreign keys, all to `users.user_id` with `ON DELETE SET NULL`: `assessed_by`, `ownership_owner_id`, `ownership_decided_by`, `closed_by`, `last_reopened_by`. New index: `ix_reports_case_status`.
+
+**Changed 2026-11-11:** `pet_snapshot` is new: the pet's registered details and when and where it was last seen, frozen by the server when a Lost Pet report is filed (null for every other report and for reports filed before this change). No index or foreign key.
+
+**Changed 2026-11-11:** `client_request_id` is new: a Lost Pet filing's retry key (the same key from the same person returns the first report). Empty for every other report. No index or foreign key.
 
 ## revoked_tokens
 

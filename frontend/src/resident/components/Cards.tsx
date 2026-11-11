@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Camera, ChevronRight, ImageIcon, MapPin } from 'lucide-react';
 import { fmtDateTime, fmtDay, relative } from '../../preview/lib/format';
@@ -26,17 +27,23 @@ export function ReportCard({ report, now }: { report: Report; now: Date }) {
   );
 }
 
-/** One community notice in a feed. Private reports can never appear here. */
+/**
+ * One community notice in a list. Private reports can never appear here. A missing pet leads with its photo and when it was last seen:
+ * that is what a neighbour scans for.
+ */
 export function NoticeCard({ notice }: { notice: Notice }) {
   const Icon = NOTICE_ICON[notice.type];
+  const photo = notice.photoUrls?.[0];
+  const lost = notice.type === 'lost_pet';
+  const when = lost && notice.lastSeenAt ? `Last seen ${relative(notice.lastSeenAt, new Date())}` : fmtDay(notice.publishedAt);
   return (
     <Link to={residentPath(`/community/${notice.id}`)} className={`rs-card rs-card--link rs-card--${notice.type === 'safety_advisory' ? 'advisory' : 'plain'}`}>
-      <span className="rs-card__icon"><Icon size={19} aria-hidden="true" /></span>
+      <span className={`rs-card__icon${photo ? ' rs-card__icon--photo' : ''}`}>{photo ? <img src={photo} alt="" loading="lazy" /> : <Icon size={19} aria-hidden="true" />}</span>
       <span className="rs-card__text">
         <span className="rs-card__kicker">{NOTICE_TYPES[notice.type].label}{notice.mine ? <Pill tone="brand">Your notice</Pill> : null}</span>
         <span className="rs-card__title">{notice.title}</span>
         <span className="rs-card__desc">{notice.description}</span>
-        <span className="rs-card__meta">{notice.area} · {fmtDay(notice.publishedAt)}</span>
+        <span className="rs-card__meta">{when} · {notice.area}</span>
       </span>
     </Link>
   );
@@ -56,27 +63,37 @@ export function PhotoStrip({ count, media, urls }: { count: number; media?: Medi
   );
 }
 
-/** One sighting: when, where and what was seen. A sighting is a report from a person, never live tracking, and nobody is named. */
-export function SightingCard({ sighting, now, latest = false, number, onMap }: { sighting: Sighting; now: Date; latest?: boolean; number?: number; onMap?: boolean }) {
+/**
+ * One sighting: when, where and what was seen. A sighting is a report from a person, never live tracking, and nobody is named.
+ * A possible-recovery report ("I may have this pet safely with me") is marked as such and may carry where the pet is being kept (private:
+ * the server only sends that to the owner, the Leader and the person who wrote it). `children` is what belongs with this one report (the
+ * conversation about it).
+ */
+export function SightingCard({ sighting, now, latest = false, number, onMap, children }: { sighting: Sighting; now: Date; latest?: boolean; number?: number; onMap?: boolean; children?: ReactNode }) {
+  const lead = sighting.kind === 'secured';
   return (
-    <li className="rs-sighting">
+    <li className={`rs-sighting${lead ? ' rs-sighting--lead' : ''}`}>
       <div className="rs-sighting__head">
         <span className="rs-sighting__time">
           {number ? <span className="rs-sighting__num" aria-label={`Sighting ${number}`}>{number}</span> : null}
-          <time dateTime={sighting.observedAt}>{relative(sighting.observedAt, now)}</time>{latest ? <Pill tone="brand">Latest</Pill> : null}
+          <time dateTime={sighting.observedAt}>{relative(sighting.observedAt, now)}</time>
+          {lead ? <Pill tone="amber">Possible recovery</Pill> : latest ? <Pill tone="brand">Latest</Pill> : null}
         </span>
         <span className="rs-meta">{sighting.by === 'you' ? 'You' : 'A neighbour'}</span>
       </div>
-      <p className="rs-meta">{fmtDateTime(sighting.observedAt)}</p>
+      <p className="rs-meta">Seen {fmtDateTime(sighting.observedAt)} · reported {fmtDateTime(sighting.submittedAt)}</p>
       <p className="rs-sighting__place"><MapPin size={15} aria-hidden="true" />{sighting.location.label}</p>
       {onMap === false ? <p className="rs-meta">Not on the map: no pin was placed, so this is described in words only.</p> : null}
       <p>{sighting.description}</p>
+      {lead && sighting.careNote ? <p className="rs-sighting__care"><strong>Where it is being kept:</strong> {sighting.careNote}</p> : null}
       {sighting.onBehalf || sighting.photos > 0 ? (
         <p className="rs-meta">
           {sighting.onBehalf ? 'Told to the reporter by someone else' : null}
           {sighting.photos > 0 ? <span className="rs-sighting__photo"><Camera size={13} aria-hidden="true" />{sighting.photos} {sighting.photos === 1 ? 'photo' : 'photos'}</span> : null}
         </p>
       ) : null}
+      {sighting.review ? <p className="rs-meta">{sighting.review.status === 'verified' ? 'Checked by the Subdivision Leader.' : 'Reviewed by the Subdivision Leader: not a match.'}{sighting.review.at ? ` ${fmtDateTime(sighting.review.at)}.` : ''}{sighting.review.note ? ` ${sighting.review.note}` : ''}</p> : <p className="rs-meta">Not verified.</p>}
+      {children}
     </li>
   );
 }

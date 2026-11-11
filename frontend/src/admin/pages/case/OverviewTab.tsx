@@ -1,26 +1,26 @@
 import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Link2, Lock, Megaphone, Plus, Unlink } from 'lucide-react';
+import { Lock, Megaphone, Plus } from 'lucide-react';
 import { isValidLatLng } from '../../../preview/geo';
 import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
 import { MapLegend } from '../../../preview/map/MapLegend';
 import { adminPath } from '../../config';
-import { Badge, IdentityBadge, OutcomeBadge, OwnershipBadge, StatusBadge } from '../../components/Badge';
+import { Badge, IdentityBadge, OutcomeBadge, OwnershipBadge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { EvidenceTile } from '../../components/Evidence';
 import { Block, Callout, Kv, Panel } from '../../components/layout';
 import { ANIMAL_TYPES, DISPOSITIONS, NOTICE_STATUS, VERIFICATION } from '../../data/constants';
 import { useAdminData } from '../../data/context';
-import { currentActivity, pendingFollowUpsOf, relatedCandidates } from '../../data/selectors';
+import { currentActivity, pendingFollowUpsOf } from '../../data/selectors';
 import type { Case } from '../../data/types';
 import { ago, dueInfo, fmtDateTime, plural } from '../../../preview/lib/format';
 import type { OpenCaseDialog } from './dialogState';
+import RegisteredPetPanel from './RegisteredPetPanel';
+import RelatedReportsBlock from './RelatedReportsBlock';
 
 export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date; openDialog: OpenCaseDialog }) {
   const { state } = useAdminData();
   const navigate = useNavigate();
-  const linked = state.cases.filter((x) => c.relatedCaseIds.includes(x.id));
-  const suggestions = relatedCandidates(state.cases, c, 3);
   const notice = state.notices.find((n) => n.caseId === c.id && n.status !== 'archived');
   const publishable = !c.sensitive && (c.category === 'lost_pet' || c.category === 'found_animal' || c.category === 'safety');
   const next = pendingFollowUpsOf(c).filter((f) => f.dueAt).sort((a, b) => a.dueAt!.localeCompare(b.dueAt!))[0];
@@ -32,7 +32,7 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
     <div className="sa-case">
       <Panel>
         <Block title="What was reported">
-          <p className="sa-prose">{c.description}</p>
+          <p className="sa-prose">{c.description.trim() || (c.category === 'lost_pet' ? 'The owner reported this pet missing and added no further details. The registered pet, and when and where it was last seen, are beside this report.' : '')}</p>
           <dl className="sa-facts mt-5">
             <div><dt>Observed</dt><dd>{fmtDateTime(c.observedAt)}</dd></div>
             <div><dt>Reported</dt><dd>{fmtDateTime(c.reportedAt)}{ago(c.reportedAt, now) ? <span className="sa-text-3"> · {ago(c.reportedAt, now)}</span> : null}</dd></div>
@@ -56,40 +56,7 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
           )}
         </Block>
 
-        <Block title="Related reports" description="Reports about the same concern. Linking never merges or hides a report." action={!closed ? <Button size="sm" icon={Link2} onClick={() => openDialog({ kind: 'link' })}>Link reports</Button> : undefined}>
-          {linked.length === 0 && suggestions.length === 0 ? <p className="sa-small sa-text-2">No related reports yet.</p> : null}
-          {linked.length > 0 ? (
-            <ul className="m-0 flex list-none flex-col p-0">
-              {linked.map((o) => (
-                <li key={o.id} className="flex items-start justify-between gap-4 border-t border-solid py-3 first:border-t-0 first:pt-0" style={{ borderColor: 'var(--sa-line-soft)' }}>
-                  <div className="min-w-0">
-                    <p className="flex flex-wrap items-center gap-2"><Link to={adminPath(`/cases/${o.id}`)} className="sa-ref">{o.id}</Link><StatusBadge status={o.status} /></p>
-                    <p className="sa-rowtitle mt-1">{o.title}</p>
-                    <p className="sa-meta mt-0.5">{o.location.area} · observed {fmtDateTime(o.observedAt)}</p>
-                  </div>
-                  {!closed ? <Button size="sm" variant="ghost" icon={Unlink} onClick={() => openDialog({ kind: 'unlink', otherId: o.id })}>Unlink</Button> : null}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {suggestions.length > 0 && !closed ? (
-            <div className={linked.length ? 'mt-4' : ''}>
-              <p className="sa-label mb-2">Possibly related</p>
-              <ul className="m-0 flex list-none flex-col gap-2 p-0">
-                {suggestions.map(({ case: o, reasons }) => (
-                  <li key={o.id} className="sa-record flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="flex flex-wrap items-center gap-2"><Link to={adminPath(`/cases/${o.id}`)} className="sa-ref">{o.id}</Link><span className="sa-meta">{o.location.area}</span></p>
-                      <p className="mt-0.5 font-medium">{o.title}</p>
-                      <p className="mt-1.5 flex flex-wrap gap-1.5">{reasons.map((r) => <Badge key={r}>{r}</Badge>)}</p>
-                    </div>
-                    <Button size="sm" onClick={() => openDialog({ kind: 'link' })}>Review</Button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </Block>
+        <RelatedReportsBlock c={c} openDialog={openDialog} />
 
         {c.closure ? (
           <Block title="Closure">
@@ -107,13 +74,15 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
             <Kv stack rows={[
               ['Incident', VERIFICATION[c.assessment.incident].label],
               // identity and ownership do not apply to wild animals
-              ...(c.animal.type === 'wildlife' ? [] : [['Animal', <IdentityBadge status={c.identity.status} />] as [string, ReactNode], ['Ownership', <OwnershipBadge status={c.ownership.status} />] as [string, ReactNode]]),
+              ...(c.animal.type === 'wildlife' ? [] : [['Animal', <IdentityBadge status={c.identity.status} decided={c.identity.decided} />] as [string, ReactNode], ['Ownership', <OwnershipBadge status={c.ownership.status} />] as [string, ReactNode]]),
               ['Right now', currentActivity(c, now)],
               ['Next follow-up', next ? <span className={dueInfo(next.dueAt, now).overdue ? 'sa-text-red' : ''}>{dueInfo(next.dueAt, now).label}<span className="sa-text-3 block">{next.title}</span></span> : '—'],
             ]} />
             <p className="sa-small mt-4"><Link to="?tab=assessment" className="font-semibold">Open assessment</Link></p>
           </Block>
         </Panel>
+
+        <RegisteredPetPanel c={c} />
 
         <Panel>
           <Block tight title={<span className="flex items-center gap-2"><Lock size={14} aria-hidden="true" />Reporter</span>} description="Visible to authorized administrators only.">

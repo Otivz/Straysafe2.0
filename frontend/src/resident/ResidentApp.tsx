@@ -25,7 +25,9 @@ import WelcomePage from './pages/auth/WelcomePage';
 import ClaimPage from './pages/community/ClaimPage';
 import ClaimStatusPage from './pages/community/ClaimStatusPage';
 import CommunityPage from './pages/community/CommunityPage';
+import NoticeDirectoryPage from './pages/community/NoticeDirectoryPage';
 import NoticePage from './pages/community/NoticePage';
+import SecuredPetPage from './pages/community/SecuredPetPage';
 import SightingHistoryPage from './pages/community/SightingHistoryPage';
 import SightingPage from './pages/community/SightingPage';
 import { EditPetPage, RegisterPetPage } from './pages/pets/PetFormPage';
@@ -94,8 +96,11 @@ export default function ResidentApp({ mode }: { mode: ResidentMode }) {
                 <Route path="reports/:reportId/recovered" element={<RecoveryPage />} />
 
                 <Route path="community" element={<CommunityPage />} />
+                <Route path="community/lost" element={<NoticeDirectoryPage key="lost" kind="lost_pet" />} />
+                <Route path="community/found" element={<NoticeDirectoryPage key="found" kind="found_animal" />} />
                 <Route path="community/:noticeId" element={<NoticePage />} />
                 <Route path="community/:noticeId/sighting" element={<SightingPage />} />
+                <Route path="community/:noticeId/secured" element={<SecuredPetPage />} />
                 <Route path="community/:noticeId/sightings" element={<SightingHistoryPage />} />
                 <Route path="community/:noticeId/claim" element={<ClaimPage />} />
                 <Route path="claims/:claimId" element={<ClaimStatusPage />} />

@@ -271,7 +271,7 @@ else:
         check(f"animal type '{given}' is accepted and stored as '{stored}'", r.status_code == 200 and r.json()["animal_type"] == stored, r.text)
     check("an unknown animal type is refused with the list of choices", (lambda r: r.status_code == 400 and "Small mammal" in r.text)(file(animal_type="Dragon", category_id=CATS["Other Animal Concern"])))
     check("a dog still works (and a report needs no pet)", file(animal_type="Dog", category_id=CATS["Found / Unidentified Animal"]).json()["pet_name"] is None)
-    check("a new report starts as 'reported', Private", (lambda r: r["case_status"] == "reported" and r["visibility"] == "Private")(file(animal_type="Cat", category_id=CATS["Lost Pet"]).json()))
+    check("a new report starts as 'reported', Private", (lambda r: r["case_status"] == "reported" and r["visibility"] == "Private")(file(animal_type="Cat", category_id=CATS["Other Animal Concern"]).json()))
     nuisance = file(animal_type="Dog", category_id=CATS["Animal Nuisance"]).json()
     check("a report in 'Animal Nuisance' is sensitive by default", db.get(Report, nuisance["report_id"]).is_sensitive is True)
     safety = file(animal_type="Dog", category_id=CATS["Animal Safety Concern"]).json()

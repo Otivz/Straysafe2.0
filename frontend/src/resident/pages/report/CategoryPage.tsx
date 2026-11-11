@@ -4,12 +4,13 @@ import { ClipboardList, Pencil, Trash2 } from 'lucide-react';
 import { ConfirmSheet } from '../../components/Sheet';
 import { ENTRY_ICON } from '../../components/icons';
 import { Screen } from '../../components/Screen';
-import { Button, Callout, EmptyState, LinkButton, Row } from '../../components/ui';
+import { Button, Callout, DisabledRow, EmptyState, LinkButton, Row } from '../../components/ui';
 import { residentPath } from '../../config';
 import { CATEGORIES } from '../../data/constants';
 import { useResidentData } from '../../data/context';
-import { ENTRIES, offeredEntries, type EntryId } from '../../data/entries';
-import { useBeginReport } from '../../lib/flow';
+import { ENTRIES, REGISTER_FIRST, offeredEntries, type EntryId } from '../../data/entries';
+import { reportablePets } from '../../data/selectors';
+import { registerForLostPath, useBeginReport } from '../../lib/flow';
 
 /** R08 — Choose what to report: three entries, and only the ones the subdivision accepts right now. */
 export default function CategoryPage() {
@@ -19,6 +20,8 @@ export default function CategoryPage() {
   const [discarding, setDiscarding] = useState(false);
   const draft = state.draft;
   const entries = offeredEntries(state.accepting);
+  // Lost Pet is for a registered pet of this resident: with none, the card stays visible but cannot be used, and says what to do
+  const noPets = reportablePets(state).length === 0;
 
   const choose = (id: EntryId) => {
     if (id === 'animal') navigate({ pathname: residentPath('/report/situation'), search: keep ? '?keep=1' : '' });
@@ -51,8 +54,9 @@ export default function CategoryPage() {
         </EmptyState>
       ) : (
         <div className="rs-list">
-          {entries.map((id) => (
-            <Row key={id} icon={ENTRY_ICON[id]} title={ENTRIES[id].title} meta={ENTRIES[id].blurb} onClick={() => choose(id)} />
+          {entries.map((id) => (id === 'lost_pet' && noPets
+            ? <DisabledRow key={id} icon={ENTRY_ICON[id]} title={ENTRIES[id].title} meta={REGISTER_FIRST} action={<LinkButton size="sm" variant="primary" to={registerForLostPath()}>Register a pet</LinkButton>} />
+            : <Row key={id} icon={ENTRY_ICON[id]} title={ENTRIES[id].title} meta={ENTRIES[id].blurb} onClick={() => choose(id)} />
           ))}
         </div>
       )}

@@ -70,6 +70,7 @@ def build_legacy(path):
         c.execute(text("INSERT INTO owner_warnings (warning_id, user_id, report_id, issued_by, warning_level, violation_type, description, fine_amount, status, created_at) "
                        "VALUES (1, 8, 4, 5, '1st Warning', 'Free-Roaming Unleashed', 'Keep your dog in', 0, 'Acknowledged', '2026-01-04 09:00:00')"))
         c.execute(text("INSERT INTO lost_pet_alerts (alert_id, report_id, subdivision_id, status) VALUES (1, 1, 1, 'active')"))
+        c.execute(text("INSERT INTO lost_pet_sightings (sighting_id, alert_id, report_id, latitude, longitude, seen_at) VALUES (1, 1, 1, 14.8, 121.0, '2026-01-02 10:00:00')"))
     return eng
 
 
@@ -107,6 +108,11 @@ check("referrals gained the organisation columns", {name for name, _ in M.REFERR
 check("referral updates gained status_after", "status_after" in {c["name"] for c in insp.get_columns("barangay_referral_updates")})
 check("warnings gained the policy columns", {name for name, _ in M.WARNING_COLUMNS} <= {c["name"] for c in insp.get_columns("owner_warnings")})
 check("alerts gained alert_type", "alert_type" in {c["name"] for c in insp.get_columns("lost_pet_alerts")})
+check("alerts gained the recovery record (2026-11-11)", {name for name, _ in M.ALERT_COLUMNS} <= {c["name"] for c in insp.get_columns("lost_pet_alerts")}
+      and {"recovered_at", "recovery_source", "recovery_confirmed_by", "recovery_recorded_by", "recovery_recorded_at", "recovery_note"} <= {c["name"] for c in insp.get_columns("lost_pet_alerts")})
+check("sightings gained their type and the private care note", {"sighting_type", "care_note"} <= {c["name"] for c in insp.get_columns("lost_pet_sightings")})
+check("reports gained the Lost Pet retry key", "client_request_id" in rcols)
+check("the coordination tables were created", insp.has_table("lost_pet_coordinations") and insp.has_table("lost_pet_coordination_messages"))
 check("the four case tables exist", all(insp.has_table(t) for t in M.CASE_TABLES))
 check("case_status is indexed", any(ix["name"] == "ix_reports_case_status" for ix in insp.get_indexes("reports")))
 
@@ -118,6 +124,9 @@ with legacy_eng.connect() as c:
     cats = [r[0] for r in c.execute(text("SELECT category_name FROM report_categories ORDER BY category_id")).all()]
     reopened = {r[0] for r in c.execute(text("SELECT reopened_count FROM reports")).all()}
     sensitive = {r[0] for r in c.execute(text("SELECT is_sensitive FROM reports")).all()}
+    snapshots = {r[0] for r in c.execute(text("SELECT pet_snapshot FROM reports")).all()}
+    sighting_types = {r[0] for r in c.execute(text("SELECT sighting_type FROM lost_pet_sightings")).all()}
+    recovered = {r[0] for r in c.execute(text("SELECT recovered_at FROM lost_pet_alerts")).all()}
 
 expected = {sid: V.case_status_from_legacy(sid) for sid in range(1, 19)}
 check("every legacy status reads as one of the four, as the vocabulary says", status_by_legacy == expected, status_by_legacy)
@@ -134,12 +143,22 @@ check("existing alert is a lost-pet alert", alert_type == "lost_pet")
 check("the six categories exist, 'Lost Pet' is not duplicated, the old ones stay",
       set(V.CATEGORY_FAMILIES.values()) <= set(cats) and cats.count("Lost Pet") == 1 and {"Injured", "Aggressive", "Rabies Risk", "Roaming Animal", "Rescue Needed"} <= set(cats), cats)
 check("defaults: reopened_count 0, is_sensitive false", reopened == {0} and sensitive == {0})
+check("pet_snapshot (the pet of a Lost Pet report as it was filed) is added empty to every existing report: nothing is rewritten", snapshots == {None}, snapshots)
+check("an existing sighting reads as an ordinary one, and an existing alert as not recovered", sighting_types == {"seen"} and recovered == {None}, (sighting_types, recovered))
 
 # ---- second run: nothing to do, nothing changes ---------------------------------------------------------
 second = M.run_case_alignment(legacy_eng)
 check("second run: no errors and no actions, status ok (idempotent)",
       second["actions"] == [] and second["errors"] == [] and second["status"] == "ok", second)
 check("second run changes no data", snapshot(legacy_eng) == after)
+
+# ---- a database migrated before pet_snapshot existed (the one already running): only that one column is added ----
+with legacy_eng.begin() as c:
+    c.execute(text("ALTER TABLE reports DROP COLUMN pet_snapshot"))
+earlier = M.run_case_alignment(legacy_eng)
+check("a database that already has every other case column gets just reports.pet_snapshot, and is ok",
+      earlier["actions"] == ["reports.pet_snapshot added"] and earlier["errors"] == [] and earlier["status"] == "ok", earlier)
+check("...and that run changes no data", snapshot(legacy_eng) == after)
 
 # ---- values a person set after the migration are never overwritten ---------------------------------------
 with legacy_eng.begin() as c:
@@ -186,9 +205,11 @@ run1 = M.run_case_alignment(FakeEngine(my))
 check("MySQL path: first run has no errors", run1["errors"] == [], run1["errors"])
 reports_alters = [s for s in my.ddl if s.startswith("ALTER TABLE reports ADD COLUMN")]
 check("MySQL path: all reports columns go in ONE statement (one instant row version)", len(reports_alters) == 1 and reports_alters[0].count("ADD COLUMN") == len(M.REPORT_COLUMNS), len(reports_alters))
+check("MySQL path: pet_snapshot is a nullable JSON column, added with the others", "ADD COLUMN pet_snapshot JSON NULL" in reports_alters[0], reports_alters)
 fk_alters = [s for s in my.ddl if "ADD CONSTRAINT" in s]
-check("MySQL path: the five user foreign keys on reports + one on referrals, batched per table",
-      len(fk_alters) == 2 and fk_alters[0].count("FOREIGN KEY") == len(M.REPORT_USER_FKS) and "ON DELETE SET NULL" in fk_alters[0], fk_alters)
+check("MySQL path: the five user foreign keys on reports + one on referrals + two on alerts (the recovery record), batched per table",
+      len(fk_alters) == 3 and fk_alters[0].count("FOREIGN KEY") == len(M.REPORT_USER_FKS) and "ON DELETE SET NULL" in fk_alters[0]
+      and any(s.startswith("ALTER TABLE lost_pet_alerts") and s.count("FOREIGN KEY") == len(M.ALERT_USER_FKS) for s in fk_alters), fk_alters)
 enum_stmt = [s for s in my.ddl if "MODIFY COLUMN animal_type" in s]
 check("MySQL path: animal_type ENUM keeps Dog, Cat, Unknown first and appends the rest (in-place change)",
       len(enum_stmt) == 1 and enum_stmt[0].startswith("ALTER TABLE reports MODIFY COLUMN animal_type ENUM('Dog','Cat','Unknown','Bird','Small mammal','Reptile','Livestock','Wildlife','Other')"), enum_stmt)

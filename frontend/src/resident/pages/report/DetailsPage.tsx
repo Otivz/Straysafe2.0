@@ -7,28 +7,25 @@ import { MediaPicker } from '../../components/MediaPicker';
 import { ConfirmSheet } from '../../components/Sheet';
 import { Button, Callout } from '../../components/ui';
 import { residentPath } from '../../config';
-import { ANIMAL_TYPES, ANIMAL_TYPE_IDS, CATEGORIES, EXTRA_FIELD, PET_TYPE_IDS } from '../../data/constants';
+import { ANIMAL_TYPES, ANIMAL_TYPE_IDS, CATEGORIES, EXTRA_FIELD } from '../../data/constants';
 import { useResidentData } from '../../data/context';
+import { LOST_NOTE } from '../../data/entries';
 import { visibilityAfterSending } from '../../data/selectors';
-import type { CategoryId, Draft, ReportKind } from '../../data/types';
+import type { CategoryId, Draft } from '../../data/types';
 import { useFlowNav } from '../../lib/flow';
 import { useFormFocus, useNow } from '../../lib/hooks';
-import { describePet } from '../../lib/pets';
 import { publicTextProblem } from '../../lib/publicText';
 import { FlowScreen } from './FlowScreen';
+import { LostPetForm } from './LostPetForm';
 
 const MAX = 600;
 
-const COPY: Record<ReportKind, { screen: string; label: string; hint: string; placeholder: string; when: string }> = {
+/** The two forms that describe an animal in words. A lost-pet report is about a registered pet and has its own form (LostPetForm). */
+const COPY: Record<'incident' | 'found', { screen: string; label: string; hint: string; placeholder: string; when: string }> = {
   incident: {
     screen: 'What happened?', label: 'What happened?', when: 'When did you see it?',
     hint: 'Stick to what you saw: what the animal did, how many there were, and anything that worries you.',
     placeholder: 'A medium brown dog without a leash ran toward joggers near the park path.',
-  },
-  lost: {
-    screen: 'About your pet', label: 'Describe your pet', when: 'When was your pet last seen?',
-    hint: 'Colour, size, markings, collar or tag, and how they act around strangers. This is shown to neighbours, so leave out phone numbers and your address.',
-    placeholder: 'Small white and gold Shih Tzu with a pink collar. Shy with strangers.',
   },
   found: {
     screen: 'About the animal', label: 'Describe the animal and where you found it', when: 'When did you find it?',
@@ -38,7 +35,7 @@ const COPY: Record<ReportKind, { screen: string; label: string; hint: string; pl
 };
 
 const NOTES: Record<CategoryId, { tone: 'info' | 'amber'; title?: string; text: string }> = {
-  lost_pet: { tone: 'info', text: 'After you submit, a notice with your pet’s photo, description and the general area is visible to neighbours. Your name, phone and address are never shown.' },
+  lost_pet: LOST_NOTE,
   found_animal: { tone: 'info', text: 'An administrator reviews this before any notice is published. Please do not hand the animal to someone who only says it is theirs.' },
   safety: { tone: 'amber', title: 'Stay safe.', text: 'Keep your distance and never touch, feed or corner the animal. If someone is in danger right now, contact the guardhouse or local emergency services first.' },
   injured: { tone: 'amber', title: 'Do not handle the animal.', text: 'Keep a safe distance and note exactly where it is. A frightened or hurt animal may bite or scratch.' },
@@ -46,8 +43,7 @@ const NOTES: Record<CategoryId, { tone: 'info' | 'amber'; title?: string; text: 
   other: { tone: 'info', text: 'This report is private. Neighbours will not see it, or who sent it.' },
 };
 
-/** The two notes that follow the subdivision's publication setting (connected); every other note is fixed. */
-const LOST_REVIEWED: (typeof NOTES)[CategoryId] = { tone: 'info', text: 'An administrator reviews this before a notice is shown to neighbours. Once it is, the notice shows your pet’s photo, description and the general area. Your name, phone and address are never shown.' };
+/** The note that follows the subdivision's publication setting (connected); every other note is fixed. */
 const FOUND_PUBLISHED: (typeof NOTES)[CategoryId] = { tone: 'info', text: 'After you submit, a notice with the animal’s description and the general area is visible to neighbours. Please do not hand the animal to someone who only says it is theirs.' };
 
 type Errors = Partial<Record<'animalType' | 'description' | 'observedAt', string>>;
@@ -60,21 +56,12 @@ function DetailsForm({ draft }: { draft: Draft }) {
   const { ref, invalid } = useFormFocus();
   const [errors, setErrors] = useState<Errors>({});
   const [discarding, setDiscarding] = useState(false);
-  const kind = CATEGORIES[draft.category].kind;
+  const kind: 'incident' | 'found' = CATEGORIES[draft.category].kind === 'found' ? 'found' : 'incident';
   const copy = COPY[kind];
-  const note = draft.category === 'lost_pet' && visibilityAfterSending(state, 'lost') === 'pending_review' ? LOST_REVIEWED
-    : draft.category === 'found_animal' && visibilityAfterSending(state, 'found') === 'published' ? FOUND_PUBLISHED
-      : NOTES[draft.category];
+  const note = draft.category === 'found_animal' && visibilityAfterSending(state, 'found') === 'published' ? FOUND_PUBLISHED : NOTES[draft.category];
   const extra = EXTRA_FIELD[draft.category];
   const patch = (p: Partial<Draft>) => local({ type: 'draft/patch', patch: p });
   const clear = (key: keyof Errors) => setErrors((prev) => ({ ...prev, [key]: undefined }));
-
-  const choosePet = (id: string) => {
-    const pet = state.pets.find((p) => p.id === id);
-    if (!pet) { patch({ petId: null }); return; }
-    patch({ petId: pet.id, petName: pet.name, animalType: pet.type, description: draft.description.trim() ? draft.description : describePet(pet) });
-    setErrors({});
-  };
 
   const submit = (ev: FormEvent) => {
     ev.preventDefault();
@@ -82,8 +69,8 @@ function DetailsForm({ draft }: { draft: Draft }) {
     if (!draft.animalType) found.animalType = 'Choose the kind of animal.';
     if (draft.description.trim().length < 10) found.description = 'Add a few more details (at least 10 characters).';
     else if (kind !== 'incident') {
-      // Lost and found descriptions end up in a notice that neighbours read.
-      const problem = publicTextProblem(`${draft.description} ${draft.petName}`);
+      // A found-animal description ends up in a notice that neighbours read.
+      const problem = publicTextProblem(draft.description);
       if (problem) found.description = problem;
     }
     if (!isValidLocalInput(draft.observedAt)) found.observedAt = 'Choose when this happened.';
@@ -108,29 +95,14 @@ function DetailsForm({ draft }: { draft: Draft }) {
 
       <form id="report-details" className="rs-stack" onSubmit={submit} noValidate>
         <div ref={ref} className="rs-stack">
-          {kind === 'lost' && state.pets.length > 0 ? (
-            <Field label="Which pet?" optional hint="Choosing a registered pet fills in what we already know.">
-              <Select value={draft.petId ?? ''} onChange={(e) => choosePet(e.target.value)}>
-                <option value="">Another animal</option>
-                {state.pets.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.breed || ANIMAL_TYPES[p.type]}</option>)}
-              </Select>
-            </Field>
-          ) : null}
-
           <FieldGroup label={kind === 'incident' ? 'What kind of animal?' : 'What kind of animal is it?'} required error={errors.animalType}>
             <ChoiceChips
               label="Kind of animal"
               value={draft.animalType}
               onChange={(v) => { patch({ animalType: v }); clear('animalType'); }}
-              options={(kind === 'lost' ? PET_TYPE_IDS : ANIMAL_TYPE_IDS).map((id) => ({ value: id, label: ANIMAL_TYPES[id], icon: ANIMAL_ICON[id] }))}
+              options={ANIMAL_TYPE_IDS.map((id) => ({ value: id, label: ANIMAL_TYPES[id], icon: ANIMAL_ICON[id] }))}
             />
           </FieldGroup>
-
-          {kind === 'lost' ? (
-            <Field label="Pet’s name" optional>
-              <Input value={draft.petName} onChange={(e) => patch({ petName: e.target.value })} maxLength={40} autoComplete="off" placeholder="Mochi" />
-            </Field>
-          ) : null}
 
           <Field label={copy.label} required error={errors.description} hint={<>{copy.hint} <span className="rs-count">{draft.description.length}/{MAX}</span></>}>
             <Textarea value={draft.description} onChange={(e) => { patch({ description: e.target.value }); clear('description'); }} maxLength={MAX} rows={5} placeholder={copy.placeholder} />
@@ -172,8 +144,9 @@ function DetailsForm({ draft }: { draft: Draft }) {
   );
 }
 
-/** R09 — Report form. Also the lost-pet report (R17) and the found-animal report (R22): the fields follow the category. */
+/** R09 — Report form. Also the found-animal report (R22); the lost-pet report (R17) is registration first and has its own form. */
 export default function DetailsPage() {
   const draft = useResidentData().state.draft;
-  return draft ? <DetailsForm draft={draft} /> : <Navigate to={residentPath('/report')} replace />;
+  if (!draft) return <Navigate to={residentPath('/report')} replace />;
+  return CATEGORIES[draft.category].kind === 'lost' ? <LostPetForm draft={draft} /> : <DetailsForm draft={draft} />;
 }

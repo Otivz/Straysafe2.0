@@ -40,6 +40,9 @@ LEGACY_DDL = [
     """CREATE TABLE lost_pet_alerts (
         alert_id INTEGER PRIMARY KEY, report_id INT NOT NULL UNIQUE, subdivision_id INT NOT NULL,
         status VARCHAR(20) NOT NULL DEFAULT 'requested')""",
+    """CREATE TABLE lost_pet_sightings (
+        sighting_id INTEGER PRIMARY KEY, alert_id INT NOT NULL, report_id INT NOT NULL, latitude NUMERIC(10,8) NOT NULL,
+        longitude NUMERIC(11,8) NOT NULL, seen_at DATETIME NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'unverified')""",
 ]
 
 
@@ -77,7 +80,7 @@ class FakeMySQL:
         p = params or {}
         self.log.append(sql)
         up = sql.upper()
-        if up.startswith(("ALTER TABLE", "CREATE INDEX")):
+        if up.startswith(("ALTER TABLE", "CREATE INDEX", "CREATE UNIQUE INDEX")):
             self.ddl.append(sql)
             return self._ddl(sql)
         if "FROM INFORMATION_SCHEMA.TABLES" in up:
@@ -126,9 +129,9 @@ class FakeMySQL:
             if md:
                 del t["indexes"][md.group(1)]
             return FakeResult()
-        m = re.match(r"CREATE INDEX (\w+) ON (\w+) \((\w+)\)", sql)
+        m = re.match(r"CREATE (?:UNIQUE )?INDEX (\w+) ON (\w+) \((\w+)\)", sql, re.IGNORECASE)
         if m:
-            self.tables[m.group(2)]["indexes"][m.group(1)] = (False, [m.group(3)])
+            self.tables[m.group(2)]["indexes"][m.group(1)] = ("UNIQUE" in sql.upper(), [m.group(3)])
         return FakeResult()
 
 
@@ -142,6 +145,7 @@ def legacy_mysql(unique_name="uq_barangay_referrals_report_id"):
     db.table("barangay_referral_updates", [("update_id", "int", False), ("referral_id", "int", False)])
     db.table("owner_warnings", [("warning_id", "int", False)])
     db.table("lost_pet_alerts", [("alert_id", "int", False)])
+    db.table("lost_pet_sightings", [("sighting_id", "int", False)])
     db.table("report_categories", [("category_id", "int", False), ("category_name", "varchar(100)", False), ("description", "text", True)])
     for t in M.CASE_TABLES:                          # created by create_all from the models in a real run: every model column
         db.table(t, [(c.name, "int", True) for c in Base.metadata.tables[t].columns])

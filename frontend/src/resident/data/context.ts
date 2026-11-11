@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { ResidentAction } from './reducer';
-import type { ResidentState } from './types';
+import type { CommunityQuery } from '../live/api';
+import type { Notice, ResidentState } from './types';
 
 export type LoadStatus = 'loading' | 'ready' | 'error';
 /** Whether one report's or notice's full record has been read. */
@@ -46,6 +47,8 @@ export interface ResidentDataValue {
   reportStatus(id: string): { status: DetailStatus; error?: string };
   /** Reads one notice in full (its sightings). */
   loadNotice(id: string): Promise<void>;
+  /** One page of the Community directory, searched and filtered on the server. The notices are kept, so their pages open. */
+  loadCommunityPage(query: CommunityQuery): Promise<{ notices: Notice[]; total: number }>;
   noticeStatus(id: string): { status: DetailStatus; error?: string };
   capabilities: ResidentCapabilities;
 }

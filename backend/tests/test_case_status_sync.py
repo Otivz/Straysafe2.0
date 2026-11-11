@@ -115,7 +115,8 @@ r.case_status = "closed"
 db.commit()
 alert = db.query(LostPetAlert).filter(LostPetAlert.report_id == r.report_id).one()
 check("closing by case_status writes the disposition's legacy status (pet_recovered -> 9)", r.current_status_id == 9 and r.closed_at is not None, r.current_status_id)
-check("...and the existing closure hook closes the alert", alert.status == "closed" and alert.close_outcome == "reunited", (alert.status, alert.close_outcome))
+check("...and the closure hook closes the alert, but never as 'recovered' (only the owner's confirmation says that)", alert.status == "closed" and alert.close_outcome == "report_closed"
+      and "owner's confirmation" in alert.close_reason, (alert.status, alert.close_outcome, alert.close_reason))
 
 r = mk(case_status="reported")
 r.closure_disposition = "invalid_report"

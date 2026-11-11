@@ -241,6 +241,18 @@ export function LiveAdminDataProvider({ children }: { children: ReactNode }) {
     } catch (err) { sessionEnded(err); }          // a missed poll is not worth a message; the next one tries again
   }, [sessionEnded]);
 
+  /** The pet registry again (a pet record was touched). */
+  const refreshPets = useCallback(async () => {
+    if (subdivisionId === null) return;
+    try {
+      const list = await adminApi.pets(subdivisionId);
+      const byOwner = ad.petIdsByOwner(list);
+      const now = new Date();
+      directory.current.residents = new Map([...directory.current.residents].map(([id, r]) => [id, { ...r, petIds: byOwner.get(id) ?? [] }]));
+      setState((s) => ({ ...s, pets: list.map((p) => ad.petFromApi(p, now)), residents: [...directory.current.residents.values()] }));
+    } catch (err) { sessionEnded(err); }          // the change is saved; the next full load shows the registry as it is
+  }, [sessionEnded, subdivisionId]);
+
   const refreshSettings = useCallback(async () => {
     if (subdivisionId === null) return;
     const [cs, cats, prefs, me] = await Promise.allSettled([adminApi.settings(subdivisionId), adminApi.categories(), adminApi.preferences(), adminApi.user(userId)]);
@@ -278,10 +290,11 @@ export function LiveAdminDataProvider({ children }: { children: ReactNode }) {
       ...unique(result.cases).map((id) => loadCase(id)),
       result.notices ? refreshNotices() : undefined,
       result.notifications ? refreshNotifications() : undefined,
+      result.pets ? refreshPets() : undefined,
       result.settings || result.profile ? refreshSettings() : undefined,
     ]);
     if (result.warnings?.length) setIssue('after-save', `${result.warnings.join(' ')} What you saved is kept.`);
-  }, [loadCase, refreshNotices, refreshNotifications, refreshSettings, sessionEnded, setIssue, subdivisionId, userId]);
+  }, [loadCase, refreshNotices, refreshNotifications, refreshPets, refreshSettings, sessionEnded, setIssue, subdivisionId, userId]);
 
   const reload = useCallback(() => {
     setStatus('loading');

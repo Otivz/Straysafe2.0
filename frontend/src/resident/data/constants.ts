@@ -1,4 +1,4 @@
-import type { AnimalType, CaseStatus, CategoryId, ClaimStatus, NoticeType, ReportKind } from './types';
+import type { AnimalType, CaseStatus, CategoryId, ClaimStatus, NoticeType, PetSex, ReportKind } from './types';
 
 export type Tone = 'neutral' | 'brand' | 'amber' | 'sage' | 'red';
 
@@ -34,8 +34,9 @@ export const ANIMAL_TYPES: Record<AnimalType, string> = {
   dog: 'Dog', cat: 'Cat', bird: 'Bird', small_mammal: 'Small mammal', reptile: 'Reptile', livestock: 'Livestock', wildlife: 'Wild animal', other: 'Other / not sure',
 };
 export const ANIMAL_TYPE_IDS = Object.keys(ANIMAL_TYPES) as AnimalType[];
-/** Types a resident can register as a pet (not livestock or wildlife). */
-export const PET_TYPE_IDS: AnimalType[] = ['dog', 'cat', 'bird', 'small_mammal', 'reptile', 'other'];
+/** What can be registered as a pet: dogs and cats only for now (the registry holds nothing else, and a wider list needs the stakeholders' decision). */
+export const PET_TYPE_IDS: AnimalType[] = ['dog', 'cat'];
+export const SEX_LABEL: Record<PetSex, string> = { male: 'Male', female: 'Female', unknown: 'Not sure' };
 
 /** The same four global statuses as the Admin UI. */
 export const STATUS: Record<CaseStatus, { label: string; tone: Tone; hint: string; rank: number }> = {

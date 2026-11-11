@@ -165,7 +165,7 @@ The proposed system includes:
 2. Community Lost-and-Found Notices.
 3. Incident Case Management.
 4. Sighting and Location Updates.
-5. Optional Pet Registry.
+5. Pet Registry (the foundation of Lost Pet reporting).
 6. Animal and Ownership Assessment.
 7. Owner Warning and Compliance Monitoring.
 8. External Referral and Coordination Tracking.
@@ -205,7 +205,7 @@ Residents may:
 - Submit possible animal sightings.
 - Track their submitted reports.
 - Provide additional evidence or information.
-- Register pets voluntarily.
+- Register their pets (a pet must be registered before it can be reported missing).
 - Submit ownership claims.
 - Respond to applicable warnings.
 - Confirm recovery of their missing pets.
@@ -277,6 +277,8 @@ A photograph, description, or GPS location does not necessarily establish the id
 
 Pet registration provides supporting information but does not independently establish legal ownership.
 
+Registration is a prerequisite for reporting a pet missing. It is not ownership verification, and it never decides who owns an animal.
+
 ## Principle 5: Matching Is Not Confirmation
 
 Physical similarities and AI-generated suggestions must not automatically establish animal identity or ownership.
@@ -329,7 +331,7 @@ Supports community awareness and participation in locating missing or unidentifi
 
 ### D. Pet Registry
 
-Provides optional owner-declared pet information for convenience and possible identification support.
+Provides owner-declared pet information. A registered pet is the foundation of a Lost Pet report, and the registry gives possible identification support. A registration is declared, not verified.
 
 ### E. Compliance Monitoring
 
@@ -525,19 +527,22 @@ Lost-and-found activities should support community participation without requiri
 
 ## 10.1 Lost Pet Reporting
 
-A resident who loses a pet may submit:
+A Lost Pet report is for a resident's own pet, and **the pet must be registered first**. The resident chooses one of the pets registered under their account, and the report uses that pet's registered profile (name, kind of animal, breed, colour, markings, age and photographs). The resident does not type those details again; the report adds only what belongs to this incident:
 
-- Pet name, if applicable.
-- Animal type.
-- Physical description.
-- Recent photograph.
-- Last-known location.
-- Last-seen date and time.
-- Other relevant identifying information.
+- When the pet was last seen.
+- Where the pet was last seen.
+- Anything else that may help (optional).
+- A recent photograph, if it shows something new (optional).
 
-The resident may select an existing pet profile or enter the details manually.
+Registration is a prerequisite for the report. It is not ownership verification, and it must not delay the report:
 
-**Prior pet registration should not be required.**
+- A resident who has not registered their pet can register it and file the Lost Pet report straight away. No Subdivision Leader approval and no ownership check is needed before filing.
+- A pet that already has an active Lost Pet report is not offered again; the resident is taken to the report that is open.
+- A pet can have only one registered owner, and a registered pet belongs to one resident account. Household co-owners are not modelled.
+- Dogs and cats can be registered for now.
+- Animals that are not the resident's own pet (a found animal, a stray, a nuisance, an injured animal) are reported through the other report types, which never require registration.
+
+The pet's details are saved with the report as they were when it was filed, together with when and where the pet was last seen. Later edits to the pet's profile do not rewrite the filed report, and the Subdivision Leader can see both.
 
 ## 10.2 Automatic Lost-Pet Publication
 
@@ -550,6 +555,18 @@ This avoids unnecessary delays while the owner searches for the animal.
 Subdivision management may moderate inappropriate or abusive notices.
 
 Automatic publication remains subject to stakeholder approval and applicable subdivision communication policies.
+
+**As implemented (2026-11-11).** The Lost Pet report publishes its own notice when it is filed, in the same step that creates the case, so the report and the notice cannot disagree and nobody has to approve or acknowledge it: the notice appears in Community at once and the pet is marked missing. Sending the same report twice (a retry after a lost connection) returns the first report. A subdivision can no longer choose to review missing-pet notices before they appear; found-animal notices keep their review setting. This default still awaits stakeholder confirmation.
+
+## 10.2a Sightings, Possible Recoveries and Recovery (as implemented 2026-11-11)
+
+- **Community.** A short overview (the newest missing pets, found animals and safety advisories with their totals) and a directory that can be searched and filtered, read a page at a time. It is not an endless feed. A private complaint is never published.
+- **A sighting is a report, not tracking.** "I saw this pet" tells the owner and is added to the case's activity. It does not open a conversation and is not a task for the Subdivision Leader. Only the Leader is shown who reported it; the owner and neighbours see "a neighbour".
+- **A possible recovery is not a recovery.** A neighbour who says "I may have this pet safely with me" can say where it is being kept. Only the owner, the Leader and that neighbour see it; the owner sees the neighbour's first name. It never marks the pet as home.
+- **Getting in touch.** The owner and that neighbour can message each other privately in the app only when **both** agree; either can instead ask the Subdivision Leader to help, with no reason needed, and direct messaging then stops. The system never shares a phone number or an address. The Leader sees the two people and their numbers only after one of them asked for help, records what was done in the case's contact log and follow-ups, and marks the request finished. The Leader does not read the private messages.
+- **The Barangay.** Asking the Barangay for help is recorded as the Leader's own contact work. Writing a request down is not contact: it reads "not contacted yet" until the Leader records an actual attempt and what came of it. The Barangay has no account in StraySafe.
+- **A pet is home only when the owner says so.** Either the owner confirms "My pet is home" in the app (after an explicit confirmation), or the Leader records that the owner confirmed it by phone or in person (with how, when it was said, who recorded it and a note). Both do the same thing: record the confirmation, resolve the notice, close the case, restore the pet to Active and thank the neighbours who helped. A Leader cannot declare a pet recovered alone, and a sighting, a possible recovery, a Barangay update or closing the case never counts as a recovery. A report the owner withdraws, or that is merged or closed for another reason, ends with that reason and is never shown as recovered.
+- **Open for stakeholder decision.** How long private messages are kept, whether a neighbour may be named to the owner (today: first name, only for a possible recovery), and whether an owner may also be reassured by push notification for each message (today: messages are read in the app).
 
 ## 10.3 Found / Unidentified Animal Notices
 
@@ -667,22 +684,29 @@ The system must not automatically award ownership based on the earliest claim or
 
 ---
 
-# 12. OPTIONAL PET REGISTRY
+# 12. PET REGISTRY
 
 ## 12.1 Registration Policy
 
-Pet registration should be voluntary by default.
+Pet registration is the foundation of the Lost Pet report: **a resident registers a pet before they can report it missing.** This is the only place the application requires registration.
 
-Mandatory registration should only be supported if an actual subdivision policy or applicable requirement establishes that obligation.
+Registration is not required to:
 
-StraySafe should not independently create a new registration requirement.
+- Report an animal incident, a nuisance, a safety concern or an injured animal.
+- Report a found or unidentified animal.
+- Submit a sighting of a lost pet.
+- View community notices, make an ownership claim or answer a warning.
+
+Registration must never become a barrier to an urgent report. Registering takes a minute, and a resident who registers from inside the Lost Pet report goes straight back to it and files without waiting for any approval.
+
+StraySafe does not, by this rule, oblige every pet owner in a subdivision to register their pets, and it does not create a subdivision-level penalty for not registering. Whether the subdivision itself requires registration remains a stakeholder question (see A3).
 
 ## 12.2 Purpose
 
 The Pet Registry should primarily provide:
 
 - Convenient pet information storage.
-- Faster lost-pet reporting.
+- The registered pet profile that a Lost Pet report is built on, so the report is filed in a few taps.
 - Supporting references for potential ownership identification.
 - Information useful for relevant animal-related cases.
 
@@ -720,9 +744,18 @@ Therefore, pet registration must not be the sole basis for:
 
 ## 12.5 Accessibility
 
-Residents should remain able to report lost pets, submit animal incidents, and provide sightings without previously registering their animals.
+Residents should remain able to submit animal incidents, report found animals, and provide sightings without registering any animal.
 
-If registration becomes mandatory under a confirmed policy, non-digital registration options should be considered for residents who cannot access the application.
+Because a Lost Pet report needs a registered pet, registering must stay easy to reach from the report itself, and a resident who cannot use the application must have another way. The subdivision office can record the pet and link the record to the resident's account (see 12.6).
+
+## 12.6 Pets Recorded by the Subdivision Office
+
+A pet record that was entered by the subdivision office (for example for an owner who has no account yet, or who cannot use the application) can be linked to the resident it belongs to.
+
+- A Subdivision Leader asks the resident to confirm that the record is theirs, and says how they checked that the account is the owner's (for example the phone number on the record or a vaccination card).
+- Nothing is transferred automatically: the record joins the resident's pets only when the resident confirms in their own account.
+- Residents cannot claim an existing record on their own, and a Leader cannot move a pet that already has an owner.
+- Linking a record to an account is a registration step. It is not an ownership decision, which stays with the case assessment and its evidence.
 
 ---
 
@@ -1350,7 +1383,7 @@ Allows residents to monitor their submitted cases.
 
 ### My Pets
 
-Provides optional pet registration and profile management.
+Provides pet registration, which a Lost Pet report requires, and profile management.
 
 ### Notifications
 
@@ -1373,12 +1406,13 @@ Sensitive internal information should not automatically be publicly visible.
 
 The system should avoid unnecessary requirements such as:
 
-- Mandatory pet registration.
 - Mandatory animal photographs.
 - Mandatory AI analysis.
 - Mandatory ownership identification.
 - Mandatory close-up observations.
 - Requiring residents to create duplicate reports for existing cases.
+
+Pet registration is required only for a Lost Pet report. It is never required to report an animal incident, a found animal or a sighting, and it never needs approval before a report is filed.
 
 ---
 
@@ -1585,6 +1619,7 @@ The recommended approach is to stabilize the core workflow before expanding supp
 
 ## Priority 2 — Community Coordination
 
+- Pet registry: the registered pet a Lost Pet report is built on.
 - Lost-pet notices.
 - Found-animal notices.
 - Community sightings.
@@ -1600,7 +1635,6 @@ The recommended approach is to stabilize the core workflow before expanding supp
 
 ## Priority 4 — Supporting Enhancements
 
-- Optional pet registry.
 - Potential matching assistance.
 - Related-report grouping.
 - AI-assisted descriptions.
@@ -1647,7 +1681,7 @@ Avoid treating physical similarity as definitive identification.
 
 ### D. Pet Registry
 
-Ensure registration remains a supporting reference rather than automatic ownership proof.
+Ensure registration remains a supporting reference rather than automatic ownership proof, and a prerequisite for Lost Pet reports only, never a barrier to other reports.
 
 ### E. Three-Day Observation
 
@@ -1680,6 +1714,8 @@ The following matters remain unresolved and require confirmation before the prop
 **A2.** Does the policy apply to all animals or only owned domestic pets?
 
 **A3.** Is pet registration mandatory under any existing subdivision rule?
+
+*Application decision made:* the application requires a registered pet for a Lost Pet report only (see 10.1 and 12.1). *Still open for the subdivision:* whether any subdivision rule obliges every pet owner to register, and who would enforce it. The application does not decide that.
 
 **A4.** What specific conduct constitutes an animal-related violation?
 
@@ -1830,7 +1866,7 @@ For this reason, StraySafe should preserve original observations, support eviden
 
 Subdivision management should remain responsible for managing subdivision-level cases, while specialized interventions remain with appropriately authorized external personnel.
 
-Pet registration, artificial intelligence, and animal matching should function as supporting capabilities rather than mandatory foundations of the reporting process.
+Artificial intelligence and animal matching should function as supporting capabilities rather than mandatory foundations of the reporting process. Pet registration is the foundation of a Lost Pet report only: it is never a requirement for reporting an animal incident, a found animal or a sighting, it never replaces assessment, and it never proves ownership.
 
 The three-day owner compliance procedure should be supported only according to verified subdivision policies and should not be applied indiscriminately to unidentified animals.
 

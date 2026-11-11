@@ -16,7 +16,7 @@ class AnnouncementMediaResponse(BaseModel):
 
 
 class AnnouncementCreate(BaseModel):
-    created_by: int
+    created_by: Optional[int] = None
     title: str
     category: str
     visibility: str = "Public"

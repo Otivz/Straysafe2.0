@@ -32,6 +32,8 @@ export interface ActionResult {
   settings?: boolean;
   notifications?: boolean;
   profile?: boolean;
+  /** The pet registry was touched. */
+  pets?: boolean;
   /** Things that did not go as hoped although the change itself was saved (for example a photo that would not upload). */
   warnings?: string[];
 }
@@ -119,14 +121,24 @@ export async function runAction(a: AdminAction, ctx: ActionContext): Promise<Act
     case 'case/createReferral':
       await adminApi.createReferral(reportId(a.id), {
         org_type: orgTypeOf(a.orgId), org_name: a.orgName, reason: a.reason, contact_method: methodOfChannel(a.contactChannel),
-        contact_person: a.contactPerson === 'Not recorded' ? null : a.contactPerson, contact_detail: a.contactChannel, referred_at: toServer(a.referredAt), notes: a.notes || null,
+        contact_person: a.contactPerson === 'Not recorded' ? null : a.contactPerson, contact_detail: a.contactChannel || null, referred_at: toServer(a.referredAt), notes: a.notes || null,
+        contacted: a.contacted ?? true,
       });
       return done({ cases: [a.id] });
     case 'case/updateReferral':
       await adminApi.updateReferral(reportId(a.id), numeric(a.referralId, 'referral'), {
         status: a.status, note: a.note, external_outcome: a.externalOutcome || null, remaining_follow_up: a.remainingFollowUp || null, follow_up_at: toServer(a.followUpAt),
+        ...(a.contact ? { contact_method: a.contact.method, contact_person: a.contact.person || null, contact_detail: a.contact.detail || null } : {}),
       });
       return done({ cases: [a.id] });
+
+    // ------------------------------------------------------------------------------------------------ Lost Pet
+    // The one recovery operation: the server records the owner's confirmation, resolves the notice, closes the case and puts the pet back to Active.
+    case 'lost/recordRecovery':
+      await adminApi.recordRecovery(numeric(a.alertId, 'notice'), { source: a.source, confirmed_at: toServer(a.confirmedAt), note: a.note?.trim() || null });
+      return done({ cases: [a.id], notices: true, pets: true });
+    case 'lost/reviewSighting': await adminApi.reviewSighting(numeric(a.sightingId, 'sighting'), a.status, a.note?.trim() || null); return done({ cases: [a.id] });
+    case 'lost/resolveConversation': await adminApi.resolveCoordination(numeric(a.conversationId, 'conversation'), a.note?.trim() || null); return done({ cases: [a.id] });
 
     case 'case/reviewClaim': await adminApi.reviewClaim(reportId(a.id), numeric(a.claimId, 'claim'), a.decision, a.note); return done({ cases: [a.id] });
 
@@ -168,6 +180,11 @@ export async function runAction(a: AdminAction, ctx: ActionContext): Promise<Act
     // ---------------------------------------------------------------------------------------- notifications etc.
     case 'notification/read': await adminApi.markRead(numeric(a.id, 'notification')); return done({ notifications: true });
     case 'notification/readAll': await adminApi.markAllRead(ctx.userId); return done({ notifications: true });
+
+    case 'pet/linkOwner':
+      // The server asks the resident to confirm; the record's owner does not change until they do. The evidence (how the officer checked) is required.
+      await adminApi.assignPetOwner(numeric(a.petId, 'pet'), numeric(a.residentId, 'resident'), a.evidence.trim());
+      return done({ pets: true });
 
     case 'resident/setStatus':
       return fail('Only the system administrator can suspend or reactivate an account. Ask them to make this change.', 403);

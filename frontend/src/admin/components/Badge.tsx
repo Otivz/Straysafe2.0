@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { AlertTriangle } from 'lucide-react';
-import { DISPOSITIONS, IDENTITY, OUTCOME_GROUPS, OWNERSHIP, PRIORITIES, STATUSES, type Tone } from '../data/constants';
+import { DISPOSITIONS, OUTCOME_GROUPS, OWNERSHIP, PRIORITIES, STATUSES, identityDisplay, type Tone } from '../data/constants';
 import type { Case, CaseStatus, IdentityStatus, OutcomeGroup, OwnershipStatus, Priority } from '../data/types';
 import { cx } from '../../preview/lib/cx';
 
@@ -42,4 +42,8 @@ export function ClosureOutcome({ c }: { c: Case }) {
 }
 
 export const OwnershipBadge = ({ status }: { status: OwnershipStatus }) => <Badge tone={OWNERSHIP[status].tone}>{OWNERSHIP[status].label}</Badge>;
-export const IdentityBadge = ({ status }: { status: IdentityStatus }) => <Badge tone={IDENTITY[status].tone}>{IDENTITY[status].label}</Badge>;
+/** `decided` false = the reporter's own link to a registered pet, which is not a decision ("Linked by the reporter"). */
+export const IdentityBadge = ({ status, decided }: { status: IdentityStatus; decided?: boolean }) => {
+  const d = identityDisplay(status, decided);
+  return <Badge tone={d.tone}>{d.label}</Badge>;
+};

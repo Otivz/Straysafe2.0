@@ -11,11 +11,12 @@ import { caseRef } from '../../live/refs.ts';
 import { fmtDay } from '../../preview/lib/format.ts';
 import type {
   AdminNotification, AdminProfile, AnimalType, Case, CategoryId, ClaimStatus, Closure, ComplianceObservation, DispositionId, EventKind, Evidence,
-  FollowUp, Note, Notice, NoticeStatus, OwnerContact, OwnershipClaim, Pet, Policy, Referral, ReferralNote, Resident, Settings, TimelineEvent, Warning,
+  FollowUp, LostPetCase, LostPetConversation, LostPetPerson, LostPetSighting, Note, Notice, NoticeStatus, OwnerContact, OwnershipClaim, Pet, PetFacts, Policy, Referral, ReferralNote,
+  RegisteredPet, Resident, Settings, TimelineEvent, Warning,
 } from '../data/types.ts';
 import type {
-  ApiAlert, ApiAnalytics, ApiAnnouncement, ApiCaseDetail, ApiCaseSettings, ApiCaseSummary, ApiCategories, ApiClosure, ApiHistory, ApiMedia,
-  ApiNote, ApiNotification, ApiNotificationPrefs, ApiPet, ApiQueue, ApiReport, ApiUser,
+  ApiAlert, ApiAnalytics, ApiAnnouncement, ApiCasePet, ApiCaseDetail, ApiCaseSettings, ApiCaseSummary, ApiCategories, ApiClosure, ApiHistory, ApiLostCoordination, ApiLostParty,
+  ApiLostSighting, ApiMedia, ApiNote, ApiNotification, ApiNotificationPrefs, ApiPet, ApiPetFacts, ApiQueue, ApiReport, ApiUser,
 } from './api.ts';
 
 /** What the adapters need to know about the rest of the loaded data (names and references), supplied by the provider. */
@@ -109,6 +110,94 @@ function reporterOf(userId: number | null, name: string | null, lookup: Lookup):
   };
 }
 
+// ------------------------------------------------------------------------------------------------ the registered pet of a case
+const NOT_RECORDED = 'Not recorded';
+const orNotRecorded = (value: string | null | undefined) => (value ?? '').trim() || NOT_RECORDED;
+
+/** The identifying facts of a pet record, in words; what the record leaves out reads "Not recorded". */
+function petFactsOf(f: ApiPetFacts): PetFacts {
+  const sex = (f.sex ?? '').trim();
+  return {
+    name: orNotRecorded(f.name), species: orNotRecorded(f.species), breed: orNotRecorded(f.breed), sex: sex && sex.toLowerCase() !== 'unknown' ? sex : NOT_RECORDED,
+    colour: orNotRecorded(f.color), markings: orNotRecorded(f.markings), age: orNotRecorded(f.age), photos: f.photos ?? [],
+  };
+}
+
+/**
+ * The registered pet a report names (`GET /cases/{id}` -> `pet`), for the Overview panel. Null when the report names none (an older report,
+ * or a split case): the screen then says so instead of showing an empty panel.
+ */
+export function registeredPetFrom(p: ApiCasePet | null | undefined): RegisteredPet | null {
+  if (!p) return null;
+  const filed = p.last_seen?.as_filed ?? null;
+  const notice = p.last_seen?.notice ?? null;
+  const o = p.owner ?? null;
+  const emergency = [o?.emergency_contact_name, o?.emergency_contact_phone].map((x) => (x ?? '').trim()).filter(Boolean).join(' · ');
+  const pin = (x: { latitude: number | null; longitude: number | null }) => (x.latitude !== null && x.longitude !== null ? { lat: x.latitude, lng: x.longitude } : {});
+  return {
+    petId: String(p.pet_id),
+    unavailable: p.available ? null : p.reason === 'removed' ? 'removed' : 'restricted',
+    linkedByReporter: p.linked_by_reporter === true,
+    reporterIsOwner: p.reporter_is_owner === true,
+    current: p.available && p.registry ? { ...petFactsOf(p.registry), status: p.registry.status?.trim() || 'Active', updatedAt: fromServerOrNull(p.registry.updated_at) } : null,
+    asReported: p.as_reported ? petFactsOf(p.as_reported) : null,
+    changedSince: p.changed_since_report ?? [],
+    registration: p.available && p.registration
+      ? { byOwner: p.registration.declared_by_owner, registeredAt: fromServer(p.registration.registered_at), registeredBy: orNotRecorded(p.registration.registered_by_name) } : null,
+    owner: o && (o.user_id !== undefined || emergency) ? {
+      residentId: idOf(o.user_id), name: o.name?.trim() || 'No resident account linked', phone: o.phone?.trim() || '—', email: o.email?.trim() || '—',
+      address: o.address?.trim() || '—', emergencyContact: emergency,
+    } : null,
+    lastSeen: filed ? { at: fromServerOrNull(filed.at), where: (filed.location ?? '').trim(), ...pin(filed) } : null,
+    notice: notice ? { at: fromServerOrNull(notice.at), where: (notice.location ?? '').trim(), status: notice.status } : null,
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------- the Lost Pet picture
+const partyOf = (p: ApiLostParty | null | undefined): LostPetPerson | null => (p ? { residentId: idOf(p.user_id), name: p.name?.trim() || 'A resident', phone: p.phone?.trim() || NO_REPORTER_DETAIL } : null);
+
+export function lostSightingFromApi(s: ApiLostSighting): LostPetSighting {
+  const hasPin = s.latitude !== null && s.longitude !== null;
+  return {
+    id: String(s.sighting_id), kind: s.sighting_type === 'secured' ? 'secured' : 'seen', seenAt: fromServer(s.seen_at), submittedAt: fromServer(s.submitted_at),
+    place: s.location_label?.trim() || (hasPin ? 'Pinned on the map' : 'No place given'), ...(hasPin ? { lat: s.latitude as number, lng: s.longitude as number } : {}),
+    description: s.description ?? '', ...(s.care_note ? { careNote: s.care_note } : {}), ...(s.photo_url ? { photoUrl: s.photo_url } : {}), reportedBy: s.reported_by,
+    review: s.status, ...(s.reviewed_by ? { reviewedBy: s.reviewed_by } : {}), ...(s.reviewed_at ? { reviewedAt: fromServer(s.reviewed_at) } : {}), ...(s.review_note ? { reviewNote: s.review_note } : {}),
+  };
+}
+
+export function conversationFromApi(c: ApiLostCoordination): LostPetConversation {
+  return {
+    id: String(c.coordination_id), sightingId: String(c.sighting_id), status: c.status, mode: c.mode, ownerAgreed: c.owner_consent, finderAgreed: c.finder_consent,
+    ...(c.mode === 'leader' && c.mediation_requested_by_role ? { requestedBy: c.mediation_requested_by_role } : {}),
+    ...(c.mediation_requested_at ? { requestedAt: fromServer(c.mediation_requested_at) } : {}),
+    ...(c.resolved_at ? { resolvedAt: fromServer(c.resolved_at) } : {}), ...(c.resolution_note ? { resolutionNote: c.resolution_note } : {}),
+    owner: partyOf(c.owner), finder: partyOf(c.finder),
+  };
+}
+
+/**
+ * The Lost Pet picture of a case (`GET /cases/{id}` -> `lost_pet`): the notice, every sighting and possible recovery (newest first), the conversations,
+ * and the recovery record. A missing-pet report with no notice (an older one) still gets a picture, with no notice and nothing in the lists.
+ */
+export function lostPetFrom(block: NonNullable<ApiCaseDetail['lost_pet']>, lookup: Pick<Lookup, 'nameOf'>): LostPetCase {
+  const a = block.alert;
+  if (!a) return { alertId: null, notice: null, lastSeen: { at: null, where: '' }, sightings: [], conversations: [], recovery: null };
+  const pin = a.last_seen.latitude !== null && a.last_seen.longitude !== null ? { lat: a.last_seen.latitude, lng: a.last_seen.longitude } : {};
+  const r = a.recovery;
+  const source = r?.source ?? 'owner_app';
+  return {
+    alertId: String(a.alert_id),
+    notice: { status: a.status, publishedAt: fromServerOrNull(a.activated_at), closedAt: fromServerOrNull(a.closed_at), closeOutcome: a.close_outcome, closeReason: a.close_reason, residentsNotified: a.residents_notified },
+    lastSeen: { at: fromServerOrNull(a.last_seen.at), where: (a.last_seen.location ?? '').trim(), ...pin },
+    sightings: (a.sightings ?? []).map(lostSightingFromApi).sort((x, y) => y.seenAt.localeCompare(x.seenAt)),
+    conversations: (a.coordinations ?? []).map(conversationFromApi).sort((x, y) => (y.requestedAt ?? '').localeCompare(x.requestedAt ?? '') || Number(y.id) - Number(x.id)),
+    recovery: r && a.recovered_at
+      ? { at: fromServer(r.recovered_at), source, recordedBy: source === 'owner_app' ? 'The owner' : lookup.nameOf(r.recorded_by) ?? 'The Subdivision Leader', recordedAt: fromServer(r.recorded_at) || fromServer(r.recovered_at), ...(r.note ? { note: r.note } : {}) }
+      : null,
+  };
+}
+
 /** The pet a case is linked to, as the UI's per-pet decision: identified -> confirmed, a possible match -> possible, otherwise none. */
 function matchesOf(status: ApiCaseSummary['identity_status'], petId: number | null): Case['identity']['matches'] {
   if (petId === null || status === 'unidentified') return {};
@@ -140,7 +229,7 @@ export function caseFromSummary(s: ApiCaseSummary, lookup: Lookup): Case {
       incident: s.assessment.incident, incidentBasis: '', evidenceSufficiency: s.assessment.evidence_sufficiency, evidenceReviewed: [],
       urgency: s.assessment.urgency, urgencyNote: '', notes: '', savedAt: fromServerOrNull(s.assessment.saved_at), savedBy: null,
     },
-    identity: { status: s.identity_status, matches: matchesOf(s.identity_status, s.pet_id), note: '' },
+    identity: { status: s.identity_status, matches: matchesOf(s.identity_status, s.pet_id), note: '', decided: s.identity_decided },
     ownership: { status: s.ownership_status, ownerResidentId: idOf(s.ownership_owner_id), evidence: [], note: '' },
     claims: [], followUps: [], ownerContacts: [], warnings: [], referrals: [], relatedCaseIds: [], notes: [],
     timeline: s.last_event ? [eventFromHistory({ history_id: s.last_event.history_id, remarks: s.last_event.text, created_at: s.last_event.at, updater_name: s.last_event.by_name })] : [],
@@ -154,7 +243,7 @@ export function summaryFromDetail(d: ApiCaseDetail): ApiCaseSummary {
     report_id: d.report_id, reported_at: d.reported_at, updated_at: d.reported_at, last_event: null, subdivision_id: d.subdivision_id, case_status: d.case_status, priority: d.priority,
     is_sensitive: d.is_sensitive, category: d.category, animal: d.animal, location: d.location, reporter: d.reporter, assigned_leader_id: d.assigned_leader_id, assigned_leader_name: d.assigned_leader_name,
     assessment: { incident: d.assessment.incident, evidence_sufficiency: d.assessment.evidence_sufficiency, urgency: d.assessment.urgency, saved_at: d.assessment.saved_at },
-    identity_status: d.identity.status, ownership_status: d.ownership.status, ownership_owner_id: d.ownership.owner_user_id, pet_id: d.identity.pet_id, closure: d.closure, reopened_count: d.reopened_count,
+    identity_status: d.identity.status, identity_decided: d.identity.decided, ownership_status: d.ownership.status, ownership_owner_id: d.ownership.owner_user_id, pet_id: d.identity.pet_id, closure: d.closure, reopened_count: d.reopened_count,
     merged_into_report_id: null, photo_count: 0, thumbnail_url: null,
   };
 }
@@ -277,7 +366,9 @@ export function applyDetail(base: Case, d: ApiCaseDetail, report: ApiReport | nu
       incident: d.assessment.incident, incidentBasis: d.assessment.incident_basis ?? '', evidenceSufficiency: d.assessment.evidence_sufficiency, evidenceReviewed: d.assessment.evidence_reviewed,
       urgency: d.assessment.urgency, urgencyNote: d.assessment.urgency_note ?? '', notes: d.assessment.notes ?? '', savedAt: fromServerOrNull(d.assessment.saved_at), savedBy: d.assessment.saved_by_name,
     },
-    identity: { status: d.identity.status, matches: confirmedPet, note: d.identity.note ?? '' },
+    identity: { status: d.identity.status, matches: confirmedPet, note: d.identity.note ?? '', decided: d.identity.decided },
+    registeredPet: registeredPetFrom(d.pet),
+    lostPet: d.lost_pet ? lostPetFrom(d.lost_pet, lookup) : null,
     ownership: { status: d.ownership.status, ownerResidentId: idOf(d.ownership.owner_user_id), evidence: d.ownership.evidence, note: d.ownership.note ?? '' },
     claims: d.claims.map((c) => claimFromApi(c, lookup)),
     followUps,
@@ -316,6 +407,10 @@ export function applyQueue(cases: Case[], queue: ApiQueue, opened: ReadonlySet<s
         updatedAt: fromServer(r.updated_at) || fromServer(r.referred_at),
       }];
     }
+  }
+  for (const m of queue.coordinations ?? []) {
+    const c = get(m.report_id);
+    if (c && !opened.has(c.id)) c.mediation = [...(c.mediation ?? []), { id: String(m.coordination_id), requestedAt: fromServerOrNull(m.requested_at), ownerName: m.owner_name ?? 'The owner', finderName: m.finder_name ?? 'A neighbour' }];
   }
   for (const w of queue.warnings) {
     const c = get(w.report_id);
@@ -362,6 +457,8 @@ export function petFromApi(p: ApiPet, now: Date): Pet {
     markings: (p.distinctive_markings ?? '').split(/[,;]\s*/).map((m) => m.trim()).filter(Boolean),
     description: (p.notes ?? p.health_condition ?? '').trim(), photos: photoUrls.length, photoUrls,
     ownerId: p.owner_id === null ? '' : String(p.owner_id), registeredAt: fromServer(p.created_at), vaccination, microchipped: false,
+    ...(p.registered_by_user_id != null || p.registered_by_name
+      ? { registeredBy: { name: p.registered_by_name?.trim() || NOT_RECORDED, byOwner: p.owner_id !== null && p.registered_by_user_id === p.owner_id, userId: idOf(p.registered_by_user_id) } } : {}),
   };
 }
 
@@ -425,8 +522,10 @@ const REPORT_RELATED = /status_update|new_report|report|follow|observation|warni
 
 export function notificationFromApi(n: ApiNotification): AdminNotification {
   const haystack = `${n.type ?? ''} ${n.title}`;
-  const kind = NOTIFICATION_KIND.find(([re]) => re.test(haystack))?.[1] ?? 'case_activity';
-  const caseId = n.related_id !== null && REPORT_RELATED.test(n.type ?? '') && !/alert/i.test(n.type ?? '') ? caseRef(n.related_id, n.created_at) : undefined;
+  // A Lost Pet notification for the Leader (an owner and a neighbour asked for help) carries the REPORT's id: it opens that case.
+  const helpRequest = (n.type ?? '').toLowerCase() === 'lost_pet_leader';
+  const kind = helpRequest ? 'help_request' : NOTIFICATION_KIND.find(([re]) => re.test(haystack))?.[1] ?? 'case_activity';
+  const caseId = n.related_id !== null && (helpRequest || (REPORT_RELATED.test(n.type ?? '') && !/alert/i.test(n.type ?? ''))) ? caseRef(n.related_id, n.created_at) : undefined;
   return { id: String(n.notification_id), kind, title: n.title, body: n.message ?? '', at: fromServer(n.created_at), read: n.is_read, ...(caseId ? { caseId } : {}) };
 }
 
@@ -486,7 +585,7 @@ export function profileFromUser(u: ApiUser): AdminProfile {
 
 // -------------------------------------------------------------------------------------------------------- analytics
 const OUTCOME_LABEL = { resolved: 'Resolved', unresolved: 'Not resolved', invalid: 'No action needed' } as const;
-const REFERRAL_LABEL = { sent: 'Sent', acknowledged: 'Acknowledged', in_progress: 'In progress', completed: 'Completed externally', declined: 'Declined', no_response: 'No response' } as const;
+const REFERRAL_LABEL = { to_contact: 'Not contacted yet', sent: 'Sent', acknowledged: 'Acknowledged', in_progress: 'In progress', completed: 'Completed externally', declined: 'Declined', no_response: 'No response' } as const;
 
 /** The server's lifecycle numbers in the shape data/selectors.ts `analytics()` returns, so the page does not change. */
 export function analyticsFromApi(api: ApiAnalytics) {

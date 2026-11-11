@@ -14,7 +14,7 @@ import { reportIdOf } from '../../live/refs';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import type { ResidentAction } from '../data/reducer';
 import type { CategoryId, Draft, Media, Notice, ResidentState } from '../data/types';
-import { ANIMAL_LABEL, PINNED_LABEL, evidenceIdsFrom, joinAddress, joinExtra, noticeRef, petToApi, preferencesFrom, withPetName } from './adapters';
+import { ANIMAL_LABEL, PINNED_LABEL, evidenceIdsFrom, joinAddress, joinExtra, noticeRef, petToApi, preferencesFrom } from './adapters';
 import { residentApi, type ApiResidentCategories } from './api';
 
 export interface ResidentActionContext {
@@ -36,6 +36,8 @@ export interface ResidentActionResult {
   notices?: boolean;
   claims?: boolean;
   pets?: boolean;
+  /** The pets the office linked to this account, to read again. */
+  ownership?: boolean;
   profile?: boolean;
   settings?: boolean;
   /** Things that did not go as hoped although the change itself was saved (a photo that would not upload). */
@@ -54,11 +56,9 @@ const numeric = (value: string, what: string): number => {
 /** The one short question the form asks for some kinds of concern, kept with the answer (see adapters.splitExtra). */
 const EXTRA_LABEL: Partial<Record<CategoryId, string>> = { nuisance: 'How often does it happen?', injured: 'Can the animal move?', found_animal: 'Where is the animal now?' };
 
-const KIND_ALERT = { lost: 'lost_pet', found: 'found_animal' } as const;
-
 /** The report's description, with when it was seen when that was not right now (a report has no field for it). */
 function descriptionOf(draft: Draft): string {
-  const base = draft.kind === 'lost' ? withPetName(draft.petName, draft.description) : draft.description.trim();
+  const base = draft.description.trim();
   const seen = new Date(fromLocalInput(draft.observedAt));
   if (Number.isNaN(seen.getTime()) || draft.kind !== 'incident' || Date.now() - seen.getTime() < 15 * 60_000) return base;
   const when = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short' }).format(seen);
@@ -74,10 +74,27 @@ async function uploadReportPhotos(reportId: number, media: Media[]): Promise<str
   return warnings;
 }
 
+/**
+ * One retry key per draft. A missing-pet report that was filed (perhaps with the answer lost on the way) and is sent again by the same person
+ * from the same, unchanged draft carries the same key, so the server answers with the report it already filed instead of refusing a second one.
+ * Editing the draft makes a new object, so a changed report gets a new key.
+ */
+const retryKeys = new WeakMap<Draft, string>();
+function retryKeyOf(draft: Draft): string {
+  let key = retryKeys.get(draft);
+  if (!key) { key = `r-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`; retryKeys.set(draft, key); }
+  return key;
+}
+
 async function submitReport(ctx: ResidentActionContext): Promise<ResidentActionResult> {
   const draft = ctx.state().draft ?? fail('There is no report to send. Start again from Report.');
-  const animal = draft.animalType;
-  if (!animal || draft.description.trim().length < 10) return fail('Add the animal and a description first.', 422);
+  const lost = draft.kind === 'lost';
+  // A lost report is about one of the resident's registered pets (the kind of animal comes from the pet); the others describe the animal themselves
+  const pet = lost ? ctx.state().pets.find((p) => p.id === draft.petId) : undefined;
+  if (lost && !pet) return fail('Register your pet first to report it missing.', 422);
+  const animal = pet ? pet.type : draft.animalType;
+  if (!lost && (!animal || draft.description.trim().length < 10)) return fail('Add the animal and a description first.', 422);
+  if (!animal) return fail('Add the animal first.', 422);
   const loc = draft.location ?? fail('Choose where the animal was.', 422);
   if (loc.lat === null || loc.lng === null) return fail('Pin the spot on the map or use your location. The subdivision needs a position to follow up.', 422);
   // The Leader may have switched this kind off since the app last asked. Ask again: the resident hears it in plain words before anything
@@ -92,15 +109,20 @@ async function submitReport(ctx: ResidentActionContext): Promise<ResidentActionR
 
   const created = await residentApi.createReport({
     category_id: category, animal_type: ANIMAL_LABEL[animal], description: descriptionOf(draft), condition: extraLabel && draft.extra ? joinExtra(extraLabel, draft.extra) : null,
-    latitude: loc.lat, longitude: loc.lng, landmark: label, animal_count: 1, pet_id: draft.petId ? numeric(draft.petId, 'pet') : null,
+    latitude: loc.lat, longitude: loc.lng, landmark: label, animal_count: 1,
+    // A lost report names the resident's own registered pet and says when it was last seen; the server builds what the report says
+    // about the animal from the pet record, and refuses a pet that is not theirs or that already has an active lost report
+    ...(pet ? { pet_id: numeric(pet.id, 'pet'), last_seen_at: toServer(draft.observedAt), client_request_id: retryKeyOf(draft) } : { pet_id: null }),
   });
 
-  // The report is filed. Its photos and the notice it asks for come next, and a problem with them never undoes it.
+  // The report is filed. Its photos come next, and a problem with them never undoes it. A missing pet's notice is published by the server in
+  // the same step that files the report (nothing is asked for afterwards); only a found animal asks for its notice, which the subdivision's
+  // publication setting then decides on.
   const warnings = await uploadReportPhotos(created.report_id, draft.media);
-  if (draft.kind !== 'incident') {
+  if (draft.kind === 'found') {
     try {
       await residentApi.requestAlert(created.report_id, {
-        alert_type: KIND_ALERT[draft.kind], last_seen_at: toServer(draft.observedAt), last_seen_location: label, last_seen_lat: loc.lat, last_seen_lng: loc.lng,
+        alert_type: 'found_animal', last_seen_at: toServer(draft.observedAt), last_seen_location: label, last_seen_lat: loc.lat, last_seen_lng: loc.lng,
         contact_preference: 'app_message', owner_note: draft.description.trim().slice(0, 1000),
       });
     } catch (err) { warnings.push(`Your report was received, but the notice could not be requested: ${errorMessage(err)}`); }
@@ -129,7 +151,13 @@ async function sightingForm(a: Extract<ResidentAction, { type: 'sighting/add' }>
   form.append('seen_at', toServer(a.observedAt) ?? fail('Choose when you saw it.', 422));
   form.append('description', a.description.trim());
   form.append('accuracy_confirmed', 'true');
-  form.append('client_request_id', `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);        // a double tap sends the same sighting once
+  form.append('on_behalf', String(a.onBehalf));
+  if (a.kind === 'secured') {
+    form.append('sighting_type', 'secured');
+    if (a.careNote?.trim()) form.append('care_note', a.careNote.trim());
+    if (a.contactChoice) form.append('contact_choice', a.contactChoice);
+  }
+  form.append('client_request_id', a.clientRequestId ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
   const photo = a.media?.find((m) => m.file)?.file;
   if (photo) form.append('photo', photo);
   return form;
@@ -162,7 +190,7 @@ export async function runAction(a: ResidentAction, ctx: ResidentActionContext): 
     case 'lost/recover': {
       const number = reportNumber(a.reportId);
       await residentApi.confirmReunited(number, a.note);
-      return done({ reportNumbers: [number], notices: true });
+      return done({ reportNumbers: [number], notices: true, pets: true });
     }
 
     case 'sighting/add': {
@@ -172,17 +200,25 @@ export async function runAction(a: ResidentAction, ctx: ResidentActionContext): 
       return done({ notices: true });
     }
 
+    case 'coordination/consent': await residentApi.coordinationConsent(numeric(a.id, 'conversation'), a.allow); return done({ notices: true });
+    case 'coordination/mediation': await residentApi.coordinationMediation(numeric(a.id, 'conversation')); return done({ notices: true });
     case 'claim/submit': return submitClaim(a, ctx);
     case 'claim/addInfo': await residentApi.claimInfo(numeric(a.claimId, 'claim'), a.text.trim()); return done({ claims: true });
 
     case 'pet/save': {
       const exists = ctx.state().pets.some((p) => p.id === a.pet.id);
-      const saved = exists ? await residentApi.updatePet(numeric(a.pet.id, 'pet'), petToApi(a.pet)) : await residentApi.createPet(petToApi(a.pet));
+      const saved = exists ? await residentApi.updatePet(numeric(a.pet.id, 'pet'), petToApi(a.pet))
+        : await residentApi.createPet({ ...petToApi(a.pet), ...(a.confirmNew ? { confirm_new_pet: true } : {}) });
       const warnings: string[] = [];
       if (a.photo) {
         try { await residentApi.uploadPetPhoto(saved.pet_id, a.photo); } catch (err) { warnings.push(`The photo could not be added: ${errorMessage(err)}`); }
       }
       return done({ pets: true, petId: String(saved.pet_id), warnings });
+    }
+
+    case 'ownership/answer': {
+      await residentApi.answerOwnership(numeric(a.id, 'request'), a.accept, a.reason);
+      return done({ pets: true, ownership: true });
     }
 
     case 'profile/update': {

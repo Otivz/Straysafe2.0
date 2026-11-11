@@ -47,4 +47,5 @@ export const NOTIFICATION_ICON: Record<AdminNotification['kind'], { icon: Lucide
   ownership_claim: { icon: Users, tone: 'brand' },
   case_activity: { icon: Bell, tone: 'neutral' },
   referral: { icon: Handshake, tone: 'brand' },
+  help_request: { icon: Handshake, tone: 'amber' },
 };

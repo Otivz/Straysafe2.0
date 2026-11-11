@@ -5,7 +5,7 @@ import { Dialog } from '../components/Dialog';
 import { Checkbox, Field, FieldGroup, OptionGroup, Select, Textarea } from '../components/form';
 import { Callout, FormError, Kv } from '../components/layout';
 import { useToast } from '../components/toast';
-import { CATEGORIES, DISPOSITIONS, DISPOSITION_IDS, OUTCOME_GROUPS, PRIORITIES, VERIFICATION } from '../data/constants';
+import { CATEGORIES, DISPOSITIONS, OFFERED_DISPOSITION_IDS, OUTCOME_GROUPS, PRIORITIES, VERIFICATION } from '../data/constants';
 import { useAdminData } from '../data/context';
 import { dispositionAvailability, openItems } from '../data/selectors';
 import type { DispositionId, OutcomeGroup } from '../data/types';
@@ -85,6 +85,7 @@ export function CloseCaseDialog({ c, onClose }: CaseDialogProps) {
 
   return (
     <Dialog size="lg" title="Close case" description="Document how this case ended. You can reopen it later if the concern returns." onClose={onClose} dirty={disposition !== '' || reason !== ''} onSubmit={next} footer={({ requestClose }) => <FormFooter pending={false} label="Review and close" requestClose={requestClose} />}>
+      {c.category === 'lost_pet' ? <Callout tone="info" title="Closing never says the pet is home.">If the owner told you the pet is home, cancel and use “Record owner confirmation” instead: it records who confirmed, how and when. Close here only when the search ends some other way.</Callout> : null}
       <section aria-label="Case summary">
         <p className="sa-label mb-2">Case summary</p>
         <Kv rows={[
@@ -122,7 +123,7 @@ export function CloseCaseDialog({ c, onClose }: CaseDialogProps) {
               <p className="sa-meta mb-1.5" style={{ fontWeight: 600 }}>{OUTCOME_GROUPS[g].heading}</p>
               <OptionGroup
                 name="disposition" label={OUTCOME_GROUPS[g].heading} value={disposition} onChange={setDisposition}
-                options={DISPOSITION_IDS.filter((d) => DISPOSITIONS[d].group === g).map((d) => {
+                options={OFFERED_DISPOSITION_IDS.filter((d) => DISPOSITIONS[d].group === g).map((d) => {
                   const a = dispositionAvailability(c, d);
                   return { value: d, label: DISPOSITIONS[d].label, description: a.ok ? DISPOSITIONS[d].description : a.reason, disabled: !a.ok };
                 })}

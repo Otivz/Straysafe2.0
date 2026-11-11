@@ -17,6 +17,7 @@ from app.schemas.announcement import (
 )
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.uploads import read_and_validate_upload
+from app.utils.public_text import redact_public_text, require_public_text
 
 router = APIRouter(prefix="/announcements", tags=["announcements"])
 
@@ -55,10 +56,26 @@ def _load_full(db: Session, announcement_id: int) -> Announcement:
 
 CATEGORY_MAP = {
     "Emergency": "Emergency Alert",
-    "Animal Advisory": "General Advisory",
+    "Animal Advisory": "Animal Advisory",
     "Vaccination Drive": "Community Event",
     "Lost and Found": "Lost and Found",
 }
+
+# Classification, not the presentation alias, controls the animal-only Resident Community. A generic emergency or
+# General Advisory is not automatically an animal notice; historical rows are never silently reclassified.
+ANIMAL_COMMUNITY_CATEGORIES = ("Animal Advisory", "Rabies Alert", "Rescue Operation")
+
+
+def _category_for_input(db: Session, name: str) -> AnnouncementCategory:
+    mapped = CATEGORY_MAP.get(name, name)
+    category = db.query(AnnouncementCategory).filter(AnnouncementCategory.category_name == mapped).first()
+    if category is None and mapped == "Animal Advisory":
+        category = AnnouncementCategory(category_name="Animal Advisory")
+        db.add(category)
+        db.flush()
+    if category is None:
+        raise HTTPException(status_code=400, detail="Invalid announcement category mapping")
+    return category
 
 
 def _presentation_category(db_name: Optional[str]) -> str:
@@ -182,7 +199,7 @@ def update_announcement_status(
 
 
 @router.get("/feed/resident/{user_id}", response_model=List[AnnouncementResponse])
-def get_resident_announcement_feed(user_id: int, db: Session = Depends(get_db),
+def get_resident_announcement_feed(user_id: int, community_animal_only: bool = False, db: Session = Depends(get_db),
                                    current_user: User = Depends(get_current_user)):
     """Announcements visible to a resident: Public (system-wide) and Subdivision Only (their subdivision).
     Only the resident's own feed (an admin may view anyone's), so subdivision-only posts don't leak by user id."""
@@ -200,7 +217,7 @@ def get_resident_announcement_feed(user_id: int, db: Session = Depends(get_db),
             & (Announcement.subdivision_id == user.subdivision_id)
         )
 
-    rows = (
+    query = (
         db.query(Announcement)
         .options(
             joinedload(Announcement.creator),
@@ -213,14 +230,22 @@ def get_resident_announcement_feed(user_id: int, db: Session = Depends(get_db),
             or_(*visibility_filter),
             or_(Announcement.expires_at.is_(None), Announcement.expires_at > now),
         )
-        .order_by(
+    )
+    if community_animal_only:
+        query = query.filter(Announcement.category.has(AnnouncementCategory.category_name.in_(ANIMAL_COMMUNITY_CATEGORIES)))
+    rows = (query.order_by(
             Announcement.priority_level.desc(),
             Announcement.published_at.desc(),
             Announcement.created_at.desc(),
         )
-        .all()
+        .limit(20 if community_animal_only else None).all()
     )
-    return [_to_response(row) for row in rows]
+    results = [_to_response(row) for row in rows]
+    if community_animal_only:
+        for result in results:
+            result.title = redact_public_text(result.title) or "Animal advisory"
+            result.content = redact_public_text(result.content) or ""
+    return results
 
 
 @router.post("/", response_model=AnnouncementResponse)
@@ -237,10 +262,10 @@ def create_announcement(
 
     creator = current_user
 
-    mapped_category = CATEGORY_MAP.get(payload.category, payload.category)
-    category = db.query(AnnouncementCategory).filter(AnnouncementCategory.category_name == mapped_category).first()
-    if not category:
-        raise HTTPException(status_code=400, detail="Invalid announcement category mapping")
+    category = _category_for_input(db, payload.category)
+    if category.category_name in ANIMAL_COMMUNITY_CATEGORIES:
+        require_public_text(payload.title, "The advisory title")
+        require_public_text(payload.content, "The advisory text")
 
     target_status = payload.status or "Published"
     row = Announcement(
@@ -327,10 +352,10 @@ def update_announcement(announcement_id: int, payload: AnnouncementCreate, db: S
         raise HTTPException(status_code=404, detail="Announcement not found")
     _require_can_manage(ann, current_user)
     
-    mapped_category = CATEGORY_MAP.get(payload.category, payload.category)
-    category = db.query(AnnouncementCategory).filter(AnnouncementCategory.category_name == mapped_category).first()
-    if not category:
-        raise HTTPException(status_code=400, detail="Invalid announcement category mapping")
+    category = _category_for_input(db, payload.category)
+    if category.category_name in ANIMAL_COMMUNITY_CATEGORIES:
+        require_public_text(payload.title, "The advisory title")
+        require_public_text(payload.content, "The advisory text")
         
     ann.title = payload.title  # type: ignore
     ann.content = payload.content  # type: ignore

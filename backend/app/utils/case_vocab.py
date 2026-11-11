@@ -80,6 +80,8 @@ DISPOSITIONS: Dict[str, Tuple[str, int, str]] = {
     "unresolved_other": ("unresolved", 17, "Closed without confirmed resolution"),
     "invalid_report": ("invalid", 14, "Report determined invalid"),
     "duplicate_report": ("invalid", 14, "Duplicate of another report"),
+    # Set when the person who filed the report withdraws it (never chosen by a Leader): the reason is kept as it was
+    "withdrawn_by_reporter": ("invalid", 14, "Withdrawn by the reporter"),
 }
 OUTCOME_GROUPS = ("resolved", "unresolved", "invalid")
 
@@ -200,8 +202,10 @@ def level_for_priority(priority: str) -> str:
 
 # ------------------------------------------------------------------------------------------------------ referrals
 ORG_TYPES = ("barangay", "animal_control", "veterinary", "animal_welfare", "wildlife", "other")
-REFERRAL_STATUSES = ("sent", "acknowledged", "in_progress", "completed", "declined", "no_response")
-OPEN_REFERRAL_STATUSES: FrozenSet[str] = frozenset({"sent", "acknowledged", "in_progress", "no_response"})
+# to_contact: assistance is needed and written down, but nobody has been contacted yet. Saving a referral is NOT proof that the
+# organisation was reached: the contact itself is recorded as the first update (2026-11-11).
+REFERRAL_STATUSES = ("to_contact", "sent", "acknowledged", "in_progress", "completed", "declined", "no_response")
+OPEN_REFERRAL_STATUSES: FrozenSet[str] = frozenset({"to_contact", "sent", "acknowledged", "in_progress", "no_response"})
 REFERRAL_CONTACT_METHODS = ("call", "visit", "message", "letter", "other")
 # approved-UI contact method -> stored contact_method
 UI_CONTACT_TO_STORED = {"in_person": "visit", "phone": "call", "message": "message", "letter": "letter"}

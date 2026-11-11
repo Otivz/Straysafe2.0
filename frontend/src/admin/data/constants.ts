@@ -53,6 +53,13 @@ export const IDENTITY: Record<IdentityStatus, { label: string; description: stri
   identified: { label: 'Identity confirmed', description: 'The animal was identified by an explicit decision.', tone: 'sage' },
 };
 
+/** The reporter named a registered pet and nobody on the team has decided who the animal is: shown instead of "Identity confirmed". */
+export const LINKED_BY_REPORTER: { label: string; description: string; tone: Tone } = {
+  label: 'Linked by the reporter', description: 'The reporter named this registered pet. Nobody on the team has confirmed the animal yet.', tone: 'neutral',
+};
+/** How an identity reads: a status the team decided, or only the reporter's own link. */
+export const identityDisplay = (status: IdentityStatus, decided?: boolean) => (status === 'identified' && decided === false ? LINKED_BY_REPORTER : IDENTITY[status]);
+
 export const VERIFICATION: Record<IncidentVerification, { label: string; description: string }> = {
   not_reviewed: { label: 'Not yet reviewed', description: 'No decision recorded.' },
   verified: { label: 'Verified', description: 'The incident is supported by the available evidence.' },
@@ -79,8 +86,11 @@ export const DISPOSITIONS: Record<DispositionId, { label: string; group: Outcome
   unresolved_other: { label: 'Closed without confirmed resolution', group: 'unresolved', description: 'Closed for another reason. Explain it in the closure reason.' },
   invalid_report: { label: 'Report determined invalid', group: 'invalid', description: 'The report was not valid. No intervention was needed.' },
   duplicate_report: { label: 'Duplicate of another report', group: 'invalid', description: 'Covered by another case. Link the related report first.' },
+  withdrawn_by_reporter: { label: 'Withdrawn by the reporter', group: 'invalid', description: 'The owner withdrew their own report. Only the owner can do this.' },
 };
 export const DISPOSITION_IDS = Object.keys(DISPOSITIONS) as DispositionId[];
+/** What a Leader may choose when closing a case. A withdrawal is the reporter's own act, so it is never offered here. */
+export const OFFERED_DISPOSITION_IDS = DISPOSITION_IDS.filter((d) => d !== 'withdrawn_by_reporter');
 export const OUTCOME_GROUPS: Record<OutcomeGroup, { label: string; heading: string; tone: Tone }> = {
   resolved: { label: 'Resolved', heading: 'Concern resolved', tone: 'sage' },
   unresolved: { label: 'Not resolved', heading: 'Closed without confirmed resolution', tone: 'amber' },
@@ -88,6 +98,7 @@ export const OUTCOME_GROUPS: Record<OutcomeGroup, { label: string; heading: stri
 };
 
 export const REFERRAL_STATUS: Record<ReferralStatus, { label: string; tone: Tone; open: boolean }> = {
+  to_contact: { label: 'Not contacted yet', tone: 'amber', open: true },
   sent: { label: 'Sent', tone: 'amber', open: true },
   acknowledged: { label: 'Acknowledged', tone: 'amber', open: true },
   in_progress: { label: 'In progress', tone: 'brand', open: true },
@@ -110,6 +121,9 @@ export const FOLLOWUP_KINDS: Record<FollowUpKind, string> = {
   referral_check: 'Referral check', warning_end: 'End of observation', post_closure: 'Post-closure check',
 };
 export const FOLLOWUP_MANUAL_KINDS: FollowUpKind[] = ['follow_up', 'site_check', 'reporter_update', 'referral_check'];
+
+/** How an owner's confirmation that the pet is home reached the record. */
+export const RECOVERY_SOURCES: Record<'owner_app' | 'phone' | 'in_person', string> = { owner_app: 'In the app', phone: 'By phone', in_person: 'In person' };
 
 export const CONTACT_METHODS: Record<ContactMethod, string> = {
   in_person: 'In person', phone: 'Phone call', message: 'Message', letter: 'Written notice',

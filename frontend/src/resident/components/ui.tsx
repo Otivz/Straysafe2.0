@@ -115,6 +115,20 @@ export function Row({ to, onClick, icon: Icon, title, meta, trailing, danger }: 
   return to ? <Link to={to} className={className}>{inner}</Link> : <button type="button" onClick={onClick} className={className}>{inner}</button>;
 }
 
+/** A choice that cannot be used yet, with the reason and the action that fixes it. Not a button: only the action in it can be tapped. */
+export function DisabledRow({ icon: Icon, title, meta, action }: { icon?: LucideIcon; title: ReactNode; meta?: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="rs-row rs-row--disabled" aria-disabled="true">
+      {Icon ? <span className="rs-row__icon"><Icon size={19} aria-hidden="true" /></span> : null}
+      <span className="rs-row__text">
+        <span className="rs-row__title">{title}</span>
+        {meta ? <span className="rs-row__meta">{meta}</span> : null}
+        {action ? <span className="rs-row-actions rs-mt">{action}</span> : null}
+      </span>
+    </div>
+  );
+}
+
 export const Avatar = ({ name, size = 'md' }: { name: string; size?: 'md' | 'lg' }) => <span className={cx('rs-avatar', size === 'lg' && 'rs-avatar--lg')} aria-hidden="true">{initials(name)}</span>;
 
 export function Segmented<T extends string>({ value, onChange, options, label }: { value: T; onChange: (v: T) => void; options: { value: T; label: string; count?: number }[]; label: string }) {

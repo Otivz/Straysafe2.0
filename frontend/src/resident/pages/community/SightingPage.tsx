@@ -8,13 +8,14 @@ import { MediaPicker } from '../../components/MediaPicker';
 import { Screen } from '../../components/Screen';
 import { DiscardSheet, Sheet } from '../../components/Sheet';
 import { useToast } from '../../components/toast';
-import { Button, Callout, FormError, NotFoundState } from '../../components/ui';
+import { Button, Callout, ErrorState, FormError, ListSkeleton, NotFoundState } from '../../components/ui';
 import { residentPath } from '../../config';
 import { useResidentData } from '../../data/context';
 import { noticeById } from '../../data/selectors';
 import type { GeoPoint, Media } from '../../data/types';
 import { useFormFocus, useLeaveGuard, useNow, useSubmit } from '../../lib/hooks';
 import { publicTextProblem } from '../../lib/publicText';
+import { useLoadNotice } from '../../lib/useLoadNotice';
 
 type Errors = Partial<Record<'observedAt' | 'location' | 'description', string>>;
 
@@ -23,6 +24,7 @@ export default function SightingPage() {
   const { state, dispatch } = useResidentData();
   const { noticeId } = useParams();
   const notice = noticeById(state, noticeId);
+  const detail = useLoadNotice(noticeId);
   const navigate = useNavigate();
   const toast = useToast();
   const now = useNow();
@@ -36,15 +38,20 @@ export default function SightingPage() {
   const [media, setMedia] = useState<Media[]>([]);
   const [errors, setErrors] = useState<Errors>({});
   const [picking, setPicking] = useState(false);
+  const [clientRequestId] = useState(() => `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
   const guard = useLeaveGuard(description.trim() !== '' || location !== null || media.length > 0, residentPath(`/community/${noticeId}`));
 
+  if (detail.status === 'idle' || detail.status === 'loading') return <Screen title="Report a sighting" back="/community"><ListSkeleton rows={3} /></Screen>;
+  if (detail.status === 'error') return <Screen title="Report a sighting" back="/community"><ErrorState onRetry={detail.retry}>{detail.error}</ErrorState></Screen>;
   if (!notice || notice.type === 'safety_advisory') return <Screen title="Report a sighting" back="/community"><NotFoundState what="notice" to="/community" label="Go to Community" /></Screen>;
-  if (notice.status === 'recovered') {
+  if (notice.status !== 'active') {
     return (
       <Screen title="Report a sighting" back={`/community/${notice.id}`}>
         {notice.type === 'lost_pet'
-          ? <Callout tone="sage" title="This pet is home.">Thank you for looking. The owner has marked this notice as recovered.</Callout>
-          : <Callout tone="sage" title="This animal is back with its owner.">Thank you for looking. The subdivision has closed this notice.</Callout>}
+          ? (notice.closeOutcome === 'recovered' || notice.recoveredAt
+            ? <Callout tone="sage" title="This pet is home.">Thank you for looking. The owner confirmed the pet is home.</Callout>
+            : <Callout tone="info" title="This notice is closed.">Thank you for looking. It no longer takes sightings.</Callout>)
+          : <Callout tone="info" title="This notice is no longer accepting sightings.">Thank you for looking.</Callout>}
       </Screen>
     );
   }
@@ -64,7 +71,7 @@ export default function SightingPage() {
     setErrors(found);
     if (Object.keys(found).length > 0) { invalid(); return; }
     const ok = await run(async () => {
-      await dispatch({ type: 'sighting/add', noticeId: notice.id, observedAt, location: location as GeoPoint, description, onBehalf, photos: media.length, media });
+      await dispatch({ type: 'sighting/add', noticeId: notice.id, clientRequestId, observedAt, location: location as GeoPoint, description, onBehalf: notice.mine || onBehalf, photos: media.length, media });
     });
     if (ok) { toast.success('Sighting shared'); navigate(residentPath(`/community/${notice.id}/sightings`), { replace: true }); }
   };
@@ -106,7 +113,7 @@ export default function SightingPage() {
           </Field>
 
           <FieldGroup label="Photo (optional)" hint="Only if you can take it from a safe distance.">
-            <MediaPicker value={media} onChange={setMedia} accept="photo" max={3} />
+            <MediaPicker value={media} onChange={setMedia} accept="photo" max={1} />
           </FieldGroup>
 
           <Checkbox checked={onBehalf} onChange={(e) => setOnBehalf(e.target.checked)} label="Someone else saw it and told me." hint="We will note that this is second-hand." />

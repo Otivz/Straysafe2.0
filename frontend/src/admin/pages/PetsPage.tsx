@@ -12,7 +12,7 @@ import type { AnimalType } from '../data/types';
 import { fmtDate, plural } from '../../preview/lib/format';
 import { usePageTitle } from '../lib/hooks';
 
-/** A16 — Pet registry. A voluntary, owner-declared reference list. Registration is never proof of ownership. */
+/** A16 — Pet registry. The subdivision's registered pets, the base of a lost-pet report. A registration is declared and is never proof of ownership. */
 export default function PetsPage() {
   usePageTitle('Pet Registry');
   const { state } = useAdminData();
@@ -38,7 +38,7 @@ export default function PetsPage() {
 
   return (
     <div>
-      <PageHeader title="Pet Registry" description="Pets that residents registered voluntarily. A registration is a convenient reference declared by the owner. It does not verify ownership." />
+      <PageHeader title="Pet Registry" description="The pets registered in your subdivision. Residents register their own pets, which is how they report one missing, and the office can record a pet and link it to its owner. A registration is declared by whoever entered it. It does not verify ownership." />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <SearchInput className="w-full sm:w-[340px]" aria-label="Search the registry" placeholder="Search pet, breed or owner" value={q} onChange={(e) => set({ q: e.target.value })} />
@@ -47,7 +47,7 @@ export default function PetsPage() {
 
       <Panel className="overflow-hidden">
         {state.pets.length === 0 ? (
-          <EmptyState icon={PawPrint} title="No pets registered yet">Residents can register their pets from their own account. Registered pets will appear here as a reference list.</EmptyState>
+          <EmptyState icon={PawPrint} title="No pets registered yet">Residents register their pets from their own account, and a registered pet is how they report it missing. Registered pets appear here.</EmptyState>
         ) : rows.length === 0 ? (
           <EmptyState icon={SearchX} title="No pets match" action={<Button onClick={clear}>Clear filters</Button>}>Try another name, or choose a different animal type.</EmptyState>
         ) : (
@@ -76,7 +76,7 @@ export default function PetsPage() {
                           </div>
                         </td>
                         <td className="hidden md:table-cell"><p className="sa-small">{p.color}</p><p className="sa-meta">{SIZE_LABEL[p.size]} · {p.ageText}</p></td>
-                        <td>{owner ? <><p className="sa-small">{owner.name}</p><p className="sa-meta">{owner.unit} · owner-declared</p></> : <span className="sa-meta">Not recorded</span>}</td>
+                        <td>{owner ? <><p className="sa-small">{owner.name}</p><p className="sa-meta">{owner.unit} · {p.registeredBy && !p.registeredBy.byOwner ? 'entered by the office' : 'owner-declared'}</p></> : <><p className="sa-small">No resident linked</p><p className="sa-meta">{p.registeredBy ? `Entered by ${p.registeredBy.name}` : 'Not recorded'}</p></>}</td>
                         <td className="hidden whitespace-nowrap lg:table-cell"><span className="sa-small">{fmtDate(p.registeredAt)}</span></td>
                         <td className="sa-right"><LinkButton size="sm" to={adminPath(`/pets/${p.id}`)} aria-label={`View ${p.name}`} onClick={(e) => e.stopPropagation()}>View<ArrowRight size={14} aria-hidden="true" /></LinkButton></td>
                       </tr>

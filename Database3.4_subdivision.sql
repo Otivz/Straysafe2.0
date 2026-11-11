@@ -115,6 +115,28 @@
 --           Subdivision settings (policies, follow-up periods, publication policy) live in the existing
 --           system_settings table, one JSON row per subdivision (key 'case_settings:<subdivision_id>').
 -- =============================================================================
+-- =============================================================================
+-- REVISION 2026-11-11 (Registration-first Lost Pet reports)
+--   [NEW]   + reports.pet_snapshot (json, nullable): the pet of a Lost Pet report as it was when the report was filed,
+--           and the last-seen details. Built by the server from the pet record at filing and never rewritten, so editing
+--           the pet later does not change the report's history. Empty for every other report and for older Lost Pet reports.
+--           Added to an existing database by backend/app/db_migrations/case_alignment.py (REPORT_COLUMNS): idempotent,
+--           nothing dropped or rewritten. The schema stays at 51 tables.
+-- =============================================================================
+-- =============================================================================
+-- REVISION 2026-11-11 (Lost Pet end to end: the notice at filing, possible-recovery reports, coordination, the recovery record)
+--   [NEW]   + reports.client_request_id (varchar(64), nullable): a Lost Pet submission's retry key. Sending the same key again
+--           returns the first report instead of filing a second one. Empty for every other report.
+--   [NEW]   + lost_pet_alerts.recovered_at, recovery_source, recovery_confirmed_by, recovery_recorded_by, recovery_recorded_at,
+--           recovery_note: the owner's confirmation that the pet is home (in the app, or recorded by the Leader after a phone call or
+--           a visit). Only that one operation fills them; closing_outcome 'recovered' means it happened.
+--   [NEW]   + lost_pet_sightings.sighting_type (seen | secured; existing rows are 'seen') and care_note (private to the owner and
+--           the Leader): "I may have this pet safely with me" is a possible-recovery report, never a recovery by itself.
+--   [NEW]   + TABLE lost_pet_coordinations and lost_pet_coordination_messages: how the owner and the neighbor get in touch (direct
+--           only when BOTH agree, or through the Leader when either asks, with no reason). 51 -> 53 tables.
+--           Added to an existing database by backend/app/db_migrations/case_alignment.py (REPORT_COLUMNS, ALERT_COLUMNS,
+--           SIGHTING_COLUMNS, CASE_TABLES): idempotent, nothing dropped or rewritten.
+-- =============================================================================
 
 DROP DATABASE IF EXISTS `straysafe_subdivision`;
 CREATE DATABASE `straysafe_subdivision` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -628,6 +650,8 @@ CREATE TABLE `reports` (
   `last_reopened_by` int DEFAULT NULL,
   `last_reopen_reason` text,
   `is_sensitive` tinyint(1) NOT NULL DEFAULT 0,                       -- [NEW] a private complaint about a neighbour: never made public, never offered as a notice
+  `pet_snapshot` json DEFAULT NULL,                                   -- [NEW] 2026-11-11: a Lost Pet report: the pet as it was when filed + last-seen details, built by the server, never rewritten
+  `client_request_id` varchar(64) DEFAULT NULL,                      -- [NEW] 2026-11-11: a Lost Pet submission's retry key (the same key again returns the first report)
   PRIMARY KEY (`report_id`),
   KEY `fk_reports_subdivision` (`subdivision_id`),
   KEY `fk_reports_category` (`category_id`),
@@ -1284,6 +1308,12 @@ CREATE TABLE `lost_pet_alerts` (
   `close_reason` text,
   `closed_by` int DEFAULT NULL,
   `closed_at` datetime DEFAULT NULL,
+  `recovered_at` datetime DEFAULT NULL,                               -- [NEW] 2026-11-11: when the owner confirmed the pet is home
+  `recovery_source` varchar(20) DEFAULT NULL,                         -- [NEW] owner_app | phone | in_person
+  `recovery_confirmed_by` int DEFAULT NULL,                           -- [NEW] the owner who confirmed it
+  `recovery_recorded_by` int DEFAULT NULL,                            -- [NEW] who recorded it: the owner, or the Leader
+  `recovery_recorded_at` datetime DEFAULT NULL,                       -- [NEW] when the server recorded it
+  `recovery_note` text,                                               -- [NEW]
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`alert_id`),
   UNIQUE KEY `uq_lost_pet_alerts_report_id` (`report_id`),
@@ -1295,6 +1325,8 @@ CREATE TABLE `lost_pet_alerts` (
   CONSTRAINT `fk_lost_pet_alerts_closed_by` FOREIGN KEY (`closed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_lost_pet_alerts_owner_id` FOREIGN KEY (`owner_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_lost_pet_alerts_pet_id` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_lost_pet_alerts_recovery_confirmed_by` FOREIGN KEY (`recovery_confirmed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_lost_pet_alerts_recovery_recorded_by` FOREIGN KEY (`recovery_recorded_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_lost_pet_alerts_report_id` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_lost_pet_alerts_requested_by` FOREIGN KEY (`requested_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_lost_pet_alerts_subdivision_id` FOREIGN KEY (`subdivision_id`) REFERENCES `subdivisions` (`subdivision_id`)
@@ -1326,6 +1358,9 @@ CREATE TABLE `lost_pet_sightings` (
   `reviewed_by` int DEFAULT NULL,
   `reviewed_at` datetime DEFAULT NULL,
   `client_request_id` varchar(64) DEFAULT NULL,
+  `sighting_type` varchar(20) NOT NULL DEFAULT 'seen',                -- [NEW] 2026-11-11: seen | secured ("I may have this pet safely with me")
+  `on_behalf` tinyint(1) NOT NULL DEFAULT 0,                           -- [NEW] second-hand observation, preserved after refresh
+  `care_note` text,                                                   -- [NEW] private to the owner and the Leader: where a secured pet is kept
   PRIMARY KEY (`sighting_id`),
   UNIQUE KEY `uq_lost_pet_sightings_client_request_id` (`client_request_id`),
   KEY `ix_lost_pet_sightings_alert_id` (`alert_id`),
@@ -1338,6 +1373,67 @@ CREATE TABLE `lost_pet_sightings` (
   CONSTRAINT `fk_lost_pet_sightings_report_id` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_lost_pet_sightings_reporter_id` FOREIGN KEY (`reporter_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_lost_pet_sightings_reviewed_by` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- TABLE: LOST_PET_COORDINATIONS (how an owner and a neighbor who may have the pet get in touch)   -- [NEW] 2026-11-11
+-- One per possible-recovery report (a sighting of type 'secured'). mode: none | direct (BOTH agreed to message each other in the
+-- app) | leader (either asked the Subdivision Leader to help, with no reason; direct messaging is then over). Kept after resolution.
+-- =========================================
+DROP TABLE IF EXISTS `lost_pet_coordinations`;
+CREATE TABLE `lost_pet_coordinations` (
+  `coordination_id` int NOT NULL AUTO_INCREMENT,
+  `alert_id` int NOT NULL,
+  `report_id` int NOT NULL,
+  `sighting_id` int NOT NULL,
+  `owner_id` int DEFAULT NULL,
+  `finder_id` int DEFAULT NULL,
+  `mode` varchar(10) NOT NULL DEFAULT 'none',
+  `owner_consent` tinyint(1) NOT NULL DEFAULT 0,
+  `finder_consent` tinyint(1) NOT NULL DEFAULT 0,
+  `mediation_requested_by` int DEFAULT NULL,
+  `mediation_requested_at` datetime DEFAULT NULL,
+  `status` varchar(10) NOT NULL DEFAULT 'open',
+  `resolved_at` datetime DEFAULT NULL,
+  `resolved_by` int DEFAULT NULL,
+  `resolution_note` text,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`coordination_id`),
+  UNIQUE KEY `uq_lost_pet_coordinations_sighting_id` (`sighting_id`),
+  KEY `ix_lost_pet_coordinations_alert_id` (`alert_id`),
+  KEY `ix_lost_pet_coordinations_finder_id` (`finder_id`),
+  KEY `ix_lost_pet_coordinations_owner_id` (`owner_id`),
+  KEY `ix_lost_pet_coordinations_report_id` (`report_id`),
+  KEY `ix_lost_pet_coordinations_status` (`status`),
+  CONSTRAINT `fk_lost_pet_coordinations_alert_id` FOREIGN KEY (`alert_id`) REFERENCES `lost_pet_alerts` (`alert_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_lost_pet_coordinations_finder_id` FOREIGN KEY (`finder_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_lost_pet_coordinations_mediation_requested_by` FOREIGN KEY (`mediation_requested_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_lost_pet_coordinations_owner_id` FOREIGN KEY (`owner_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_lost_pet_coordinations_report_id` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_lost_pet_coordinations_resolved_by` FOREIGN KEY (`resolved_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_lost_pet_coordinations_sighting_id` FOREIGN KEY (`sighting_id`) REFERENCES `lost_pet_sightings` (`sighting_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- TABLE: LOST_PET_COORDINATION_MESSAGES (a private message between the owner and the finder of one coordination)   -- [NEW] 2026-11-11
+-- Text only, and only while both agreed (mode direct). The Leader never reads them.
+-- =========================================
+DROP TABLE IF EXISTS `lost_pet_coordination_messages`;
+CREATE TABLE `lost_pet_coordination_messages` (
+  `message_id` int NOT NULL AUTO_INCREMENT,
+  `coordination_id` int NOT NULL,
+  `sender_id` int DEFAULT NULL,
+  `message_text` text NOT NULL,
+  `sent_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `is_read` tinyint(1) NOT NULL DEFAULT 0,
+  `client_request_id` varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`message_id`),
+  UNIQUE KEY `uq_lost_pet_coordination_message_request` (`client_request_id`),
+  KEY `ix_lost_pet_coordination_messages_coordination_id` (`coordination_id`),
+  KEY `ix_lost_pet_coordination_messages_sent_at` (`sent_at`),
+  CONSTRAINT `fk_lost_pet_coordination_messages_coordination_id` FOREIGN KEY (`coordination_id`) REFERENCES `lost_pet_coordinations` (`coordination_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_lost_pet_coordination_messages_sender_id` FOREIGN KEY (`sender_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =========================================

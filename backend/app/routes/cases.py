@@ -73,7 +73,8 @@ def list_categories(subdivision_id: Optional[int] = None, db: Session = Depends(
                             "office": settings.office.model_dump()},
             # whether the subdivision publishes a lost-pet / found-animal notice at once or an officer reviews it first, so the
             # resident's screens can say which will happen to the notice they are about to ask for
-            "publication": settings.publication.model_dump(),
+            # (a missing pet's notice is always published at once, whatever an older stored setting says: it is not a choice any more)
+            "publication": {**settings.publication.model_dump(), "lost_pet": "immediate"},
             "categories": [
                 {"id": k, "category_id": ids.get(k), "label": label, "description": V.CATEGORY_DESCRIPTIONS[k],
                  "enabled": case_policy.category_enabled(settings, k)}

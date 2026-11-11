@@ -3,8 +3,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  animalTypeOf, claimFromApi, evidenceIdsFrom, joinAddress, joinExtra, mediaFromApi, noticeFromAlert, noticeFromAnnouncement, noticeRef, notificationFromApi, officeFrom,
-  petFromApi, petToApi, preferencesFrom, profileFromUser, reportFromApi, settingsFrom, sightingFromApi, splitAddress, splitExtra, updateFromChat, updateFromHistory,
+  animalTypeOf, claimFromApi, coordinationFromApi, evidenceIdsFrom, joinAddress, joinExtra, mediaFromApi, noticeFromAlert, noticeFromAnnouncement, noticeRef, notificationFromApi, officeFrom,
+  ownershipRequestFromApi, petFromApi, petToApi, preferencesFrom, profileFromUser, reportFromApi, settingsFrom, sightingFromApi, splitAddress, splitExtra, updateFromChat, updateFromHistory,
 } from '../src/resident/live/adapters.ts';
 
 const FAMILY = { 1: 'injured', 3: 'nuisance', 5: 'found_animal', 6: 'lost_pet' };
@@ -131,10 +131,14 @@ test('a lost-pet notice: the title from the pet, the general area from the posit
   assert.equal(noticeFromAlert(alert(), lookup, new Set([158])).mine, true, 'the resident who filed the report owns the notice');
 });
 
-test('a found-animal notice, a closed notice (recovered) and one with no place', () => {
+test('publication state stays distinct from recovery, including requested and closed notices', () => {
   const found = noticeFromAlert(alert({ alert_type: 'found_animal', pet: { name: 'Found animal', photo_url: null, species: 'Cat', breed: null, color: null, distinguishing_marks: null, description: null } }), lookup, new Set());
   assert.deepEqual([found.type, found.title, found.source, found.photos, found.photoUrls], ['found_animal', 'Found: cat', 'admin', 0, undefined]);
-  assert.equal(noticeFromAlert(alert({ status: 'closed' }), lookup, new Set()).status, 'recovered');
+  assert.equal(noticeFromAlert(alert({ status: 'closed', close_outcome: 'withdrawn' }), lookup, new Set()).status, 'closed');
+  assert.equal(noticeFromAlert(alert({ status: 'requested' }), lookup, new Set()).status, 'requested');
+  const confirmed = noticeFromAlert(alert({ status: 'closed', close_outcome: 'recovered', recovered_at: '2026-11-01T04:00:00Z' }), lookup, new Set());
+  assert.equal(confirmed.status, 'closed');
+  assert.equal(confirmed.recoveredAt, '2026-11-01T04:00:00.000Z');
   const nowhere = noticeFromAlert(alert({ last_seen: { at: null, location: null, latitude: null, longitude: null, generalized: true } }), lookup, new Set());
   assert.deepEqual([nowhere.area, nowhere.approx, nowhere.lastSeenAt], ['Somewhere in the subdivision', undefined, undefined]);
 });
@@ -145,6 +149,15 @@ test('sightings: by you or a neighbour, newest first, a place only if one was gi
   assert.deepEqual([sightingFromApi(s({ latitude: null, longitude: null })).location.lat, sightingFromApi(s({ latitude: null, longitude: null, location_label: null })).location.label], [null, 'Pinned on the map']);
   const n = noticeFromAlert(alert({ sightings: [s({ sighting_id: 1, seen_at: '2026-11-01T10:00:00+00:00' }), s({ sighting_id: 2, seen_at: '2026-11-03T10:00:00+00:00' })] }), lookup, new Set());
   assert.deepEqual(n.sightings.map((x) => x.id), ['sg2', 'sg1']);
+  const reviewed = sightingFromApi(s({ on_behalf: true, status: 'dismissed', reviewed_at: '2026-11-03T12:00:00Z', review_note: 'A different dog.' }));
+  assert.equal(reviewed.onBehalf, true);
+  assert.equal(reviewed.review.status, 'dismissed');
+  assert.equal(reviewed.review.at, '2026-11-03T12:00:00.000Z');
+  assert.equal(reviewed.review.note, 'A different dog.');
+  const summary = noticeFromAlert(alert({ sighting_count: 7, latest_sighting: s({ sighting_id: 9 }) }), lookup, new Set());
+  assert.equal(summary.sightingCount, 7);
+  assert.equal(summary.sightings.length, 0);
+  assert.equal(summary.latestSighting.id, 'sg9');
 });
 
 test('a safety advisory is an announcement, shown as published', () => {
@@ -181,6 +194,29 @@ test('pets: read from the registry, written back as the server takes them', () =
   assert.equal(petToApi({ ...pet, breed: '', ageText: '' }).breed, null);
 });
 
+test('a pet carries its sex and the record status the server holds, and is saved as a dog or a cat with its sex', () => {
+  const base = { pet_id: 31, pet_name: 'Mochi', pet_type: 'Dog', breed: null, color_markings: 'White', primary_color: null, secondary_color: null, gender: 'Female', estimated_age: null,
+    birth_date: null, size_category: 'Medium', distinctive_markings: null, health_condition: null, notes: null, photo_url: null, photo_front_url: null, photo_left_url: null,
+    photo_right_url: null, owner_id: 7, created_at: '2026-10-01T00:00:00+00:00', is_vaccinated: false, vaccine_expiry: null, status: 'Deceased' };
+  const pet = petFromApi(base);
+  assert.deepEqual([pet.sex, pet.status], ['female', 'Deceased']);
+  assert.equal(petFromApi({ ...base, gender: 'Unknown', status: null }).sex, 'unknown');
+  assert.equal('status' in petFromApi({ ...base, status: null }), false, 'no status is simply absent');
+  assert.deepEqual([petToApi({ ...pet, sex: 'male' }).gender, petToApi({ ...pet, sex: 'unknown' }).gender, petToApi({ ...pet, type: 'cat' }).pet_type], ['Male', 'Unknown', 'Cat']);
+});
+
+test('a pet the office linked to this account is a question to answer, with who asked', () => {
+  const req = ownershipRequestFromApi({ confirmation_id: 5, pet_id: 31, pet_name: 'Brownie', pet_type: 'Dog', breed: 'Aspin', photo_url: 'https://img.test/b.jpg', proposed_by_name: 'Leader Lee', created_at: '2026-11-10T09:00:00+00:00' });
+  assert.deepEqual([req.id, req.petId, req.petName, req.petType, req.photoUrl, req.proposedBy], ['5', '31', 'Brownie', 'dog', 'https://img.test/b.jpg', 'Leader Lee']);
+  const bare = ownershipRequestFromApi({ confirmation_id: 6, pet_id: 32, pet_name: null, pet_type: null, breed: null, photo_url: null, proposed_by_name: null, created_at: null });
+  assert.deepEqual([bare.petName, bare.proposedBy, 'photoUrl' in bare], ['A pet', 'Your subdivision office', false]);
+});
+
+test('the notification that asks "is this your pet?" leads to My pets, not to a report', () => {
+  const n = notificationFromApi({ notification_id: 9, type: 'pet_owner_confirmation', title: 'Please confirm pet ownership', message: 'Open My Pets', related_id: 31, is_read: false, created_at: '2026-11-10T00:00:00+00:00' }, lookup);
+  assert.equal(n.to, '/pets');
+});
+
 test('notifications lead where they should: an alert id is never taken for a report id', () => {
   const n = (over) => notificationFromApi({ notification_id: 5, type: 'status_update', title: 'Report #158 was updated', message: 'm', related_id: 158, is_read: false, created_at: '2026-11-02T00:00:00+00:00', ...over }, lookup);
   assert.deepEqual([n({}).kind, n({}).to, n({}).read], ['report_update', '/reports/SS-2026-0158', false]);
@@ -189,6 +225,65 @@ test('notifications lead where they should: an alert id is never taken for a rep
   assert.deepEqual([n({ type: 'ownership_claim_review', related_id: 40 }).kind, n({ type: 'ownership_claim_review', related_id: 40 }).to], ['claim_update', '/claims/9']);
   assert.equal(n({ type: 'ownership_claim_review', related_id: 99 }).to, '/community');
   assert.equal(n({ related_id: null }).to, '/reports');
+});
+
+test('every Lost Pet notification opens the NOTICE (its id is the alert\'s): an ordinary sighting opens the sightings, the rest the notice', () => {
+  const n = (type, over = {}) => notificationFromApi({ notification_id: 6, type, title: 'Mochi', message: 'm', related_id: 12, is_read: false, created_at: '2026-11-02T00:00:00+00:00', ...over }, lookup);
+  assert.deepEqual([n('lost_pet_sighting').kind, n('lost_pet_sighting').to], ['sighting', '/community/alert-12/sightings']);
+  assert.deepEqual([n('lost_pet_secured').kind, n('lost_pet_secured').to], ['sighting', '/community/alert-12']);
+  assert.deepEqual([n('lost_pet_coordination').kind, n('lost_pet_coordination').to], ['community_notice', '/community/alert-12']);
+  assert.deepEqual([n('lost_pet_recovered').kind, n('lost_pet_recovered').to], ['community_notice', '/community/alert-12']);
+  assert.equal(n('lost_pet_sighting', { related_id: null }).to, '/community');
+  // a Leader's notification carries a REPORT id: it is never read as a notice here
+  assert.equal(n('lost_pet_leader', { related_id: 158 }).to, '/reports/SS-2026-0158');
+});
+
+test('a notice that ended says how: only the owner\'s confirmation is "home"; every other ending keeps its own reason', () => {
+  const closed = (outcome, reason, extra = {}) => noticeFromAlert(alert({ status: 'closed', close_outcome: outcome, close_reason: reason, ...extra }), lookup, new Set());
+  const home = closed('recovered', null, { recovered_at: '2026-11-04T01:00:00+00:00' });
+  assert.deepEqual([home.status, home.closeOutcome, Boolean(home.recoveredAt)], ['closed', 'recovered', true]);
+  const withdrawn = closed('withdrawn', 'The owner withdrew the report.');
+  assert.deepEqual([withdrawn.status, withdrawn.closeOutcome, withdrawn.closeReason, withdrawn.recoveredAt], ['closed', 'withdrawn', 'The owner withdrew the report.', undefined]);
+  const open = noticeFromAlert(alert(), lookup, new Set());
+  assert.deepEqual([open.closeOutcome, open.closeReason, open.recoveredAt], [undefined, undefined, undefined], 'an active notice has no ending');
+});
+
+test('a lost-pet notice carries what identifies the pet, the viewer\'s role, and a name only when the pet has one', () => {
+  const pet = (over) => ({ name: 'Mochi', photo_url: null, species: 'Dog', breed: 'Shih Tzu', color: 'White', distinguishing_marks: 'Blue collar', description: null, ...over });
+  const owner = noticeFromAlert(alert({ pet: pet(), is_owner: true }), lookup, new Set());
+  assert.deepEqual([owner.petName, owner.identity, owner.viewerRole], ['Mochi', { breed: 'Shih Tzu', color: 'White', marks: 'Blue collar' }, 'owner']);
+  const unnamed = noticeFromAlert(alert({ pet: pet({ name: 'Missing pet', breed: null, color: null, distinguishing_marks: null }) }), lookup, new Set());
+  assert.deepEqual([unnamed.petName, unnamed.identity, unnamed.viewerRole], [undefined, undefined, 'neighbor']);
+  assert.equal(noticeFromAlert(alert({ viewer_role: 'finder' }), lookup, new Set()).viewerRole, 'finder');
+  const found = noticeFromAlert(alert({ alert_type: 'found_animal', is_owner: true, pet: pet({ name: 'Found animal' }) }), lookup, new Set());
+  assert.deepEqual([found.petName, found.viewerRole], [undefined, 'neighbor'], 'the person who reported a found animal is not its owner');
+});
+
+test('a possible-recovery report keeps its kind, its private care note and the Leader\'s review; a conversation is read from the resident\'s own side', () => {
+  const sg = {
+    sighting_id: 7, latitude: 14.8, longitude: 121, coordinates_generalized: false, location_label: 'Block 6', location_source: 'map_pin', seen_at: '2026-11-02T10:00:00+00:00',
+    submitted_at: '2026-11-02T10:05:00+00:00', description: 'Calm.', photo_url: null, status: 'verified', reported_by: 'A neighbor', is_mine: false,
+    sighting_type: 'secured', care_note: 'In my carport', reviewed_by: 'Leader Ana',
+  };
+  const s = sightingFromApi(sg);
+  assert.deepEqual([s.kind, s.careNote, s.review], ['secured', 'In my carport', { status: 'verified', by: 'Leader Ana' }]);
+  const plain = sightingFromApi({ ...sg, sighting_type: 'seen', care_note: null, status: 'unverified', reviewed_by: null });
+  assert.deepEqual([plain.kind, plain.careNote, plain.review], [undefined, undefined, undefined]);
+  assert.equal(sightingFromApi({ ...sg, status: 'dismissed' }).review.status, 'dismissed');
+
+  const c = (over = {}) => ({
+    coordination_id: 3, alert_id: 12, report_id: 158, sighting_id: 7, you_are: 'owner', status: 'open', mode: 'none', owner_consent: true, finder_consent: false, direct_open: false,
+    can_message: false, mediation_requested: false, mediation_requested_by_you: false, unread_messages: 2, resolution_note: null, other_party: { first_name: 'Ben' }, ...over,
+  });
+  const owner = coordinationFromApi(c());
+  assert.deepEqual([owner.id, owner.sightingId, owner.youAre, owner.youAgreed, owner.otherAgreed, owner.otherName, owner.unread], ['3', 'sg7', 'owner', true, false, 'Ben', 2]);
+  const finder = coordinationFromApi(c({ you_are: 'finder', other_party: { first_name: null } }));
+  assert.deepEqual([finder.youAgreed, finder.otherAgreed, finder.otherName], [false, true, 'the owner']);
+  const asked = coordinationFromApi(c({ mode: 'leader', mediation_requested: true, mediation_requested_by_you: true }));
+  assert.deepEqual([asked.mode, asked.mediationRequested, asked.mediationByYou, asked.canMessage], ['leader', true, true, false]);
+  assert.equal(coordinationFromApi(c({ you_are: 'leader' })), null, 'the Leader\'s own view of it is the Leader app\'s');
+  const n = noticeFromAlert(alert({ is_owner: true, sightings: [sg], coordinations: [c(), c({ coordination_id: 4, you_are: 'leader' })], secured_count: 1 }), lookup, new Set());
+  assert.deepEqual([n.securedCount, n.coordinations.map((x) => x.id)], [1, ['3']]);
 });
 
 test('profile and office', () => {

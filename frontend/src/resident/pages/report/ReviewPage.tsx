@@ -6,16 +6,17 @@ import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
 import { MapLegend } from '../../../preview/map/MapLegend';
 import { Checkbox } from '../../components/form';
 import { NOTICE_ICON } from '../../components/icons';
-import { Button, Callout, FormError, MediaThumbs } from '../../components/ui';
+import { Button, Callout, FormError, LinkButton, MediaThumbs } from '../../components/ui';
 import { residentPath } from '../../config';
 import { ANIMAL_TYPES, CATEGORIES, EXTRA_FIELD, VISIBILITY_COPY } from '../../data/constants';
 import { useResidentData } from '../../data/context';
 import { accepts } from '../../data/entries';
-import { nextReportId, visibilityAfterSending } from '../../data/selectors';
+import { activeLostReport, nextReportId, visibilityAfterSending } from '../../data/selectors';
 import type { Draft } from '../../data/types';
 import { stepPath } from '../../lib/flow';
 import { useSubmit } from '../../lib/hooks';
 import { PINNED_LABEL, pointOf } from '../../lib/location';
+import { petSummary } from '../../lib/pets';
 import { FlowScreen } from './FlowScreen';
 
 const LostIcon = NOTICE_ICON.lost_pet;
@@ -30,20 +31,29 @@ function Item({ label, to, children }: { label: string; to?: string; children: R
   );
 }
 
-function ReviewForm({ draft, onSending }: { draft: Draft; onSending: () => void }) {
+function ReviewForm({ draft, live, onSending }: { draft: Draft; /** false once the report was sent and this screen only shows the copy until it is replaced */ live: boolean; onSending: () => void }) {
   const { state, dispatch } = useResidentData();
   const navigate = useNavigate();
   const { pending, error, run } = useSubmit();
   const [agree, setAgree] = useState(false);
   const [agreeError, setAgreeError] = useState(false);
   const cat = CATEGORIES[draft.category];
+  const lost = cat.kind === 'lost';
+  // A lost report is about one of the resident's registered pets: what it says about the animal is that pet's registered profile
+  const pet = lost ? state.pets.find((p) => p.id === draft.petId) : undefined;
+  // The pet's lost report that is already open (not the one just filed: once sent, the screen only shows its copy of the draft)
+  const existing = live && pet ? activeLostReport(state, pet.id) : undefined;
   const extra = EXTRA_FIELD[draft.category];
-  const animal = draft.animalType ? ANIMAL_TYPES[draft.animalType] : '';
+  const animal = pet ? ANIMAL_TYPES[pet.type] : draft.animalType ? ANIMAL_TYPES[draft.animalType] : '';
   const pin = pointOf(draft.location);
 
   const missing: { text: string; to: string }[] = [];
-  if (!draft.animalType || draft.description.trim().length < 10) missing.push({ text: 'the description', to: stepPath('details') });
-  if (!draft.location) missing.push({ text: 'where the animal was', to: stepPath('location') });
+  if (lost) {
+    if (!pet) missing.push({ text: 'which pet is missing', to: stepPath('details') });
+  } else if (!draft.animalType || draft.description.trim().length < 10) {
+    missing.push({ text: 'the description', to: stepPath('details') });
+  }
+  if (!draft.location) missing.push({ text: lost ? 'where your pet was last seen' : 'where the animal was', to: stepPath('location') });
   const complete = missing.length === 0;
   // The Leader switched this kind off while the report was being written (known once the app has read the subdivision's settings).
   const unavailable = state.accepting !== undefined && !accepts(state.accepting, draft.category);
@@ -53,7 +63,7 @@ function ReviewForm({ draft, onSending }: { draft: Draft; onSending: () => void 
   // A notice that will be shown to neighbours needs the resident's say-so (even when an administrator approves it first).
   const consentNeeded = cat.kind === 'lost' || (cat.kind === 'found' && visibility === 'published');
   const VisIcon = visibility === 'published' ? Eye : visibility === 'pending_review' ? Hourglass : EyeOff;
-  const noticeTitle = `Lost ${animal.toLowerCase()}${draft.petName.trim() ? `: ${draft.petName.trim()}` : ''}`;
+  const noticeTitle = pet ? `Lost ${animal.toLowerCase()}: ${pet.name}` : `Lost ${animal.toLowerCase()}`;
 
   const consent = (
     <Checkbox
@@ -81,7 +91,7 @@ function ReviewForm({ draft, onSending }: { draft: Draft; onSending: () => void 
       title="Review and submit"
       draft={draft}
       footer={(
-        <Button variant="primary" block loading={pending} disabled={!complete || unavailable} onClick={() => void submit()}>
+        <Button variant="primary" block loading={pending} disabled={!complete || unavailable || existing !== undefined} onClick={() => void submit()}>
           {visibility === 'published' ? 'Publish notice and submit' : cat.kind === 'incident' ? 'Submit report' : 'Submit for review'}
         </Button>
       )}
@@ -89,6 +99,12 @@ function ReviewForm({ draft, onSending }: { draft: Draft; onSending: () => void 
       {!complete ? (
         <Callout tone="amber" title="A few details are missing.">
           Add {missing.map((m, i) => <span key={m.to}>{i > 0 ? ' and ' : ''}<Link to={m.to}>{m.text}</Link></span>)} before you submit.
+        </Callout>
+      ) : null}
+      {existing && pet ? (
+        <Callout tone="amber" title={`${pet.name} already has an active lost-pet report.`}>
+          <span>Open it to follow it, instead of starting another.</span>
+          <span className="rs-row-actions rs-mt"><LinkButton size="sm" variant="primary" to={residentPath(`/reports/${existing.id}`)}>View the existing report</LinkButton></span>
         </Callout>
       ) : null}
       {unavailable ? (
@@ -103,12 +119,22 @@ function ReviewForm({ draft, onSending }: { draft: Draft; onSending: () => void 
 
       <dl className="rs-summary">
         <Item label="Type" to={stepPath('details')}>{cat.label}</Item>
-        <Item label="Animal" to={stepPath('details')}>{animal || 'Not chosen'}{draft.petName.trim() ? ` · ${draft.petName.trim()}` : ''}</Item>
-        <Item label="Details" to={stepPath('details')}>{draft.description.trim() || 'Not added'}</Item>
-        <Item label="When" to={stepPath('details')}>{fmtDateTime(fromLocalInput(draft.observedAt))}</Item>
-        {extra && draft.extra ? <Item label={extra.label} to={stepPath('details')}>{draft.extra}</Item> : null}
+        {lost ? (
+          <>
+            <Item label="Pet" to={stepPath('details')}>{pet ? <>{pet.name}{petSummary(pet) ? <span className="rs-meta"> · {petSummary(pet)}</span> : null}</> : 'Not chosen'}</Item>
+            <Item label="Last seen" to={stepPath('details')}>{fmtDateTime(fromLocalInput(draft.observedAt))}</Item>
+            <Item label="Anything else" to={stepPath('details')}>{draft.description.trim() || 'Nothing added'}</Item>
+          </>
+        ) : (
+          <>
+            <Item label="Animal" to={stepPath('details')}>{animal || 'Not chosen'}</Item>
+            <Item label="Details" to={stepPath('details')}>{draft.description.trim() || 'Not added'}</Item>
+            <Item label="When" to={stepPath('details')}>{fmtDateTime(fromLocalInput(draft.observedAt))}</Item>
+            {extra && draft.extra ? <Item label={extra.label} to={stepPath('details')}>{draft.extra}</Item> : null}
+          </>
+        )}
         <Item label="Where" to={stepPath('location')}>{draft.location ? <>{draft.location.label}{draft.location.lat === null ? <span className="rs-meta"> · described in words</span> : draft.location.label === PINNED_LABEL ? null : <span className="rs-meta"> · pinned on the map</span>}</> : 'Not chosen'}</Item>
-        <Item label="Photos" to={cat.kind === 'incident' ? stepPath('evidence') : stepPath('details')}>{draft.media.length === 0 ? 'None added' : <MediaThumbs media={draft.media} />}</Item>
+        <Item label="Photos" to={cat.kind === 'incident' ? stepPath('evidence') : stepPath('details')}>{draft.media.length === 0 ? (lost && pet?.photoUrl ? 'Your pet’s registered photo' : 'None added') : <MediaThumbs media={draft.media} />}</Item>
       </dl>
 
       {pin ? (
@@ -124,7 +150,7 @@ function ReviewForm({ draft, onSending }: { draft: Draft; onSending: () => void 
         <p>{VISIBILITY_COPY[visibility].long}</p>
       </section>
 
-      {cat.kind === 'lost' && draft.animalType && draft.location ? (
+      {lost && pet && draft.location ? (
         <div className="rs-stack-sm">
           <h2 className="rs-h2">How the notice will look</h2>
           <div className="rs-card" role="group" aria-label="Notice preview">
@@ -132,7 +158,7 @@ function ReviewForm({ draft, onSending }: { draft: Draft; onSending: () => void 
             <span className="rs-card__text">
               <span className="rs-card__kicker">Lost pet</span>
               <span className="rs-card__title">{noticeTitle}</span>
-              <span className="rs-card__desc">{draft.description.trim()}</span>
+              <span className="rs-card__desc">{draft.description.trim() || petSummary(pet) || animal}</span>
               <span className="rs-card__meta">{draft.location.label} · last seen {fmtDateTime(fromLocalInput(draft.observedAt))}</span>
             </span>
           </div>
@@ -160,5 +186,5 @@ export default function ReviewPage() {
   const draft = useResidentData().state.draft;
   const [frozen, setFrozen] = useState<Draft | null>(null);
   const current = draft ?? frozen;
-  return current ? <ReviewForm draft={current} onSending={() => setFrozen(draft)} /> : <Navigate to={residentPath('/report')} replace />;
+  return current ? <ReviewForm draft={current} live={draft !== null} onSending={() => setFrozen(draft)} /> : <Navigate to={residentPath('/report')} replace />;
 }

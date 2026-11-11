@@ -14,6 +14,7 @@ import sys
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-for-pet-photo-multi-animal-0123456789")
 os.environ["GEMINI_API_KEY"] = ""          # photo check runs YOLO only here (a fake model below)
+os.environ["CLOUDINARY_CLOUD_NAME"] = ""    # the photo addresses here are fake: with no cloud configured the address check accepts any Cloudinary host
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import FastAPI  # noqa: E402

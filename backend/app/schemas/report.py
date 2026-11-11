@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_serializer, field_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator
 from typing import Optional, Any, List, Literal, Union
 from datetime import datetime
 from app.schemas.landmark import LandmarkResponse
@@ -63,7 +63,10 @@ class ReportBase(BaseModel):
 
 
 class ReportCreate(ReportBase):
-    pass
+    # A Lost Pet report only: when the resident last saw their pet (their local time). Kept in the report's pet snapshot.
+    last_seen_at: Optional[datetime] = None
+    # A Lost Pet report only: the browser's id for this submission. Sending it again (a retry) returns the first report.
+    client_request_id: Optional[str] = Field(None, max_length=64)
 
 
 class ReportMediaResponse(BaseModel):
@@ -463,5 +466,3 @@ class ReportSelfReunitedRequest(BaseModel):
 class RequestReunionPhotoPayload(BaseModel):
     recipient_user_id: Optional[int] = None
     custom_message: Optional[str] = None
-
-

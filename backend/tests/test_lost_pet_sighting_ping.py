@@ -1,6 +1,7 @@
 """
-Neighbor-to-Neighbor Lost Pet Sighting Ping (docs/01-system/LOST_PET_SIGHTING_PING.md): owner requests, leader
-broadcasts, residents report sightings (reported time kept apart from submission time, never auto-verified),
+Neighbor-to-Neighbor Lost Pet Sighting Ping (docs/01-system/LOST_PET_SIGHTING_PING.md). Since 2026-11-11 a missing pet's notice is
+published at once (no review) and recovery is the owner's confirmation (the whole lifecycle is in test_lost_pet_lifecycle.py);
+this keeps the notice, sighting, privacy and closure rules: owner requests, the notice is published, residents report sightings (reported time kept apart from submission time, never auto-verified),
 owner and leader notified, privacy and scope, duplicates, closure with the report, history kept, no rescue/endorsement.
 Run from the backend folder:  python tests/test_lost_pet_sighting_ping.py
 """
@@ -85,7 +86,7 @@ def notes(uid, ntype=None):
 
 def sight(alert_id, user, **kw):
     data = {"latitude": str(kw.pop("lat", LAT + 0.0005)), "longitude": str(kw.pop("lng", LNG)), "accuracy_confirmed": "true",
-            "location_label": kw.pop("label", "Lot 15"), **{k: str(v) for k, v in kw.items()}}
+            "location_label": kw.pop("label", "Near the clubhouse"), **{k: str(v) for k, v in kw.items()}}
     return client.post(f"/lost-pet-alerts/{alert_id}/sightings", headers=H(user), data=data)
 
 
@@ -99,18 +100,16 @@ r = client.post(f"/lost-pet-alerts/reports/{lost.report_id}/request", headers=H(
     "owner_note": "Shy, answers to Bantay"})
 a = r.json()
 aid = a.get("alert_id")
-check("request: saved as requested with last-seen details", r.status_code == 200 and a["status"] == "requested"
-      and a["last_seen"]["location"] == "Subdivision entrance" and a["pet"]["name"] == "Bantay", r.text[:300])
-check("request: the leader is notified", notes(leader.user_id, "lost_pet_alert_request") == 1)
+check("request: a missing pet's notice is published at once with the last-seen details (no review step)", r.status_code == 200 and a["status"] == "active"
+      and a["last_seen"]["location"] == "Subdivision entrance" and a["pet"]["name"] == "Bantay" and a["residents_notified"] == 2, r.text[:300])
+check("request: the Leader is not asked to approve anything", notes(leader.user_id, "lost_pet_alert_request") == 0)
 check("request: no duplicate open alert", client.post(f"/lost-pet-alerts/reports/{lost.report_id}/request", headers=H(owner), json={}).status_code == 409)
-check("requested alerts aren't visible to residents yet", client.get(f"/lost-pet-alerts/{aid}", headers=H(neighbor)).status_code == 404)
-check("requested alerts don't accept sightings", sight(aid, neighbor).status_code == 409)
+check("a published notice is visible to residents and takes sightings", client.get(f"/lost-pet-alerts/{aid}", headers=H(neighbor)).status_code == 200)
 
 # ── 2. Leader activates (broadcast) ──
 check("activate: residents can't", client.post(f"/lost-pet-alerts/{aid}/activate", headers=H(neighbor), json={}).status_code == 403)
 check("activate: another subdivision's leader can't", client.post(f"/lost-pet-alerts/{aid}/activate", headers=H(leader2), json={}).status_code == 403)
-r = client.post(f"/lost-pet-alerts/{aid}/activate", headers=H(leader), json={"leader_message": "Please check your garages."})
-check("activate: active, residents notified", r.status_code == 200 and r.json()["status"] == "active" and r.json()["residents_notified"] == 2, r.text[:300])
+check("activate: a notice that is already published is not published twice (409)", client.post(f"/lost-pet-alerts/{aid}/activate", headers=H(leader), json={}).status_code == 409)
 check("broadcast: subdivision residents get the alert (not the owner as a resident, not other subdivisions)",
       notes(neighbor.user_id, "lost_pet_alert") == 1 and notes(neighbor2.user_id, "lost_pet_alert") == 1
       and notes(outsider.user_id) == 0 and notes(owner.user_id, "lost_pet_alert") == 1)
@@ -121,8 +120,9 @@ check("scope: the report itself is untouched by the alert", db.get(Report, lost.
 act = client.get("/lost-pet-alerts/active", headers=H(neighbor)).json()["results"]
 check("residents: active alerts of their subdivision", [x["alert_id"] for x in act] == [aid])
 check("residents of other subdivisions: nothing", client.get("/lost-pet-alerts/active", headers=H(outsider)).json()["results"] == [])
+# (A Barangay account is refused for every request since the Barangay accounts were retired: 403, before any notice is looked at.)
 check("privacy: other subdivisions and Barangay staff can't open it",
-      client.get(f"/lost-pet-alerts/{aid}", headers=H(outsider)).status_code == 404 and client.get(f"/lost-pet-alerts/{aid}", headers=H(staff)).status_code == 404)
+      client.get(f"/lost-pet-alerts/{aid}", headers=H(outsider)).status_code == 404 and client.get(f"/lost-pet-alerts/{aid}", headers=H(staff)).status_code == 403)
 d = client.get(f"/lost-pet-alerts/{aid}", headers=H(neighbor)).json()
 check("privacy: no owner phone, email or address in the alert", "09170001111" not in str(d) and "Blk 9" not in str(d) and "@test-mail" not in str(d))
 
@@ -146,11 +146,11 @@ r3 = sight(aid, neighbor, seen_at=earlier.isoformat())
 check("duplicate: an immediate double tap at the same pin isn't a second record", r3.json().get("duplicate") is True)
 db.expire_all()
 check("duplicate: one record stored", db.query(LostPetSighting).filter(LostPetSighting.alert_id == aid).count() == 1)
-check("notify: the owner and the leader get 'New Lost Pet Sighting!'", notes(owner.user_id, "lost_pet_sighting") == 1
-      and notes(leader.user_id, "lost_pet_sighting") == 1 and notes(neighbor.user_id, "lost_pet_sighting") == 0)
+check("notify: the owner gets 'New Lost Pet Sighting!' (an ordinary sighting is not a Leader task)", notes(owner.user_id, "lost_pet_sighting") == 1
+      and notes(leader.user_id, "lost_pet_sighting") == 0 and notes(neighbor.user_id, "lost_pet_sighting") == 0)
 n = db.query(Notification).filter(Notification.user_id == owner.user_id, Notification.type == "lost_pet_sighting").one()
 check("notify: location, sighting time and report date in the message", n.title == "New Lost Pet Sighting!"
-      and "Lot 15" in n.message and "Sighting time:" in n.message and "Reported on:" in n.message, n.message)
+      and "Near the clubhouse" in n.message and "Sighting time:" in n.message and "Reported on:" in n.message, n.message)
 with patch("app.utils.cloudinary_config.upload_to_cloudinary", return_value="https://img.test/sighting.jpg"):
     r = client.post(f"/lost-pet-alerts/{aid}/sightings", headers=H(neighbor2), data={
         "latitude": str(LAT - 0.0004), "longitude": str(LNG + 0.0003), "accuracy_confirmed": "true", "location_source": "device"},
@@ -165,7 +165,7 @@ check("map: last known location plus every sighting, ordered by reported time",
       and d["sightings"][0]["seen_at"] <= d["sightings"][1]["seen_at"])
 check("latest sighting = the latest submitted", d["latest_sighting"]["sighting_id"] == d["sightings"][-1]["sighting_id"] or
       d["latest_sighting"]["submitted_at"] >= max(x["submitted_at"] for x in d["sightings"]))
-check("owner sees reporter names; never phones", d["sightings"][0]["reported_by"] == "Neighbor Ben" and "09170001111" not in str(d))
+check("the owner is never given a reporter's name or phone (the app promises it)", d["sightings"][0]["reported_by"] == "A neighbor" and "Neighbor Ben" not in str(d) and "09170001111" not in str(d))
 d2 = client.get(f"/lost-pet-alerts/{aid}", headers=H(neighbor2)).json()
 check("neighbors see 'A neighbor' / 'You', not names", {x["reported_by"] for x in d2["sightings"]} == {"A neighbor", "You"})
 check("report page: the alert with its latest sighting",
@@ -184,13 +184,13 @@ check("dashboard: stats from the records", dash["stats"]["active_alerts"] == 1 a
 check("dashboard: residents can't open it", client.get("/lost-pet-alerts/dashboard", headers=H(neighbor)).status_code == 403)
 
 # ── 4. Reunited: report resolved, alert closed, history kept ──
-check("reunited: residents can't", client.post(f"/lost-pet-alerts/{aid}/reunited", headers=H(neighbor), json={"note": "home"}).status_code == 403)
-r = client.post(f"/lost-pet-alerts/{aid}/reunited", headers=H(leader), json={"note": "Owner confirmed Bantay is home"})
+check("recovered: residents can't record it", client.post(f"/lost-pet-alerts/{aid}/record-recovery", headers=H(neighbor), json={"source": "phone"}).status_code == 403)
+r = client.post(f"/lost-pet-alerts/{aid}/record-recovery", headers=H(leader), json={"source": "phone", "confirmed_at": (datetime.now() - timedelta(minutes=10)).isoformat(), "note": "Owner confirmed Bantay is home"})
 db.expire_all()
 rep = db.get(Report, lost.report_id)
-check("reunited: report Resolved - Pet Reunited (Claimed by Owner) and alert closed as reunited", r.status_code == 200
-      and rep.current_status_id == 9 and rep.custody_status == "Reunited with Owner" and r.json()["status"] == "closed"
-      and r.json()["close_outcome"] == "reunited", r.text[:300])
+check("recovered: the Leader records the owner's confirmation: the report is Claimed by Owner and the alert is closed as recovered", r.status_code == 200
+      and rep.current_status_id == 9 and rep.custody_status == "Reunited with Owner" and r.json()["alert"]["status"] == "closed"
+      and r.json()["alert"]["close_outcome"] == "recovered", r.text[:300])
 check("reunited: no new sightings accepted", sight(aid, neighbor2, lat=LAT + 0.0002).status_code == 409)
 check("reunited: sightings kept", db.query(LostPetSighting).filter(LostPetSighting.alert_id == aid).count() == 2)
 check("reunited: helpers thanked", notes(neighbor.user_id) >= 2 and notes(neighbor2.user_id) >= 2)
@@ -208,11 +208,10 @@ lost2 = Report(user_id=owner.user_id, subdivision_id=1, category_id=6, latitude=
 db.add(lost2)
 db.commit()
 a2 = client.post(f"/lost-pet-alerts/reports/{lost2.report_id}/request", headers=H(owner), json={}).json()["alert_id"]
-client.post(f"/lost-pet-alerts/{a2}/activate", headers=H(leader), json={})
 r = client.post(f"/reports/{lost2.report_id}/confirm-reunited", headers=H(owner), json={"notes": "She came home"})
 db.expire_all()
 al2 = db.get(LostPetAlert, a2)
-check("owner's Pet Recovered closes the alert (reunited)", al2.status == "closed" and al2.close_outcome == "reunited", (r.status_code, r.text[:200], al2.status))
+check("owner's Pet Recovered closes the alert (recovered)", al2.status == "closed" and al2.close_outcome == "recovered", (r.status_code, r.text[:200], al2.status))
 
 # Leader closes without resolving: report stays open
 pet3 = Pet(owner_id=owner.user_id, pet_name="Tagpi", pet_type="Dog", status="Lost")
@@ -223,7 +222,6 @@ lost3 = Report(user_id=owner.user_id, subdivision_id=1, category_id=6, latitude=
 db.add(lost3)
 db.commit()
 a3 = client.post(f"/lost-pet-alerts/reports/{lost3.report_id}/request", headers=H(owner), json={}).json()["alert_id"]
-client.post(f"/lost-pet-alerts/{a3}/activate", headers=H(leader), json={})
 check("close: a reason is required", client.post(f"/lost-pet-alerts/{a3}/close", headers=H(leader), json={"outcome": "not_found", "reason": "x"}).status_code == 422)
 r = client.post(f"/lost-pet-alerts/{a3}/close", headers=H(leader), json={"outcome": "not_found", "reason": "No sightings for two weeks"})
 db.expire_all()
@@ -240,7 +238,7 @@ r = client.post(f"/lost-pet-alerts/reports/{lost4.report_id}/request", headers=H
 check("leader can prepare an alert from the report; it belongs to the pet's owner", r.status_code == 200
       and db.get(LostPetAlert, r.json()["alert_id"]).owner_id == owner.user_id, r.text[:200])
 check("another subdivision's leader can't", client.post(f"/lost-pet-alerts/reports/{lost3.report_id}/request", headers=H(leader2), json={}).status_code == 403)
-check("close: the owner can request it again", client.post(f"/lost-pet-alerts/reports/{lost3.report_id}/request", headers=H(owner), json={}).json()["status"] == "requested")
+check("close: the owner can publish it again", client.post(f"/lost-pet-alerts/reports/{lost3.report_id}/request", headers=H(owner), json={}).json()["status"] == "active")
 
 print(f"\n{sum(results)}/{len(results)} checks passed")
 sys.exit(0 if all(results) else 1)

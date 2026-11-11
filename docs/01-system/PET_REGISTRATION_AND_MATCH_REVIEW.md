@@ -16,6 +16,10 @@ Coat Pattern and Specific Markings are separate inputs. The existing combined st
 
 Approximate ages still advance from their stored birth date. Empty age inputs remain unknown. Redundant approximate-age banners, AI badges, file-analysis labels and size/weight annotations have been removed. Resident bite/chasing declaration checkboxes are hidden; existing declaration values are loaded and retained on edit. Staff controls and server protections against reducing verified incident history remain in place.
 
+## Registration before a Lost Pet report (2026-11-11)
+
+A resident registers a pet before they can report it missing: the Lost Pet report uses the registered profile and adds only when and where the pet was last seen. Registration is what the owner declared. It does not verify ownership, and it is not required for any other report. Dogs and cats can be registered for now (the database enum); a resident cannot set the owner, who registered the record, a verification flag or the status; photo addresses must be the subdivision's own uploads. A record the subdivision office entered for an owner is linked to the resident's account by the Leader (`POST /pets/{id}/assign-owner`, with how they checked), and it joins the resident's pets only when the resident confirms. The rules and the screens are in [CASE_WORKFLOW_BACKEND.md](CASE_WORKFLOW_BACKEND.md#registration-first-lost-pet-reports-2026-11-11) and [NEW_INTERFACES_INTEGRATION.md](NEW_INTERFACES_INTEGRATION.md#lost-pet-reports-registration-first-2026-11-11).
+
 ## Matches and claims
 
 Side-by-side comparison displays physical patterns, markings and observed conditions. Structured custody and encounter notes are omitted from this comparison; full report views retain their descriptions. Unstructured legacy descriptions remain visible as legacy free text. The redundant AI header and staff owner-verification prompt are removed; identity confirmation, dispute, reversal and owner actions remain available under their existing rules.

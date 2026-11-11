@@ -18,14 +18,14 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 from app.limiter import limiter
-from app.routes import (announcements, auth, cases, chat, landmarks, lost_pet_alerts, notifications, ownership_claims, pets,
+from app.routes import (announcements, auth, cases, chat, landmarks, lost_pet_alerts, notifications, ownership_claims, pet_ownership, pets,
                         reports, users, warnings, analytics, owner_followups)
 
 PASSWORD = "Test#Pass2026xx"
 
 api = _isolated_db.build_app(auth.router, users.router, reports.router, pets.router, notifications.router, announcements.router, chat.router,
                              warnings.router, owner_followups.router, lost_pet_alerts.router, cases.router, ownership_claims.router,
-                             landmarks.router, analytics.router)
+                             landmarks.router, analytics.router, pet_ownership.router)
 limiter.enabled = False                      # the test signs in many times a minute
 api.state.limiter = limiter
 
@@ -108,6 +108,7 @@ def seed() -> None:
         owen = User(name="Owen Owner", email="owen@e2e-straysafe.com", password=hashed, role_id=1, is_verified=True, status="Active", subdivision_id=1,
                     barangay_id=1, phone="09179998888", address="Blk 7 Lot 3, Acacia St.")
         db.add(owen)
+        db.add(AnnouncementCategory(category_name="Animal Advisory"))
         db.add(AnnouncementCategory(category_name="General Advisory"))
         db.commit()
         db.refresh(owen)
@@ -159,7 +160,8 @@ def seed() -> None:
                             last_seen_location="Clubhouse", last_seen_lat=Decimal("14.80063400"), last_seen_lng=Decimal("121.00222800"), last_seen_at=now - timedelta(days=3),
                             activated_by=ids["leader"], activated_at=now - timedelta(days=2), requested_at=now - timedelta(days=2), contact_preference="app_message"))
         found.visibility, found.verification_status = "Public", "verified_true"
-        db.add(Announcement(barangay_id=1, subdivision_id=1, created_by=ids["leader"], category_id=db.query(AnnouncementCategory).first().category_id,
+        animal_advisory_cat = db.query(AnnouncementCategory).filter(AnnouncementCategory.category_name == "Animal Advisory").first()
+        db.add(Announcement(barangay_id=1, subdivision_id=1, created_by=ids["leader"], category_id=animal_advisory_cat.category_id,
                             title="Rabies vaccination reminder", content="Please keep your pets' vaccinations up to date.", visibility="Subdivision Only", priority_level="Normal",
                             status="Published", published_at=now - timedelta(days=5)))
         db.add(Landmark(name="Selera Homes Main Entrance Gate", category="general", subdivision_id=1, barangay_id=1, latitude=Decimal("14.80149600"),

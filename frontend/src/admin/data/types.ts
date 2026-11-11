@@ -31,7 +31,9 @@ export type DispositionId =
   | 'no_further_sightings'
   | 'unresolved_other'
   | 'invalid_report'
-  | 'duplicate_report';
+  | 'duplicate_report'
+  /** Set only when the owner withdraws their own report: a Leader never picks it. */
+  | 'withdrawn_by_reporter';
 /** A closed case does not necessarily mean the concern was resolved. */
 export type OutcomeGroup = 'resolved' | 'unresolved' | 'invalid';
 
@@ -134,7 +136,8 @@ export interface Warning {
   observations: ComplianceObservation[];
 }
 
-export type ReferralStatus = 'sent' | 'acknowledged' | 'in_progress' | 'completed' | 'declined' | 'no_response';
+/** `to_contact`: the assistance is written down but nobody has been contacted yet. Saving a referral is never proof that the organisation was reached. */
+export type ReferralStatus = 'to_contact' | 'sent' | 'acknowledged' | 'in_progress' | 'completed' | 'declined' | 'no_response';
 export interface ReferralNote {
   id: string;
   at: string;
@@ -190,6 +193,49 @@ export interface IdentityReview {
   status: IdentityStatus;
   matches: Record<string, MatchDecision>;
   note: string;
+  /**
+   * Whether a Leader has recorded the identity. False while `status` only reflects the reporter naming a registered pet ("Linked by the reporter"):
+   * naming a pet is the reporter's say-so, not a decision. Absent when the server did not say; the status is then taken as it is.
+   */
+  decided?: boolean;
+}
+
+/** What identifies a pet in the registry, in words ("Not recorded" for what was left out). */
+export interface PetFacts {
+  name: string;
+  species: string;
+  breed: string;
+  sex: string;
+  colour: string;
+  markings: string;
+  age: string;
+  photos: string[];
+}
+
+/**
+ * The registered pet a report names, for the Leader (staff only, scoped to their subdivision). A registration is what was declared when the pet was
+ * recorded; it is never proof of ownership, which only the Leader's own decision on the case records, with evidence.
+ */
+export interface RegisteredPet {
+  petId: string;
+  /** `removed`: the record no longer exists. `restricted`: it belongs to another subdivision, so it is not shown. null: readable. */
+  unavailable: 'removed' | 'restricted' | null;
+  /** The reporter named this pet and no Leader has decided the animal's identity yet. */
+  linkedByReporter: boolean;
+  reporterIsOwner: boolean;
+  /** The registry record today. */
+  current: (PetFacts & { status: string; updatedAt: string | null }) | null;
+  /** The record as it was when the report was filed (none for a report filed before pets were frozen into reports). */
+  asReported: PetFacts | null;
+  /** Which facts differ now from what was reported ("colour", "photos"...). */
+  changedSince: string[];
+  registration: { byOwner: boolean; registeredAt: string; registeredBy: string } | null;
+  /** The registered owner and how to reach them. null when no owner and no contact is recorded. */
+  owner: { residentId: string | null; name: string; phone: string; email: string; address: string; emergencyContact: string } | null;
+  /** When and where the owner last saw the pet, as filed. */
+  lastSeen: { at: string | null; where: string; lat?: number; lng?: number } | null;
+  /** What the community notice says, when a notice exists. */
+  notice: { at: string | null; where: string; status: string } | null;
 }
 
 export interface OwnershipReview {
@@ -231,6 +277,12 @@ export interface Case {
   assessment: Assessment;
   identity: IdentityReview;
   ownership: OwnershipReview;
+  /** The registered pet the report names: undefined until the case is opened, null when no pet is linked (an older report). */
+  registeredPet?: RegisteredPet | null;
+  /** The Lost Pet picture (sightings, conversations, recovery). undefined until the case is opened in full; null for every other kind of case. */
+  lostPet?: LostPetCase | null;
+  /** The open requests to help an owner and a neighbour get in touch, read from the work queue (so the dashboard needs no case opened). */
+  mediation?: MediationRequest[];
   claims: OwnershipClaim[];
   followUps: FollowUp[];
   ownerContacts: OwnerContact[];
@@ -241,6 +293,73 @@ export interface Case {
   timeline: TimelineEvent[];
   closure: Closure | null;
 }
+
+/** One thing a neighbour told the owner about a missing pet: an ordinary sighting, or "I may have this pet safely with me" (a possible recovery). */
+export interface LostPetSighting {
+  id: string;
+  kind: 'seen' | 'secured';
+  seenAt: string;
+  submittedAt: string;
+  place: string;
+  /** The exact spot: the Leader is authorised to see it. */
+  lat?: number;
+  lng?: number;
+  description: string;
+  /** Where a secured pet is being kept (private to the owner, the Leader and its writer). */
+  careNote?: string;
+  photoUrl?: string;
+  /** The writer, by name: only the Leader is given it, because the Leader follows it up. */
+  reportedBy: string;
+  review: 'unverified' | 'verified' | 'dismissed';
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewNote?: string;
+}
+
+export interface LostPetPerson { residentId: string | null; name: string; phone: string }
+
+/** How the owner and the person who may have the pet get in touch about one possible recovery. The Leader never reads their messages. */
+export interface LostPetConversation {
+  id: string;
+  sightingId: string;
+  status: 'open' | 'resolved';
+  /** none: not agreed yet. direct: both agreed to message in the app. leader: one of them asked the Leader to help (direct messages are over). */
+  mode: 'none' | 'direct' | 'leader';
+  ownerAgreed: boolean;
+  finderAgreed: boolean;
+  /** Who asked the Leader to help, and when (no reason is ever asked). */
+  requestedBy?: 'owner' | 'finder';
+  requestedAt?: string;
+  resolvedAt?: string;
+  resolutionNote?: string;
+  owner: LostPetPerson | null;
+  finder: LostPetPerson | null;
+}
+
+/** The owner's confirmation that the pet is home: the only thing that records a recovery. */
+export interface LostPetRecovery {
+  at: string;
+  source: 'owner_app' | 'phone' | 'in_person';
+  /** Who recorded it: the owner (in the app) or the Leader (after a call or a visit). */
+  recordedBy: string;
+  recordedAt: string;
+  note?: string;
+}
+
+/** The Lost Pet picture of a case, from the notice and its records. Present on a lost-pet case that has been opened in full. */
+export interface LostPetCase {
+  /** null: a missing-pet report with no notice (an older one). */
+  alertId: string | null;
+  notice: { status: 'requested' | 'active' | 'closed'; publishedAt: string | null; closedAt: string | null; closeOutcome: string | null; closeReason: string | null; residentsNotified: number | null } | null;
+  lastSeen: { at: string | null; where: string; lat?: number; lng?: number };
+  /** Newest first. */
+  sightings: LostPetSighting[];
+  conversations: LostPetConversation[];
+  recovery: LostPetRecovery | null;
+}
+
+/** An owner and a neighbour who asked the Leader to help them get in touch: a real request for the Leader's time. */
+export interface MediationRequest { id: string; requestedAt: string | null; ownerName: string; finderName: string }
 
 export interface Resident {
   id: string;
@@ -271,6 +390,8 @@ export interface Pet {
   photoUrls?: string[];
   ownerId: string;
   registeredAt: string;
+  /** Who entered the record: the owner in their own account, or someone on the team for them. Absent when the server did not say. */
+  registeredBy?: { name: string; byOwner: boolean; userId: string | null };
   vaccination: 'up_to_date' | 'overdue' | 'unknown';
   microchipped: boolean;
 }
@@ -304,7 +425,7 @@ export interface Notice {
 
 export interface AdminNotification {
   id: string;
-  kind: 'new_report' | 'urgent' | 'follow_up' | 'ownership_claim' | 'case_activity' | 'referral';
+  kind: 'new_report' | 'urgent' | 'follow_up' | 'ownership_claim' | 'case_activity' | 'referral' | 'help_request';
   title: string;
   body: string;
   at: string;

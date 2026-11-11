@@ -1,8 +1,8 @@
 # Neighbor-to-Neighbor Lost Pet Sighting Ping
 
-**Status:** Current (2026-11-02)
+**Status:** Reference. The workflow summary was updated on 2026-11-11; older map/component descriptions below describe the former implementation. [LOST_PET_LIFECYCLE.md](LOST_PET_LIFECYCLE.md) is the current source for behavior, privacy, files and verification limits.
 
-Neighbor-to-Neighbor Lost Pet Sighting Ping helps residents of a subdivision find a lost pet together. A Subdivision Leader broadcasts a Neighborhood Alert, residents pin "Spotted Here" sightings on a map, and the owner follows them on a timeline.
+Neighbor-to-Neighbor Lost Pet Sighting Ping helps residents of a subdivision find a lost pet together. The Lost Pet report publishes its Neighborhood Alert when it is filed, residents pin sightings on a map, and the owner follows them on a timeline.
 
 It is **not** a rescue or Barangay feature:
 - it never creates a rescue mission;
@@ -13,32 +13,25 @@ The Lost Pet Report itself keeps its normal workflow, including Barangay endorse
 
 ## Workflow
 
-1. **The resident files a Lost Pet Report** from My Pets. The form has a **Request a Subdivision Neighborhood Alert** option, ticked by default, and a contact preference: "Message me through StraySafe" or "Through the Subdivision Leader".
-   - The report is filed first. The alert request is a separate call, so a failure never loses the report; the confirmation tells the owner which happened.
-   - The owner can also request the alert later from the report page.
-2. **The Subdivision Leader reviews it.** They are notified (`lost_pet_alert_request`) and the request appears on the Lost Pet Alerts page and the report page. The Leader can also prepare an alert from the report; it still belongs to the pet's owner.
-3. **The Leader activates the alert** (`POST /lost-pet-alerts/{id}/activate`), optionally with a message. Only the subdivision's own Leader or an Admin can do this.
-   - Every active resident of that subdivision except the owner gets an in-app (and push) notification `lost_pet_alert`. It includes the pet's name, appearance, last-seen place and time, and asks them to open the alert and tap **Report a Sighting**.
-   - The owner is told how many residents were notified.
-   - The report's history records the broadcast.
-4. **Residents submit "Spotted Here"** (`POST /lost-pet-alerts/{id}/sightings`, multipart):
+> **Changed 2026-11-11.** A missing pet's notice is no longer requested by the owner and activated by the Leader: the Lost Pet report publishes it when it is filed, nobody approves it, and the old Leader button **Mark Resolved – Pet Reunited** (`POST /lost-pet-alerts/{id}/reunited`) is gone. Recovery is only the owner's confirmation. The whole flow, with the rules the code enforces, is in [LOST_PET_LIFECYCLE.md](LOST_PET_LIFECYCLE.md). The numbered steps below are the current flow; the rest of this document (map, timeline, pins, found animals) still applies.
+
+1. **The resident files a Lost Pet Report** for one of their registered pets (a pet must be registered first, see [CASE_WORKFLOW_BACKEND.md](CASE_WORKFLOW_BACKEND.md#registration-first-lost-pet-reports-2026-11-11)). In the same transaction the server creates the case and the pet snapshot, **creates and publishes the Community notice**, marks the pet "Lost", writes the history lines and notifies. There is no alert request and no contact-preference choice on the form; a retried filing (same `client_request_id`) returns the first report. Found-animal notices still go through a request and the subdivision's publication setting.
+2. **Neighbours see the notice** in Community (a short overview, then a directory searched and paged on the server) and can report an ordinary sighting or say they may have the pet safely.
+3. **"I saw this pet"** (`POST /lost-pet-alerts/{id}/sightings`, multipart):
    - **Location:** a pin placed on the map, or the device location. The device location is read once, after the resident agrees in StraySafe and the browser asks for permission.
    - **Sighting time:** defaults to now and can be set earlier.
    - **Optional:** a nearby place label, observations and a photo.
    - **Required:** a confirmation that the information is accurate.
-5. **The system records the sighting.** The resident's reported time (`seen_at`) and the server's submission time (`submitted_at`) are stored separately and always shown separately. A sighting starts **Not verified**; only the Leader can mark it verified or dismissed.
-6. **The owner and the Leader are notified:** "New Lost Pet Sighting!" (`lost_pet_sighting`), with the place, the sighting time and the report date. Open pages refresh on their own (every 15 seconds on the alert page, plus on focus and after saves) and announce a new sighting.
-7. **Coordination:** the alert shows the owner's preferred contact method. Phone numbers and addresses are never shown.
-8. **Reunion:** the owner uses the existing **Pet Recovered** button, or the Leader verifies and clicks **Mark Resolved – Pet Reunited** (`POST /lost-pet-alerts/{id}/reunited`). The Leader's action:
-   - sets the report to Claimed by Owner (9), custody "Reunited with Owner";
-   - creates the owner-return record, the same as Pet Recovered;
-   - adds a history entry "Resolved – Pet Reunited";
-   - thanks the residents who reported sightings.
-9. **The alert closes with the report:** any closing status closes the open alert through the case-closure hook (`close_lost_pet_alerts` in `backend/app/utils/case_closure.py`). Claimed, Released or Resolved closes it as *reunited*; any other closing status closes it as *report closed*. New sightings are refused after that. Earlier sightings and history are kept.
+4. **The system records the sighting.** The resident's reported time (`seen_at`) and the server's submission time (`submitted_at`) are stored separately and always shown separately. A sighting starts **Not verified**; only the Leader can mark it verified or dismissed, and who did and when are kept. A sighting is added to the case activity.
+5. **Only the owner is notified** ("New Lost Pet Sighting!", `lost_pet_sighting`; it opens the notice's sightings). An ordinary sighting creates no conversation and no Leader task or notification. Open pages refresh on their own (every 15 seconds on the alert page, plus on focus and after saves).
+6. **"I may have this pet safely with me"** (the same endpoint with `sighting_type=secured`, a private `care_note` and the writer's `contact_choice`) is a **possible recovery**: it tells the owner, opens a conversation (direct messages when both agree, Leader mediation when either asks) and never marks the pet recovered.
+7. **Coordination:** phone numbers and addresses are never shared by the system. See [LOST_PET_LIFECYCLE.md](LOST_PET_LIFECYCLE.md#rules-the-code-enforces).
+8. **Reunion:** exactly two ways, one operation. The owner says **My pet is home** in the app (with an explicit confirmation), or the Leader records that the owner confirmed by phone or in person (`POST /lost-pet-alerts/{id}/record-recovery`). It records the confirmation, resolves the notice, closes the case ("Missing pet recovered"), puts the pet back to Active, finishes open conversations and follow-ups, and thanks the residents who reported sightings. A Leader cannot declare a recovery alone; a sighting, a lead, a Barangay update or the generic "Close case" never records one.
+9. **The notice closes with the case:** any other closing keeps its own reason (`withdrawn`, `merged`, `not_found`, `report_closed`) through the central closure hook (`close_lost_pet_alerts` in `backend/app/utils/case_closure.py`), never `recovered`. New sightings are refused after that. Earlier sightings and history are kept.
 
    Escalation to the Barangay doesn't close the alert.
 
-The Leader can also **close** an alert without resolving the report (pet not found, not broadcast, other; a reason is required). The owner can then request it again.
+The Leader can also **close** a notice without resolving the report (pet not found, other; a reason is required); the case stays open and the notice says it was closed, never that the pet is home. The owner can then ask for it to be published again.
 
 ## Data
 
@@ -55,7 +48,10 @@ The Leader can also **close** an alert without resolving the report (pet not fou
   - `seen_at` and `submitted_at`;
   - description, photo and the accuracy confirmation;
   - review status, note, reviewer and time;
-  - `client_request_id` (unique), to catch duplicates.
+  - `client_request_id` (unique), to catch duplicates;
+  - (2026-11-11) `sighting_type` (`seen` or `secured`), `on_behalf` (second-hand provenance) and a private `care_note`.
+- **`lost_pet_alerts`** also holds (2026-11-11) the recovery record: `recovered_at`, `recovery_source`, `recovery_confirmed_by`, `recovery_recorded_by`, `recovery_recorded_at`, `recovery_note`.
+- **`lost_pet_coordinations`** and **`lost_pet_coordination_messages`** (2026-11-11): how the owner and a neighbour who may have the pet get in touch.
 
 Both tables are created at startup (`create_all`) and are also in `Database3.4_subdivision.sql`.
 
@@ -73,9 +69,9 @@ Both tables are created at startup (`create_all`) and are also in `Database3.4_s
 
 | Who | Can |
 | --- | --- |
-| Pet owner | Request; view the alert, map, timeline and reporter names |
-| Subdivision Leader (own subdivision), Admin | Activate, update, close, mark reunited, review sightings, dashboard; sees reporter names |
-| Residents of the same subdivision | View active alerts and submit sightings. After an alert closes, only residents who reported a sighting can still view it. Reporters appear as "A neighbor" (or "You"). |
+| Pet owner | View the alert, map, timeline and exact pins; sees ordinary reporters as "A neighbor" and a possible recovery's writer by first name; confirms "My pet is home" |
+| Subdivision Leader (own subdivision), Admin | Update, close without recovery, record the owner's phone or in-person confirmation, review sightings, help with requests, dashboard; the only role given a reporter's full name |
+| Residents of the same subdivision | View active alerts and submit sightings. After an alert closes, only residents who reported a sighting can still view it. Reporters appear as "A neighbor" (or "You"). A possible recovery is seen only by its writer, the owner and the Leader. |
 | Other subdivisions, Barangay staff | No access: the location history stays within the alert |
 
 Phone numbers, email addresses and home addresses are never part of an alert or a sighting.
@@ -122,7 +118,7 @@ The same alert machinery carries a **found-animal notice** (`lost_pet_alerts.ale
   - `backend/app/routes/lost_pet_alerts.py` (prefix `/lost-pet-alerts`);
   - the closure hook in `backend/app/utils/case_closure.py`;
   - push categories and links in `backend/app/utils/push_categories.py`.
-- **Frontend:**
+- **Frontend** (the components below are the original implementation; the legacy pages were retired on 2026-11-10 and the current Resident and Leader files are listed in [LOST_PET_LIFECYCLE.md](LOST_PET_LIFECYCLE.md#files)):
   - `frontend/src/utils/lostPets.ts`;
   - `frontend/src/utils/placeName.ts` (place names and coordinate format);
   - `frontend/src/components/LostPets/` (`LostPetAlertView`, `LostPetTrackingMap`, `SpottedHereForm`, `PinLocationInfo`, `usePlaceNames`, `LostPetAlertSummary`, `LostPetDashboardSection`);

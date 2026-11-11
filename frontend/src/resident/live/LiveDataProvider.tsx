@@ -22,7 +22,7 @@ import { reducer, type ResidentAction } from '../data/reducer';
 import type { CategoryId, Claim, Notice, Report, ResidentState, Settings } from '../data/types';
 import { runAction, type ResidentActionContext } from './actions';
 import * as ad from './adapters';
-import { residentApi, type ApiResidentAlert, type ApiResidentCategories, type ApiResidentClaim } from './api';
+import { residentApi, type ApiResidentAlert, type ApiResidentCategories, type ApiResidentClaim, type CommunityQuery } from './api';
 
 const LIVE_CAPABILITIES: ResidentCapabilities = { messageOffice: false, communityToggles: false, smsChannel: false };
 const REFRESH_AFTER_MS = 60_000;
@@ -68,6 +68,8 @@ function Loaded({ session, children }: { session: ResidentSession; children: Rea
   const categoryIds = useRef<Map<CategoryId, number>>(new Map());
   const claimsByReport = useRef<Map<number, string>>(new Map());
   const alertsByReport = useRef<Map<number, ApiResidentAlert>>(new Map());
+  /** The notices read in full (with their sightings and conversations). The lists hold each one without those, so a change reads them again. */
+  const readNotices = useRef<Set<string>>(new Set());
   const mineReports = useRef<Set<number>>(new Set());
   const opened = useRef<Set<string>>(new Set());
   const loadToken = useRef(0);
@@ -118,13 +120,13 @@ function Loaded({ session, children }: { session: ResidentSession; children: Rea
   // ------------------------------------------------------------------------------------------------ the first load
   const loadAll = useCallback(async (silent: boolean) => {
     const token = ++loadToken.current;           // (the 'loading' state is set by reload(); the first load starts in it)
-    const [me, reports, active, mine, anns, claims, pets, notifs, prefs, cats, coverage, landmarks] = await Promise.allSettled([
-      residentApi.user(userId), residentApi.myReports(), residentApi.alertsActive(), residentApi.alertsMine(), residentApi.announcements(userId), residentApi.claims(),
+    const [me, reports, active, mine, anns, claims, pets, notifs, prefs, cats, coverage, landmarks, owns] = await Promise.allSettled([
+      residentApi.user(userId), residentApi.myReports(), residentApi.communitySummary(), residentApi.alertsMine(), residentApi.announcements(userId), residentApi.claims(),
       residentApi.pets(), residentApi.notifications(), residentApi.preferences(), residentApi.categories(), residentApi.coverage(),
-      subdivisionId === null ? Promise.resolve([]) : residentApi.landmarks(subdivisionId),
+      subdivisionId === null ? Promise.resolve([]) : residentApi.landmarks(subdivisionId), residentApi.ownershipRequests(),
     ]);
     if (token !== loadToken.current) return;
-    for (const r of [me, reports, active, mine, anns, claims, pets, notifs, prefs, cats, coverage, landmarks]) if (r.status === 'rejected' && sessionEnded(r.reason)) return;
+    for (const r of [me, reports, active, mine, anns, claims, pets, notifs, prefs, cats, coverage, landmarks, owns]) if (r.status === 'rejected' && sessionEnded(r.reason)) return;
 
     // "My reports" is the heart of the app: without it there is nothing to show, and nothing is invented in its place.
     if (reports.status === 'rejected') {
@@ -168,12 +170,13 @@ function Loaded({ session, children }: { session: ResidentSession; children: Rea
     if (reports.value.truncated) problems.push({ section: 'reports', message: `Only your ${reportList.length} newest reports are shown here.` });
 
     const alerts = new Map<number, ApiResidentAlert>();
-    for (const a of [...(mineList?.results ?? []), ...(alertList?.results ?? [])]) alerts.set(a.alert_id, a);
+    for (const a of [...(mineList?.results ?? []), ...(alertList?.lost.results ?? []), ...(alertList?.found.results ?? [])]) alerts.set(a.alert_id, a);
     const notices: Notice[] = [
       ...[...alerts.values()].map((a) => ad.noticeFromAlert(a, lk, mineReports.current)),
       ...(annList ?? []).filter((a) => ad.ADVISORY_CATEGORIES.has(a.category)).map(ad.noticeFromAnnouncement),
     ];
     const petList = part('pets', 'Your pets', pets);
+    const ownList = part('pets', 'The pets your subdivision office linked to you', owns);
     const notifList = part('notifications', 'Notifications', notifs);
     const prefList = part('settings', 'Your notification settings', prefs);
     const meUser = part('profile', 'Your profile', me);
@@ -190,8 +193,10 @@ function Loaded({ session, children }: { session: ResidentSession; children: Rea
       accepting: categories ? ad.acceptingFrom(categories) : s.accepting,
       reports: reportList,
       notices: mineList || alertList || annList ? notices.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)) : s.notices,
+      community: alertList ? { lostTotal: alertList.lost.total, foundTotal: alertList.found.total } : s.community,
       claims: claimsState ?? s.claims,
       pets: petList ? petList.map(ad.petFromApi) : s.pets,
+      ownershipRequests: ownList ? ownList.map(ad.ownershipRequestFromApi) : s.ownershipRequests,
       notifications: notifList ? notifList.map((n) => ad.notificationFromApi(n, lk)).sort((a, b) => b.at.localeCompare(a.at)) : s.notifications,
       settings: prefList ? ad.settingsFrom(prefList) : s.settings,
     }));
@@ -231,6 +236,7 @@ function Loaded({ session, children }: { session: ResidentSession; children: Rea
       const a = await residentApi.alert(ref.id);
       const full = ad.noticeFromAlert(a, lookup(), mineReports.current);
       patch((s) => ({ ...s, notices: s.notices.some((n) => n.id === full.id) ? s.notices.map((n) => (n.id === full.id ? full : n)) : [full, ...s.notices] }));
+      readNotices.current.add(id);
       setNoticeDetails((d) => ({ ...d, [id]: { status: 'ready' } }));
     } catch (err) {
       if (sessionEnded(err)) return;
@@ -240,22 +246,46 @@ function Loaded({ session, children }: { session: ResidentSession; children: Rea
 
   const noticeStatus = useCallback((id: string): Detail => noticeDetails[id] ?? { status: 'idle' }, [noticeDetails]);
 
+  // ------------------------------------------------------------------------------------ the Community, a page at a time
+  /**
+   * One page of the directory, searched and filtered by the server. The notices are kept in the app's own list as well, so opening one finds it
+   * already read; a notice that is already there (perhaps read in full, with its sightings) is kept as it is.
+   */
+  const loadCommunityPage = useCallback(async (query: CommunityQuery) => {
+    let page;
+    try { page = await residentApi.communityPage(query); } catch (err) { sessionEnded(err); throw err; }       // the directory shows its own retry
+    const lk = lookup();
+    const notices = page.results.map((a) => ad.noticeFromAlert(a, lk, mineReports.current));
+    patch((s) => {
+      const have = new Map(s.notices.map((n) => [n.id, n]));
+      for (const n of notices) if (!have.has(n.id)) have.set(n.id, n);
+      return { ...s, notices: [...have.values()].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)) };
+    });
+    return { notices, total: page.total };
+  }, [lookup, patch, sessionEnded]);
+
   // ----------------------------------------------------------------------------------------- the smaller re-reads
   const refreshNotices = useCallback(async () => {
-    const [active, mine, anns] = await Promise.allSettled([residentApi.alertsActive(), residentApi.alertsMine(), residentApi.announcements(userId)]);
+    const [active, mine, anns] = await Promise.allSettled([residentApi.communitySummary(), residentApi.alertsMine(), residentApi.announcements(userId)]);
     for (const x of [active, mine, anns]) if (x.status === 'rejected' && sessionEnded(x.reason)) return;
     if (mine.status === 'fulfilled') alertsByReport.current = new Map(mine.value.results.map((a) => [a.report_id, a]));
     const lk = lookup();
     patch((s) => {
       const keep = (type: Notice['type']) => s.notices.filter((n) => (type === 'safety_advisory' ? n.type === 'safety_advisory' : n.type !== 'safety_advisory'));
       const alerts = new Map<number, ApiResidentAlert>();
-      for (const a of [...(mine.status === 'fulfilled' ? mine.value.results : []), ...(active.status === 'fulfilled' ? active.value.results : [])]) alerts.set(a.alert_id, a);
+      for (const a of [...(mine.status === 'fulfilled' ? mine.value.results : []), ...(active.status === 'fulfilled' ? [...active.value.lost.results, ...active.value.found.results] : [])]) alerts.set(a.alert_id, a);
       const fromAlerts = active.status === 'fulfilled' || mine.status === 'fulfilled' ? [...alerts.values()].map((a) => ad.noticeFromAlert(a, lk, mineReports.current)) : keep('lost_pet');
       const fromAnns = anns.status === 'fulfilled' ? anns.value.filter((a) => ad.ADVISORY_CATEGORIES.has(a.category)).map(ad.noticeFromAnnouncement) : keep('safety_advisory');
-      return { ...s, notices: [...fromAlerts, ...fromAnns].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)) };
+      return {
+        ...s, notices: [...fromAlerts, ...fromAnns].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)),
+        community: active.status === 'fulfilled' ? { lostTotal: active.value.lost.total, foundTotal: active.value.found.total } : s.community,
+      };
     });
     setIssue('notices', [active, mine, anns].some((x) => x.status === 'rejected') ? 'The notices could not be refreshed after your change. Reload to see their latest state.' : null);
-  }, [lookup, patch, sessionEnded, setIssue, userId]);
+    // The lists hold each notice without its sightings and conversations: the ones this person had open are read in full again, so a change to one
+    // (agreeing to message, asking the Leader to help, a sighting) shows on the screen they are looking at, not only after they leave it.
+    await Promise.all([...readNotices.current].map((id) => loadNotice(id)));
+  }, [loadNotice, lookup, patch, sessionEnded, setIssue, userId]);
 
   const refreshClaims = useCallback(async () => {
     try {
@@ -270,6 +300,11 @@ function Loaded({ session, children }: { session: ResidentSession; children: Rea
     catch (err) { if (!sessionEnded(err)) setIssue('pets', 'Your pets could not be refreshed after your change. Reload to see them.'); }
   }, [patch, sessionEnded, setIssue]);
 
+  const refreshOwnership = useCallback(async () => {
+    try { const list = await residentApi.ownershipRequests(); patch((s) => ({ ...s, ownershipRequests: list.map(ad.ownershipRequestFromApi) })); }
+    catch (err) { if (!sessionEnded(err)) setIssue('pets', 'Your pet requests could not be refreshed after your change. Reload to see them.'); }
+  }, [patch, sessionEnded, setIssue]);
+
   const refreshProfileAndSettings = useCallback(async () => {
     const [me, prefs] = await Promise.allSettled([residentApi.user(userId), residentApi.preferences()]);
     for (const x of [me, prefs]) if (x.status === 'rejected' && sessionEnded(x.reason)) return;
@@ -281,9 +316,16 @@ function Loaded({ session, children }: { session: ResidentSession; children: Rea
     try {
       const list = await residentApi.notifications();
       const lk = lookup();
+      const known = new Set(stateRef.current.notifications.map((n) => n.id));
+      const changedLostPet = list.filter((n) => !known.has(String(n.notification_id)) && (n.type ?? '').startsWith('lost_pet_'));
       patch((s) => ({ ...s, notifications: list.map((n) => ad.notificationFromApi(n, lk)).sort((a, b) => b.at.localeCompare(a.at)) }));
+      if (changedLostPet.length) {
+        await refreshNotices();
+        await Promise.all([...opened.current].slice(-3).map((id) => loadReport(id)));
+        if (changedLostPet.some((n) => n.type === 'lost_pet_recovered' || /recovered/i.test(n.title))) await refreshPets();
+      }
     } catch (err) { sessionEnded(err); }                // a missed poll is not worth a message; the next one tries again
-  }, [lookup, patch, sessionEnded]);
+  }, [loadReport, lookup, patch, refreshNotices, refreshPets, sessionEnded]);
 
   // ------------------------------------------------------------------------------------------------------- actions
   const dispatch = useCallback(async (action: ResidentAction): Promise<ActionOutcome | void> => {
@@ -293,6 +335,8 @@ function Loaded({ session, children }: { session: ResidentSession; children: Rea
       result = await runAction(action, ctx);
     } catch (err) {
       sessionEnded(err);
+      // A refused report (a kind switched off, a pet that already has one) may mean what is on screen is out of date: read it again quietly
+      if (action.type === 'report/submit') void loadAll(true);
       throw err instanceof AdminApiError ? err : new AdminApiError('server');
     }
     // The change is recorded. Read back what it touched; a failure here must not make the saved change look failed.
@@ -308,11 +352,12 @@ function Loaded({ session, children }: { session: ResidentSession; children: Rea
       result.notices ? refreshNotices() : undefined,
       result.claims ? refreshClaims() : undefined,
       result.pets ? refreshPets() : undefined,
+      result.ownership ? refreshOwnership() : undefined,
       result.profile || result.settings ? refreshProfileAndSettings() : undefined,
     ]);
     if (result.warnings?.length) setIssue('after-save', `${result.warnings.join(' ')} What you sent is kept.`);
     return { ...(result.created ? { reportRef: caseRef(result.created.number, result.created.createdAt) } : {}), ...(result.petId ? { petId: result.petId } : {}) };
-  }, [categoriesRead, loadReport, refOf, refreshClaims, refreshNotices, refreshPets, refreshProfileAndSettings, sessionEnded, setIssue, userId]);
+  }, [categoriesRead, loadAll, loadReport, refOf, refreshClaims, refreshNotices, refreshOwnership, refreshPets, refreshProfileAndSettings, sessionEnded, setIssue, userId]);
 
   /** Drafts and read marks are applied here at once. A read mark is also told to the server; if that is missed, the next read corrects it. */
   const local = useCallback((action: ResidentAction) => {
@@ -339,8 +384,8 @@ function Loaded({ session, children }: { session: ResidentSession; children: Rea
   }, [loadAll, loadReport, refreshNotifications]);
 
   const value = useMemo(() => ({
-    state, status, loadError, issues, dispatch, local, reload, loadReport, reportStatus, loadNotice, noticeStatus, capabilities: LIVE_CAPABILITIES,
-  }), [state, status, loadError, issues, dispatch, local, reload, loadReport, reportStatus, loadNotice, noticeStatus]);
+    state, status, loadError, issues, dispatch, local, reload, loadReport, reportStatus, loadNotice, noticeStatus, loadCommunityPage, capabilities: LIVE_CAPABILITIES,
+  }), [state, status, loadError, issues, dispatch, local, reload, loadReport, reportStatus, loadNotice, noticeStatus, loadCommunityPage]);
 
   return <ResidentDataContext.Provider value={value}>{children}</ResidentDataContext.Provider>;
 }

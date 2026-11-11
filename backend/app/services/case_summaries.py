@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.report import Report, ReportMedia, StatusHistory
 from app.models.user import User
-from app.utils import case_state, case_vocab as V
+from app.utils import case_state, case_vocab as V, identity_decision
 from app.utils.warning_rules import report_family
 
 DEFAULT_PAGE = 100
@@ -95,6 +95,7 @@ def _rows(db: Session, reports: List[Report]) -> List[Dict[str, Any]]:
             if entry["thumbnail"] is None and kind == "Image":
                 entry["thumbnail"] = url            # the first photo is the list thumbnail
 
+    decided = identity_decision.decided_ids(db, reports)
     rows = []
     for r in reports:
         status = case_state.case_status_of(r)
@@ -118,7 +119,8 @@ def _rows(db: Session, reports: List[Report]) -> List[Dict[str, Any]]:
             "assigned_leader_id": r.assigned_leader_id, "assigned_leader_name": names.get(r.assigned_leader_id),
             "assessment": {"incident": case_state.incident_of(r), "evidence_sufficiency": case_state.sufficiency_of(r),
                            "urgency": case_state.urgency_of(r), "saved_at": r.assessed_at},
-            "identity_status": case_state.identity_of(r), "ownership_status": case_state.ownership_of(r),
+            "identity_status": case_state.identity_of(r), "identity_decided": r.report_id in decided,
+            "ownership_status": case_state.ownership_of(r),
             "ownership_owner_id": r.ownership_owner_id, "pet_id": r.pet_id,
             "closure": case_state.closure_of(r), "reopened_count": r.reopened_count or 0,
             "merged_into_report_id": r.duplicate_of_report_id,

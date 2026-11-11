@@ -23,7 +23,7 @@ def pending_confirmation(db: Session, pet_id: int) -> Optional[PetOwnerConfirmat
 
 
 def propose_owner(db: Session, pet: Pet, owner: User, actor: User, source: str = "assign",
-                  report_id: Optional[int] = None) -> PetOwnerConfirmation:
+                  report_id: Optional[int] = None, evidence: Optional[str] = None) -> PetOwnerConfirmation:
     """
     Ask `owner` to confirm they own `pet`. Replaces any earlier pending proposal for the pet.
     The pet's owner_id is NOT changed here. Caller commits.
@@ -56,7 +56,8 @@ def propose_owner(db: Session, pet: Pet, owner: User, actor: User, source: str =
         pet_id=pet.pet_id,
         event_type="OWNER_CONFIRMATION_REQUESTED",
         title="Owner Confirmation Requested",
-        description=f"{actor.name} proposed {owner.name} as the owner. Waiting for {owner.name} to accept.",
+        description=(f"{actor.name} proposed {owner.name} as the owner. Waiting for {owner.name} to accept."
+                     + (f" Checked by the officer: {evidence}" if evidence else "")),
         actor_id=actor.user_id,
         actor_name=actor.name,
         actor_role="Staff",

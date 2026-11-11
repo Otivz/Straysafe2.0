@@ -231,7 +231,9 @@ function PrivacySection() {
         </Block>
         <Block title="Community publication" description="How notices reach residents, according to your community policy.">
           <div className="flex flex-col gap-5">
-            <FieldGroup label="Lost-pet notices"><OptionGroup name="lost" label="Lost-pet publication" value={f.lostPetPublication} onChange={(v) => setF((p) => ({ ...p, lostPetPublication: v }))} options={options} /></FieldGroup>
+            <FieldGroup label="Lost-pet notices">
+              <p className="sa-small"><Lock size={13} className="sa-text-3 mr-1.5 inline" aria-hidden="true" /><strong>Published at once, always.</strong> A missing pet’s notice appears as soon as the owner files the report. Nobody has to approve it, and a Leader is not asked to. You can still edit or close a notice from its case.</p>
+            </FieldGroup>
             <FieldGroup label="Found-animal notices"><OptionGroup name="found" label="Found-animal publication" value={f.foundPublication} onChange={(v) => setF((p) => ({ ...p, foundPublication: v }))} options={options} /></FieldGroup>
             <Callout>Safety advisories are always published by an administrator after checking the facts.</Callout>
           </div>

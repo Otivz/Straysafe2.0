@@ -102,7 +102,7 @@ before = {t: columns(old, t) for t in ("reports", "barangay_referrals", "baranga
 verdict = M.check_case_schema(old)
 check("a legacy database is critically incompatible: the reports columns are named",
       any(c.startswith("reports lacks columns case_status, incident_verification") for c in verdict["critical"]), verdict["critical"])
-check("...as a short list (eight names and a count), not a wall of text", any("and 19 more" in c for c in verdict["critical"]))
+check("...as a short list (eight names and a count), not a wall of text", any("and 21 more" in c for c in verdict["critical"]))
 check("...and the four case tables are reported missing", all(f"table {t} is missing" in verdict["critical"] for t in M.CASE_TABLES))
 check("the check changed nothing", {t: columns(old, t) for t in before} == before and not inspect(old).has_table("case_followups"))
 
@@ -282,7 +282,7 @@ fm = failing_mysql({"needle": "ALTER TABLE reports ADD COLUMN",
 res = M.run_case_alignment(FakeEngine(fm))
 check("MySQL: ALTER denied on reports -> failed, with the MySQL error number in the step error",
       res["status"] == "failed" and any(e.startswith("report_columns: OperationalError (error 1142): ALTER command denied") for e in res["errors"]), res)
-check("MySQL: 27 missing columns are summarised as eight names and a count", any("case_status" in c and "and 19 more" in c for c in res["critical"]), res["critical"])
+check("MySQL: 29 missing columns are summarised as eight names and a count", any("case_status" in c and "and 21 more" in c for c in res["critical"]), res["critical"])
 try:
     M.run_case_alignment(FakeEngine(failing_mysql({"needle": "ALTER TABLE reports ADD COLUMN", "error": lambda: OperationalError(1142, "ALTER command denied")})), strict=True)
     msg = ""
@@ -342,7 +342,8 @@ for i, col in enumerate(M.REPORT_USER_FKS, start=1):       # ...and its keys, un
 res = M.run_case_alignment(FakeEngine(fm))
 constraint_statements = [s for s in fm.ddl if "ADD CONSTRAINT" in s]
 check("MySQL: foreign keys are found by their column, not their name: none is added twice on a create_all table",
-      res["status"] == "ok" and len(constraint_statements) == 1 and constraint_statements[0].startswith("ALTER TABLE barangay_referrals"), constraint_statements)
+      res["status"] == "ok" and not any(s.startswith("ALTER TABLE reports ") for s in constraint_statements)
+      and sorted(s.split()[2] for s in constraint_statements) == ["barangay_referrals", "lost_pet_alerts"], constraint_statements)
 
 # ============================================================================================================
 # 9. Error descriptions

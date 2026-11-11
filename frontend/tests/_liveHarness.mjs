@@ -10,8 +10,9 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createServer as createPortProbe } from 'node:net';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const frontendDir = resolve(here, '..');
@@ -21,6 +22,21 @@ export const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 const PYTHON = process.env.PYTHON || 'python';
 const CHROME = process.env.CHROME_BIN || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 
+async function removeOwnedTemp(path, prefix) {
+  const target = resolve(path);
+  assert.equal(dirname(target), resolve(tmpdir()), 'test cleanup stays inside TEMP');
+  assert(basename(target).startsWith(prefix), 'test cleanup only removes its own temporary directory');
+  await rm(target, { recursive: true, force: true });
+}
+
+async function requireFreePort(port) {
+  await new Promise((done, reject) => {
+    const probe = createPortProbe();
+    probe.once('error', () => reject(new Error(`Isolated test port ${port} is occupied; its existing process was left untouched.`)));
+    probe.listen(port, '127.0.0.1', () => probe.close(done));
+  });
+}
+
 async function until(check, what, timeoutMs = 60000, stepMs = 200) {
   const end = Date.now() + timeoutMs;
   let last;
@@ -28,34 +44,57 @@ async function until(check, what, timeoutMs = 60000, stepMs = 200) {
     try { const v = await check(); if (v) return v; } catch (e) { last = e; }
     await delay(stepMs);
   }
-  throw new Error(`Timed out waiting for ${what}${last ? `: ${last.message}` : ''}`);
+  throw new Error(`Timed out waiting for ${typeof what === 'function' ? what() : what}${last ? `: ${last.message}` : ''}`);
 }
 
 /** Starts the isolated API and the Vite dev server. Returns their addresses and a stop() that kills both. */
 export async function startStack({ apiPort = 8780, webPort = 5190 } = {}) {
+  await Promise.all([requireFreePort(apiPort), requireFreePort(webPort)]);
   const children = [];
-  const api = spawn(PYTHON, ['tests/e2e_server.py'], { cwd: backendDir, env: { ...process.env, E2E_API_PORT: String(apiPort), PYTHONIOENCODING: 'utf-8' }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-  let apiLog = '';
-  api.stdout.on('data', (d) => { apiLog += d; });
-  api.stderr.on('data', (d) => { apiLog += d; });
-  children.push(api);
-  const apiUrl = `http://127.0.0.1:${apiPort}`;
-  await until(async () => (await fetch(`${apiUrl}/__e2e/ids`)).ok, `the isolated API (${apiLog.slice(-400)})`, 90000);
-
-  const web = spawn(process.execPath, [join(frontendDir, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(webPort), '--strictPort', '--host', '127.0.0.1'],
-    { cwd: frontendDir, env: { ...process.env, STRAYSAFE_API_TARGET: apiUrl }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-  let webLog = '';
-  web.stdout.on('data', (d) => { webLog += d; });
-  web.stderr.on('data', (d) => { webLog += d; });
-  children.push(web);
-  const webUrl = `http://127.0.0.1:${webPort}`;
-  await until(async () => (await fetch(`${webUrl}/`)).ok, `the Vite dev server (${webLog.slice(-400)})`, 90000);
-
+  const scratch = await mkdtemp(join(tmpdir(), 'straysafe-live-stack-'));
   const stop = async () => {
+    if (process.platform === 'win32') for (const c of children) {
+      if (!c.pid || c.exitCode !== null || c.signalCode !== null) continue;
+      await new Promise((done) => {
+        const killer = spawn('taskkill', ['/pid', String(c.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+        killer.once('error', done); killer.once('exit', done);
+      });
+    }
     for (const c of children) { try { c.kill(); } catch { /* already gone */ } }
-    if (process.platform === 'win32') for (const c of children) { try { spawn('taskkill', ['/pid', String(c.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }); } catch { /* ignore */ } }
+    await removeOwnedTemp(scratch, 'straysafe-live-stack-').catch(() => undefined);
   };
-  return { apiUrl, webUrl, stop };
+  try {
+    // Disable dotenv BEFORE any application import. _isolated_db then sets a throwaway SQLite URL and disables MySQL.
+    const bootstrap = "import dotenv, runpy, sys; dotenv.load_dotenv = lambda *a, **k: False; sys.path.insert(0, 'tests'); runpy.run_path('tests/e2e_server.py', run_name='__main__')";
+    const api = spawn(PYTHON, ['-c', bootstrap], { cwd: backendDir, env: { ...process.env, E2E_API_PORT: String(apiPort), PYTHONIOENCODING: 'utf-8' }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    let apiLog = '';
+    api.stdout.on('data', (d) => { apiLog += d; });
+    api.stderr.on('data', (d) => { apiLog += d; });
+    children.push(api);
+    const apiUrl = `http://127.0.0.1:${apiPort}`;
+    await until(async () => (await fetch(`${apiUrl}/__e2e/ids`)).ok, () => `the isolated API (${apiLog.slice(-800)})`, 90000);
+  
+    const webEnv = { ...process.env, STRAYSAFE_API_TARGET: apiUrl };
+    for (const key of Object.keys(webEnv)) if (key.startsWith('VITE_')) delete webEnv[key];
+    // The actual project config calls loadEnv only in Android build modes. Development uses this empty envDir and cache.
+    const webBootstrap = `import { createServer } from 'vite'; const server = await createServer(${JSON.stringify({
+      root: frontendDir, configFile: join(frontendDir, 'vite.config.ts'), mode: 'development', envDir: scratch,
+      cacheDir: join(scratch, 'vite-cache'), clearScreen: false, server: { port: webPort, strictPort: true, host: '127.0.0.1' },
+    })}); await server.listen();`;
+    const web = spawn(process.execPath, ['--input-type=module', '--eval', webBootstrap],
+      { cwd: frontendDir, env: webEnv, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    let webLog = '';
+    web.stdout.on('data', (d) => { webLog += d; });
+    web.stderr.on('data', (d) => { webLog += d; });
+    children.push(web);
+    const webUrl = `http://127.0.0.1:${webPort}`;
+    await until(async () => (await fetch(`${webUrl}/`)).ok, () => `the Vite dev server (${webLog.slice(-800)})`, 90000);
+  
+    return { apiUrl, webUrl, stop };
+  } catch (error) {
+    await stop();
+    throw error;
+  }
 }
 
 /** A headless Chrome with an isolated profile. */
@@ -85,10 +124,17 @@ export async function openBrowser(webUrl) {
       m.error ? t.rej(new Error(JSON.stringify(m.error))) : t.res(m.result);
     } else if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text);
     else if (m.method === 'Network.requestWillBeSent') requests.push(m.params.request.url);
+    else if (m.method === 'Fetch.requestPaused') {
+      const { requestId, request } = m.params;
+      const url = new URL(request.url);
+      const local = ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname);
+      void command(local ? 'Fetch.continueRequest' : 'Fetch.failRequest', local ? { requestId } : { requestId, errorReason: 'BlockedByClient' }).catch(() => undefined);
+    }
   };
   await command('Page.enable');
   await command('Runtime.enable');
   await command('Network.enable');
+  await command('Fetch.enable', { patterns: [{ urlPattern: 'http://*', requestStage: 'Request' }, { urlPattern: 'https://*', requestStage: 'Request' }] });
   await command('Emulation.setTimezoneOverride', { timezoneId: 'Asia/Manila' });
 
   const evaluate = async (expression) => {
@@ -178,7 +224,7 @@ export async function openBrowser(webUrl) {
     try { socket.close(); } catch { /* ignore */ }
     try { chrome.kill(); } catch { /* ignore */ }
     await delay(500);
-    await rm(profile, { recursive: true, force: true }).catch(() => undefined);
+    await removeOwnedTemp(profile, 'straysafe-live-test-').catch(() => undefined);
   };
   return { page, close };
 }
@@ -193,7 +239,7 @@ export async function apiLogin(apiUrl, email, password) {
     const text = await r.text();
     return { status: r.status, body: text ? JSON.parse(text) : null };
   };
-  return { user: data, get: (p) => call('GET', p), post: (p, b) => call('POST', p, b ?? {}), put: (p, b) => call('PUT', p, b ?? {}) };
+  return { user: data, get: (p) => call('GET', p), post: (p, b) => call('POST', p, b ?? {}), put: (p, b) => call('PUT', p, b ?? {}), patch: (p, b) => call('PATCH', p, b ?? {}) };
 }
 
 export const PASSWORD = 'Test#Pass2026xx';

@@ -185,6 +185,15 @@ class Report(Base):
     # by anything but an explicit staff action).
     is_sensitive: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
 
+    # A Lost Pet report: the pet as it was when the report was filed, and the last-seen details (utils/lost_pet_rules.py).
+    # Built by the server from the pet record at filing and never rewritten, so editing the pet later does not change history.
+    # NULL for every other report, and for older Lost Pet reports.
+    pet_snapshot: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
+
+    # The browser's id for one Lost Pet submission: sending it again (a retry after a lost answer) returns the first report
+    # instead of filing a second one (routes/reports.py; the pet row is locked, so two copies cannot both pass).
+    client_request_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
     # Relationships
     reporter: Mapped[Optional["User"]] = relationship("User", foreign_keys=[user_id], backref="reports")
     assigned_leader: Mapped[Optional["User"]] = relationship("User", foreign_keys=[assigned_leader_id])

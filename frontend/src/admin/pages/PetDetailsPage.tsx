@@ -1,16 +1,18 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Camera, FileQuestion, Lock } from 'lucide-react';
+import { Camera, FileQuestion, Link2, Lock } from 'lucide-react';
 import { adminPath } from '../config';
 import { Badge, StatusBadge } from '../components/Badge';
-import { LinkButton } from '../components/Button';
+import { Button, LinkButton } from '../components/Button';
 import { Block, Callout, EmptyState, Kv, Panel } from '../components/layout';
 import { PetAvatar } from '../components/PetAvatar';
-import { ANIMAL_TYPES, CATEGORIES, SIZE_LABEL, VACCINATION } from '../data/constants';
+import { ANIMAL_TYPES, CATEGORIES, LINKED_BY_REPORTER, SIZE_LABEL, VACCINATION } from '../data/constants';
 import { useAdminData } from '../data/context';
 import { petById, petCases, residentById } from '../data/selectors';
-import type { MatchDecision } from '../data/types';
+import type { Case, MatchDecision } from '../data/types';
 import { fmtDate, maskPhone } from '../../preview/lib/format';
 import { usePageTitle } from '../lib/hooks';
+import { LinkOwnerDialog } from '../dialogs/PetDialogs';
 
 const DECISION: Record<MatchDecision, { label: string; tone: 'amber' | 'neutral' | 'sage' }> = {
   possible: { label: 'Possible match', tone: 'amber' },
@@ -18,10 +20,17 @@ const DECISION: Record<MatchDecision, { label: string; tone: 'amber' | 'neutral'
   confirmed: { label: 'Identity confirmed', tone: 'sage' },
 };
 
-/** A17 — Pet details. Owner-declared information; never presented as verified ownership. */
+/** How a case relates to this pet: a decision the team made, or only the reporter having named the pet (which decides nothing). */
+const decisionOf = (c: Case, petId: string) => {
+  const d = c.identity.matches[petId];
+  return d === 'confirmed' && c.identity.decided === false ? { label: LINKED_BY_REPORTER.label, tone: 'neutral' as const } : DECISION[d];
+};
+
+/** A17 — Pet details. Declared information (by the owner, or by the office for them); never presented as verified ownership. */
 export default function PetDetailsPage() {
   const { petId } = useParams();
   const { state } = useAdminData();
+  const [linking, setLinking] = useState(false);
   const pet = petById(state, petId);
   usePageTitle(pet ? pet.name : 'Pet not found');
 
@@ -30,6 +39,10 @@ export default function PetDetailsPage() {
   }
   const owner = residentById(state, pet.ownerId);
   const cases = petCases(state.cases, pet.id);
+  // A record the office entered: its registrar is not the owner, or (registrar unknown) it has no owner account at all
+  const byOffice = pet.registeredBy ? !pet.registeredBy.byOwner : !owner;
+  // Only whoever entered an ownerless record (or the administrator) may link it: the server decides, this only avoids a button that cannot work
+  const canLink = !owner && (!pet.registeredBy || pet.registeredBy.userId === null || pet.registeredBy.userId === state.admin.id);
 
   return (
     <div>
@@ -42,7 +55,11 @@ export default function PetDetailsPage() {
         </div>
       </header>
 
-      <Callout className="mb-6" title="Owner-declared registration.">This record was entered by the resident. It is a reference for comparing animals and contacting owners. It is not verified proof of ownership.</Callout>
+      {byOffice ? (
+        <Callout className="mb-6" title="Entered by the office.">{pet.registeredBy?.name ?? 'The subdivision office'} recorded this pet. It is a reference for comparing animals and contacting owners. It is not verified proof of ownership{owner ? ', and the resident named here confirmed it is theirs.' : ', and no resident has confirmed it yet.'}</Callout>
+      ) : (
+        <Callout className="mb-6" title="Owner-declared registration.">This record was entered by the resident. It is a reference for comparing animals and contacting owners. It is not verified proof of ownership.</Callout>
+      )}
 
       <div className="sa-case" style={{ marginTop: 0 }}>
         <div className="flex min-w-0 flex-col gap-5">
@@ -76,13 +93,21 @@ export default function PetDetailsPage() {
 
         <aside className="sa-case__aside" aria-label="Owner and related cases">
           <Panel>
-            <Block tight title={<span className="flex items-center gap-2"><Lock size={14} aria-hidden="true" />Registered owner</span>} description="As declared at registration. Visible to administrators only.">
+            <Block tight title={<span className="flex items-center gap-2"><Lock size={14} aria-hidden="true" />Registered owner</span>} description="As declared at registration, not verified. Visible to administrators only.">
               {owner ? (
                 <>
                   <Kv stack rows={[['Name', owner.name], ['Unit', [owner.unit, owner.street].filter(Boolean).join(' · ')], ['Phone', maskPhone(owner.phone)]]} />
                   <p className="sa-small mt-3"><Link to={adminPath(`/residents/${owner.id}`)} className="font-semibold">View resident profile</Link></p>
                 </>
-              ) : <p className="sa-small sa-text-2">No owner is recorded.</p>}
+              ) : (
+                <>
+                  <p className="sa-small sa-text-2">No resident account is linked to this pet record.</p>
+                  <p className="sa-hint mt-2">A resident can report a pet missing only once it is on their account. Ask the resident to confirm it is theirs: nothing changes until they accept.</p>
+                  {canLink
+                    ? <Button className="mt-3" size="sm" icon={Link2} onClick={() => setLinking(true)}>Link to a resident</Button>
+                    : <p className="sa-hint mt-2">Only {pet.registeredBy?.name ?? 'the person who entered this record'}, or the system administrator, can link it to a resident.</p>}
+                </>
+              )}
             </Block>
           </Panel>
           <Panel>
@@ -94,7 +119,7 @@ export default function PetDetailsPage() {
                       <p className="flex flex-wrap items-center gap-2"><Link to={adminPath(`/cases/${c.id}`)} className="sa-ref">{c.id}</Link><StatusBadge status={c.status} /></p>
                       <p className="mt-1 font-medium">{c.title}</p>
                       <p className="sa-meta mt-0.5">{CATEGORIES[c.category].label}</p>
-                      <p className="mt-1.5"><Badge tone={DECISION[c.identity.matches[pet.id]].tone}>{DECISION[c.identity.matches[pet.id]].label}</Badge></p>
+                      <p className="mt-1.5"><Badge tone={decisionOf(c, pet.id).tone}>{decisionOf(c, pet.id).label}</Badge></p>
                     </li>
                   ))}
                 </ul>
@@ -104,6 +129,7 @@ export default function PetDetailsPage() {
           </Panel>
         </aside>
       </div>
+      {linking ? <LinkOwnerDialog pet={pet} onClose={() => setLinking(false)} /> : null}
     </div>
   );
 }

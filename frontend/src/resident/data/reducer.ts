@@ -13,10 +13,13 @@ export type ResidentAction =
   | { type: 'report/submit' }
   | { type: 'report/addUpdate'; reportId: string; text: string; media?: Media[] }
   | { type: 'lost/recover'; reportId: string; note: string }
-  | { type: 'sighting/add'; noticeId: string; observedAt: string; location: GeoPoint; description: string; onBehalf: boolean; photos: number; /** the photos themselves (the app uploads the first) */ media?: Media[] }
+  | { type: 'sighting/add'; noticeId: string; clientRequestId?: string; /** secured: a possible recovery ("I may have this pet safely with me") */ kind?: 'seen' | 'secured'; /** private: where the pet is being kept */ careNote?: string; /** how the finder would like to be reached */ contactChoice?: 'direct' | 'leader'; observedAt: string; location: GeoPoint; description: string; onBehalf: boolean; photos: number; /** the photo itself */ media?: Media[] }
+  | { type: 'coordination/consent'; id: string; allow: boolean }
+  | { type: 'coordination/mediation'; id: string }
   | { type: 'claim/submit'; noticeId: string; petId: string | null; statement: string; evidence: string[]; /** the photos themselves (the app uploads them as the claim's evidence) */ media?: Media[] }
   | { type: 'claim/addInfo'; claimId: string; text: string }
-  | { type: 'pet/save'; pet: Pet; /** the photo file the person just chose (the app uploads it) */ photo?: File }
+  | { type: 'pet/save'; pet: Pet; /** the photo file the person just chose (the app uploads it) */ photo?: File; /** "this is a different pet": the subdivision held a record that looked like it */ confirmNew?: boolean }
+  | { type: 'ownership/answer'; id: string; accept: boolean; reason?: string }
   | { type: 'notification/read'; id: string }
   | { type: 'notification/readAll' }
   | { type: 'profile/update'; patch: Partial<Pick<Profile, 'name' | 'email' | 'phone' | 'unit' | 'street'>> }

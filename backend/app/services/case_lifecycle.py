@@ -35,6 +35,7 @@ from app.models.warning import OwnerWarning
 from app.schemas.case import AssessmentIn, CloseIn
 from app.utils import case_state
 from app.utils import case_vocab as V
+from app.utils import identity_decision, lost_pet_rules
 from app.utils.auth import verify_subdivision_scope
 from app.utils.case_status_sync import legacy_status_for
 
@@ -55,6 +56,9 @@ def case_for_staff(db: Session, report_id: int, user: User, write: bool = False)
         raise HTTPException(status_code=403, detail="Only the Subdivision Leader or the Administrator can work on a case.")
     verify_subdivision_scope(user, report.subdivision_id, db=db)
     if write:
+        if V.is_lost_pet_report(report):
+            from app.services import lost_pet_lifecycle as LP
+            report = LP.lock_case(db, report.report_id)
         require_case_handler(report, user)
         require_not_merged(report)
     return report
@@ -202,6 +206,10 @@ def save_assessment(db: Session, report: Report, actor: User, data: AssessmentIn
     if data.identity is not None:
         report.identity_status = data.identity.status
         report.identity_note = (data.identity.note or "").strip() or None
+        # A Leader's own decision is recorded apart from the status the pet link alone gives (utils/identity_decision.py)
+        audit(db, actor, identity_decision.ACTION, report,
+              f"{actor.name} recorded the animal's identity on report #{report.report_id}: {data.identity.status}.",
+              old={"identity": old["identity"]}, new={"identity": data.identity.status, "linked_pet_id": report.pet_id})
     if data.ownership is not None:
         o = data.ownership
         report.ownership_status = o.status
@@ -248,15 +256,23 @@ def disposition_availability(db: Session, report: Report, disposition: str) -> T
     """Whether the case can be closed with this disposition, and if not, why (same rules as the Admin screen)."""
     from app.utils.warning_rules import report_family
     rid = report.report_id
+    family = report_family(report)
+    if disposition == "withdrawn_by_reporter":
+        return False, "Set when the person who filed the report withdraws it."
     if disposition == "pet_recovered":
-        return (True, None) if report_family(report) == V.LOST_PET else (False, "Only for lost-pet cases.")
+        # Recovery is the owner's confirmation, recorded by the one recovery operation: a Leader cannot close a case as recovered by choosing it
+        if family == V.LOST_PET:
+            return False, "Record the owner's confirmation that the pet is home. That is what closes a missing-pet case as recovered."
+        return False, "Only for lost-pet cases."
     if disposition == "owner_compliance":
         complied = db.query(OwnerFollowUp).filter(OwnerFollowUp.report_id == rid, OwnerFollowUp.status == "complied").count()
         resolved = db.query(OwnerWarning).filter(OwnerWarning.report_id == rid, OwnerWarning.status == "Resolved").count()
         return (True, None) if (complied or resolved) else (False, "Needs a warning with a compliant observation on record.")
     if disposition == "handed_off":
-        has = db.query(BarangayReferral).filter(BarangayReferral.report_id == rid).count()
-        return (True, None) if has else (False, "Needs an external referral on record.")
+        # A referral that was only written down (status to_contact) is not proof that anyone was contacted
+        has = db.query(BarangayReferral).filter(BarangayReferral.report_id == rid,
+                                                (BarangayReferral.referral_status.is_(None)) | (BarangayReferral.referral_status != "to_contact")).count()
+        return (True, None) if has else (False, "Needs an external referral on record, with the contact recorded.")
     if disposition == "duplicate_report":
         has = db.query(CaseLink).filter(((CaseLink.report_id == rid) | (CaseLink.related_report_id == rid)),
                                         CaseLink.unlinked_at.is_(None)).count()
@@ -327,6 +343,7 @@ def reopen_case(db: Session, report: Report, actor: User, reason: str, ip: Optio
     reason = (reason or "").strip()
     if len(reason) < 5:
         raise HTTPException(status_code=422, detail="Write the reason for reopening (at least 5 characters).")
+    lost_pet_rules.refuse_reopen_if_other_active(db, report)      # one active lost report per pet
     closure = case_state.closure_of(report) or {}
     old = {"case_status": V.CLOSED, "disposition": closure.get("disposition"), "closure_reason": report.closure_reason,
            "closed_at": report.closed_at.isoformat() if report.closed_at else None, "closed_by": report.closed_by}
@@ -339,5 +356,36 @@ def reopen_case(db: Session, report: Report, actor: User, reason: str, ip: Optio
     audit(db, actor, "CASE_REOPENED", report, f"{actor.name} reopened report #{report.report_id}.",
           old=old, new={"case_status": V.UNDER_REVIEW, "reason": reason, "reopened_count": report.reopened_count},
           ip=ip, user_agent=user_agent)
+    from app.services import lost_pet_lifecycle as LP
+    LP.reactivate_on_reopen(db, report, actor)           # a missing pet's case that reopens is missing again: its notice is published again
     _notify_reporter(db, report, actor, f"Report #{report.report_id} reopened",
                      f"Your report #{report.report_id} was reopened by your Subdivision Admin for further review.")
+
+def withdraw_case(db: Session, report: Report, actor: User, ip: Optional[str] = None, user_agent: Optional[str] = None) -> None:
+    """
+    The person who filed the report withdraws it. It is closed as "Withdrawn by the reporter": the real reason is kept, and it is
+    never read as resolved or as a Leader's decision that the report was invalid. The central closure hook ends the notice (as
+    withdrawn), finishes any conversation and puts a missing pet back to Active.
+    """
+    if V.is_lost_pet_report(report):
+        from app.services import lost_pet_lifecycle as LP
+        report = LP.lock_case(db, report.report_id)
+    if case_state.is_closed(report):
+        raise HTTPException(status_code=409, detail="This report is already closed.")
+    if report.user_id != actor.user_id:
+        raise HTTPException(status_code=403, detail="Only the person who filed a report can withdraw it.")
+    previous = case_state.case_status_of(report)
+    now = _now()
+    report.closure_disposition, report.closure_reason = "withdrawn_by_reporter", "Withdrawn by the reporter."
+    report.closed_at, report.closed_by = now, actor.user_id
+    _apply_status(report, V.CLOSED)
+    for f in db.query(CaseFollowUp).filter(CaseFollowUp.report_id == report.report_id, CaseFollowUp.status == "pending").all():
+        f.status, f.cancel_reason = "cancelled", "The report was withdrawn."
+    history(db, report, actor, "Report withdrawn by the reporter.")
+    audit(db, actor, "CASE_WITHDRAWN", report, f"{actor.name} withdrew report #{report.report_id}.",
+          old={"case_status": previous}, new={"case_status": V.CLOSED, "disposition": "withdrawn_by_reporter"}, ip=ip, user_agent=user_agent)
+    if report.subdivision_id:
+        for (leader_id,) in db.query(User.user_id).filter(User.role_id == 2, User.subdivision_id == report.subdivision_id, User.status == "Active").all():
+            db.add(Notification(user_id=leader_id, title=f"Report #{report.report_id} withdrawn",
+                                message=f"The person who filed report #{report.report_id} withdrew it. The case is closed.",
+                                type="status_update", related_id=report.report_id))

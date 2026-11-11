@@ -7,6 +7,7 @@
  */
 import type { GeneralArea } from '../../preview/geo';
 
+export type PetSex = 'male' | 'female' | 'unknown';
 export type CategoryId = 'lost_pet' | 'found_animal' | 'nuisance' | 'safety' | 'injured' | 'other';
 export type AnimalType = 'dog' | 'cat' | 'bird' | 'small_mammal' | 'reptile' | 'livestock' | 'wildlife' | 'other';
 export type CaseStatus = 'reported' | 'under_review' | 'in_progress' | 'closed';
@@ -70,6 +71,30 @@ export interface Sighting {
   /** Someone else saw it and told the resident. */
   onBehalf: boolean;
   photos: number;
+  /** seen ("I saw this pet") or secured ("I may have this pet safely with me": a possible recovery, only for the owner and the person who wrote it). */
+  kind?: 'seen' | 'secured';
+  /** Where a secured pet is being kept. Private: the owner and the person who wrote it only. */
+  careNote?: string;
+  /** What the Leader decided about it, when they did. */
+  review?: { status: 'verified' | 'dismissed'; by: string | null; at?: string; note?: string };
+}
+
+/** How the owner and the person who may have the pet get in touch about one possible-recovery report. */
+export interface Coordination {
+  id: string;
+  sightingId: string;
+  youAre: 'owner' | 'finder';
+  status: 'open' | 'resolved';
+  /** none: nothing agreed yet. direct: both agreed to message. leader: the Subdivision Leader was asked to help (direct messages are over). */
+  mode: 'none' | 'direct' | 'leader';
+  youAgreed: boolean;
+  otherAgreed: boolean;
+  canMessage: boolean;
+  mediationRequested: boolean;
+  mediationByYou: boolean;
+  unread: number;
+  otherName: string;
+  resolutionNote?: string;
 }
 
 export interface Notice {
@@ -96,9 +121,30 @@ export interface Notice {
   /** The number of the report the notice was made from (live mode): what an ownership claim is filed against. */
   reportNumber?: number;
   lastSeenAt?: string;
-  /** 'recovered' means resolved (the pet is home, or the case closed): the notice no longer appears in Community. */
-  status: 'active' | 'recovered';
+  /** Publication state is independent of outcome: only confirmed recovery means the pet is home. */
+  status: 'requested' | 'active' | 'closed';
   sightings: Sighting[];
+  /** Counts and the latest public observation are available even before full sightings are loaded. */
+  sightingCount?: number;
+  latestSighting?: Sighting;
+  /** The notice's own number on the server (what the actions address). */
+  alertNumber?: number;
+  /** The pet's name, when it has one (a registered pet). */
+  petName?: string;
+  /** What identifies the animal, in the server's (already protected) words. */
+  identity?: { breed?: string; color?: string; marks?: string };
+  /** The owner's first name, for a neighbour's "who is looking". */
+  ownerName?: string;
+  /** When the owner confirmed the pet is home. A notice that ended any other way has no such time. */
+  recoveredAt?: string;
+  /** How a closed notice ended (recovered, withdrawn, not_found, ...) and why, in the server's words. */
+  closeOutcome?: string;
+  closeReason?: string;
+  /** owner: this is their pet. finder: they wrote a possible-recovery report. neighbor: everyone else. */
+  viewerRole?: 'owner' | 'finder' | 'neighbor';
+  /** The possible-recovery reports on a missing-pet notice (owner only). */
+  securedCount?: number;
+  coordinations?: Coordination[];
   /** Official guidance (safety advisories). */
   guidance?: string[];
   updates?: { id: string; at: string; text: string }[];
@@ -128,7 +174,13 @@ export interface Pet {
   photoUrl?: string;
   photoName?: string;
   registeredAt: string;
+  sex: PetSex;
+  /** The record's status as the server holds it (Active, Lost, Deceased...). Only a deceased pet cannot be reported missing. */
+  status?: string;
 }
+
+/** An office-registered pet that a Subdivision Leader linked to this account and that the resident has not answered yet. */
+export interface OwnershipRequest { id: string; petId: string; petName: string; petType: AnimalType; photoUrl?: string; proposedBy: string; at: string }
 
 export interface Notification {
   id: string;
@@ -179,8 +231,12 @@ export interface ResidentState {
   settings: Settings;
   reports: Report[];
   notices: Notice[];
+  /** How many missing pets and found animals the Community holds in all (the overview shows only a few of each). Absent until read. */
+  community?: { lostTotal: number; foundTotal: number };
   claims: Claim[];
   pets: Pet[];
+  /** Pets the office linked to this account, waiting for the resident to say yes or no. Absent until read. */
+  ownershipRequests?: OwnershipRequest[];
   notifications: Notification[];
   draft: Draft | null;
   /** Next report reference number (SS-2026-0168 → 168). */

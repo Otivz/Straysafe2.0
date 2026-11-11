@@ -1,96 +1,18 @@
 import { Link, useParams } from 'react-router-dom';
-import { Check, EyeOff, Eye, Footprints, ShieldCheck } from 'lucide-react';
-import { fmtDate, fmtDateTime, relative } from '../../../preview/lib/format';
-import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
-import { MapLegend } from '../../../preview/map/MapLegend';
+import { Check, Footprints, ShieldCheck } from 'lucide-react';
 import { PhotoStrip, SightingCard } from '../../components/Cards';
 import { Screen } from '../../components/Screen';
-import { Callout, ClaimPill, ErrorState, LinkButton, ListSkeleton, NotFoundState, Pill, Section, UpdateTimeline } from '../../components/ui';
+import { Callout, ClaimPill, ErrorState, LinkButton, ListSkeleton, NotFoundState, Section, UpdateTimeline } from '../../components/ui';
 import { residentPath } from '../../config';
-import { ANIMAL_TYPES, NOTICE_TYPES } from '../../data/constants';
+import { ANIMAL_TYPES } from '../../data/constants';
 import { useResidentData } from '../../data/context';
-import { claimForNotice, latestSighting, noticeById, reportById } from '../../data/selectors';
+import { claimForNotice, noticeById, noticeEndedLabel, reportById } from '../../data/selectors';
 import type { Notice } from '../../data/types';
 import { useNow } from '../../lib/hooks';
 import { useLoadNotice } from '../../lib/useLoadNotice';
 import { useOffice } from '../../lib/useOffice';
-
-/**
- * The only map a community notice may show: a general area (a rounded position with a circle around it), never the exact
- * spot. The exact spot stays on the owner's own report, visible to them and to administrators.
- */
-function GeneralAreaMap({ notice, what }: { notice: Notice; what: 'last seen' | 'found' }) {
-  if (!notice.approx) return null;
-  return (
-    <figure className="rs-figure">
-      <LocationMapPreview areas={[notice.approx]} height={170} label={`Map of the general area where it was ${what}: ${notice.area}`} />
-      <MapLegend items={[{ kind: 'area', label: `General area where it was ${what}` }, { kind: 'outline', label: 'Approximate subdivision outline' }]} />
-      <figcaption className="rs-hint">A general area only. The exact spot is shown only to {notice.mine ? 'you' : 'the person who reported it'} and subdivision administrators.</figcaption>
-    </figure>
-  );
-}
-
-function Head({ notice }: { notice: Notice }) {
-  return (
-    <header className="rs-stack-sm">
-      <p className="rs-card__kicker">{NOTICE_TYPES[notice.type].label}{notice.mine ? <Pill tone="brand">Your notice</Pill> : null}{notice.status === 'recovered' ? <Pill tone="sage">Recovered</Pill> : null}</p>
-      <h2 className="rs-title rs-title--sm">{notice.title}</h2>
-      <p className="rs-meta">{notice.area} · published {fmtDate(notice.publishedAt)}</p>
-    </header>
-  );
-}
-
-/** R18 — Lost-pet notice, seen by the owner (with their actions) or by a neighbour (who can report a sighting). */
-function LostView({ notice }: { notice: Notice }) {
-  const { state } = useResidentData();
-  const now = useNow();
-  const report = notice.reportId ? reportById(state, notice.reportId) : undefined;
-  const name = report?.petName ?? (notice.mine ? 'Your pet' : 'This pet');
-  const seen = notice.sightings.length;
-  const latest = latestSighting(notice);
-
-  return (
-    <Screen
-      title="Lost pet"
-      back="/community"
-      footer={notice.status === 'recovered' ? undefined : notice.mine ? (
-        <>
-          <LinkButton variant="primary" block icon={Footprints} to={residentPath(`/community/${notice.id}/sightings`)}>Sightings ({seen})</LinkButton>
-          {report ? <LinkButton block to={residentPath(`/reports/${report.id}/recovered`)}>My pet is home</LinkButton> : null}
-        </>
-      ) : (
-        <>
-          <LinkButton variant="primary" block icon={Footprints} to={residentPath(`/community/${notice.id}/sighting`)}>I saw this pet</LinkButton>
-          <LinkButton block to={residentPath(`/community/${notice.id}/sightings`)}>See sightings ({seen})</LinkButton>
-        </>
-      )}
-    >
-      <Head notice={notice} />
-      {notice.status === 'recovered' ? <Callout tone="sage" title={`${name} is home.`}>Thank you to everyone who helped look.</Callout> : null}
-      <PhotoStrip count={notice.photos} media={report?.media} urls={notice.photoUrls} />
-      <p className="rs-prose">{notice.description}</p>
-      <GeneralAreaMap notice={notice} what="last seen" />
-      <dl className="rs-kv">
-        {notice.animalType ? <div><dt>Animal</dt><dd>{ANIMAL_TYPES[notice.animalType]}</dd></div> : null}
-        {notice.lastSeenAt ? <div><dt>Last seen</dt><dd>{relative(notice.lastSeenAt, now)} · {fmtDateTime(notice.lastSeenAt)}</dd></div> : null}
-        <div><dt>General area</dt><dd>{notice.area}</dd></div>
-        <div><dt>Sightings</dt><dd><Link to={residentPath(`/community/${notice.id}/sightings`)}>{seen === 0 || !latest ? 'None yet' : `${seen} reported, latest ${relative(latest.observedAt, now)}`}</Link></dd></div>
-      </dl>
-
-      {notice.mine ? (
-        <section className="rs-visibility rs-visibility--published" aria-label="What neighbours see">
-          <p className="rs-visibility__title"><Eye size={18} aria-hidden="true" />Visible to neighbours</p>
-          <p>They can see the photo, description, general area and when it was last seen.</p>
-          <p className="rs-visibility__title"><EyeOff size={18} aria-hidden="true" />Never shown</p>
-          <p>Your name, phone number, address and the exact spot. Neighbours reach you only through the subdivision.</p>
-          {report ? <Link to={residentPath(`/reports/${report.id}`)} className="rs-seeall">View my report</Link> : null}
-        </section>
-      ) : (
-        <Callout tone="info">Please don’t chase, corner or feed the animal; a frightened pet may run. If you see it, report a sighting and the owner and the subdivision are told. Don’t post your own contact details.</Callout>
-      )}
-    </Screen>
-  );
-}
+import { LostView } from './LostNotice';
+import { GeneralAreaMap, NoticeHead } from './NoticeParts';
 
 /** R23 — Found-animal notice. Anyone who thinks it is theirs submits an ownership claim, which an administrator reviews. */
 function FoundView({ notice }: { notice: Notice }) {
@@ -99,19 +21,20 @@ function FoundView({ notice }: { notice: Notice }) {
   const claim = claimForNotice(state, notice.id);
   const report = notice.reportId ? reportById(state, notice.reportId) : undefined;
   const sightings = [...notice.sightings].sort((a, b) => b.observedAt.localeCompare(a.observedAt));
+  const recovered = notice.closeOutcome === 'reunited' || notice.closeOutcome === 'recovered';
 
   return (
     <Screen
       title="Found animal"
       back="/community"
-      footer={notice.mine || notice.status === 'recovered' ? undefined : claim ? (
+      footer={notice.mine || notice.status !== 'active' ? undefined : claim ? (
         <LinkButton variant="primary" block to={residentPath(`/claims/${claim.id}`)}>View my claim</LinkButton>
       ) : (
         <LinkButton variant="primary" block icon={ShieldCheck} to={residentPath(`/community/${notice.id}/claim`)}>This may be my animal</LinkButton>
       )}
     >
-      <Head notice={notice} />
-      {notice.status === 'recovered' ? <Callout tone="sage" title="This animal is back with its owner.">The subdivision closed this notice, so it no longer appears in Community.</Callout> : null}
+      <NoticeHead notice={notice} />
+      {notice.status !== 'active' ? <Callout tone={recovered ? 'sage' : 'info'} title={recovered ? 'This animal is back with its owner.' : noticeEndedLabel(notice)}>{notice.closeReason || 'This notice no longer appears in Community.'}</Callout> : null}
       <PhotoStrip count={notice.photos} media={report?.media} urls={notice.photoUrls} />
       <p className="rs-prose">{notice.description}</p>
       <GeneralAreaMap notice={notice} what="found" />
@@ -160,7 +83,7 @@ function AdvisoryView({ notice }: { notice: Notice }) {
   const { office } = useOffice();
   return (
     <Screen title="Safety advisory" back="/community" footer={<LinkButton variant="primary" block to={residentPath('/report')}>Report a concern</LinkButton>}>
-      <Head notice={notice} />
+      <NoticeHead notice={notice} />
       <Callout tone="amber" title="From the subdivision administrators.">Follow this guidance until the administrators say otherwise.</Callout>
       <p className="rs-prose">{notice.description}</p>
 

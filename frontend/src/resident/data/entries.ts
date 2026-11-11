@@ -9,12 +9,15 @@
  *
  * Imports carry their `.ts` extension so the unit tests can load this file as it is (tests/residentCategories.test.mjs).
  */
-import { CATEGORIES, PET_TYPE_IDS } from './constants.ts';
+import { CATEGORIES } from './constants.ts';
 import type { CategoryId, Draft, ResidentState } from './types.ts';
 
 export type EntryId = 'lost_pet' | 'complaint' | 'animal';
 
 export const SITUATION_QUESTION = 'What’s happening with the animal?';
+
+/** Said wherever a lost-pet report is asked for and the resident has no registered pet (the server refuses it with the same words). */
+export const REGISTER_FIRST = 'Register your pet first to report it missing.';
 
 /** The answers to the question, in the order shown. Each one is filed as one of the existing kinds of report and opens that kind's own form. */
 export const SITUATIONS: { family: CategoryId; title: string }[] = [
@@ -50,11 +53,17 @@ export const offeredEntries = (accepting: Accepting): EntryId[] => ENTRY_IDS.fil
  */
 export function carryOver(from: Draft, to: CategoryId): Partial<Draft> {
   const kind = CATEGORIES[to].kind;
+  // A Lost Pet report is about one registered pet and asks only when and where it was last seen: nothing else is carried into it.
+  if (kind === 'lost') return { observedAt: from.observedAt, location: from.location };
   return {
     description: from.description,
     observedAt: from.observedAt,
     location: from.location,
-    animalType: kind === 'lost' && from.animalType && !PET_TYPE_IDS.includes(from.animalType) ? '' : from.animalType,
+    animalType: from.animalType,
     media: kind === 'incident' ? from.media : from.media.filter((m) => m.kind === 'photo').slice(0, 3),
   };
 }
+
+/** What the first step says about the notice, which follows the subdivision's publication setting. */
+export const LOST_NOTE = { tone: 'info', text: 'After you submit, a notice with your pet’s photo, description and the general area is visible to neighbours. Your name, phone and address are never shown.' } as const;
+export const LOST_REVIEWED_NOTE = { tone: 'info', text: 'An administrator reviews this before a notice is shown to neighbours. Once it is, the notice shows your pet’s photo, description and the general area. Your name, phone and address are never shown.' } as const;

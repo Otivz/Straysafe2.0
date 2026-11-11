@@ -19,8 +19,15 @@ export type AdminAction =
   | { type: 'case/recordOwnerContact'; id: string; at: string; method: ContactMethod; withWhom: string; summary: string; outcome: OwnerContact['outcome']; nextStepAt: string | null }
   | { type: 'case/issueWarning'; id: string; policyId: string; details: string; delivery: WarningDelivery; observationDays: number | null; observationStart: string | null; followUpAt: string | null }
   | { type: 'case/recordCompliance'; id: string; warningId: string; observedAt: string; result: ComplianceResult; notes: string; conclude: 'compliant' | 'non_compliant' | null }
-  | { type: 'case/createReferral'; id: string; orgId: string; orgName: string; reason: string; referredAt: string; contactPerson: string; contactChannel: string; notes: string }
-  | { type: 'case/updateReferral'; id: string; referralId: string; status: ReferralStatus; note: string; externalOutcome?: string; remainingFollowUp?: string; followUpAt?: string | null }
+  /** `contacted: false` writes the assistance down without claiming anyone was reached (status "Not contacted yet"): saving a referral is never proof of contact. */
+  | { type: 'case/createReferral'; id: string; orgId: string; orgName: string; reason: string; referredAt: string; contactPerson: string; contactChannel: string; notes: string; contacted?: boolean }
+  /** `contact` is the attempt itself (how, whom), when this update records the first contact or another one. */
+  | { type: 'case/updateReferral'; id: string; referralId: string; status: ReferralStatus; note: string; externalOutcome?: string; remainingFollowUp?: string; followUpAt?: string | null; contact?: { method: ContactMethod; person: string; detail: string } }
+  /** The OWNER confirmed by phone or in person that the pet is home, and the Leader records it. It is the one recovery operation: the Leader never declares a recovery alone. */
+  | { type: 'lost/recordRecovery'; id: string; alertId: string; source: 'phone' | 'in_person'; confirmedAt: string; note?: string }
+  | { type: 'lost/reviewSighting'; id: string; sightingId: string; status: 'unverified' | 'verified' | 'dismissed'; note?: string }
+  /** The Leader finished helping an owner and a neighbour get in touch. The contact work itself is in the case's contact log and follow-ups. */
+  | { type: 'lost/resolveConversation'; id: string; conversationId: string; note?: string }
   | { type: 'case/reviewClaim'; id: string; claimId: string; decision: ClaimStatus; note: string }
   | { type: 'case/linkCases'; id: string; otherIds: string[] }
   | { type: 'case/unlinkCase'; id: string; otherId: string }
@@ -32,5 +39,7 @@ export type AdminAction =
   | { type: 'notification/read'; id: string }
   | { type: 'notification/readAll' }
   | { type: 'resident/setStatus'; id: string; status: Resident['status'] }
+  /** Ask a resident to confirm that an existing pet record (one the office entered) is theirs. Nothing moves until they accept. */
+  | { type: 'pet/linkOwner'; petId: string; residentId: string; evidence: string }
   | { type: 'settings/set'; settings: Settings }
   | { type: 'admin/updateProfile'; patch: Partial<Pick<AdminProfile, 'name' | 'title' | 'email' | 'phone'>> };

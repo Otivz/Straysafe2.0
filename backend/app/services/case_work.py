@@ -77,17 +77,19 @@ def create_referral(db: Session, report: Report, actor: User, data: ReferralIn) 
         reason=data.reason.strip(), reference_no=(data.reference_no or "").strip() or None,
         contact_method=V.UI_CONTACT_TO_STORED[data.contact_method], org_type=data.org_type, org_name=name,
         contact_person=(data.contact_person or "").strip() or None, contact_detail=(data.contact_detail or "").strip() or None,
-        is_urgent=data.is_urgent, referral_status="sent", status_updated_at=now, status_updated_by=actor.user_id)
+        is_urgent=data.is_urgent, referral_status="sent" if data.contacted else "to_contact", status_updated_at=now, status_updated_by=actor.user_id)
+    if not data.contacted:
+        referral.contact_method = "other"        # nobody has been contacted yet: the contact is recorded when it happens
     db.add(referral)
     db.flush()
     if data.notes and data.notes.strip():
         db.add(BarangayReferralUpdate(referral_id=referral.referral_id, update_type="other", source="straysafe_user",
-                                      update_date=referred_at.date(), note=data.notes.strip(), status_after="sent",
+                                      update_date=referred_at.date(), note=data.notes.strip(), status_after=referral.referral_status,
                                       recorded_by=actor.user_id))
-    L.advance_case(db, report, actor, V.IN_PROGRESS, "referral sent")
-    L.history(db, report, actor, f"Referred to {name}.")
-    L.audit(db, actor, "CASE_REFERRAL_CREATED", report,
-            f"{actor.name} referred report #{report.report_id} to {name}.", table="barangay_referrals",
+    L.advance_case(db, report, actor, V.IN_PROGRESS, "referral sent" if data.contacted else "assistance requested")
+    L.history(db, report, actor, f"Referred to {name}." if data.contacted else f"Assistance from {name} requested; not contacted yet.")
+    L.audit(db, actor, "CASE_REFERRAL_CREATED" if data.contacted else "CASE_ASSISTANCE_REQUESTED", report,
+            f"{actor.name} {'referred' if data.contacted else 'wrote down a request for assistance on'} report #{report.report_id} {'to' if data.contacted else 'from'} {name}.", table="barangay_referrals",
             target_id=referral.referral_id,
             new={"org_type": data.org_type, "org_name": name, "urgent": data.is_urgent, "contact_method": referral.contact_method,
                  "reference_no": referral.reference_no})
@@ -107,7 +109,15 @@ def update_referral(db: Session, report: Report, actor: User, referral: Barangay
     if when > now + timedelta(days=1):
         raise HTTPException(status_code=422, detail="The update date cannot be in the future.")
     previous = referral.referral_status or "sent"
+    if data.status == "to_contact":
+        raise HTTPException(status_code=422, detail="Record the contact when it happens instead.")
     referral.referral_status, referral.status_updated_at, referral.status_updated_by = data.status, now, actor.user_id
+    if data.contact_method:
+        referral.contact_method = V.UI_CONTACT_TO_STORED[data.contact_method]
+    if data.contact_person is not None:
+        referral.contact_person = data.contact_person.strip() or referral.contact_person
+    if data.contact_detail is not None:
+        referral.contact_detail = data.contact_detail.strip() or referral.contact_detail
     if data.external_outcome is not None:
         referral.external_outcome = data.external_outcome.strip() or None
     if data.remaining_follow_up is not None:
@@ -126,7 +136,10 @@ def update_referral(db: Session, report: Report, actor: User, referral: Barangay
         scheduled = CaseFollowUp(report_id=report.report_id, subdivision_id=report.subdivision_id, kind="referral_check",
                                  title=title, due_at=due, status="pending", referral_id=referral.referral_id, created_by=actor.user_id)
         db.add(scheduled)
-    L.history(db, report, actor, f"Update from {referral.org_name}: {data.status.replace('_', ' ')}.")
+    if previous == "to_contact":
+        L.history(db, report, actor, f"{referral.org_name} contacted: {data.status.replace('_', ' ')}.")
+    else:
+        L.history(db, report, actor, f"Update from {referral.org_name}: {data.status.replace('_', ' ')}.")
     L.audit(db, actor, "CASE_REFERRAL_UPDATED", report, f"{actor.name} recorded an update from {referral.org_name} on report #{report.report_id}.",
             table="barangay_referrals", target_id=referral.referral_id,
             old={"referral_status": previous}, new={"referral_status": data.status, "case_status_unchanged": case_state.case_status_of(report),

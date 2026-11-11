@@ -382,7 +382,9 @@ res = client.post(f"/cases/{ri}/close", json={"disposition": "invalid_report", "
 check("an invalid report closes straight from Reported", res.status_code == 200 and res.json()["case"]["closure"]["outcome"] == "invalid" and fresh(Report, ri).current_status_id == 14, res.text)
 rl = mk(category=LOST)
 res = client.post(f"/cases/{rl}/close", json={"disposition": "pet_recovered", "reason": "Back home safely."}, headers=H(leader))
-check("a lost pet can be closed as recovered (Claimed by Owner = 9)", res.status_code == 200 and fresh(Report, rl).current_status_id == 9, res.text)
+check("a Leader cannot close a lost-pet case as recovered by choosing it: recovery is the owner's confirmation (409)", res.status_code == 409 and "owner's confirmation" in res.text, res.text)
+res = client.post(f"/cases/{rl}/close", json={"disposition": "no_further_sightings", "reason": "No sightings for a month."}, headers=H(leader))
+check("a lost-pet case can be closed for another documented reason (no further sightings = 17)", res.status_code == 200 and fresh(Report, rl).current_status_id == 17, res.text)
 check("keep the follow-ups: end_open_items=false leaves them pending", (lambda rid: (
     client.post(f"/cases/{rid}/followups", json={"title": "Keep me going", "due_at": (datetime.now() + timedelta(days=2)).isoformat()}, headers=H(leader)),
     client.post(f"/cases/{rid}/close", json={"disposition": "unresolved_other", "reason": "Closing but keeping the check.", "end_open_items": False}, headers=H(leader)),

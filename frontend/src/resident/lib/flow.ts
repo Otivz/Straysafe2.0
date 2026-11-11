@@ -9,13 +9,16 @@ import { useBack } from './hooks';
 
 export const stepPath = (step: FlowStep) => residentPath(`/report/${step}`);
 
+/** Registering a pet from the lost-pet flow: when it is saved, a lost-pet report starts with the new pet chosen. */
+export const registerForLostPath = () => `${residentPath('/pets/new')}?next=lost`;
+
 /** Starts a fresh report draft for a category (replacing any unfinished one) and opens the first step. */
 export function useStartReport() {
   const { local } = useResidentData();
   const navigate = useNavigate();
-  return (category: CategoryId, patch?: Partial<Draft>) => {
+  return (category: CategoryId, patch?: Partial<Draft>, options?: { replace?: boolean }) => {
     local({ type: 'draft/start', kind: CATEGORIES[category].kind, category, patch });
-    navigate(stepPath('details'));
+    navigate(stepPath('details'), { replace: options?.replace });
   };
 }
 

@@ -106,7 +106,7 @@ test('when a kind is switched off mid-report, what was written is carried to the
   assert.deepEqual(Object.keys(toIncident).sort(), ['animalType', 'description', 'location', 'media', 'observedAt'], 'nothing else is carried: not the pet, not the old extra answer');
   const toFound = carryOver(from, 'found_animal');
   assert.deepEqual(toFound.media.map((m) => m.id), ['m1', 'm3', 'm4'], 'a found report takes up to three photos and no videos');
-  assert.equal(carryOver(draft({ animalType: 'wildlife' }), 'lost_pet').animalType, '', 'a kind of animal a pet cannot be is asked again for a lost pet');
-  assert.equal(carryOver(draft({ animalType: 'cat' }), 'lost_pet').animalType, 'cat');
-  assert(PET_TYPE_IDS.includes('cat') && !PET_TYPE_IDS.includes('wildlife'));
+  const toLost = carryOver(from, 'lost_pet');
+  assert.deepEqual(toLost, { observedAt: from.observedAt, location: from.location }, 'a lost report is about one registered pet: only when and where is carried into it, never the text or the animal of another report');
+  assert.deepEqual(PET_TYPE_IDS, ['dog', 'cat'], 'only dogs and cats can be registered for now');
 });

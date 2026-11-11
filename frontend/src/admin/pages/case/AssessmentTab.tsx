@@ -104,7 +104,8 @@ function IdentitySection({ c, locked }: { c: Case; locked: boolean }) {
   const { state, dispatch, capabilities } = useAdminData();
   const toast = useToast();
   const { pending, error, run } = useSubmit();
-  const initial: IdentityReview = c.identity;
+  // `decided` is shown, not edited: leaving it out of the form keeps "unsaved changes" honest after a save
+  const initial: IdentityReview = { status: c.identity.status, matches: c.identity.matches, note: c.identity.note };
   const [f, setF] = useState<IdentityReview>(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const dirty = !same(f, initial);
@@ -137,6 +138,11 @@ function IdentitySection({ c, locked }: { c: Case; locked: boolean }) {
       <Lockable locked={locked}>
         <Panel>
           <Block title="Animal identity" description="Which animal was involved? An unknown animal is never treated as identified until you decide it is.">
+            {c.identity.status === 'identified' && c.identity.decided === false ? (
+              <Callout className="mb-4" tone="amber" title="Linked by the reporter. You have not decided yet.">
+                The reporter named {c.registeredPet?.current?.name ?? c.registeredPet?.asReported?.name ?? 'a registered pet'} from the pet registry. That does not confirm the animal. To record your own decision, keep “Identity confirmed” and write how you checked, or choose another status, then save.
+              </Callout>
+            ) : null}
             <FieldGroup label="Identity status">
               <OptionGroup name="identity" cols={3} label="Identity status" value={f.status} onChange={(v) => setF({ ...f, status: v })} options={(Object.keys(IDENTITY) as IdentityStatus[]).map((s) => ({ value: s, label: IDENTITY[s].label, description: IDENTITY[s].description }))} />
             </FieldGroup>

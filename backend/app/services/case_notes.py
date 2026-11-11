@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.models.audit_log import AuditLog
 from app.models.barangay_referral import BarangayReferral
 from app.models.case_records import CaseFollowUp, OwnershipClaim
+from app.models.lost_pet_alert import LostPetCoordination
 from app.models.report import Report
 from app.models.user import User
 from app.models.warning import OwnerWarning
@@ -78,7 +79,8 @@ def work_queue(db: Session, user: User, subdivision_id: Optional[int] = None) ->
     """The open follow-ups, claims, referrals and warnings of the open cases a staff member may see."""
     scope = scope_of(user, subdivision_id, "work queue")
     ids = _open_report_ids(db, scope)
-    out: Dict[str, Any] = {"subdivision_id": scope, "generated_at": datetime.now(), "followups": [], "claims": [], "referrals": [], "warnings": []}
+    out: Dict[str, Any] = {"subdivision_id": scope, "generated_at": datetime.now(), "followups": [], "claims": [], "referrals": [], "warnings": [],
+                           "coordinations": []}
     if not ids:
         return out
 
@@ -90,10 +92,15 @@ def work_queue(db: Session, user: User, subdivision_id: Optional[int] = None) ->
         BarangayReferral.report_id.in_(ids), BarangayReferral.final_outcome.is_(None),
         or_(BarangayReferral.referral_status.is_(None), BarangayReferral.referral_status.in_(list(V.OPEN_REFERRAL_STATUSES))))
         .order_by(BarangayReferral.referral_id).limit(QUEUE_LIMIT).all())
+    # An owner and a neighbor who asked the Leader to help them get in touch (a real request for the Leader's time)
+    coordinations = (db.query(LostPetCoordination).filter(LostPetCoordination.report_id.in_(ids), LostPetCoordination.mode == "leader",
+                                                          LostPetCoordination.status == "open")
+                     .order_by(LostPetCoordination.mediation_requested_at, LostPetCoordination.coordination_id).limit(QUEUE_LIMIT).all())
     warnings = (db.query(OwnerWarning).filter(OwnerWarning.report_id.in_(ids), OwnerWarning.follow_up_at.isnot(None))
                 .order_by(OwnerWarning.follow_up_at).limit(QUEUE_LIMIT).all())
 
-    names = _name_of(db, [f.created_by for f in followups] + [c.claimant_user_id for c in claims] + [w.user_id for w in warnings])
+    names = _name_of(db, [f.created_by for f in followups] + [c.claimant_user_id for c in claims] + [w.user_id for w in warnings]
+                     + [c.owner_id for c in coordinations] + [c.finder_id for c in coordinations])
     out["followups"] = [{"followup_id": f.followup_id, "report_id": f.report_id, "kind": f.kind, "title": f.title, "notes": f.notes,
                          "due_at": f.due_at, "status": f.status, "created_at": f.created_at, "created_by": f.created_by,
                          "created_by_name": names.get(f.created_by), "referral_id": f.referral_id} for f in followups]
@@ -105,6 +112,9 @@ def work_queue(db: Session, user: User, subdivision_id: Optional[int] = None) ->
                          "follow_up_at": r.follow_up_at, "contact_person": r.contact_person, "contact_detail": r.contact_detail,
                          "updated_at": r.status_updated_at or r.referred_at}
                         for r in referrals]
+    out["coordinations"] = [{"coordination_id": c.coordination_id, "report_id": c.report_id, "alert_id": c.alert_id, "mode": c.mode, "status": c.status,
+                             "requested_at": c.mediation_requested_at, "owner_name": names.get(c.owner_id), "finder_name": names.get(c.finder_id)}
+                            for c in coordinations]
     out["warnings"] = [{"warning_id": w.warning_id, "report_id": w.report_id, "owner_user_id": w.user_id, "owner_name": names.get(w.user_id),
                         "policy_id": w.policy_id, "policy_title": w.policy_title, "policy_reference": w.policy_reference,
                         "observation_days": w.observation_days, "follow_up_at": w.follow_up_at, "status": w.status,

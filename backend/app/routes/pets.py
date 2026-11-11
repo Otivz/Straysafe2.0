@@ -17,12 +17,38 @@ from app.utils.uploads import validate_cloudinary_url, read_and_validate_upload
 from app.utils.model_loader import get_yolo_model
 from app.utils.auth import get_current_user, get_current_staff_or_admin, verify_subdivision_scope
 from app.utils import pet_duplicates
+from app.utils import lost_pet_rules
 from app.utils.case_review import require_review_permission
 
 router = APIRouter(
     prefix="/pets",
     tags=["pets"]
 )
+
+# Only dogs and cats can be registered for now: the pets.pet_type column accepts nothing else (a wider list needs the
+# stakeholders' decision and a migration). Said here, so a person is told instead of the database refusing the row.
+SPECIES = {"dog": "Dog", "cat": "Cat"}
+PHOTO_FIELDS = ("photo_url", "photo_front_url", "photo_left_url", "photo_right_url")
+# What a resident cannot set on their own pet: who owns it, who registered it, whether it is verified and the record's status
+# (a transfer goes through the ownership process, a removal through Remove). Taken from the account, never from the request.
+RESIDENT_LOCKED_PET_FIELDS = ("owner_id", "registered_by_user_id", "registered_by_name", "is_verified", "status",
+                              "last_seen_lat", "last_seen_lng")
+
+
+def _normalize_species(value: Optional[str]) -> str:
+    key = (value or "").strip().lower()
+    if key not in SPECIES:
+        raise HTTPException(status_code=400, detail="Only dogs and cats can be registered for now.")
+    return SPECIES[key]
+
+
+def _check_resident_photo_urls(data: dict) -> None:
+    """A photo address a resident sends must be one of our own Cloudinary uploads: it is shown to neighbours in notices."""
+    for field in PHOTO_FIELDS:
+        if data.get(field):
+            validate_cloudinary_url(data[field], allowed={"Image"})
+    if data.get("vaccine_card_url"):
+        validate_cloudinary_url(data["vaccine_card_url"], allowed={"Image", "Document"})
 
 def _leader_barangay_id(leader: User, db: Session) -> Optional[int]:
     if leader.barangay_id:
@@ -511,8 +537,20 @@ def get_subdivision_pets(
         )
     verify_subdivision_scope(current_user, subdivision_id, db=db)
 
-    query = db.query(Pet).outerjoin(User, Pet.owner_id == User.user_id).filter(
-        or_(User.subdivision_id == subdivision_id, Pet.owner_id.is_(None))
+    # A resident's pet belongs to the subdivision its owner lives in. A record with no owner account (one the office registered, or a
+    # community animal) belongs to the subdivision of whoever registered it, or of a report it is linked to: never to every subdivision.
+    RegUser = aliased(User, name="reg_user")
+    query = (
+        db.query(Pet)
+        .outerjoin(User, Pet.owner_id == User.user_id)
+        .outerjoin(RegUser, Pet.registered_by_user_id == RegUser.user_id)
+        .filter(or_(
+            User.subdivision_id == subdivision_id,
+            and_(Pet.owner_id.is_(None), or_(
+                RegUser.subdivision_id == subdivision_id,
+                Pet.pet_id.in_(db.query(Report.pet_id).filter(Report.pet_id.isnot(None), Report.subdivision_id == subdivision_id)),
+            )),
+        ))
     )
     if not include_archived:
         query = query.filter(Pet.status.notin_(["Archived", "Inactive"]))
@@ -551,12 +589,18 @@ def _resolve_actor_user(req: Request, db: Session) -> Optional[User]:
             pass
     return None
 
+class AssignOwnerBody(BaseModel):
+    """How the officer checked that this resident account is the pet's owner. Required from a Subdivision Leader."""
+    evidence_note: Optional[str] = None
+
+
 @router.post("/{pet_id}/assign-owner", response_model=PetResponse)
 def assign_pet_owner(
     pet_id: int, 
     owner_id: int, 
     req: Request, 
     process_type: Optional[str] = None,
+    body: Optional[AssignOwnerBody] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -629,8 +673,14 @@ def assign_pet_owner(
                 detail="Residents cannot directly assign pet ownership. Authorized officer or administrator approval is required."
             )
         
-        # The resident must accept before they become the owner (protects against picking the wrong account)
-        propose_owner(db, pet, owner, actor, source="assign")
+        # The Leader records HOW they checked the account is the owner's (the phone number on the record, a vaccination card...);
+        # the resident must still accept before they become the owner (protects against picking the wrong account)
+        evidence = ((body.evidence_note if body else None) or "").strip()
+        if actor_role == 2 and len(evidence) < 10:
+            raise HTTPException(status_code=422, detail=(
+                "Say how you checked that this resident is the owner (at least 10 characters), for example the phone number "
+                "on the record or a vaccination card."))
+        propose_owner(db, pet, owner, actor, source="assign", evidence=evidence or None)
 
         db.commit()
         db.refresh(pet)
@@ -647,7 +697,7 @@ def assign_pet_owner(
             description=f"{actor_title} {actor_name} proposed owner {owner.name} (user_id={owner_id}, pending their acceptance) for unassigned pet '{pet.pet_name}' (pet_id={pet_id}){process_label}",
             log_type="operation",
             old_values={"owner_id": None},
-            new_values={"owner_id": owner_id, "owner_name": owner.name, "assigned_by": actor_name},
+            new_values={"owner_id": owner_id, "owner_name": owner.name, "assigned_by": actor_name, "evidence": evidence or None},
             user_id=actor.user_id if actor else None,
             request=req
         )
@@ -688,6 +738,7 @@ def create_pet(
     current_user: User = Depends(get_current_user)
 ):
     pet_dict = pet.model_dump()
+    pet_dict["pet_type"] = _normalize_species(pet_dict.get("pet_type"))
     # What the registering person says about bites / chasing is a declaration. The verified history starts empty and
     # is counted only from verified incident reports (refresh_pet_behavior).
     pet_dict["declared_bite_history"] = bool(pet_dict.pop("has_bite_history", False) or pet_dict.get("declared_bite_history"))
@@ -726,6 +777,11 @@ def create_pet(
         pet_dict["owner_id"] = current_user.user_id
         pet_dict["registered_by_user_id"] = current_user.user_id
         pet_dict["registered_by_name"] = current_user.name
+        # Not a resident's to set: a new registration is Active and unverified, whatever the request says
+        pet_dict["status"] = "Active"
+        pet_dict["is_verified"] = False
+        pet_dict["last_seen_lat"] = pet_dict["last_seen_lng"] = None
+        _check_resident_photo_urls(pet_dict)
     elif current_user.role_id == 2:
         if pet_dict.get("owner_id"):
             owner_user = db.query(User).filter(User.user_id == pet_dict["owner_id"]).first()
@@ -945,6 +1001,12 @@ def update_pet(
                     "temperament": db_pet.temperament, "declared_bite_history": bool(db_pet.declared_bite_history),
                     "declared_chase_behavior": bool(db_pet.declared_chase_behavior)}
     update_data = pet_update.model_dump(exclude_unset=True)
+    if current_user.role_id == 1:
+        for field in RESIDENT_LOCKED_PET_FIELDS:
+            update_data.pop(field, None)
+        _check_resident_photo_urls(update_data)
+    if update_data.get("pet_type") is not None:
+        update_data["pet_type"] = _normalize_species(update_data["pet_type"])
     for key in VERIFIED_BEHAVIOR_FIELDS:
         update_data.pop(key, None)  # checked above: unchanged, so nothing to write
     for key in ("declared_bite_history", "declared_chase_behavior"):
@@ -1383,6 +1445,8 @@ def merge_pet_records(db: Session, dup: Pet, keep: Pet, actor: User, reason: str
     from app.models.report_match import ReportMatch
     from app.utils.case_groups import PENDING_MATCH_STATUSES, SUPERSEDED_STATUS, case_root, refresh_pet_behavior, resync_case_pet_identity
 
+    lost_pet_rules.refuse_archive_while_missing(db, dup, "merged into another record")       # the duplicate is archived by a merge
+
     moved = {}
 
     def move(model, col, label):
@@ -1515,6 +1579,7 @@ def remove_pet(
         raise HTTPException(status_code=404, detail="Pet not found")
     
     check_pet_access(current_user, db_pet, db, for_write=True)
+    lost_pet_rules.refuse_archive_while_missing(db, db_pet)      # a pet with an active lost report is not removed
 
     actor = current_user
     actor_role = current_user.role_id
@@ -1844,6 +1909,7 @@ def delete_pet_record(
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
+    lost_pet_rules.refuse_archive_while_missing(db, db_pet, "deleted")
 
     try:
         # 1. Clean up AI Matches
@@ -1876,4 +1942,3 @@ def delete_pet_record(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to delete pet: {str(e)}")
-

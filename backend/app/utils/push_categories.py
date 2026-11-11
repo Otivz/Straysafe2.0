@@ -23,6 +23,7 @@ _TYPE_CATEGORY = {
     "alert": RESCUES,
     # Pet matches
     "lost_pet_alert": PET_MATCHES, "lost_pet_sighting": PET_MATCHES, "lost_pet_alert_request": PET_MATCHES,
+    "lost_pet_secured": PET_MATCHES, "lost_pet_coordination": PET_MATCHES, "lost_pet_recovered": PET_MATCHES, "lost_pet_leader": PET_MATCHES,
     "potential_match": PET_MATCHES, "pet_owner_confirmation": PET_MATCHES, "pet_owner_confirmation_result": PET_MATCHES,
     "pet_match_confirmation": PET_MATCHES, "pet_match_confirmation_result": PET_MATCHES, "leader_identity_verified": PET_MATCHES,
     "wrong_identity": PET_MATCHES, "reunion_photo_requested": PET_MATCHES,
@@ -95,7 +96,7 @@ def notification_link(role_id: int, ntype: Optional[str], related_id: Optional[i
     if role_id == 1:  # Resident app
         if t in ("pet_owner_confirmation", "pet_match_confirmation"):
             return f"{RESIDENT_APP}/pets"
-        if t == "lost_pet_alert":
+        if t in ("lost_pet_alert", "lost_pet_secured", "lost_pet_coordination", "lost_pet_recovered"):
             return f"{RESIDENT_APP}/community/alert-{rid}" if rid else f"{RESIDENT_APP}/community"
         if t == "lost_pet_sighting":
             return f"{RESIDENT_APP}/community/alert-{rid}/sightings" if rid else f"{RESIDENT_APP}/community"
@@ -105,6 +106,7 @@ def notification_link(role_id: int, ntype: Optional[str], related_id: Optional[i
             return f"{LEADER_APP}/pets"
         if t in ("lost_pet_alert", "lost_pet_sighting", "lost_pet_alert_request"):
             return f"{LEADER_APP}/community"
+        # lost_pet_leader carries the REPORT id: the Leader's case screen (the default below)
         return f"{LEADER_APP}/cases/{rid}" if rid else f"{LEADER_APP}/cases"
     # No other role has an interface: retired Barangay accounts are never pushed to, and the Administrator has no screen yet.
     return "/"

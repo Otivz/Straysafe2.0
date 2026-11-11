@@ -119,7 +119,7 @@ def publication_mode(settings: CaseSettings, family: str, is_sensitive: bool = F
     if is_sensitive or family in V.PRIVATE_BY_DEFAULT_FAMILIES:
         return "review"
     if family == V.LOST_PET:
-        return settings.publication.lost_pet
+        return "immediate"          # a missing pet's notice is published by the report itself, at once (2026-11-11): no review
     if family == V.FOUND_ANIMAL:
         return settings.publication.found_animal
     return "review"

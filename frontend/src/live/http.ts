@@ -10,7 +10,7 @@
 import axios from 'axios';
 import { api } from '../utils/api';
 import { AdminApiError } from '../preview/lib/errors';
-import { detailOf } from './detail';
+import { detailOf, structuredDetailOf } from './detail';
 
 export type Query = Record<string, string | number | boolean | null | undefined>;
 
@@ -22,6 +22,19 @@ export interface CallOptions {
   /** Extra headers, for example the restricted token of a sign-up that is not verified yet. */
   headers?: Record<string, string>;
 }
+
+/** An AdminApiError that also carries the structured `detail` the server sent (an object with a `code`), for the few screens that act on it. */
+export class ApiDetailError extends AdminApiError {
+  readonly data: Record<string, unknown>;
+
+  constructor(message: string | undefined, status: number, data: Record<string, unknown>) {
+    super('server', message, status);
+    this.data = data;
+  }
+}
+
+/** The server's `code` for this error, when it sent one (for example LOST_REPORT_EXISTS). */
+export const errorCodeOf = (err: unknown): string | undefined => (err instanceof ApiDetailError && typeof err.data.code === 'string' ? err.data.code : undefined);
 
 const TOO_MANY = 'Too many attempts. Please wait a minute and try again.';
 
@@ -36,7 +49,8 @@ export function toApiError(err: unknown, options: Pick<CallOptions, 'unauthorize
     if (status === 429) return new AdminApiError('server', TOO_MANY, 429);
     // A 5xx body can carry internals: show our own sentence, keep the status for whoever needs it.
     if (status >= 500) return new AdminApiError('server', undefined, status);
-    return new AdminApiError('server', detail ?? undefined, status);
+    const structured = structuredDetailOf(err.response.data);
+    return structured ? new ApiDetailError(detail ?? undefined, status, structured) : new AdminApiError('server', detail ?? undefined, status);
   }
   return new AdminApiError('server');
 }

@@ -1,7 +1,7 @@
 /** Pure, derived views over AdminState. Nothing here mutates; nothing here knows about React. */
 import { CATEGORIES, DISPOSITIONS, DISPOSITION_IDS, OUTCOME_GROUPS, PRIORITIES, REFERRAL_STATUS, REFERRAL_STATUS_IDS } from './constants';
 import type {
-  AdminState, Case, CaseStatus, CategoryId, DispositionId, FollowUp, OutcomeGroup, Pet, Priority, ReferralStatus, Resident, TimelineEvent,
+  AdminState, Case, CaseStatus, CategoryId, DispositionId, FollowUp, LostPetConversation, MediationRequest, OutcomeGroup, Pet, Priority, ReferralStatus, Resident, TimelineEvent,
 } from './types';
 import { addDays, daysSince, dueInfo, fmtDay, median, relative, remaining, startOfDay, startOfWeek } from '../../preview/lib/format';
 
@@ -22,22 +22,46 @@ export const caseById = (s: AdminState, id: string | undefined) => {
 export const residentById = (s: AdminState, id: string | null | undefined) => s.residents.find((r) => r.id === id);
 export const petById = (s: AdminState, id: string | null | undefined) => s.pets.find((p) => p.id === id);
 export const pendingFollowUpsOf = (c: Case) => c.followUps.filter((f) => f.status === 'pending');
+export const isLostPet = (c: Case) => c.category === 'lost_pet';
+
+/**
+ * The open requests to help an owner and a neighbour get in touch. Read from the case when it has been opened in full (it is then the fresher
+ * record), otherwise from the work queue, so the dashboard shows them without opening every case.
+ */
+export function mediationOf(c: Case): MediationRequest[] {
+  if (c.lostPet) {
+    return c.lostPet.conversations.filter((x) => x.status === 'open' && x.mode === 'leader')
+      .map((x) => ({ id: x.id, requestedAt: x.requestedAt ?? null, ownerName: x.owner?.name ?? 'The owner', finderName: x.finder?.name ?? 'A neighbour' }));
+  }
+  return c.mediation ?? [];
+}
+/** Conversations the Leader was asked to help with and has not finished. */
+export const openMediation = (c: Case): LostPetConversation[] => (c.lostPet?.conversations ?? []).filter((x) => x.status === 'open' && x.mode === 'leader');
 
 // ----------------------------------------------------------------------------------------------------- dashboard
-export type ReasonKind = 'urgent' | 'new' | 'overdue' | 'due_today' | 'observation' | 'awaiting' | 'stale';
+export type ReasonKind = 'urgent' | 'mediation' | 'new' | 'overdue' | 'due_today' | 'observation' | 'barangay' | 'awaiting' | 'stale';
 export interface AttentionReason { kind: ReasonKind; label: string; tone: 'red' | 'amber' | 'neutral' }
 export interface AttentionItem { case: Case; reasons: AttentionReason[]; score: number }
 
-const REASON_SCORE: Record<ReasonKind, number> = { urgent: 100, overdue: 80, observation: 60, new: 55, due_today: 50, awaiting: 30, stale: 20 };
+const REASON_SCORE: Record<ReasonKind, number> = { urgent: 100, mediation: 95, barangay: 85, overdue: 80, observation: 60, new: 55, due_today: 50, awaiting: 30, stale: 20 };
 
-/** "What needs my attention today?" Cases are ranked by the most pressing reason, not by date. */
+/**
+ * "What needs my attention today?" Cases are ranked by the most pressing reason, not by date. A missing-pet report is not a task by itself: its
+ * notice is published at once and nobody has to approve it, so it appears here only for something a Leader has to DO (an owner and a neighbour asked
+ * for help, the Barangay still has to be contacted, a follow-up is due), never merely for being new.
+ */
 export function attentionItems(cases: Case[], now: Date): AttentionItem[] {
   const items: AttentionItem[] = [];
   for (const c of cases) {
     if (!isOpen(c)) continue;
     const reasons: AttentionReason[] = [];
     if (c.priority === 'urgent') reasons.push({ kind: 'urgent', label: c.status === 'reported' ? 'Urgent · not yet assessed' : 'Urgent safety concern', tone: 'red' });
-    if (c.status === 'reported' && c.priority !== 'urgent') reasons.push({ kind: 'new', label: `New report · ${relative(c.reportedAt, now)}`, tone: 'amber' });
+    const asked = mediationOf(c);
+    if (asked.length > 0) {
+      const first = asked[0];
+      reasons.push({ kind: 'mediation', label: asked.length === 1 ? `${first.ownerName} and ${first.finderName} asked you to help them get in touch` : `${asked.length} requests to help an owner and a neighbour get in touch`, tone: 'amber' });
+    }
+    if (c.status === 'reported' && c.priority !== 'urgent' && !isLostPet(c)) reasons.push({ kind: 'new', label: `New report · ${relative(c.reportedAt, now)}`, tone: 'amber' });
     const pending = pendingFollowUpsOf(c).filter((f) => f.dueAt);
     const overdue = pending.filter((f) => dueInfo(f.dueAt, now).overdue).sort((a, b) => a.dueAt!.localeCompare(b.dueAt!))[0];
     const today = pending.filter((f) => dueInfo(f.dueAt, now).today)[0];
@@ -48,7 +72,9 @@ export function attentionItems(cases: Case[], now: Date): AttentionItem[] {
       if (left <= 0) reasons.push({ kind: 'observation', label: 'Observation period ended · record the outcome', tone: 'red' });
       else if (left <= 48 * 3_600_000) reasons.push({ kind: 'observation', label: `Observation ends soon · ${remaining(w.observationEnd!, now)}`, tone: 'amber' });
     }
-    for (const r of c.referrals.filter((x) => REFERRAL_STATUS[x.status].open)) {
+    const unsent = c.referrals.find((x) => x.status === 'to_contact');
+    if (unsent) reasons.push({ kind: 'barangay', label: `Help from ${unsent.orgName} is written down but nobody has contacted them yet`, tone: 'amber' });
+    for (const r of c.referrals.filter((x) => REFERRAL_STATUS[x.status].open && x.status !== 'to_contact')) {
       if (r.status === 'no_response' || ((r.status === 'sent' || r.status === 'acknowledged') && daysSince(r.updatedAt, now) >= 3)) {
         reasons.push({ kind: 'awaiting', label: `Awaiting an update from ${r.orgName}`, tone: 'neutral' });
         break;
@@ -76,10 +102,15 @@ export function pendingFollowUps(cases: Case[]): FollowUpRef[] {
 export function dashboardCounts(cases: Case[], now: Date) {
   const endOfToday = addDays(startOfDay(now), 1).getTime();
   return {
-    newReports: cases.filter((c) => c.status === 'reported').length,
+    // A missing-pet report is published by itself, so it is not a report waiting for review
+    newReports: cases.filter((c) => c.status === 'reported' && !isLostPet(c)).length,
     active: cases.filter(isOpen).length,
     urgent: cases.filter((c) => isOpen(c) && c.priority === 'urgent').length,
     followUpsDue: pendingFollowUps(cases).filter((x) => new Date(x.followUp.dueAt!).getTime() < endOfToday).length,
+    /** Owners and neighbours waiting for the Leader to help them get in touch. */
+    mediation: cases.filter(isOpen).reduce((n, c) => n + mediationOf(c).length, 0),
+    /** Missing pets still being looked for. */
+    missingPets: cases.filter((c) => isOpen(c) && isLostPet(c)).length,
   };
 }
 
@@ -123,6 +154,8 @@ export function statusCounts(cases: Case[]): Record<StatusFilter, number> {
 /** What is happening on the case right now, in a few words. Separate from the global status. */
 export function currentActivity(c: Case, now: Date): string {
   if (c.status === 'closed') return 'Closed';
+  if (mediationOf(c).length > 0) return 'Waiting for you · help an owner and a neighbour get in touch';
+  if (c.referrals.some((x) => x.status === 'to_contact')) return 'Barangay help written down · nobody contacted yet';
   const w = c.warnings.find((x) => x.status === 'active');
   if (w) return w.observationEnd ? `Owner observation · ${remaining(w.observationEnd, now)}` : 'Warning issued · monitoring';
   const r = c.referrals.find((x) => REFERRAL_STATUS[x.status].open);
@@ -133,6 +166,8 @@ export function currentActivity(c: Case, now: Date): string {
 }
 
 export function allowedStatusMoves(c: Case): CaseStatus[] {
+  // A missing-pet case has no manual status to move: it stays open until the owner confirms the pet is home (or it is closed another way)
+  if (isLostPet(c)) return [];
   switch (c.status) {
     case 'reported': return ['under_review', 'in_progress'];
     case 'under_review': return ['in_progress'];
@@ -146,6 +181,7 @@ export function openItems(c: Case) {
     followUps: pendingFollowUpsOf(c),
     warnings: c.warnings.filter((w) => w.status === 'active'),
     referrals: c.referrals.filter((r) => REFERRAL_STATUS[r.status].open),
+    conversations: openMediation(c),
     claims: c.claims.filter((x) => x.status === 'submitted' || x.status === 'under_review' || x.status === 'needs_info'),
   };
 }
@@ -165,7 +201,9 @@ export function warningEligibility(c: Case, s: AdminState): { ok: boolean; reaso
 
 export function dispositionAvailability(c: Case, id: DispositionId): { ok: boolean; reason?: string } {
   switch (id) {
-    case 'pet_recovered': return c.category === 'lost_pet' ? { ok: true } : { ok: false, reason: 'Only for lost-pet cases.' };
+    // A recovery is only ever the OWNER's confirmation (in the app, or by phone / in person and recorded by the Leader): closing a case never says it
+    case 'pet_recovered': return c.category === 'lost_pet' ? { ok: false, reason: 'Only the owner’s confirmation records a recovery. Use “Record owner confirmation” on the case.' } : { ok: false, reason: 'Only for lost-pet cases.' };
+    case 'withdrawn_by_reporter': return { ok: false, reason: 'Only the owner can withdraw their own report.' };
     case 'owner_compliance': return c.warnings.some((w) => w.observations.some((o) => o.result === 'compliant')) ? { ok: true } : { ok: false, reason: 'Needs a warning with a compliant observation on record.' };
     case 'handed_off': return c.referrals.length > 0 ? { ok: true } : { ok: false, reason: 'Needs an external referral on record.' };
     case 'duplicate_report': return c.relatedCaseIds.length > 0 ? { ok: true } : { ok: false, reason: 'Link the related report first.' };

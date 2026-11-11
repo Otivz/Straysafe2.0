@@ -6,7 +6,7 @@ from app.models.ai_vision_comparison import AiVisionComparison  # noqa: F401
 from app.models.pet_history import PetHistory
 from app.models.pet_owner_confirmation import PetOwnerConfirmation  # noqa: F401
 from app.models.report import ReportCategory, ReportStatus, Report, ReportMedia, StatusHistory, ReportReturn  # noqa: F401
-from app.models.lost_pet_alert import LostPetAlert, LostPetSighting  # noqa: F401
+from app.models.lost_pet_alert import LostPetAlert, LostPetCoordination, LostPetCoordinationMessage, LostPetSighting  # noqa: F401
 from app.models.report_dispute import ReportDispute
 from app.models.report_match import ReportMatch
 from app.models.manual_match import ManualMatchDecision  # noqa: F401

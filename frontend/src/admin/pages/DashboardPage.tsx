@@ -1,15 +1,18 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, CalendarClock, CircleCheck, Clock3 } from 'lucide-react';
+import { ArrowRight, CalendarClock, CircleCheck, Clock3, Handshake, Landmark, PawPrint } from 'lucide-react';
 import { adminPath } from '../config';
 import { LinkButton } from '../components/Button';
 import { EmptyState, Panel } from '../components/layout';
 import { CATEGORIES } from '../data/constants';
 import { useAdminData } from '../data/context';
-import { attentionItems, dashboardCounts, pendingFollowUps, recentActivity } from '../data/selectors';
+import { attentionItems, dashboardCounts, isLostPet, isOpen, mediationOf, pendingFollowUps, recentActivity, type ReasonKind } from '../data/selectors';
 import { addDays, fmtTime, fmtWeekday, greeting, plural, relative, sameDay } from '../../preview/lib/format';
 import { usePageTitle } from '../lib/hooks';
 import { useNow } from '../../preview/lib/hooks';
 import { cx } from '../../preview/lib/cx';
+
+/** What each reason looks like in the attention list: a request for help and the Barangay are not clocks. */
+const REASON_ICON: Partial<Record<ReasonKind, typeof Clock3>> = { mediation: Handshake, barangay: Landmark };
 
 const listSentence = (parts: string[]) => (parts.length <= 1 ? parts[0] ?? '' : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`);
 
@@ -25,7 +28,11 @@ export default function DashboardPage() {
   const upcoming = pendingFollowUps(state.cases).filter((x) => { const t = new Date(x.followUp.dueAt!); return t >= now && t <= horizon; }).slice(0, 7);
   const recent = recentActivity(state.cases, 7);
 
+  // Missing pets are listed on their own: each is visible, none is a task by itself (its notice is published when the report is filed)
+  const missing = state.cases.filter((c) => isOpen(c) && isLostPet(c)).sort((x, y) => y.reportedAt.localeCompare(x.reportedAt));
+
   const parts: string[] = [];
+  if (counts.mediation) parts.push(`${plural(counts.mediation, 'owner and neighbour')} ${counts.mediation === 1 ? 'is' : 'are'} waiting for your help to get in touch`);
   if (counts.urgent) parts.push(`${plural(counts.urgent, 'urgent case')} ${counts.urgent === 1 ? 'is' : 'are'} open`);
   if (counts.newReports) parts.push(`${plural(counts.newReports, 'new report')} ${counts.newReports === 1 ? 'is' : 'are'} waiting for review`);
   if (counts.followUpsDue) parts.push(`${plural(counts.followUpsDue, 'follow-up')} ${counts.followUpsDue === 1 ? 'is' : 'are'} due today or overdue`);
@@ -72,7 +79,7 @@ export default function DashboardPage() {
                       <div className="min-w-0">
                         <p className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5"><span className="sa-ref">{c.id}</span><span className="sa-meta">{CATEGORIES[c.category].label}</span></p>
                         <p className="sa-rowtitle mt-0.5"><Link to={link(c.id)}>{c.title}</Link></p>
-                        {reasons.slice(0, 2).map((r) => <p key={r.kind} className="sa-reason" data-tone={r.tone}><Clock3 size={13} className="shrink-0" aria-hidden="true" />{r.label}</p>)}
+                        {reasons.slice(0, 2).map((r) => { const Icon = REASON_ICON[r.kind] ?? Clock3; return <p key={r.kind} className="sa-reason" data-tone={r.tone}><Icon size={13} className="shrink-0" aria-hidden="true" />{r.label}</p>; })}
                       </div>
                       <LinkButton size="sm" to={link(c.id)} aria-label={`Open ${c.id}`}>Open<ArrowRight size={14} aria-hidden="true" /></LinkButton>
                     </li>
@@ -87,6 +94,28 @@ export default function DashboardPage() {
         </section>
 
         <div className="sa-stack">
+          <section aria-labelledby="missing-h">
+            <h2 id="missing-h" className="sa-h2 mb-3">Missing pets{missing.length > 0 ? ` (${missing.length})` : ''}</h2>
+            <Panel className="overflow-hidden">
+              {missing.length === 0 ? (
+                <EmptyState icon={PawPrint} title="No missing pets" compact>When an owner reports a pet missing, its notice is published at once and it is listed here. Nothing needs your approval.</EmptyState>
+              ) : (
+                <ul className="sa-feed">
+                  {missing.slice(0, 5).map((c) => (
+                    <li key={c.id}>
+                      <span className="sa-feed__dot" aria-hidden="true" />
+                      <div className="min-w-0">
+                        <p className="font-medium"><Link to={link(c.id)}>{c.title}</Link></p>
+                        <p className="sa-meta mt-0.5"><span className="sa-ref">{c.id}</span> · reported {relative(c.reportedAt, now)}{mediationOf(c).length > 0 ? ' · asking for your help' : ''}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {missing.length > 5 ? <div className="sa-pager"><span>{missing.length - 5} more</span><Link to={`${adminPath('/cases')}?status=open&category=lost_pet`} className="font-semibold">View in Cases</Link></div> : null}
+            </Panel>
+          </section>
+
           <section aria-labelledby="upcoming-h">
             <h2 id="upcoming-h" className="sa-h2 mb-3">Upcoming follow-ups</h2>
             <Panel className="overflow-hidden">

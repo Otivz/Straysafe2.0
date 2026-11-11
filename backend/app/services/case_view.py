@@ -11,11 +11,13 @@ from sqlalchemy.orm import Session
 
 from app.models.barangay_referral import BarangayReferral
 from app.models.case_records import CaseContactLog, CaseFollowUp
+from app.models.lost_pet_alert import LostPetAlert
+from app.models.pet import Pet
 from app.models.report import Report
 from app.models.user import User
 from app.models.warning import OwnerWarning
 from app.services import case_claims, case_compliance, case_lifecycle as L, case_work
-from app.utils import case_policy, case_state
+from app.utils import case_policy, case_state, identity_decision, lost_pet_rules
 from app.utils import case_vocab as V
 from app.utils.warning_rules import report_family, warning_blocker
 
@@ -75,6 +77,84 @@ def warning_eligibility(db: Session, report: Report) -> Dict[str, Any]:
     return {"ok": True, "reason": None}
 
 
+def _pet_in_scope(viewer: User, pet: Pet, report: Report) -> bool:
+    """
+    May this staff member read this pet record and its owner? The Administrator: yes. A Subdivision Leader: the owner lives in
+    the Leader's subdivision, or (a record with no owner account) whoever registered it belongs to it or it is linked to a report
+    of it. A pet from another subdivision that a report happens to name is never shown.
+    """
+    if viewer.role_id == 4:
+        return True
+    subdivision = viewer.subdivision_id
+    if not subdivision:
+        return False
+    if pet.owner is not None:
+        return pet.owner.subdivision_id == subdivision
+    registrant = pet.registered_by
+    return (registrant is not None and registrant.subdivision_id == subdivision) or report.subdivision_id == subdivision
+
+
+def pet_block(db: Session, report: Report, viewer: User) -> Optional[Dict[str, Any]]:
+    """
+    The registered pet a report names, for the Leader: the registry record as it is now, the same record as it was when the report
+    was filed (the snapshot), the registered owner and how to reach them, and the last-seen details. None when no pet is linked
+    (an older report, or a split case). STAFF ONLY, scoped to the viewer's subdivision.
+
+    Declared registration and verified ownership are different things: a registration is what the owner declared (`registration`),
+    ownership is verified only by the Leader's own decision on the case (`ownership`, which needs evidence other than the registry).
+    `linked_by_reporter` is true until a Leader decides the animal's identity: a report naming a pet is the resident's say-so.
+    """
+    if report.pet_id is None:
+        return None
+    pet = db.get(Pet, report.pet_id)
+    snapshot = report.pet_snapshot if isinstance(report.pet_snapshot, dict) else None
+    if pet is None:
+        return {"pet_id": report.pet_id, "available": False, "reason": "removed",
+                "as_reported": (snapshot or {}).get("pet"), "last_seen": {"as_filed": (snapshot or {}).get("last_seen"), "notice": None}}
+    if not _pet_in_scope(viewer, pet, report):
+        return {"pet_id": report.pet_id, "available": False, "reason": "restricted", "as_reported": None,
+                "last_seen": {"as_filed": None, "notice": None}}
+    current = lost_pet_rules.pet_facts(pet)
+    owner = pet.owner
+    then = snapshot.get("pet") if snapshot else None
+    alert = db.query(LostPetAlert).filter(LostPetAlert.report_id == report.report_id).first()
+    contact = {"emergency_contact_name": pet.emergency_contact_name, "emergency_contact_phone": pet.emergency_contact_phone}
+    return {
+        "pet_id": pet.pet_id, "available": True,
+        "linked_by_reporter": not identity_decision.is_decided(db, report),
+        "reporter_is_owner": bool(owner is not None and owner.user_id == report.user_id),
+        "registry": {**current, "status": pet.status, "updated_at": pet.updated_at},
+        "registration": {"declared_by_owner": current["declared_by_owner"], "registered_at": current["registered_at"],
+                         "registered_by_name": current["registered_by_name"], "verified": bool(pet.is_verified)},
+        "owner": ({"user_id": owner.user_id, "name": owner.name, "phone": owner.phone, "email": owner.email,
+                   "address": owner.address, "status": owner.status, **contact} if owner is not None
+                  else (contact if any(contact.values()) else None)),
+        "as_reported": then, "snapshot_taken_at": snapshot.get("taken_at") if snapshot else None,
+        "changed_since_report": lost_pet_rules.changed_since(then, current),
+        "last_seen": {"as_filed": snapshot.get("last_seen") if snapshot else None,
+                      "notice": ({"at": alert.last_seen_at, "location": alert.last_seen_location,
+                                  "latitude": float(alert.last_seen_lat) if alert.last_seen_lat is not None else None,
+                                  "longitude": float(alert.last_seen_lng) if alert.last_seen_lng is not None else None,
+                                  "status": alert.status} if alert is not None else None)},
+    }
+
+
+def lost_pet_block(db: Session, report: Report, viewer: User) -> Optional[Dict[str, Any]]:
+    """
+    The Lost Pet picture for the Leader's case screen, from the records (services/lost_pet_lifecycle.py): the notice with every
+    sighting and possible-recovery lead (with who reviewed it and when), the conversations (who the owner and the neighbor are, how to
+    reach them, whether the Leader was asked to help), and the recovery record. `alert` is None for a missing-pet report that has no
+    notice (an older one). None for every other kind of case. Staff only: the finder's and the owner's contact details are here.
+    """
+    if not V.is_lost_pet_report(report):
+        return None
+    from app.services import lost_pet_lifecycle as LP
+    alert = db.query(LostPetAlert).filter(LostPetAlert.report_id == report.report_id).first()
+    if alert is None:
+        return {"alert": None}
+    return {"alert": LP.alert_view(db, alert, viewer, with_sightings=True)}
+
+
 def case_detail(db: Session, report: Report, viewer: User) -> Dict[str, Any]:
     rid = report.report_id
     status = case_state.case_status_of(report)
@@ -109,7 +189,10 @@ def case_detail(db: Session, report: Report, viewer: User) -> Dict[str, Any]:
             "evidence_sufficiency": case_state.sufficiency_of(report), "evidence_reviewed": report.evidence_reviewed or [],
             "urgency": case_state.urgency_of(report), "urgency_note": report.urgency_note, "notes": report.assessment_notes,
             "saved_at": report.assessed_at, "saved_by": report.assessed_by, "saved_by_name": names.get(report.assessed_by)},
-        "identity": {"status": case_state.identity_of(report), "note": report.identity_note, "pet_id": report.pet_id},
+        "identity": {"status": case_state.identity_of(report), "note": report.identity_note, "pet_id": report.pet_id,
+                     "decided": identity_decision.is_decided(db, report)},
+        "pet": pet_block(db, report, viewer),
+        "lost_pet": lost_pet_block(db, report, viewer),
         "ownership": {"status": case_state.ownership_of(report), "owner_user_id": report.ownership_owner_id,
                       "owner_name": names.get(report.ownership_owner_id), "evidence": report.ownership_evidence or [],
                       "note": report.ownership_note, "decided_at": report.ownership_decided_at},

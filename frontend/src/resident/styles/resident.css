@@ -148,6 +148,9 @@
   .rs-row--danger, .rs-row--danger .rs-row__icon { color: var(--sa-red-ink); }
   .rs-row--danger .rs-row__icon { background: var(--sa-red-soft); }
   .rs-row--toggle { cursor: default; }
+  .rs-row--disabled { align-items: flex-start; cursor: default; }
+  .rs-row--disabled .rs-row__icon { background: var(--sa-sand); color: var(--sa-ink-3); }
+  .rs-row--disabled .rs-row__title { color: var(--sa-ink-2); }
 
   .rs-avatar { display: inline-grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; border: 1px solid var(--sa-brand-tint); border-radius: 50%; background: var(--sa-brand-soft); color: var(--sa-brand-ink); font-size: 15px; font-weight: 700; }
   .rs-avatar--lg { width: 68px; height: 68px; font-size: 22px; }
@@ -298,6 +301,9 @@
   .rs-option:has(input:focus-visible) { outline: 2px solid var(--sa-brand); outline-offset: 2px; }
   .rs-option__icon { display: grid; place-items: center; flex-shrink: 0; width: 38px; height: 38px; border-radius: 11px; background: var(--sa-sand); color: var(--sa-ink-2); }
   .rs-option__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .rs-option__icon img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+  .rs-option--taken { align-items: center; background: var(--sa-sand); cursor: default; }
+  .rs-option--taken .rs-option__text { flex: 1; }
   .rs-option__title { font-size: 16px; font-weight: 600; line-height: 22px; }
   .rs-option__desc { font-size: 14px; line-height: 20px; color: var(--sa-ink-3); }
 
@@ -415,6 +421,9 @@
   }
   .rs-tile > svg { color: var(--sa-brand-ink); }
   .rs-tile:hover { border-color: var(--sa-line-control); background: var(--sa-hover); color: var(--sa-ink); text-decoration: none; }
+  .rs-tile--muted { border-style: dashed; }
+  .rs-tile--muted > svg { color: var(--sa-ink-3); }
+  .rs-tile__hint { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 500; color: var(--sa-ink-3); }
   .rs-tile--primary { border-color: var(--sa-brand-strong); background: var(--sa-brand-strong); color: #fff; }
   .rs-tile--primary > svg { color: #fff; }
   .rs-tile--primary:hover { background: color-mix(in srgb, var(--sa-brand-strong) 88%, black); border-color: transparent; color: #fff; }
@@ -476,6 +485,20 @@
   .rs-office ul { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
   .rs-office li { display: flex; align-items: flex-start; gap: 10px; font-size: 15px; line-height: 22px; overflow-wrap: anywhere; }
   .rs-office li svg { flex-shrink: 0; margin-top: 3px; color: var(--sa-ink-3); }
+
+  /* ------------------------------------------------------------------------------ Community overview, directory and Lost Pet contact */
+  .rs-searchform { display: flex; align-items: stretch; gap: 8px; }
+  .rs-searchform .rs-search { flex: 1; min-width: 0; }
+  .rs-linkbtn { border: 0; background: transparent; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .rs-card__icon--photo { width: 64px; height: 64px; }
+  .rs-sighting--lead { border-color: color-mix(in srgb, var(--sa-amber) 55%, white); background: var(--sa-amber-soft); }
+  .rs-sighting__care { padding: 8px 10px; border: 1px dashed var(--sa-line-control); border-radius: 10px; background: var(--sa-surface); font-size: 14.5px; line-height: 21px; }
+  .rs-thread { display: flex; flex-direction: column; gap: 8px; max-height: 320px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+  .rs-msg { align-self: flex-start; max-width: 86%; padding: 8px 12px; border: 1px solid var(--sa-line); border-radius: 14px 14px 14px 4px; background: var(--sa-surface); overflow-wrap: anywhere; }
+  .rs-msg--mine { align-self: flex-end; border-color: var(--sa-brand-tint); border-radius: 14px 14px 4px 14px; background: var(--sa-brand-soft); }
+  .rs-msg__text { margin: 0; font-size: 15px; line-height: 22px; white-space: pre-wrap; }
+  .rs-msg__meta { margin: 2px 0 0; font-size: 12px; line-height: 16px; color: var(--sa-ink-3); }
+  .rs-composer { display: flex; flex-direction: column; gap: 8px; }
 
   @keyframes rs-spin { to { transform: rotate(360deg); } }
   @keyframes rs-shimmer { to { background-position: -200% 0; } }

@@ -40,6 +40,8 @@ export interface ApiCaseSummary {
   assigned_leader_name: string | null;
   assessment: { incident: IncidentVerification; evidence_sufficiency: EvidenceSufficiency; urgency: UrgencyLevel; saved_at: string | null };
   identity_status: IdentityStatus;
+  /** False while the status only comes from the reporter naming a registered pet (no Leader has decided the identity yet). */
+  identity_decided?: boolean;
   ownership_status: OwnershipStatus;
   /** The resident confirmed as the owner, when there is one (so "confirmed owner in" works from the list alone). */
   ownership_owner_id: number | null;
@@ -73,6 +75,28 @@ export interface ApiWarning {
 export interface ApiClaim { claim_id: number; report_id: number; status: ClaimStatus | 'withdrawn'; statement: string; evidence: string[]; submitted_at: string | null; reviewed_at: string | null; review_note: string | null; claimant_user_id: number | null; claimant_name: string | null; claimed_pet_id: number | null; evidence_urls: string[]; reviewed_by: number | null }
 export interface ApiLink { link_id: number; report_id: number; link_type: string; note: string | null; linked_at: string | null }
 
+/** One sighting or possible-recovery report as the Leader reads it (the writer by name, the exact pin, the private care note). */
+export interface ApiLostSighting {
+  sighting_id: number; sighting_type: 'seen' | 'secured'; latitude: number | null; longitude: number | null; location_label: string | null;
+  seen_at: string; submitted_at: string; description: string | null; photo_url: string | null; status: 'unverified' | 'verified' | 'dismissed';
+  review_note: string | null; care_note: string | null; reviewed_by: string | null; reviewed_at: string | null; reported_by: string;
+}
+export interface ApiLostParty { user_id: number; name: string; first_name: string; phone?: string | null }
+export interface ApiLostCoordination {
+  coordination_id: number; alert_id: number; report_id: number; sighting_id: number; status: 'open' | 'resolved'; mode: 'none' | 'direct' | 'leader';
+  owner_consent: boolean; finder_consent: boolean; mediation_requested_at: string | null; mediation_requested_by_role?: 'owner' | 'finder' | null;
+  resolved_at: string | null; resolution_note: string | null; owner?: ApiLostParty | null; finder?: ApiLostParty | null;
+}
+/** `GET /cases/{id}` -> `lost_pet.alert` (the Leader's view of the notice, with every sighting, lead and conversation). */
+export interface ApiLostAlert {
+  alert_id: number; report_id: number; status: 'requested' | 'active' | 'closed';
+  last_seen: { at: string | null; location: string | null; latitude: number | null; longitude: number | null };
+  activated_at: string | null; closed_at: string | null; close_outcome: string | null; close_reason: string | null; residents_notified: number | null;
+  recovered_at: string | null;
+  recovery: { recovered_at: string; source?: 'owner_app' | 'phone' | 'in_person'; recorded_by?: number | null; confirmed_by?: number | null; recorded_at?: string | null; note?: string | null } | null;
+  sightings?: ApiLostSighting[]; coordinations?: ApiLostCoordination[];
+}
+
 export interface ApiCaseDetail {
   report_id: number;
   case_status: CaseStatus;
@@ -87,7 +111,11 @@ export interface ApiCaseDetail {
   assigned_leader_id: number | null;
   assigned_leader_name: string | null;
   assessment: { incident: IncidentVerification; incident_basis: string | null; evidence_sufficiency: EvidenceSufficiency; evidence_reviewed: string[]; urgency: UrgencyLevel; urgency_note: string | null; notes: string | null; saved_at: string | null; saved_by: number | null; saved_by_name: string | null };
-  identity: { status: IdentityStatus; note: string | null; pet_id: number | null };
+  identity: { status: IdentityStatus; note: string | null; pet_id: number | null; decided?: boolean };
+  /** The registered pet this report names, as this Leader may see it. */
+  pet?: ApiCasePet | null;
+  /** The Lost Pet picture. Absent or null for every other kind of case; `alert` is null for a missing-pet report that has no notice. */
+  lost_pet?: { alert: ApiLostAlert | null } | null;
   ownership: { status: OwnershipStatus; owner_user_id: number | null; owner_name: string | null; evidence: string[]; note: string | null; decided_at: string | null };
   closure: ApiClosure | null;
   reopened_count: number;
@@ -102,6 +130,33 @@ export interface ApiCaseDetail {
   warning_eligibility: { ok: boolean; reason: string | null };
 }
 
+/** What identifies a pet in the registry (the backend's `pet_facts`, also frozen into the report when it was filed). */
+export interface ApiPetFacts {
+  pet_id: number; reference_code: string | null; name: string; species: string | null; breed: string | null; sex: string | null; color: string | null;
+  markings: string | null; age: string | null; photos: string[]; registered_at: string | null; registered_by_user_id: number | null; registered_by_name: string | null;
+  declared_by_owner: boolean; owner_id: number | null; owner_name: string | null;
+}
+export interface ApiLastSeen { at: string | null; location: string | null; latitude: number | null; longitude: number | null }
+/**
+ * `GET /cases/{id}` -> `pet`: the registered pet a report names, for the Leader. Null for an older report with no pet link.
+ * `available: false` says why the record is not shown: `removed` (it no longer exists) or `restricted` (another subdivision's pet).
+ */
+export interface ApiCasePet {
+  pet_id: number;
+  available: boolean;
+  reason?: 'removed' | 'restricted';
+  /** True until a Leader records the animal's identity: a report naming a pet is the reporter's say-so. */
+  linked_by_reporter?: boolean;
+  reporter_is_owner?: boolean;
+  registry?: ApiPetFacts & { status: string | null; updated_at: string | null };
+  registration?: { declared_by_owner: boolean; registered_at: string | null; registered_by_name: string | null; verified: boolean };
+  owner?: { user_id?: number; name?: string; phone?: string | null; email?: string | null; address?: string | null; status?: string | null; emergency_contact_name?: string | null; emergency_contact_phone?: string | null } | null;
+  as_reported: ApiPetFacts | null;
+  snapshot_taken_at?: string | null;
+  changed_since_report?: string[];
+  last_seen: { as_filed: ApiLastSeen | null; notice: (ApiLastSeen & { status: string }) | null };
+}
+
 export interface ApiMedia { media_id: number; file_url: string; media_type: string; is_evidence?: boolean | null; uploaded_at: string }
 export interface ApiHistory { history_id: number; remarks: string | null; created_at: string; updater_name: string | null }
 /** `GET /reports/{id}` as staff get it: only the parts the case screen reads. */
@@ -113,6 +168,8 @@ export interface ApiQueue {
   claims: ApiClaim[];
   referrals: (Pick<ApiReferral, 'referral_id' | 'report_id' | 'org_type' | 'org_name' | 'status' | 'is_urgent' | 'reason' | 'referred_at' | 'follow_up_at' | 'contact_person' | 'contact_detail'> & { updated_at: string | null })[];
   warnings: { warning_id: number; report_id: number; owner_user_id: number; owner_name: string | null; policy_id: string | null; policy_title: string | null; policy_reference: string | null; observation_days: number | null; follow_up_at: string | null; status: string; created_at: string | null; description: string | null }[];
+  /** An owner and a neighbour who asked the Leader to help them get in touch. */
+  coordinations?: { coordination_id: number; report_id: number; alert_id: number; mode: string; status: string; requested_at: string | null; owner_name: string | null; finder_name: string | null }[];
 }
 
 // ----------------------------------------------------------------------------------------------------- directories
@@ -125,6 +182,8 @@ export interface ApiPet {
   gender: string | null; estimated_age: string | null; birth_date: string | null; size_category: string | null; distinctive_markings: string | null;
   health_condition: string | null; notes: string | null; photo_url: string | null; photo_front_url: string | null; photo_left_url: string | null; photo_right_url: string | null;
   owner_id: number | null; created_at: string; is_vaccinated: boolean | null; vaccine_expiry: string | null; status: string | null;
+  /** Who entered the record: the owner in their own account, or someone on the team for them. */
+  registered_by_user_id?: number | null; registered_by_name?: string | null;
 }
 
 // ---------------------------------------------------------------------------------------------------------- notices
@@ -214,12 +273,19 @@ export const adminApi = {
   user: (id: number) => httpGet<ApiUser>(`/users/${id}`),
   updateUser: (id: number, patch: Record<string, unknown>) => httpPut<ApiUser>(`/users/${id}`, patch),
   pets: (subdivisionId: number) => httpGet<ApiPet[]>(`/pets/subdivision/${subdivisionId}`),
+  /** Ask a resident to confirm that a pet record is theirs. Nothing moves until they say yes; the Leader must say how they checked (at least 10 characters). */
+  assignPetOwner: (petId: number, ownerId: number, evidenceNote: string) => httpPost<ApiPet>(`/pets/${petId}/assign-owner?owner_id=${ownerId}`, { evidence_note: evidenceNote }),
 
   alerts: () => httpGet<{ total: number; results: ApiAlert[] }>('/lost-pet-alerts/all', { limit: PAGE }),
   requestAlert: (reportId: number, body: Record<string, unknown>) => httpPost<ApiAlert>(`/lost-pet-alerts/reports/${reportId}/request`, body),
   activateAlert: (alertId: number, body: Record<string, unknown>) => httpPost<ApiAlert>(`/lost-pet-alerts/${alertId}/activate`, body),
   updateAlert: (alertId: number, body: Record<string, unknown>) => httpPatch<ApiAlert>(`/lost-pet-alerts/${alertId}`, body),
   closeAlert: (alertId: number, outcome: string, reason: string) => httpPost<ApiAlert>(`/lost-pet-alerts/${alertId}/close`, { outcome, reason }),
+  /** The Leader records that the OWNER confirmed (by phone or in person) that the pet is home: the one recovery operation, never the Leader's own say-so. */
+  recordRecovery: (alertId: number, body: { source: 'phone' | 'in_person'; confirmed_at: string | null; note: string | null }) => httpPost(`/lost-pet-alerts/${alertId}/record-recovery`, body),
+  reviewSighting: (sightingId: number, status: 'unverified' | 'verified' | 'dismissed', note: string | null) => httpPost(`/lost-pet-alerts/sightings/${sightingId}/review`, { status, note }),
+  /** The Leader finished helping an owner and a neighbour get in touch. */
+  resolveCoordination: (coordinationId: number, note: string | null) => httpPost(`/lost-pet-alerts/coordinations/${coordinationId}/resolve`, { note }),
   announcements: (subdivisionId: number) => httpGet<ApiAnnouncement[]>(`/announcements/subdivision/${subdivisionId}`),
   createAnnouncement: (body: Record<string, unknown>) => httpPost<ApiAnnouncement>('/announcements/', body),
   updateAnnouncement: (id: number, body: Record<string, unknown>) => httpPut<ApiAnnouncement>(`/announcements/${id}`, body),

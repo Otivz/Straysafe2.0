@@ -8,12 +8,11 @@ import { Button, Callout, EmptyState, LinkButton, NotFoundState } from '../../co
 import { residentPath } from '../../config';
 import { useResidentData } from '../../data/context';
 import { reportById } from '../../data/selectors';
-import { useFormFocus } from '../../lib/hooks';
 
 const HOW = [
   { value: 'home', label: 'Came home on their own' },
   { value: 'neighbour', label: 'A neighbour brought them back' },
-  { value: 'subdivision', label: 'The subdivision or security found them' },
+  { value: 'subdivision', label: 'The subdivision helped bring them home' },
   { value: 'other', label: 'Something else' },
 ] as const;
 type How = (typeof HOW)[number]['value'];
@@ -22,10 +21,8 @@ type How = (typeof HOW)[number]['value'];
 export default function RecoveryPage() {
   const { state, dispatch } = useResidentData();
   const report = reportById(state, useParams().reportId);
-  const { ref, invalid } = useFormFocus();
   const [how, setHow] = useState<How | ''>('');
   const [note, setNote] = useState('');
-  const [howError, setHowError] = useState<string>();
   const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(false);
 
@@ -43,17 +40,14 @@ export default function RecoveryPage() {
   if (report.status === 'closed') {
     return (
       <Screen title="My pet is home" back={`/reports/${report.id}`}>
-        <Callout tone="sage" title="This report is already closed.">{report.outcome?.summary ?? 'No further action is needed.'}</Callout>
+        <Callout tone="info" title="This report is already closed.">{report.outcome?.summary ?? 'No further action is needed.'}</Callout>
         <LinkButton variant="primary" block to={residentPath(`/reports/${report.id}`)}>View the report</LinkButton>
       </Screen>
     );
   }
 
   const name = report.petName ?? 'your pet';
-  const ask = () => {
-    if (!how) { setHowError('Choose how they came home.'); invalid(); return; }
-    setConfirming(true);
-  };
+  const ask = () => setConfirming(true);
   const label = HOW.find((h) => h.value === how)?.label ?? '';
 
   return (
@@ -63,10 +57,10 @@ export default function RecoveryPage() {
       back={`/reports/${report.id}`}
       footer={<Button variant="primary" block onClick={ask}>Mark as recovered</Button>}
     >
-      <p className="rs-sub">We’re glad. Tell us how {name} came home, and we will close the report and remove the notice from Community.</p>
-      <div ref={ref} className="rs-stack">
-        <FieldGroup label={`How did ${name} come home?`} required error={howError}>
-          <OptionList name="How they came home" value={how} onChange={(v) => { setHow(v); setHowError(undefined); }} options={HOW.map((h) => ({ value: h.value, label: h.label }))} />
+      <p className="rs-sub">Confirm that {name} is safely back with you. We will close the report, remove the notice from Community and restore your pet’s Active registry state.</p>
+      <div className="rs-stack">
+        <FieldGroup label={`How did ${name} come home?`} hint="Optional. Your confirmation is what closes the case.">
+          <OptionList name="How they came home" value={how} onChange={setHow} options={HOW.map((h) => ({ value: h.value, label: h.label }))} />
         </FieldGroup>
         <Field label="Anything you want to add" optional>
           <Textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} rows={3} placeholder="Thank you to everyone who helped." />
@@ -75,10 +69,10 @@ export default function RecoveryPage() {
       {confirming ? (
         <ConfirmSheet
           title={`Mark ${name} as recovered?`}
-          message="The notice will be removed from Community and this report will be closed. You can’t undo this from the app."
+          message="Confirm that your pet is safely back with you. The notice will be removed from Community and this report will be closed. You can’t undo this from the app."
           confirmLabel="Yes, mark as recovered"
           onConfirm={async () => {
-            await dispatch({ type: 'lost/recover', reportId: report.id, note: `${label}${note.trim() ? `. ${note.trim()}` : '.'}` });
+            await dispatch({ type: 'lost/recover', reportId: report.id, note: [label, note.trim()].filter(Boolean).join('. ') });
             setDone(true);
           }}
           onClose={() => setConfirming(false)}

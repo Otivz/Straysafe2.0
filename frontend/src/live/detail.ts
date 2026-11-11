@@ -16,3 +16,13 @@ export function detailOf(data: unknown): string | null {
   }
   return null;
 }
+
+/**
+ * The `detail` itself when the server sent an object (for example `{ code: 'LOST_REPORT_EXISTS', report_id: 12, message }`), so a
+ * screen can act on the code. Null for a plain sentence, a list or no detail.
+ */
+export function structuredDetailOf(data: unknown): Record<string, unknown> | null {
+  if (!data || typeof data !== 'object') return null;
+  const detail = (data as { detail?: unknown }).detail;
+  return detail && typeof detail === 'object' && !Array.isArray(detail) ? (detail as Record<string, unknown>) : null;
+}

@@ -13,8 +13,13 @@ const STATUS_ORDER: CaseStatus[] = ['reported', 'under_review', 'in_progress', '
 const FAQ: { q: string; text: string; a: ReactNode }[] = [
   {
     q: 'What can I report?',
-    text: 'A lost pet, an animal complaint, or an animal you saw that may need attention in your subdivision.',
-    a: <p>You can report a lost pet, make an animal complaint (for example noise or a roaming animal), or report an animal you saw that may need attention: one that looks lost or has no owner nearby, is hurt or needs help, may be dangerous, or something else. Start from <Link to={residentPath('/report')}>Report</Link>.</p>,
+    text: 'Your own pet missing (once it is registered), an animal complaint, or an animal you saw that may need attention in your subdivision.',
+    a: <p>You can report your own pet missing (once it is registered), make an animal complaint (for example noise or a roaming animal), or report an animal you saw that may need attention: one that looks lost or has no owner nearby, is hurt or needs help, may be dangerous, or something else. Start from <Link to={residentPath('/report')}>Report</Link>.</p>,
+  },
+  {
+    q: 'Why do I need to register my pet first?',
+    text: 'A lost-pet report uses your pet’s registered profile, so you register your pet once and then report it missing in a few taps. A registration is not proof of ownership.',
+    a: <p>A lost-pet report uses your pet’s registered profile (its name, photo and description), so you don’t type them again and neighbours can recognise your pet. <Link to={residentPath('/pets')}>Register your pet</Link> once, then report it missing in a few taps. A registration is what you declare: it does not prove ownership by itself. If your pet is already missing, register it first and you go straight back to your report.</p>,
   },
   {
     q: 'Who sees my report?',

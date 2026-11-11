@@ -8,11 +8,11 @@
  */
 import { fromServer } from '../../live/dates.ts';
 import type {
-  AnimalType, CategoryId, Claim, ClaimStatus, Media, Notice, Notification, Office, Pet, Profile, Report, ReportUpdate, Settings, Sighting,
+  AnimalType, CategoryId, Claim, ClaimStatus, Coordination, Media, Notice, Notification, Office, OwnershipRequest, Pet, PetSex, Profile, Report, ReportUpdate, Settings, Sighting,
 } from '../data/types.ts';
 import type {
-  ApiAnnouncement, ApiChatMessage, ApiNotification, ApiNotificationPrefs, ApiPet, ApiResidentAlert, ApiResidentCategories, ApiResidentClaim,
-  ApiResidentReport, ApiSighting, ApiUser,
+  ApiAnnouncement, ApiChatMessage, ApiCoordination, ApiNotification, ApiNotificationPrefs, ApiPet, ApiResidentAlert, ApiResidentCategories, ApiResidentClaim,
+  ApiOwnershipRequest, ApiResidentReport, ApiSighting, ApiUser,
 } from './api.ts';
 
 /** What the adapters need to know about the rest of the loaded data. Supplied by the provider. */
@@ -157,12 +157,38 @@ export function sightingFromApi(s: ApiSighting): Sighting {
   return {
     id: `sg${s.sighting_id}`, observedAt: fromServer(s.seen_at), submittedAt: fromServer(s.submitted_at),
     location: { label: s.location_label?.trim() || PINNED_LABEL, lat: hasPin ? (s.latitude as number) : null, lng: hasPin ? (s.longitude as number) : null, manual: s.location_source !== 'map_pin' && !hasPin },
-    description: s.description ?? '', by: s.is_mine ? 'you' : 'neighbour', onBehalf: false, photos: s.photo_url ? 1 : 0,
+    description: s.description ?? '', by: s.is_mine ? 'you' : 'neighbour', onBehalf: s.on_behalf === true, photos: s.photo_url ? 1 : 0,
+    ...(s.sighting_type === 'secured' ? { kind: 'secured' as const } : {}), ...(s.care_note ? { careNote: s.care_note } : {}),
+    ...(s.status === 'verified' || s.status === 'dismissed' ? { review: { status: s.status, by: s.reviewed_by ?? null, ...(s.reviewed_at ? { at: fromServer(s.reviewed_at) } : {}), ...(s.review_note ? { note: s.review_note } : {}) } } : {}),
   };
+}
+
+/**
+ * One conversation about a possible-recovery report, as the owner or the finder sees it. The Leader's own view of it is the Leader app's
+ * (null here). Whether you agreed and whether the other person did are read from your side, so a screen never reasons about roles.
+ */
+export function coordinationFromApi(c: ApiCoordination): Coordination | null {
+  if (c.you_are === 'leader') return null;
+  const owner = c.you_are === 'owner';
+  return {
+    id: String(c.coordination_id), sightingId: `sg${c.sighting_id}`, youAre: c.you_are, status: c.status, mode: c.mode,
+    youAgreed: owner ? c.owner_consent : c.finder_consent, otherAgreed: owner ? c.finder_consent : c.owner_consent, canMessage: c.can_message,
+    mediationRequested: c.mediation_requested, mediationByYou: c.mediation_requested_by_you, unread: c.unread_messages,
+    otherName: c.other_party?.first_name?.trim() || (owner ? 'the neighbour' : 'the owner'), ...(c.resolution_note ? { resolutionNote: c.resolution_note } : {}),
+  };
+}
+
+/** What identifies the animal on a notice (breed, colour, markings): only what the server sent, trimmed. */
+function identityOf(p: ApiResidentAlert['pet']): Notice['identity'] | undefined {
+  const breed = (p.breed ?? '').trim();
+  const color = (p.color ?? '').trim();
+  const marks = (p.distinguishing_marks ?? '').trim();
+  return breed || color || marks ? { ...(breed ? { breed } : {}), ...(color ? { color } : {}), ...(marks ? { marks } : {}) } : undefined;
 }
 
 export function noticeFromAlert(a: ApiResidentAlert, ctx: Pick<ResidentLookup, 'refOf'>, mineReportIds: ReadonlySet<number>): Notice {
   const found = a.alert_type === 'found_animal';
+  const identity = identityOf(a.pet);
   const type = animalTypeOf(a.pet.species);
   const where = (a.last_seen.location ?? '').trim();
   const mine = a.is_owner || mineReportIds.has(a.report_id);
@@ -174,7 +200,17 @@ export function noticeFromAlert(a: ApiResidentAlert, ctx: Pick<ResidentLookup, '
     animalType: type, photos: a.pet.photo_url ? 1 : 0, ...(a.pet.photo_url ? { photoUrls: [a.pet.photo_url] } : {}),
     publishedAt: fromServer(a.activated_at) || fromServer(a.requested_at), source: found ? 'admin' : 'owner', mine,
     reportNumber: a.report_id, ...(mine ? { reportId: ctx.refOf(a.report_id) } : {}), ...(a.last_seen.at ? { lastSeenAt: fromServer(a.last_seen.at) } : {}),
-    status: a.status === 'active' ? 'active' : 'recovered', sightings: (a.sightings ?? []).map(sightingFromApi).sort((x, y) => y.observedAt.localeCompare(x.observedAt)),
+    status: a.status, sightings: (a.sightings ?? []).map(sightingFromApi).sort((x, y) => y.observedAt.localeCompare(x.observedAt)),
+    sightingCount: a.sighting_count, ...(a.latest_sighting ? { latestSighting: sightingFromApi(a.latest_sighting) } : {}),
+    alertNumber: a.alert_id,
+    ...(!found && a.pet.name && a.pet.name !== 'Missing pet' ? { petName: a.pet.name } : {}), ...(identity ? { identity } : {}),
+    ...(a.owner_first_name ? { ownerName: a.owner_first_name } : {}),
+    // "Recovered" is only the owner's confirmation. A notice that ended any other way is closed, with the reason the server kept.
+    ...(a.recovered_at ? { recoveredAt: fromServer(a.recovered_at) } : {}),
+    ...(a.status === 'closed' && a.close_outcome ? { closeOutcome: a.close_outcome } : {}), ...(a.status === 'closed' && a.close_reason ? { closeReason: a.close_reason } : {}),
+    viewerRole: a.viewer_role === 'finder' ? 'finder' : a.is_owner && !found ? 'owner' : 'neighbor',
+    ...(a.secured_count ? { securedCount: a.secured_count } : {}),
+    ...(a.coordinations ? { coordinations: a.coordinations.map(coordinationFromApi).filter((c): c is Coordination => c !== null) } : {}),
   };
 }
 
@@ -223,6 +259,9 @@ export function evidenceIdsFrom(proof: string[]): string[] {
 }
 
 // --------------------------------------------------------------------------------------------------------------- pets
+const SEX_FROM: Record<string, PetSex> = { male: 'male', female: 'female' };
+const SEX_TO: Record<PetSex, string> = { male: 'Male', female: 'Female', unknown: 'Unknown' };
+
 export function petFromApi(p: ApiPet): Pet {
   const color = [p.primary_color, p.secondary_color, p.color_markings].map((c) => (c ?? '').trim()).filter(Boolean);
   const photo = p.photo_url ?? p.photo_front_url ?? null;
@@ -230,6 +269,7 @@ export function petFromApi(p: ApiPet): Pet {
     id: String(p.pet_id), name: p.pet_name, type: animalTypeOf(p.pet_type), breed: p.breed?.trim() ?? '', color: [...new Set(color)].join(', '),
     ageText: p.estimated_age?.trim() ?? (p.birth_date ? `Born ${p.birth_date}` : ''), markings: (p.distinctive_markings ?? '').split(/[,;]\s*/).map((m) => m.trim()).filter(Boolean),
     description: (p.notes ?? '').trim(), ...(photo ? { photoUrl: photo, photoName: 'Photo' } : {}), registeredAt: fromServer(p.created_at),
+    sex: SEX_FROM[(p.gender ?? '').toLowerCase()] ?? 'unknown', ...(p.status ? { status: p.status } : {}),
   };
 }
 
@@ -237,9 +277,18 @@ export function petFromApi(p: ApiPet): Pet {
 export function petToApi(p: Pet): Record<string, unknown> {
   return {
     pet_name: p.name, pet_type: ANIMAL_LABEL[p.type], breed: p.breed || null, color_markings: p.color || null, primary_color: null,
-    estimated_age: p.ageText || null, distinctive_markings: p.markings.join(', ') || null, notes: p.description || null,
+    estimated_age: p.ageText || null, distinctive_markings: p.markings.join(', ') || null, notes: p.description || null, gender: SEX_TO[p.sex],
   };
 }
+
+/** A pet the office linked to this account, asking "is this your pet?" */
+export function ownershipRequestFromApi(o: ApiOwnershipRequest): OwnershipRequest {
+  return {
+    id: String(o.confirmation_id), petId: String(o.pet_id), petName: (o.pet_name ?? '').trim() || 'A pet', petType: animalTypeOf(o.pet_type),
+    ...(o.photo_url ? { photoUrl: o.photo_url } : {}), proposedBy: (o.proposed_by_name ?? '').trim() || 'Your subdivision office', at: fromServer(o.created_at),
+  };
+}
+
 
 // ---------------------------------------------------------------------------------------------------- notifications
 /** Where a notification leads. Alert ids and report ids are different things, so each type is read for what its related_id is. */
@@ -249,10 +298,18 @@ export function notificationFromApi(n: ApiNotification, ctx: Pick<ResidentLookup
   const id = n.related_id;
   let kind: Notification['kind'] = 'report_update';
   let to = '/reports';
-  if (type.includes('lost_pet_alert')) {
+  if (type.includes('pet_owner_confirmation')) {
+    to = '/pets';                                       // "is this your pet?": its related id is the pet, not a report
+  } else if (type.includes('lost_pet_alert')) {
+    // The older notice notification: its own text says whether it was about a sighting.
     const sighting = /sighting|spotted/.test(text);
     kind = sighting ? 'sighting' : 'community_notice';
     to = id === null ? '/community' : sighting ? `/community/${noticeId(id)}/sightings` : `/community/${noticeId(id)}`;
+  } else if (type.startsWith('lost_pet_') && type !== 'lost_pet_leader') {
+    // Every other Lost Pet notification (a sighting, a possible recovery, a conversation, "your pet is home") carries the NOTICE's number
+    // (the alert's), never a report's. An ordinary sighting opens the sightings; the rest open the notice, where the owner or the finder acts.
+    kind = type === 'lost_pet_sighting' || type === 'lost_pet_secured' ? 'sighting' : 'community_notice';
+    to = id === null ? '/community' : type === 'lost_pet_sighting' ? `/community/${noticeId(id)}/sightings` : `/community/${noticeId(id)}`;
   } else if (type.includes('ownership_claim')) {
     kind = 'claim_update';
     const claim = id === null ? undefined : ctx.claimOfReport(id);
