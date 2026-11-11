@@ -7,6 +7,7 @@ import { Button, Callout, IconButton, LinkButton, NotFoundState, Section } from 
 import { residentPath } from '../../config';
 import { ANIMAL_TYPES } from '../../data/constants';
 import { useResidentData } from '../../data/context';
+import { accepts } from '../../data/entries';
 import { petById } from '../../data/selectors';
 import { useStartReport } from '../../lib/flow';
 import { describePet } from '../../lib/pets';
@@ -29,11 +30,11 @@ export default function PetDetailsPage() {
       actions={<IconButton label="Edit pet" icon={Pencil} onClick={() => navigate(residentPath(`/pets/${pet.id}/edit`))} />}
       footer={missing ? (
         <LinkButton variant="primary" block to={residentPath(`/reports/${missing.id}`)}>View the lost-pet report</LinkButton>
-      ) : (
+      ) : accepts(state.accepting, 'lost_pet') ? (
         <Button variant="primary" block icon={Search} onClick={() => start('lost_pet', { petId: pet.id, petName: pet.name, animalType: pet.type, description: describePet(pet) })}>
           {pet.name} is lost
         </Button>
-      )}
+      ) : undefined}
     >
       <div className="rs-pethero">
         <span className="rs-pethero__photo">{pet.photoUrl ? <img src={pet.photoUrl} alt={`${pet.name}`} /> : <Icon size={40} aria-hidden="true" />}</span>

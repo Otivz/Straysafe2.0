@@ -68,7 +68,9 @@ export function parseBackendUrl(input: string | null | undefined): ParsedBackend
     return fail('Plain http:// is only for a computer on your own network (an address such as 192.168.x.x or 10.x.x.x). For anything on the internet, use its https:// address.');
   }
   if (bareIp && !url.port) url.port = DEFAULT_LAN_PORT;
-  return { ok: true, url: `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, '')}`, secure: url.protocol === 'https:' };
+  // Server connectivity uses the default host root: automatically strip any accidental frontend routes like /resident-app
+  const cleanPath = url.pathname.replace(/\/resident-app(?:\/.*)?$/i, '').replace(/\/+$/, '');
+  return { ok: true, url: `${url.protocol}//${url.host}${cleanPath}`, secure: url.protocol === 'https:' };
 }
 
 /** "http://192.168.1.10:8000" -> "192.168.1.10:8000" (for display). */

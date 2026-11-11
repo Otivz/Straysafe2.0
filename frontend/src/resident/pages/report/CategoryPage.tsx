@@ -1,39 +1,39 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Pencil, Trash2 } from 'lucide-react';
+import { ClipboardList, Pencil, Trash2 } from 'lucide-react';
 import { ConfirmSheet } from '../../components/Sheet';
-import { CATEGORY_ICON } from '../../components/icons';
-import { PrimaryScreen } from '../../components/Screen';
-import { Button, Callout, Row } from '../../components/ui';
+import { ENTRY_ICON } from '../../components/icons';
+import { Screen } from '../../components/Screen';
+import { Button, Callout, EmptyState, LinkButton, Row } from '../../components/ui';
 import { residentPath } from '../../config';
-import { CATEGORIES, CATEGORY_IDS } from '../../data/constants';
+import { CATEGORIES } from '../../data/constants';
 import { useResidentData } from '../../data/context';
-import type { CategoryId } from '../../data/types';
-import { useStartReport } from '../../lib/flow';
+import { ENTRIES, offeredEntries, type EntryId } from '../../data/entries';
+import { useBeginReport } from '../../lib/flow';
 
-/** What each choice does with the report. Stated before anything is written, so submitting is never a surprise. */
-const SHARING: Record<CategoryId, string> = {
-  lost_pet: 'Shared with neighbours as a lost-pet notice',
-  found_animal: 'Private until an administrator reviews it',
-  nuisance: 'Private to subdivision administrators',
-  safety: 'Private to subdivision administrators',
-  injured: 'Private to subdivision administrators',
-  other: 'Private to subdivision administrators',
-};
-
-/** R08 — Choose what to report. */
+/** R08 — Choose what to report: three entries, and only the ones the subdivision accepts right now. */
 export default function CategoryPage() {
-  const { state, local } = useResidentData();
-  const start = useStartReport();
+  const { state, local, reload } = useResidentData();
+  const { begin, keep } = useBeginReport();
   const navigate = useNavigate();
   const [discarding, setDiscarding] = useState(false);
   const draft = state.draft;
+  const entries = offeredEntries(state.accepting);
+
+  const choose = (id: EntryId) => {
+    if (id === 'animal') navigate({ pathname: residentPath('/report/situation'), search: keep ? '?keep=1' : '' });
+    else begin(ENTRIES[id].families[0]);
+  };
 
   return (
-    <PrimaryScreen title="Report" lead="What would you like to report?">
-      {draft ? (
+    <Screen title="Report" subtitle="What would you like to report?" back="/home">
+      {draft && keep ? (
+        <Callout tone="amber" title="Your subdivision isn’t accepting that kind of report right now.">
+          Choose another type below. What you wrote is kept.
+        </Callout>
+      ) : draft ? (
         <Callout tone="amber" title="You have an unfinished report.">
-          <span>{CATEGORIES[draft.category].label}. Choosing a category below starts a new one.</span>
+          <span>{CATEGORIES[draft.category].label}. Choosing a type below starts a new one.</span>
           <span className="rs-row-actions rs-mt">
             <Button size="sm" variant="primary" icon={Pencil} onClick={() => navigate(residentPath('/report/details'))}>Continue</Button>
             <Button size="sm" icon={Trash2} onClick={() => setDiscarding(true)}>Discard</Button>
@@ -41,20 +41,21 @@ export default function CategoryPage() {
         </Callout>
       ) : null}
 
-      <div className="rs-list">
-        {CATEGORY_IDS.map((id) => {
-          const Icon = CATEGORY_ICON[id];
-          return (
-            <Row
-              key={id}
-              icon={Icon}
-              title={CATEGORIES[id].label}
-              meta={<><span>{CATEGORIES[id].blurb}</span><span className="rs-row__share">{SHARING[id]}</span></>}
-              onClick={() => start(id)}
-            />
-          );
-        })}
-      </div>
+      {state.accepting === undefined ? (
+        <EmptyState icon={ClipboardList} title="We can’t check what you can report right now" action={<Button variant="primary" onClick={reload}>Try again</Button>}>
+          The kinds of report could not be loaded. Check your connection and try again.
+        </EmptyState>
+      ) : entries.length === 0 ? (
+        <EmptyState icon={ClipboardList} title="Reports aren’t being taken in the app right now" action={<LinkButton to={residentPath('/contact')}>Contact the office</LinkButton>}>
+          Your subdivision has paused new reports here. Contact the office for anything urgent.
+        </EmptyState>
+      ) : (
+        <div className="rs-list">
+          {entries.map((id) => (
+            <Row key={id} icon={ENTRY_ICON[id]} title={ENTRIES[id].title} meta={ENTRIES[id].blurb} onClick={() => choose(id)} />
+          ))}
+        </div>
+      )}
 
       <Callout tone="info" title="Not for emergencies.">
         If someone is in danger or hurt right now, call local emergency services or tell the guardhouse first. Reports are reviewed by the subdivision during office hours.
@@ -70,6 +71,6 @@ export default function CategoryPage() {
           onClose={() => setDiscarding(false)}
         />
       ) : null}
-    </PrimaryScreen>
+    </Screen>
   );
 }

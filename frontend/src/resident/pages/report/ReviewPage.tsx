@@ -10,6 +10,7 @@ import { Button, Callout, FormError, MediaThumbs } from '../../components/ui';
 import { residentPath } from '../../config';
 import { ANIMAL_TYPES, CATEGORIES, EXTRA_FIELD, VISIBILITY_COPY } from '../../data/constants';
 import { useResidentData } from '../../data/context';
+import { accepts } from '../../data/entries';
 import { nextReportId, visibilityAfterSending } from '../../data/selectors';
 import type { Draft } from '../../data/types';
 import { stepPath } from '../../lib/flow';
@@ -44,6 +45,8 @@ function ReviewForm({ draft, onSending }: { draft: Draft; onSending: () => void 
   if (!draft.animalType || draft.description.trim().length < 10) missing.push({ text: 'the description', to: stepPath('details') });
   if (!draft.location) missing.push({ text: 'where the animal was', to: stepPath('location') });
   const complete = missing.length === 0;
+  // The Leader switched this kind off while the report was being written (known once the app has read the subdivision's settings).
+  const unavailable = state.accepting !== undefined && !accepts(state.accepting, draft.category);
 
   // What happens after sending is the subdivision's own publication setting.
   const visibility = cat.kind === 'incident' ? 'private' : visibilityAfterSending(state, cat.kind);
@@ -78,7 +81,7 @@ function ReviewForm({ draft, onSending }: { draft: Draft; onSending: () => void 
       title="Review and submit"
       draft={draft}
       footer={(
-        <Button variant="primary" block loading={pending} disabled={!complete} onClick={() => void submit()}>
+        <Button variant="primary" block loading={pending} disabled={!complete || unavailable} onClick={() => void submit()}>
           {visibility === 'published' ? 'Publish notice and submit' : cat.kind === 'incident' ? 'Submit report' : 'Submit for review'}
         </Button>
       )}
@@ -88,7 +91,15 @@ function ReviewForm({ draft, onSending }: { draft: Draft; onSending: () => void 
           Add {missing.map((m, i) => <span key={m.to}>{i > 0 ? ' and ' : ''}<Link to={m.to}>{m.text}</Link></span>)} before you submit.
         </Callout>
       ) : null}
-      {error ? <FormError message={error} /> : null}
+      {unavailable ? (
+        <Callout tone="amber" title="Your subdivision isn’t accepting this kind of report right now.">
+          <span>What you wrote is kept. Choose another type to send it.</span>
+          <span className="rs-row-actions rs-mt">
+            <Button size="sm" variant="primary" onClick={() => navigate({ pathname: residentPath('/report'), search: '?keep=1' })}>Choose another type</Button>
+          </span>
+        </Callout>
+      ) : null}
+      {error && !unavailable ? <FormError message={error} /> : null}
 
       <dl className="rs-summary">
         <Item label="Type" to={stepPath('details')}>{cat.label}</Item>

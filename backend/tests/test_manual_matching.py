@@ -407,7 +407,7 @@ from app.utils.push_categories import category_for, notification_link  # noqa: E
 check("push: owner request opens My Pets in the Resident app", notification_link(1, "pet_match_confirmation", 7) == "/resident-app/pets"
       and category_for("pet_match_confirmation") == category_for("potential_match"))
 check("push: owner answer opens the report's case for the Leader; retired Barangay accounts get the web root",
-      notification_link(2, "pet_match_confirmation_result", 9) == "/subd-admin/cases/9"
+      notification_link(2, "pet_match_confirmation_result", 9) == "/cases/9"
       and notification_link(3, "pet_match_confirmation_result", 9) == "/")
 
 # ── match-pair endpoint for Potential Match Review modal ──

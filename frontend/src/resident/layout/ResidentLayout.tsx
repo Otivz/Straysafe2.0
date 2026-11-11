@@ -10,7 +10,7 @@ import { useResidentData } from '../data/context';
 import { Frame } from './Frame';
 
 /** Paths (below the app base) that show the bottom navigation. Every other screen is a focused task with Back. */
-const PRIMARY = new Set(['/home', '/community', '/report', '/reports', '/profile']);
+const PRIMARY = new Set(['/home', '/community', '/reports', '/profile']);
 
 /** Shown when a request reports that the session is no longer valid. It cannot be dismissed: the only way on is to sign in. */
 function SessionExpiredSheet() {

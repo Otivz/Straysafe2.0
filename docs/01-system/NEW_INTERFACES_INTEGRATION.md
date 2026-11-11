@@ -68,6 +68,24 @@ Each live provider keeps the preview provider's contract (`state`, async `dispat
 
 Privacy stays on the server: a resident receives only what `report_visibility.redact_response` allows (own exact pin; neighbours' notices rounded to an area; no staff notes, priority, assessment or other residents' names). The screens add nothing to it.
 
+## What the Resident Report screens offer
+
+The Resident app groups the six internal kinds of report (`lost_pet`, `found_animal`, `nuisance`, `safety`, `injured`, `other`) into three entries and one question, in a resident's words (`frontend/src/resident/data/entries.ts`). Nothing below the screens changes: the identifiers, the stored categories, the Leader's names for them and every rule keyed to them (privacy, notices, owner warnings, publication, counting) are the same.
+
+| A resident chooses | Filed as | Form that opens |
+|---|---|---|
+| Lost pet ("My pet is missing.") | `lost_pet` | lost-pet form (3 steps), notice requested |
+| Animal complaint ("An animal is causing a problem.") | `nuisance` | general form (4 steps), "How often does it happen?" |
+| Report an animal, then "It looks lost or has no owner nearby" | `found_animal` | found-animal form (3 steps), notice requested (reviewed first unless the subdivision publishes at once) |
+| Report an animal, then "It is hurt or needs help" | `injured` | general form, "Can the animal move?" |
+| Report an animal, then "It may be dangerous" | `safety` | general form |
+| Report an animal, then "Something else, or I'm not sure" | `other` | general form |
+
+- **Only what the subdivision accepts is offered.** `GET /cases/categories` already says, per kind, whether the Leader switched it on (`enabled`) and which stored category a report is filed under (`category_id`); the app keeps both as `state.accepting` (`adapters.acceptingFrom`). A kind is offered only when it is on and has a stored category. "Report an animal" disappears when all four of its kinds are off. When the settings could not be read the Report screen offers "Try again" rather than a list that could not be filed.
+- **A kind switched off while a report is being written:** when the report is sent the app reads `GET /cases/categories` once more, files nothing, says so and offers "Choose another type"; the description, time, place, animal and photos (where the new kind takes them) are carried to the kind chosen instead. The server still refuses a switched-off kind on its own.
+- **Reports already filed** keep their stored category and are grouped in My reports by the same mapping (older categories such as Aggressive or Roaming Animal are read as one of the six by the server).
+- **The Leader's screens are unchanged:** they show the six kinds under the Leader's own names.
+
 ## Backend contract adjustments made for the connection
 
 Additive, no schema change, see [CASE_WORKFLOW_BACKEND.md](CASE_WORKFLOW_BACKEND.md) for each: `GET /cases/summaries`, `GET /cases/work-queue`, `GET/POST /cases/{id}/notes`, `POST /cases/{id}/warnings/{wid}/observations`, the `office` block of the case settings, `category_id`/`subdivision`/`publication`/`stored_categories` in `GET /cases/categories`, `GET /reports/?mine=true`, `case_outcome` on a report, `GET /ownership-claims/mine`, `POST /ownership-claims/{id}/info`, `GET /lost-pet-alerts/mine`, `GET /lost-pet-alerts/all`, and `requested_by` on a notice (never shown to neighbours).

@@ -87,7 +87,7 @@ body = res.json()
 check("admin creates the account", res.status_code == 200 and body["email"] == "new.leader@test-mail.com", res.text[:200])
 check("setup email goes to the entered address with a 72-hour code",
       len(invites) == 1 and invites[0]["to"] == "new.leader@test-mail.com" and invites[0]["hours"] == 72 and len(invites[0]["code"]) == 6, str(invites))
-check("email names the role and links to the Leader sign-in page", invites[0]["role"] == "Subdivision Leader" and invites[0]["url"] == "http://localhost:5173/subd-admin/login", str(invites[0]))
+check("email names the role and links to the Leader sign-in page", invites[0]["role"] == "Subdivision Leader" and invites[0]["url"] == "http://localhost:5173/login", str(invites[0]))
 check("response says the invite was sent and is pending", body["invite_sent"] is True and body["invite_pending"] is True)
 new_id = body["user_id"]
 check("a password typed by the admin is ignored", not pw_ok("new.leader@test-mail.com", "Typed-By-Admin-1"))

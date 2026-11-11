@@ -13,8 +13,8 @@ const STATUS_ORDER: CaseStatus[] = ['reported', 'under_review', 'in_progress', '
 const FAQ: { q: string; text: string; a: ReactNode }[] = [
   {
     q: 'What can I report?',
-    text: 'Lost pets, found animals, animal nuisance, safety concerns, injured animals and anything else involving an animal in your subdivision.',
-    a: <p>Lost pets, found animals, animal nuisance (noise or roaming), animal safety concerns, injured or distressed animals, and anything else involving an animal in your subdivision. Start from <Link to={residentPath('/report')}>Report</Link>.</p>,
+    text: 'A lost pet, an animal complaint, or an animal you saw that may need attention in your subdivision.',
+    a: <p>You can report a lost pet, make an animal complaint (for example noise or a roaming animal), or report an animal you saw that may need attention: one that looks lost or has no owner nearby, is hurt or needs help, may be dangerous, or something else. Start from <Link to={residentPath('/report')}>Report</Link>.</p>,
   },
   {
     q: 'Who sees my report?',

@@ -116,7 +116,7 @@ function Body() {
 
       <Field
         label="Backend API address"
-        hint="Your computer on the same Wi-Fi (http://192.168.1.10:8000) or an https tunnel (https://example-tunnel.example.com)."
+        hint="Paste the default tunnel URL (https://your-tunnel.trycloudflare.com) or your computer on Wi-Fi (http://192.168.1.10:8000). Do not add /resident-app or any route at the end."
         error={fieldError}
       >
         <Input

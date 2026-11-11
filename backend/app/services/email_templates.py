@@ -385,7 +385,7 @@ def render_leader_new_report_email(
     ]
     
     intro = f"A new resident stray report has been submitted in your subdivision and is awaiting verification and initial assessment."
-    cta_url = f"/subd-admin/cases/{report_id}"
+    cta_url = f"/cases/{report_id}"
     
     html_content = _build_html_wrapper(
         header_badge="Action Required",
@@ -423,7 +423,7 @@ def render_unassigned_reminder_email(
     ]
     
     intro = f"Report #{report_id} has been active for {minutes_unassigned} minutes without an assigned leader. Please assign an officer or claim the case to proceed with verification."
-    cta_url = f"/subd-admin/cases/{report_id}"
+    cta_url = f"/cases/{report_id}"
     
     html_content = _build_html_wrapper(
         header_badge="Unassigned Alert",

@@ -1,0 +1,36 @@
+# Resident reporting: three entry points instead of six categories
+
+- **Date:** 2026-11-11 07:07 (UTC)
+- **AI tool:** Claude Code (Sonnet 5.5)
+- **Files changed:** `frontend/src/resident/data/entries.ts` (new), `frontend/src/resident/pages/report/SituationPage.tsx` (new), `frontend/src/resident/pages/report/CategoryPage.tsx`, `frontend/src/resident/pages/report/ReviewPage.tsx`, `frontend/src/resident/pages/reports/MyReportsPage.tsx`, `frontend/src/resident/pages/account/HelpPage.tsx`, `frontend/src/resident/pages/HomePage.tsx`, `frontend/src/resident/pages/pets/PetDetailsPage.tsx`, `frontend/src/resident/ResidentApp.tsx`, `frontend/src/resident/data/constants.ts`, `frontend/src/resident/data/types.ts`, `frontend/src/resident/components/icons.ts`, `frontend/src/resident/lib/flow.ts`, `frontend/src/resident/live/adapters.ts`, `frontend/src/resident/live/actions.ts`, `frontend/src/resident/live/LiveDataProvider.tsx`, `frontend/tests/residentCategories.test.mjs` (new), `frontend/tests/liveInterfaces.browser.mjs`, `proposal.md`, `docs/01-system/NEW_INTERFACES_INTEGRATION.md`, `docs/README.md`
+- **Authorization:** the developer's brief "StraySafe 2.0 — Implement Simplified Resident Reporting Categories" (2026-11-11), approving the reassessment that followed the technical adviser's usability concern about the six Resident categories.
+- **Type:** Polish
+
+## Intent
+
+The Resident Report screen listed six categories, several in terms residents do not use ("unidentified", "nuisance", "distressed", "safety concern") and several that overlap (an injured stray dog fits three). The choice also decides what happens to the report (only lost and found reports can become notices), so a wrong pick mattered. The Resident interface now offers three entry points and one plain question; the six internal kinds of report, their stored categories and every rule keyed to them are unchanged.
+
+## Key changes
+
+- **Report screen:** *Lost pet* ("My pet is missing."), *Animal complaint* ("An animal is causing a problem."), *Report an animal* ("I saw an animal that may need attention."). The long sharing lines were removed from the cards.
+- **New screen `/report/situation`** ("What’s happening with the animal?"): *It looks lost or has no owner nearby* → found animal; *It is hurt or needs help* → injured; *It may be dangerous* → safety; *Something else, or I’m not sure* → other. Each opens the existing form of that kind (same steps, notes, extra question and notice request as before). Lost pet → `lost_pet`, Animal complaint → `nuisance` (not limited to repeated problems).
+- **Mapping:** `data/entries.ts` holds the grouping, `entryOf`, the availability rules and the carry-over. Resident-facing labels in `data/constants.ts` are plain words (Lost pet, Lost or stray animal, Animal complaint, Possibly dangerous animal, Animal that needs help, Other animal report). Internal identifiers, stored categories and the Leader's labels are unchanged.
+- **My reports** filters by the three groups (older categories are read as one of the six by the server, so every report belongs to a group); Help FAQ reworded.
+- **Disabled categories** (an existing mismatch: the Leader's Settings say a switched-off category is hidden, but the Resident app never read the setting). The app now keeps what `GET /cases/categories` already says (`enabled` and a stored category to file under) as `state.accepting` and offers only those kinds. *Report an animal* disappears when all four of its kinds are off; the Home "My pet is lost" / "I found an animal" shortcuts and the pet page's lost button follow the same switch; a failed read shows "Try again" instead of a list that could not be filed; all off shows "Reports aren’t being taken in the app right now" with a link to Contact.
+- **A kind switched off mid-report:** when the report is sent the app asks the server once more (`GET /cases/categories`, no new endpoint), files nothing, says so in the resident's words and offers *Choose another type*; what was written (description, time, place, animal, photos where the new kind takes them) is carried to the kind chosen instead.
+- **Back navigation:** every report step pushed the next one, but Back also pushed a screen, which could loop between two screens (and the Report screen has no bottom navigation since the earlier change). Back from a report step now unwinds where the resident came from (details → the question → Report → Home); opened on its own it goes to the previous step, from the first step to where the kind was chosen. The draft is untouched.
+- **Docs:** one sentence in `proposal.md` §8.1 (the Resident interface groups the six internal classifications into three entry points); a section in `NEW_INTERFACES_INTEGRATION.md` with the mapping; the internal classification documents are unchanged.
+
+Not changed: the Leader interface and its labels, the backend, the database and its categories, `.env*`, Android native files, dependencies, `src/preview/`, the bottom-navigation change in `CategoryPage.tsx` / `ResidentLayout.tsx` (kept as it was; both files were uncommitted work of another tool and are still uncommitted).
+
+## Validation evidence
+
+- `tsc -b`: passes. ESLint on the 18 touched source and test files: no findings.
+- `node --test tests/residentCategories.test.mjs tests/residentLiveAdapters.test.mjs`: 30 of 30 pass. The new file (10 tests) covers the three entries and four options with their wording, that all six kinds stay reachable through exactly one entry and keep their form kind, no technical word in what a resident reads, availability (unknown, one off, four off, everything off), `acceptingFrom` and the carry-over.
+- Browser journey, only the resident steps this change touches (`E2E_ONLY`, throwaway SQLite and its own API and Vite ports; 45 s), 8 of 8 pass: the three choices and none of the old six; the four options; each option opens its own form and Back returns to the question, then to Report with the draft kept; filing through Animal complaint, the lost-pet request and the found-animal notice still work; an older report is named "Possibly dangerous animal"; a switched-off kind is not offered, "Report an animal" goes when all four are off, `/report/situation` opened directly falls back to Report, the Home shortcut disappears; a kind switched off while the review is open is explained, nothing is filed, the written text and place survive, and the report is then filed under the chosen kind (checked on the server).
+- Phone-width screenshots (390 px) of Report and the question screen render cleanly with the existing components.
+- Not run: the other 38 steps of the journey (the full journey is the one that counts and should be run before release), the backend tests (no backend change), the Android builds and a device (the screens are shared code; no native file changed).
+
+## Observation (not changed)
+
+`resident.css` sets `--rs-bar: 34px` ("height of the sticky preview bar") and `.rs-topbar { top: var(--rs-bar) }`. The preview bar no longer exists, so every pushed Resident screen (Report, My pets, Contact, ...) has its top bar 34 px lower than the flow places the content, covering about the first 18 px of it. It predates this change and is only fully right in the Android debug build, which has its own 34 px connection bar. A separate fix, not part of this task.

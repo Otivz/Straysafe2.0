@@ -92,7 +92,7 @@ Admins can check the queue at `GET /admin/ai-jobs`.
 
 The database starts with **no account**: nothing is seeded and no default password exists.
 
-- **Residents** sign up in the app (`/login` on the website).
+- **Residents** sign up in the app (`/resident-app/login` on the website).
 - **The first Subdivision Leader** is created with the seed script. Run it from `backend/` with the virtual environment active (the backend does not need to be running):
 
   ```powershell
@@ -101,7 +101,7 @@ The database starts with **no account**: nothing is seeded and no default passwo
 
   It asks for the Leader's e-mail address and a password (typed twice, never shown). Never reuse a password from this repository; it needs at least 12 characters, with an uppercase letter, a lowercase letter, a number and a special character. Nothing is read from `.env` and nothing is kept except the bcrypt hash in the database, so there is nothing to add to `.env`.
 
-  The Leader signs in at `/subd-admin/login`. The script creates nothing without `--leader` or `--admin`, refuses a weak password, never changes or resets an account that already exists, and prints no password.
+  The Leader signs in at `/login` (the website's root sign-in page). The script creates nothing without `--leader` or `--admin`, refuses a weak password, never changes or resets an account that already exists, and prints no password.
 - **Admin** (a role reserved for a future implementation, not needed for current development): `--admin` instead, the same way.
 - **Barangay Staff** is retired: no account of that role is created.
 

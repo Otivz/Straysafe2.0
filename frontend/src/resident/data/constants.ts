@@ -2,16 +2,19 @@ import type { AnimalType, CaseStatus, CategoryId, ClaimStatus, NoticeType, Repor
 
 export type Tone = 'neutral' | 'brand' | 'amber' | 'sage' | 'red';
 
-/** The six incident categories, in the order residents see them. `private` ones are never published automatically. */
-export const CATEGORIES: Record<CategoryId, { label: string; blurb: string; kind: ReportKind; private: boolean; careful?: boolean }> = {
-  lost_pet: { label: 'Lost pet', blurb: 'Your pet is missing', kind: 'lost', private: false },
-  found_animal: { label: 'Found / unidentified animal', blurb: 'You found an animal that may have an owner', kind: 'found', private: false },
-  nuisance: { label: 'Animal nuisance', blurb: 'Noise, roaming or repeated disturbance', kind: 'incident', private: true },
-  safety: { label: 'Animal safety concern', blurb: 'An animal that may be a risk to people', kind: 'incident', private: true, careful: true },
-  injured: { label: 'Injured / distressed animal', blurb: 'An animal that looks hurt, trapped or unwell', kind: 'incident', private: true, careful: true },
-  other: { label: 'Other animal concern', blurb: 'Anything else involving an animal', kind: 'incident', private: true },
+/**
+ * The six kinds of report the subdivision works with. `label` is what a resident reads once a kind is chosen (the form's step line, My
+ * reports, a report's details), in plain words; the identifiers, the stored categories and the Leader's own names for them are unchanged.
+ * How the first Report screen groups the six is data/entries.ts. `private` ones are never published automatically.
+ */
+export const CATEGORIES: Record<CategoryId, { label: string; kind: ReportKind; private: boolean; careful?: boolean }> = {
+  lost_pet: { label: 'Lost pet', kind: 'lost', private: false },
+  found_animal: { label: 'Lost or stray animal', kind: 'found', private: false },
+  nuisance: { label: 'Animal complaint', kind: 'incident', private: true },
+  safety: { label: 'Possibly dangerous animal', kind: 'incident', private: true, careful: true },
+  injured: { label: 'Animal that needs help', kind: 'incident', private: true, careful: true },
+  other: { label: 'Other animal report', kind: 'incident', private: true },
 };
-export const CATEGORY_IDS = Object.keys(CATEGORIES) as CategoryId[];
 
 /** One short multiple-choice question that helps an administrator, for the categories that benefit from it. */
 export const EXTRA_FIELD: Partial<Record<CategoryId, { label: string; options: string[] }>> = {
@@ -56,4 +59,3 @@ export const NOTICE_TYPES: Record<NoticeType, { label: string; plural: string }>
   found_animal: { label: 'Found animal', plural: 'Found animals' },
   safety_advisory: { label: 'Safety advisory', plural: 'Safety advisories' },
 };
-

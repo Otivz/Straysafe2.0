@@ -36,6 +36,7 @@ import DetailsPage from './pages/report/DetailsPage';
 import EvidencePage from './pages/report/EvidencePage';
 import LocationPage from './pages/report/LocationPage';
 import ReviewPage from './pages/report/ReviewPage';
+import SituationPage from './pages/report/SituationPage';
 import SubmittedPage from './pages/report/SubmittedPage';
 import AddUpdatePage from './pages/reports/AddUpdatePage';
 import MyReportsPage from './pages/reports/MyReportsPage';
@@ -80,6 +81,7 @@ export default function ResidentApp({ mode }: { mode: ResidentMode }) {
                 <Route path="home" element={<HomePage />} />
 
                 <Route path="report" element={<CategoryPage />} />
+                <Route path="report/situation" element={<SituationPage />} />
                 <Route path="report/details" element={<DetailsPage />} />
                 <Route path="report/location" element={<LocationPage />} />
                 <Route path="report/evidence" element={<EvidencePage />} />

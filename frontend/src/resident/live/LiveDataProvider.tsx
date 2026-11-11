@@ -104,6 +104,12 @@ function Loaded({ session, children }: { session: ResidentSession; children: Rea
     categoryIds.current = ids;
   }, []);
 
+  /** What the server said, outside the load (a report about to be sent asked again): the ids to file under and what is accepted. */
+  const categoriesRead = useCallback((cats: ApiResidentCategories) => {
+    applyCategories(cats);
+    patch((s) => ({ ...s, accepting: ad.acceptingFrom(cats) }));
+  }, [applyCategories, patch]);
+
   const applyClaims = useCallback((list: ApiResidentClaim[]): Claim[] => {
     claimsByReport.current = new Map(list.filter((c) => c.status !== 'withdrawn').map((c) => [c.report_id, String(c.claim_id)]));
     return list.map(ad.claimFromApi).filter((c): c is Claim => c !== null);
@@ -181,6 +187,7 @@ function Loaded({ session, children }: { session: ResidentSession; children: Rea
       office: categories ? ad.officeFrom(categories) : s.office,
       subdivisionName: categories ? categories.subdivision.name : s.subdivisionName,
       publication: categories ? categories.publication : s.publication,
+      accepting: categories ? ad.acceptingFrom(categories) : s.accepting,
       reports: reportList,
       notices: mineList || alertList || annList ? notices.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)) : s.notices,
       claims: claimsState ?? s.claims,
@@ -280,7 +287,7 @@ function Loaded({ session, children }: { session: ResidentSession; children: Rea
 
   // ------------------------------------------------------------------------------------------------------- actions
   const dispatch = useCallback(async (action: ResidentAction): Promise<ActionOutcome | void> => {
-    const ctx: ResidentActionContext = { userId, state: () => stateRef.current, categoryIdOf: (family) => categoryIds.current.get(family) ?? null };
+    const ctx: ResidentActionContext = { userId, state: () => stateRef.current, categoryIdOf: (family) => categoryIds.current.get(family) ?? null, categoriesRead };
     let result;
     try {
       result = await runAction(action, ctx);
@@ -305,7 +312,7 @@ function Loaded({ session, children }: { session: ResidentSession; children: Rea
     ]);
     if (result.warnings?.length) setIssue('after-save', `${result.warnings.join(' ')} What you sent is kept.`);
     return { ...(result.created ? { reportRef: caseRef(result.created.number, result.created.createdAt) } : {}), ...(result.petId ? { petId: result.petId } : {}) };
-  }, [loadReport, refOf, refreshClaims, refreshNotices, refreshPets, refreshProfileAndSettings, sessionEnded, setIssue, userId]);
+  }, [categoriesRead, loadReport, refOf, refreshClaims, refreshNotices, refreshPets, refreshProfileAndSettings, sessionEnded, setIssue, userId]);
 
   /** Drafts and read marks are applied here at once. A read mark is also told to the server; if that is missed, the next read corrects it. */
   const local = useCallback((action: ResidentAction) => {

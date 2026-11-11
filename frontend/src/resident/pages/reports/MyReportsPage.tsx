@@ -6,10 +6,9 @@ import { Select, SearchInput } from '../../components/form';
 import { PrimaryScreen } from '../../components/Screen';
 import { Button, Callout, ClaimPill, EmptyState, LinkButton, Section, Segmented } from '../../components/ui';
 import { residentPath } from '../../config';
-import { CATEGORIES, CATEGORY_IDS } from '../../data/constants';
 import { useResidentData } from '../../data/context';
+import { ENTRIES, ENTRY_IDS, entryOf, type EntryId } from '../../data/entries';
 import { myReports, noticeById } from '../../data/selectors';
-import type { CategoryId } from '../../data/types';
 import { fmtDay } from '../../../preview/lib/format';
 import { useNow } from '../../lib/hooks';
 
@@ -22,12 +21,12 @@ export default function MyReportsPage() {
   const now = useNow();
   const [tab, setTab] = useState<Tab>('active');
   const [query, setQuery] = useState('');
-  const [type, setType] = useState<CategoryId | 'all'>('all');
+  const [type, setType] = useState<EntryId | 'all'>('all');
 
   const active = myReports(state, 'active');
   const closed = myReports(state, 'closed');
   const q = query.trim().toLowerCase();
-  const shown = (tab === 'active' ? active : closed).filter((r) => (type === 'all' || r.category === type) && (!q || `${r.title} ${r.id} ${r.description}`.toLowerCase().includes(q)));
+  const shown = (tab === 'active' ? active : closed).filter((r) => (type === 'all' || entryOf(r.category) === type) && (!q || `${r.title} ${r.id} ${r.description}`.toLowerCase().includes(q)));
   const filtering = q !== '' || type !== 'all';
   const none = state.reports.length === 0;
 
@@ -48,9 +47,9 @@ export default function MyReportsPage() {
           <Segmented<Tab> label="Report status" value={tab} onChange={setTab} options={[{ value: 'active', label: 'Active', count: active.length }, { value: 'closed', label: 'Closed', count: closed.length }]} />
           <div className="rs-filters">
             <SearchInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search your reports" aria-label="Search your reports" />
-            <Select value={type} onChange={(e) => setType(e.target.value as CategoryId | 'all')} aria-label="Filter by type">
+            <Select value={type} onChange={(e) => setType(e.target.value as EntryId | 'all')} aria-label="Filter by type">
               <option value="all">All types</option>
-              {CATEGORY_IDS.map((id) => <option key={id} value={id}>{CATEGORIES[id].label}</option>)}
+              {ENTRY_IDS.map((id) => <option key={id} value={id}>{ENTRIES[id].filter}</option>)}
             </Select>
           </div>
 

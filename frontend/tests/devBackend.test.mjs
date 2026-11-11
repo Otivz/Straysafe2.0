@@ -50,6 +50,9 @@ test('whitespace, trailing slashes, case and shorthand are normalized', () => {
   assert.equal(good('192.168.1.10:9000').url, 'http://192.168.1.10:9000');                      // an explicit port is kept
   assert.equal(good('example-tunnel.example.com').url, 'https://example-tunnel.example.com');  // bare name: https
   assert.equal(good('HTTP://192.168.1.10:80').url, 'http://192.168.1.10');                      // default port dropped by the URL parser
+  assert.equal(good('https://example-tunnel.trycloudflare.com/resident-app').url, 'https://example-tunnel.trycloudflare.com');
+  assert.equal(good('https://example-tunnel.trycloudflare.com/resident-app/').url, 'https://example-tunnel.trycloudflare.com');
+  assert.equal(good('https://example-tunnel.trycloudflare.com/resident-app/login').url, 'https://example-tunnel.trycloudflare.com');
 });
 
 test('localhost and every other name for "this device" are refused, with the reason', () => {

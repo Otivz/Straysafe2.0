@@ -59,7 +59,7 @@ def _populate_user_fields(user: Optional[User]) -> Optional[User]:
 ROLE_LABELS = {1: "Resident", 2: "Subdivision Leader", 3: "Barangay Staff", 4: "Administrator"}
 # Sign-in pages of the StraySafe 2.0 interfaces (frontend/src/live/config.ts). The Barangay accounts are retired and the
 # Administrator has no screen yet, so those roles get no link.
-LOGIN_PATHS = {1: "/resident-app/login", 2: "/subd-admin/login"}
+LOGIN_PATHS = {1: "/resident-app/login", 2: "/login"}
 
 
 def _login_url(role_id: int) -> Optional[str]:

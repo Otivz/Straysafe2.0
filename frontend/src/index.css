@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * Global rules of StraySafe 2.0 (the Resident app at /resident-app and the Leader app at /subd-admin).
+ * Global rules of StraySafe 2.0 (the Subdivision Leader app at / and the Resident app at /resident-app).
  * Both interfaces are light-only and style their own screens (src/preview/styles/tokens.css, src/admin/styles, src/resident/styles);
  * this file adds Tailwind and the few rules that apply to every page. The stylesheet of the retired portals (dark theme, role accents,
  * legacy utility classes, legacy map and modal rules) was removed with them.

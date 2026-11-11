@@ -86,7 +86,7 @@ def push_tag(ntype: Optional[str], related_id: Optional[int]) -> str:
 # The Resident app and the Subdivision Leader app (frontend/src/live/config.ts). A resident's report screen is addressed by the case
 # reference (SS-<year>-<id>), which a push does not know, so it opens the list; a Leader's case screen accepts the bare report id.
 RESIDENT_APP = "/resident-app"
-LEADER_APP = "/subd-admin"
+LEADER_APP = ""
 
 
 def notification_link(role_id: int, ntype: Optional[str], related_id: Optional[int], title: str = "") -> str:

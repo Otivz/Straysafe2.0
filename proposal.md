@@ -406,6 +406,8 @@ The proposed reporting interface should support the following concerns:
 | Injured / Distressed Animal | An animal may require appropriate welfare assistance        |
 | Other Animal Concern        | A concern not adequately represented by existing categories |
 
+The Resident interface groups these six internal classifications into three user-facing entry points (Lost pet, Animal complaint, and Report an animal, which asks one plain question about what is happening); each choice is filed under the matching classification above.
+
 Categories may overlap.
 
 The system should allow relevant secondary concerns to be recorded without forcing users to submit duplicate reports.

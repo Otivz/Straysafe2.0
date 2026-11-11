@@ -13,8 +13,12 @@
   ```powershell
   cloudflared tunnel --url http://localhost:8000
   ```
-* **Public URL**: **new every time the tunnel starts.** `cloudflared` prints it as `https://<random-words>.trycloudflare.com`; copy it from that terminal. There is no permanent URL, so never reuse one from an earlier run or from a document.
-* **Target Local Service**: FastAPI Backend (`http://localhost:8000`)
+* **Public URLs**: **new every time a tunnel starts.** `cloudflared` prints each as `https://<random-words>.trycloudflare.com`; copy it from that terminal. There is no permanent URL, so never reuse one from an earlier run or from a document.
+* **Target Local Services**:
+  - **FastAPI Backend** (`http://localhost:8000`) – for mobile APK connection (via `cloudflared tunnel --url http://localhost:8000`)
+  - **Web Frontend** (`http://localhost:5173`) – for web browser testing (via `cloudflared tunnel --url http://localhost:5173`):
+    - **Subdivision Leader Admin**: Default Base URL (`/` or `https://<web-tunnel>.trycloudflare.com/`), sign-in at `/login`.
+    - **Resident Web App**: `/resident-app` (`https://<web-tunnel>.trycloudflare.com/resident-app`).
 * **Database Isolation**: Local MySQL (`127.0.0.1:3306`) – **STRICTLY PRIVATE** (never exposed to the internet)
 * **Binary Location**: `C:\Program Files (x86)\cloudflared\cloudflared.exe` (it is on the PATH, so `cloudflared` works in any terminal)
 
@@ -76,7 +80,7 @@ The debug APK (built by the **Build Android APK** GitHub workflow, see [docs/05-
    * tap **Connection** in the amber **"Debug build · …"** bar at the top of any screen (it is there on Welcome and Sign in, before you log in);
    * after signing in: **Settings → Developer → Developer connection**;
    * on the very first launch with no address built in, the app opens straight on **Connect to a backend**.
-5. In **Backend API address**, enter the tunnel URL (it must be `https://…`; a trailing slash is removed, and `http://` is refused for an internet address).
+5. In **Backend API address**, enter the default tunnel URL exactly as given (e.g. `https://….trycloudflare.com`). **Do not add `/resident-app` or any route at the end** (just put whatever the tunnel gives by default; trailing slashes and accidental paths are normalized automatically).
 6. Tap **Test connection**. It should say **Reachable**. If it does not, see the troubleshooting table below.
 7. Tap **Save & connect**. If the app is already connected to another backend, confirm **Switch backend**.
 8. The app reloads on Welcome. **Switching backend signs you out and clears what the app stored for the previous backend**, so sign in again.
@@ -109,7 +113,13 @@ If someone does not have the APK and wants to open StraySafe in their phone's mo
    cloudflared tunnel --url http://localhost:5173
    ```
 2. Cloudflare will give you a web tunnel URL (e.g. `https://xxxx.trycloudflare.com`). It is a different URL from the backend tunnel's, and it also changes on every restart.
-3. Open that URL on any remote device in Chrome or Safari. Vite automatically forwards all `/api` requests to FastAPI.
+3. Access the interfaces directly on any remote device in Chrome or Safari:
+   - **Subdivision Leader Admin** (Default Base URL):
+     `https://xxxx.trycloudflare.com/` (or `/login` to sign in)
+     Subdivision Leaders land directly on the Admin interface without needing any prefix path.
+   - **Resident Web App**:
+     `https://xxxx.trycloudflare.com/resident-app`
+   Vite automatically forwards all `/api` requests to FastAPI.
 
 ---
 

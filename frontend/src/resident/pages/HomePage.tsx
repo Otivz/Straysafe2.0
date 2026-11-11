@@ -7,6 +7,7 @@ import { Callout, Button, EmptyState, LinkButton, Row, Section, StatusPill } fro
 import { residentPath } from '../config';
 import { CATEGORIES } from '../data/constants';
 import { useResidentData } from '../data/context';
+import { accepts } from '../data/entries';
 import { feed, latestAdvisory, recentUpdates, unreadCount } from '../data/selectors';
 import { useStartReport } from '../lib/flow';
 import { useNow } from '../lib/hooks';
@@ -64,8 +65,8 @@ export default function HomePage() {
 
       <div className="rs-tiles" role="group" aria-label="Quick actions">
         <Link to={residentPath('/report')} className="rs-tile rs-tile--primary"><Plus size={22} aria-hidden="true" /><span>Report a concern</span></Link>
-        <button type="button" className="rs-tile" onClick={() => start('lost_pet')}><Search size={22} aria-hidden="true" /><span>My pet is lost</span></button>
-        <button type="button" className="rs-tile" onClick={() => start('found_animal')}><PawPrint size={22} aria-hidden="true" /><span>I found an animal</span></button>
+        {accepts(state.accepting, 'lost_pet') ? <button type="button" className="rs-tile" onClick={() => start('lost_pet')}><Search size={22} aria-hidden="true" /><span>My pet is lost</span></button> : null}
+        {accepts(state.accepting, 'found_animal') ? <button type="button" className="rs-tile" onClick={() => start('found_animal')}><PawPrint size={22} aria-hidden="true" /><span>I found an animal</span></button> : null}
         <Link to={residentPath('/pets')} className="rs-tile"><Dog size={22} aria-hidden="true" /><span>My pets</span></Link>
       </div>
 

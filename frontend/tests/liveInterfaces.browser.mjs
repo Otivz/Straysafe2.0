@@ -10,7 +10,7 @@
 import assert from 'node:assert/strict';
 import { ACCOUNTS, PASSWORD, apiLogin, delay, openBrowser, startStack } from './_liveHarness.mjs';
 
-const ADMIN = '/subd-admin';
+const ADMIN = '';
 const RESIDENT = '/resident-app';
 let passed = 0;
 let skipped = 0;
@@ -472,16 +472,48 @@ try {
     await page.waitText('A brown dog barks all night near Gate 2.');
     await page.click('Closed');                                                                   // the older report was closed long ago
     await page.click('A large dog snapped at me near the park path last month.', { selector: 'a' });
-    await page.waitText('Animal safety concern · reported');                                 // "Aggressive" is read as a safety concern
+    await page.waitText('Possibly dangerous animal · reported');                             // "Aggressive" is read as a safety concern, and named in a resident's words
     const text = await page.text();
-    assert(!text.includes('Other animal concern · reported'), 'not mislabelled as something it is not');
+    assert(!text.includes('Other animal report · reported'), 'not mislabelled as something it is not');
     assert(text.includes('A final outcome was recorded'), 'and it shows as closed, with the neutral outcome wording');
+  });
+
+  await step('resident: Report offers three choices, and "Report an animal" asks what is happening, then opens the existing form', async () => {
+    await page.goto(`${RESIDENT}/report`);
+    await page.waitText('What would you like to report?');
+    await page.waitText('I saw an animal that may need attention.');
+    let text = await page.text();
+    for (const shown of ['Lost pet', 'My pet is missing.', 'Animal complaint', 'An animal is causing a problem.', 'Report an animal']) assert(text.includes(shown), `${shown} is offered`);
+    for (const gone of ['Found / unidentified', 'Animal nuisance', 'Animal safety concern', 'Injured / distressed', 'Other animal concern']) assert(!text.includes(gone), `${gone} is no longer a choice`);
+    await page.click('Report an animal');
+    await page.waitText('What’s happening with the animal?');
+    assert.equal(await page.path(), `${RESIDENT}/report/situation`);
+    text = await page.text();
+    for (const option of ['It looks lost or has no owner nearby', 'It is hurt or needs help', 'It may be dangerous', 'Something else, or I’m not sure']) assert(text.includes(option), `${option} is offered`);
+    await page.click('It may be dangerous');
+    await page.waitText('Stay safe.');                                                    // the safety concern's own form, as before
+    await page.waitText('Step 1 of 4 · Possibly dangerous animal');
+    await page.click('Back');
+    await page.waitText('What’s happening with the animal?');                              // Back returns to the question, not past it
+    await page.click('It is hurt or needs help');
+    await page.waitText('Do not handle the animal.');
+    await page.waitText('Can the animal move?');                                          // the injured animal's own extra question
+    await page.click('Back');
+    await page.waitText('What’s happening with the animal?');
+    await page.click('It looks lost or has no owner nearby');
+    await page.waitText('About the animal');                                              // the found-animal form: three steps, the photo on the first
+    await page.waitText('Step 1 of 3 · Lost or stray animal');
+    await page.click('Back');
+    await page.waitText('What’s happening with the animal?');
+    await page.click('Back');
+    await page.waitText('What would you like to report?');
+    await page.waitText('You have an unfinished report.');                                  // the draft is kept, as before
   });
 
   await step('resident: a report is filed at a registered landmark, saved on the server and listed in My reports', async () => {
     await page.goto(`${RESIDENT}/report`);
     await page.waitText('What would you like to report?');
-    await page.click('Animal nuisance');
+    await page.click('Animal complaint');
     await page.waitText('What happened?');
     await page.click('Dog', { selector: 'label' });
     await page.fill('What happened?', 'A tan dog keeps knocking over the bins by Gate 3 every evening.');
@@ -546,7 +578,9 @@ try {
     try {
       await page.goto(`${RESIDENT}/report`);                                  // a full page load, so the app reads the setting again
       await page.waitText('What would you like to report?');
-      await page.click('Found / unidentified animal');
+      await page.click('Report an animal');
+      await page.waitText('What’s happening with the animal?');
+      await page.click('It looks lost or has no owner nearby');
       await page.waitText('About the animal');
       await page.waitText('After you submit, a notice with the animal');       // the first-step note now says the notice goes out
       await page.click('Cat', { selector: 'label' });
@@ -571,6 +605,95 @@ try {
       assert(active.some((a) => a.report_id === filed.report_id && a.alert_type === 'found_animal'), 'neighbours can see the notice');
     } finally {
       await leaderApi.put(path, original);                                     // later steps expect the default setting
+    }
+  });
+
+  await step('resident: only the kinds of report the Leader accepts are offered, and "Report an animal" goes when all four of its kinds are off', async () => {
+    const path = '/cases/settings/1';
+    const original = (await leaderApi.get(path)).body;
+    const switchOff = async (kinds) => {
+      const saved = await leaderApi.put(path, { ...original, categories: { ...original.categories, ...Object.fromEntries(kinds.map((k) => [k, false])) } });
+      assert.equal(saved.status, 200, JSON.stringify(saved.body));
+      await page.goto(`${RESIDENT}/report`);                       // a full page load, so the app reads the settings again
+      await page.waitText('What would you like to report?');
+    };
+    try {
+      await switchOff(['injured']);
+      await page.click('Report an animal');
+      await page.waitText('What’s happening with the animal?');
+      let text = await page.text();
+      assert(text.includes('It looks lost or has no owner nearby') && text.includes('It may be dangerous') && text.includes('Something else, or I’m not sure'), 'the other three are offered');
+      assert(!text.includes('It is hurt or needs help'), 'the switched-off kind is not offered');
+
+      await switchOff(['found_animal', 'injured', 'safety', 'other']);
+      text = await page.text();
+      assert(text.includes('Lost pet') && text.includes('Animal complaint'), 'the rest of the screen remains');
+      assert(!text.includes('Report an animal'), 'the parent goes when all four of its kinds are off');
+      await page.goto(`${RESIDENT}/report/situation`);              // opened directly, the question has nothing to ask: the Report screen takes over
+      await page.waitText('What would you like to report?');
+      await page.goto(`${RESIDENT}/home`);
+      await page.waitText('My pet is lost');
+      assert(!(await page.text()).includes('I found an animal'), 'Home no longer offers the shortcut to a kind that is off');
+
+      await switchOff(['lost_pet', 'nuisance']);
+      text = await page.text();
+      assert(text.includes('Report an animal') && !text.includes('Lost pet') && !text.includes('Animal complaint'), 'the other entries are hidden one by one');
+    } finally {
+      await leaderApi.put(path, original);                           // later steps expect every kind on
+    }
+  });
+
+  await step('resident: a kind switched off while a report is being written is explained, nothing is filed, and what was written is kept', async () => {
+    const path = '/cases/settings/1';
+    const original = (await leaderApi.get(path)).body;
+    const text = 'A white dog howls every night behind the clubhouse and keeps the whole street awake.';
+    try {
+      await page.goto(`${RESIDENT}/report`);
+      await page.waitText('What would you like to report?');
+      await page.click('Animal complaint');
+      await page.waitText('What happened?');
+      await page.click('Dog', { selector: 'label' });
+      await page.fill('What happened?', text);
+      await page.click('Continue', { selector: 'button[type=submit]' });
+      await page.waitText('Where was the animal?');
+      await page.click('Selera Homes Main Entrance Gate', { selector: 'button' });
+      await page.waitText('Pin placed, inside the reporting area');
+      await page.click('Confirm location');
+      await page.waitText('Add photos or video');
+      await page.click('Continue without photos');
+      await page.waitText('Review and submit');
+      const off = await leaderApi.put(path, { ...original, categories: { ...original.categories, nuisance: false } });   // the Leader switches the kind off while the review is open
+      assert.equal(off.status, 200, JSON.stringify(off.body));
+      await page.click('Submit report');
+      await page.waitText('Your subdivision isn’t accepting this kind of report right now');
+      assert((await page.text()).includes('What you wrote is kept'), 'it says her words are kept');
+      const owner = await apiLogin(stack.apiUrl, ACCOUNTS.resident, PASSWORD);
+      assert(!(await owner.get('/reports/?mine=true')).body.some((r) => String(r.description).includes('keeps the whole street awake')), 'nothing was filed');
+
+      await page.click('Choose another type');
+      await page.waitText('Your subdivision isn’t accepting that kind of report right now');
+      assert(!(await page.text()).includes('Animal complaint'), 'the switched-off kind is no longer offered');
+      await page.click('Report an animal');
+      await page.waitText('What’s happening with the animal?');
+      await page.click('Something else, or I’m not sure');
+      await page.waitText('What happened?');
+      const kept = await page.evaluate("document.querySelector('textarea').value");
+      assert(String(kept).includes('keeps the whole street awake'), `what she wrote is still there: ${kept}`);
+      await page.click('Continue', { selector: 'button[type=submit]' });
+      await page.waitText('Where was the animal?');
+      await page.waitText('Pin placed, inside the reporting area');           // the spot she chose is still chosen
+      await page.click('Confirm location');
+      await page.waitText('Add photos or video');
+      await page.click('Continue without photos');
+      await page.waitText('Review and submit');
+      await page.click('Submit report');
+      await page.waitText('Report submitted');
+      const filed = (await owner.get('/reports/?mine=true')).body.find((r) => String(r.description).includes('keeps the whole street awake'));
+      assert(filed, 'it is filed now');
+      const other = (await owner.get('/cases/categories')).body.categories.find((c) => c.id === 'other');
+      assert.equal(filed.category_id, other.category_id, 'under the kind she chose instead');
+    } finally {
+      await leaderApi.put(path, original);
     }
   });
 

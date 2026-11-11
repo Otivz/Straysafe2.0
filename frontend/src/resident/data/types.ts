@@ -174,6 +174,8 @@ export interface ResidentState {
   subdivisionName?: string | null;
   /** How the subdivision publishes each kind of notice (the server's publication setting). Absent until it has been read. */
   publication?: { lost_pet: 'immediate' | 'review'; found_animal: 'immediate' | 'review' };
+  /** Which kinds of report the subdivision accepts right now (the Leader's category settings, as the server says them). Absent until read, or when it could not be. */
+  accepting?: Partial<Record<CategoryId, boolean>>;
   settings: Settings;
   reports: Report[];
   notices: Notice[];

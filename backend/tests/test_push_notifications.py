@@ -170,7 +170,7 @@ check("5 nothing is pushed about a report the person can't see", deliveries(nid)
       and "no longer available" in deliveries(nid)[0].last_error, deliveries(nid)[0].last_error)
 
 # 8. Links per role
-check("8 leader links go to the Leader app's case page", pc.notification_link(2, "status_update", 52) == "/subd-admin/cases/52")
+check("8 leader links go to the Leader app's case page", pc.notification_link(2, "status_update", 52) == "/cases/52")
 check("8 resident links go to the Resident app's reports", pc.notification_link(1, "status_update", 52) == "/resident-app/reports")
 check("8 retired adoption chat types are no longer pushed", pc.category_for("adoption_chat") is None and pc.category_for("adoption_available_again") is None)
 

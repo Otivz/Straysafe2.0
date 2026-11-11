@@ -87,7 +87,7 @@ export const getStoredToken = (): string | null => {
         prioritizedKeys = ['admin_user', 'staff_user', 'resident_user'];
     } else if (path.startsWith('/staff') || path.startsWith('/subd') || path.startsWith('/brgy')) {
         prioritizedKeys = ['staff_user', 'admin_user', 'resident_user'];
-    } else if (path.startsWith('/resident') || path.startsWith('/resident-home') || path.startsWith('/login')) {
+    } else if (path.startsWith('/resident') || path.startsWith('/resident-home')) {
         prioritizedKeys = ['resident_user', 'staff_user', 'admin_user'];
     }
 

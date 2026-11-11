@@ -283,6 +283,13 @@ export function officeFrom(cats: ApiResidentCategories): Office | null {
   return { name: `${cats.subdivision.name ?? 'Subdivision'} office`, phone: o.phone, email: o.email, hours: o.hours, address: o.address };
 }
 
+/** Which kinds of report the subdivision accepts: the Leader's switch for the kind, and a stored category to file it under. */
+export function acceptingFrom(cats: Pick<ApiResidentCategories, 'categories'>): Partial<Record<CategoryId, boolean>> {
+  const out: Partial<Record<CategoryId, boolean>> = {};
+  for (const c of cats.categories) out[c.id as CategoryId] = c.enabled && c.category_id !== null;
+  return out;
+}
+
 /** The server's per-type, per-channel flags as the resident screen's switches. The community and advisory switches and SMS have no server flag. */
 export function settingsFrom(p: ApiNotificationPrefs): Settings {
   return {

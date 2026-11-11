@@ -15,13 +15,15 @@ import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import type { ResidentAction } from '../data/reducer';
 import type { CategoryId, Draft, Media, Notice, ResidentState } from '../data/types';
 import { ANIMAL_LABEL, PINNED_LABEL, evidenceIdsFrom, joinAddress, joinExtra, noticeRef, petToApi, preferencesFrom, withPetName } from './adapters';
-import { residentApi } from './api';
+import { residentApi, type ApiResidentCategories } from './api';
 
 export interface ResidentActionContext {
   userId: number;
   state(): ResidentState;
   /** The stored id a report of this kind is filed with. */
   categoryIdOf(family: CategoryId): number | null;
+  /** Hands the provider what the server just said about the kinds of report (what is accepted, and the stored id of each). */
+  categoriesRead?(cats: ApiResidentCategories): void;
 }
 
 /** What to read again afterwards, and what the screen asked to hear back. */
@@ -78,7 +80,13 @@ async function submitReport(ctx: ResidentActionContext): Promise<ResidentActionR
   if (!animal || draft.description.trim().length < 10) return fail('Add the animal and a description first.', 422);
   const loc = draft.location ?? fail('Choose where the animal was.', 422);
   if (loc.lat === null || loc.lng === null) return fail('Pin the spot on the map or use your location. The subdivision needs a position to follow up.', 422);
-  const category = ctx.categoryIdOf(draft.category) ?? fail('This kind of report is not available in your subdivision.', 422);
+  // The Leader may have switched this kind off since the app last asked. Ask again: the resident hears it in plain words before anything
+  // is filed (what they wrote is kept) and the screens stop offering it. The server still refuses a switched-off kind on its own.
+  const fresh = await residentApi.categories().then((c) => c, () => null);
+  if (fresh) ctx.categoriesRead?.(fresh);
+  const entry = fresh?.categories.find((c) => c.id === draft.category);
+  if (fresh && !(entry?.enabled && entry.category_id !== null)) return fail('Your subdivision isn’t accepting this kind of report right now. What you wrote is kept: choose another type.', 409);
+  const category = entry?.category_id ?? ctx.categoryIdOf(draft.category) ?? fail('This kind of report is not available in your subdivision.', 422);
   const label = loc.label === PINNED_LABEL ? null : loc.label;
   const extraLabel = EXTRA_LABEL[draft.category];
 
