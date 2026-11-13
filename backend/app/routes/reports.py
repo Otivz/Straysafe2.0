@@ -108,6 +108,15 @@ router = APIRouter(
     tags=["reports"]
 )
 
+def _family_for_notice(db: Session, report: Report) -> Optional[str]:
+    """lost_pet or found_animal (their confirmation reads differently), else None."""
+    from app.utils import case_vocab as V
+    if V.is_lost_pet_report(report):
+        return "lost_pet"
+    cat = db.get(ReportCategory, report.category_id) if report.category_id else None
+    return "found_animal" if cat is not None and V.category_family(cat.category_name) == V.FOUND_ANIMAL else None
+
+
 
 def populate_handler_info(rep_data: ReportResponse, rep: Report):
     """Populates current handler officer and pending transfer details on ReportResponse."""
@@ -2251,12 +2260,8 @@ def create_report(
         # the animal comes from the pet record, never from the request.
         lost_pet = None
         if chosen_family == case_vocab.LOST_PET:
-            # Retry ids are scoped to the resident, including submissions about different pets. Serialize before the pet
-            # lock so the same key cannot create two cases by taking two different pet locks concurrently.
             db.query(User.user_id).filter(User.user_id == current_user.user_id).with_for_update().first()
             lost_pet = lost_pet_rules.require_own_pet_for_lost_report(db, current_user, report_data.get("pet_id"))
-            # A retry of a submission that already went through (same id, same resident, same pet) is answered with the FIRST report
-            # instead of a second one. The pet row is locked above, so two copies arriving together cannot both pass this point.
             if client_request_id:
                 first = db.query(Report).filter(Report.user_id == current_user.user_id,
                                                 Report.client_request_id == client_request_id).with_for_update().first()
@@ -2269,9 +2274,39 @@ def create_report(
             last_seen_at = lost_pet_rules.clean_last_seen(last_seen_at)
             # What the owner writes is published in the notice neighbors read: the server checks it, not only the form
             report_data["description"] = public_text.require_public_text(report_data.get("description"), "What you wrote about your pet", 1000)
-            report_data["client_request_id"] = client_request_id
-        elif current_user.role_id == 1:
-            report_data["pet_id"] = None
+        else:
+            if current_user.role_id == 1:
+                report_data["pet_id"] = None
+            if client_request_id:
+                db.query(User.user_id).filter(User.user_id == current_user.user_id).with_for_update().first()
+                first = db.query(Report).filter(Report.user_id == current_user.user_id,
+                                                Report.client_request_id == client_request_id).with_for_update().first()
+                if first is not None:
+                    return _report_response(db, first)
+
+        # Short-window duplicate protection (when no client_request_id is provided): prevent duplicate active submissions within 15s
+        if not client_request_id:
+            from datetime import timezone
+            from app.utils.case_closure import CLOSED_REPORT_STATUS_IDS
+            recent_window = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=15)
+            target_pet_id = report_data.get("pet_id")
+            recent_dup = db.query(Report).filter(
+                Report.user_id == current_user.user_id,
+                Report.category_id == report_data["category_id"],
+                Report.animal_type == report_data.get("animal_type"),
+                Report.description == report_data.get("description"),
+                Report.pet_id == target_pet_id,
+                Report.current_status_id.notin_(CLOSED_REPORT_STATUS_IDS),
+                Report.created_at >= recent_window
+            ).first()
+            if recent_dup is not None:
+                rep_lat = report_data.get("latitude")
+                rep_lng = report_data.get("longitude")
+                if rep_lat is not None and rep_lng is not None and recent_dup.latitude is not None and recent_dup.longitude is not None:
+                    if abs(float(recent_dup.latitude) - float(rep_lat)) < 0.0001 and abs(float(recent_dup.longitude) - float(rep_lng)) < 0.0001:
+                        return _report_response(db, recent_dup)
+
+        report_data["client_request_id"] = client_request_id
 
         # Preserve initial found location
         report_data["initial_latitude"] = report_data.get("latitude")
@@ -2364,6 +2399,11 @@ def create_report(
 
         db.commit()
         db.refresh(db_report)
+        # Lost and found: does this report look like an open report of the other kind? The check only SUGGESTS (the Leaders are told, nobody
+        # else, nothing is linked) and never blocks or fails the filing (docs/01-system/LOST_FOUND_MATCHING.md).
+        from app.services import lost_found_matching as LFM
+        LFM.suggest_after_filing(db, db_report.report_id)
+        db.refresh(db_report)
         # Look-alike / duplicate scan can call Gemini several times: never block the submit on it
         ai_jobs.enqueue_follow_up(db_report.report_id)
 
@@ -2391,6 +2431,8 @@ def create_report(
                 animal_breed=db_report.animal_breed,
                 landmark=db_report.landmark,
                 priority=db_report.priority_level or "Medium",
+                family=_family_for_notice(db, db_report),
+                reference=f"SS-{(db_report.created_at or datetime.now()).year}-{db_report.report_id:04d}",
             )
         except Exception as res_notif_err:
             print(f"Notice: Failed to dispatch resident submission notification: {res_notif_err}")
@@ -4000,8 +4042,8 @@ def update_report_status(
         )
         db.add(db_history)
     
-    # Create Notification for Resident
-    if report.user_id:
+    # Create Notification for Resident if status actually changed
+    if report.user_id and prev_status_id != status_update.status_id:
         status_names = {
             1: "Reported",
             2: "Verified",

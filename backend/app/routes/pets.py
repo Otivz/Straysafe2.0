@@ -1012,6 +1012,11 @@ def update_pet(
     for key in ("declared_bite_history", "declared_chase_behavior"):
         if key in update_data and update_data[key] is None:
             update_data.pop(key)
+    if update_data.get("color_markings"):
+        if "secondary_color" not in pet_update.model_fields_set:
+            db_pet.secondary_color = None
+        if "tertiary_color" not in pet_update.model_fields_set:
+            db_pet.tertiary_color = None
     for key, value in update_data.items():
         setattr(db_pet, key, value)
     
@@ -1628,7 +1633,8 @@ def remove_pet(
 
 def auto_extract_pet_colors(file_content: bytes, filename: str, db_pet: Pet):
     # If the pet already has valid colors assigned by user / registration form, DO NOT overwrite them!
-    if db_pet.primary_color and db_pet.primary_color.strip() not in ['Unknown', 'None', '']:
+    if (db_pet.color_markings and db_pet.color_markings.strip() not in ['Unknown', 'None', '']) or \
+       (db_pet.primary_color and db_pet.primary_color.strip() not in ['Unknown', 'None', '']):
         return
 
     try:

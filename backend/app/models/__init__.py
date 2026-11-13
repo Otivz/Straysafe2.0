@@ -16,6 +16,9 @@ from app.models.owner_followup import OwnerFollowUp, FollowUpContactLog, OwnerOb
 from app.models.leader_identity import LeaderIdentityVerification  # noqa: F401
 from app.models.barangay_referral import BarangayReferral, BarangayReferralUpdate  # noqa: F401  (external referral log)
 from app.models.case_records import CaseFollowUp, CaseContactLog, CaseLink, OwnershipClaim  # noqa: F401  (case details)
+from app.models.lost_found_match import LostFoundMatch  # noqa: F401  (possible lost/found matches)
+from app.models.case_alert import CaseAlert, CaseAlertSend  # noqa: F401  (lost & found notification alerts; created by a SQL migration, not at start-up)
+from app.models.case_messaging import CaseMessage, CaseMessageMember, CaseMessageThread  # noqa: F401  (Leader-to-resident messages and the lost/found bridge)
 from app.models.chat import ChatThread, ChatMessage
 from app.models.notification import Notification
 from app.models.notification_preference import UserNotificationPreference

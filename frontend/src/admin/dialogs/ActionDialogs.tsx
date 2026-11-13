@@ -13,12 +13,18 @@ import { FormFooter, type CaseDialogProps } from './BasicDialogs';
 
 const tomorrowNine = () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return toLocalInput(d); };
 
+/** What a contact can come to on a missing pet or a found animal (there is no ownership to deny): reached, no answer, or something else. */
+const PLAIN_OUTCOMES: OwnerContact['outcome'][] = ['cooperative', 'no_response', 'other'];
+const PLAIN_OUTCOME_LABEL: Record<OwnerContact['outcome'], string> = { cooperative: 'Reached them', no_response: 'No answer', other: 'Something else', denied_ownership: 'Denies ownership' };
+
 /** Record follow-up (scheduled or already done) and Record owner coordination share one dialog; only the fields differ. */
 export function FollowUpDialog({ c, mode, onClose }: CaseDialogProps & { mode: 'follow_up' | 'owner' }) {
   const { state, dispatch } = useAdminData();
   const toast = useToast();
   const { pending, error, run } = useSubmit();
   const owner = residentById(state, c.ownership.ownerResidentId);
+  // On a missing pet or a found animal this is just "a contact": who was reached, how, and what came of it
+  const plain = c.category === 'lost_pet' || c.category === 'found_animal';
 
   // follow-up
   const [kind, setKind] = useState<FollowUpKind>('follow_up');
@@ -53,15 +59,15 @@ export function FollowUpDialog({ c, mode, onClose }: CaseDialogProps & { mode: '
     const ok = await run(() => (mode === 'follow_up'
       ? dispatch({ type: 'case/recordFollowUp', id: c.id, kind, title: title.trim(), notes: notes.trim() || undefined, dueAt: when === 'later' ? fromLocalInput(due) : null, doneNow: when === 'done' })
       : dispatch({ type: 'case/recordOwnerContact', id: c.id, at: fromLocalInput(at), method, withWhom: withWhom.trim(), summary: summary.trim(), outcome, nextStepAt: nextStep && isValidLocalInput(nextStep) ? fromLocalInput(nextStep) : null })));
-    if (ok) { toast.success(mode === 'owner' ? 'Owner coordination recorded' : when === 'later' ? 'Follow-up scheduled' : 'Follow-up recorded'); onClose(); }
+    if (ok) { toast.success(mode === 'owner' ? (plain ? 'Contact recorded' : 'Owner coordination recorded') : when === 'later' ? 'Follow-up scheduled' : 'Follow-up recorded'); onClose(); }
   };
 
   return (
     <Dialog
-      title={mode === 'owner' ? 'Record owner coordination' : 'Record follow-up'}
-      description={mode === 'owner' ? 'Log a conversation or notice with the person who may be responsible for the animal.' : 'Schedule a check, or record one that already happened.'}
+      title={mode === 'owner' ? (plain ? 'Record a contact' : 'Record owner coordination') : 'Record follow-up'}
+      description={mode === 'owner' ? (plain ? 'Write down who you spoke with, how, and what came of it.' : 'Log a conversation or notice with the person who may be responsible for the animal.') : 'Schedule a check, or record one that already happened.'}
       onClose={onClose} dirty={dirty} onSubmit={submit}
-      footer={({ requestClose }) => <FormFooter pending={pending} label={mode === 'owner' ? 'Record coordination' : when === 'later' ? 'Schedule follow-up' : 'Record follow-up'} requestClose={requestClose} />}
+      footer={({ requestClose }) => <FormFooter pending={pending} label={mode === 'owner' ? (plain ? 'Record contact' : 'Record coordination') : when === 'later' ? 'Schedule follow-up' : 'Record follow-up'} requestClose={requestClose} />}
     >
       {mode === 'follow_up' ? (
         <>
@@ -80,8 +86,8 @@ export function FollowUpDialog({ c, mode, onClose }: CaseDialogProps & { mode: '
             <Field label="When" required error={errors.at}><Input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} /></Field>
           </div>
           <Field label="Who you spoke with" required error={errors.withWhom} hint="Use the name and relationship, e.g. “Maria Cruz (neighbour)”."><Input value={withWhom} onChange={(e) => setWithWhom(e.target.value)} /></Field>
-          <Field label="What was discussed" required error={errors.summary}><Textarea autoFocus value={summary} onChange={(e) => setSummary(e.target.value)} rows={4} /></Field>
-          <Field label="Outcome"><Select value={outcome} onChange={(e) => setOutcome(e.target.value as OwnerContact['outcome'])}>{(Object.keys(CONTACT_OUTCOMES) as OwnerContact['outcome'][]).map((o) => <option key={o} value={o}>{CONTACT_OUTCOMES[o]}</option>)}</Select></Field>
+          <Field label={plain ? 'What came of it' : 'What was discussed'} required error={errors.summary}><Textarea autoFocus value={summary} onChange={(e) => setSummary(e.target.value)} rows={plain ? 3 : 4} /></Field>
+          <Field label="Outcome"><Select value={outcome} onChange={(e) => setOutcome(e.target.value as OwnerContact['outcome'])}>{(plain ? PLAIN_OUTCOMES : (Object.keys(CONTACT_OUTCOMES) as OwnerContact['outcome'][])).map((o) => <option key={o} value={o}>{plain ? PLAIN_OUTCOME_LABEL[o] : CONTACT_OUTCOMES[o]}</option>)}</Select></Field>
           {outcome === 'denied_ownership' ? <Callout>A denial is recorded as a <strong>dispute of ownership</strong>. It does not close the case, and it is not treated as dishonesty. Assess the evidence under your established procedure.</Callout> : null}
           <Field label="Next step" optional hint="Creates a follow-up for this date."><Input type="datetime-local" value={nextStep} onChange={(e) => setNextStep(e.target.value)} /></Field>
         </>

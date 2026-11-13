@@ -32,7 +32,8 @@ export interface GeoPoint { label: string; lat: number | null; lng: number | nul
 export interface ReportUpdate {
   id: string;
   at: string;
-  kind: 'received' | 'status' | 'message' | 'you' | 'sighting' | 'outcome';
+  /** `info`: a line the system recorded (a notice went out, a sighting came in). `message` is only ever a person writing to the resident. */
+  kind: 'received' | 'status' | 'message' | 'you' | 'sighting' | 'outcome' | 'info';
   title: string;
   body?: string;
 }
@@ -145,6 +146,10 @@ export interface Notice {
   /** The possible-recovery reports on a missing-pet notice (owner only). */
   securedCount?: number;
   coordinations?: Coordination[];
+  /** The owner only: how many residents the notice reached when it was published. */
+  residentsNotified?: number;
+  /** The owner only: the lost & found alerts the Subdivision Leader sent to neighbours about this pet (never the notice itself). */
+  leaderAlerts?: { sent: number; lastAt: string | null };
   /** Official guidance (safety advisories). */
   guidance?: string[];
   updates?: { id: string; at: string; text: string }[];
@@ -184,7 +189,8 @@ export interface OwnershipRequest { id: string; petId: string; petName: string; 
 
 export interface Notification {
   id: string;
-  kind: 'report_update' | 'sighting' | 'claim_update' | 'community_notice' | 'safety_advisory';
+  /** `alert`: a lost & found alert the Subdivision Leader sent (a tap opens its notice, the notice's form, or the notifications). */
+  kind: 'report_update' | 'sighting' | 'claim_update' | 'community_notice' | 'safety_advisory' | 'alert';
   title: string;
   body: string;
   at: string;
@@ -193,13 +199,31 @@ export interface Notification {
   to: string;
 }
 
+/** A case conversation the signed-in resident belongs to. It never grants access to another resident's report. */
+export interface CaseConversation {
+  id: string;
+  kind: 'direct' | 'bridge';
+  status: 'open' | 'closed';
+  canReply: boolean;
+  endedReason: string | null;
+  myReportNumber: number | null;
+  title: string;
+  subtitle: string;
+  unread: number;
+  messageCount: number;
+  lastAt: string;
+  lastText: string;
+  people: Array<{ id: string; name: string; label: string; me: boolean }>;
+}
+
 export interface Profile { id: string; name: string; email: string; phone: string; unit: string; street: string; memberSince: string }
 
 /** How to reach the subdivision office: the office's own details, set by the Leader. */
 export interface Office { name: string; phone: string; email: string; hours: string; address: string }
 
 export interface Settings {
-  notifications: { reportUpdates: boolean; sightings: boolean; claims: boolean; community: boolean; advisories: boolean };
+  /** `lostFoundAlerts`: the Subdivision Leader's alerts about missing and found animals (notices stay in Community either way). */
+  notifications: { reportUpdates: boolean; sightings: boolean; claims: boolean; community: boolean; advisories: boolean; lostFoundAlerts: boolean };
   channels: { push: boolean; email: boolean; sms: boolean };
 }
 
@@ -238,6 +262,8 @@ export interface ResidentState {
   /** Pets the office linked to this account, waiting for the resident to say yes or no. Absent until read. */
   ownershipRequests?: OwnershipRequest[];
   notifications: Notification[];
+  /** Case-linked conversations, separate from the reporter's original confidential case updates. */
+  conversations?: CaseConversation[];
   draft: Draft | null;
   /** Next report reference number (SS-2026-0168 → 168). */
   nextRef: number;

@@ -16,7 +16,7 @@ from app.models.pet import Pet
 from app.models.report import Report
 from app.models.user import User
 from app.models.warning import OwnerWarning
-from app.services import case_claims, case_compliance, case_lifecycle as L, case_work
+from app.services import case_alerts, case_claims, case_compliance, case_lifecycle as L, case_messaging, case_work
 from app.utils import case_policy, case_state, identity_decision, lost_pet_rules
 from app.utils import case_vocab as V
 from app.utils.warning_rules import report_family, warning_blocker
@@ -205,6 +205,10 @@ def case_detail(db: Session, report: Report, viewer: User) -> Dict[str, Any]:
         "claims": [case_claims.claim_view(db, c, True) for c in claims],
         "links": [{"link_id": l.link_id, "report_id": l.related_report_id if l.report_id == rid else l.report_id,
                    "link_type": l.link_type, "note": l.note, "linked_at": l.linked_at} for l in links],
+        # the Leader's conversations on this case (who is in each, how many messages, how many are new): what the Leader wrote is in "contacts" above
+        "threads": case_messaging.threads_for_report(db, report, viewer) if (V.is_lost_pet_report(report) or family == V.FOUND_ANIMAL) else [],
+        # notification alerts sent or scheduled about this case (they never change its Community notice)
+        "alerts": case_alerts.alerts_for_report(db, report) if (V.is_lost_pet_report(report) or family == V.FOUND_ANIMAL) else [],
         "open_items": L.open_items(db, report),
         "allowed_moves": sorted(V.MANUAL_MOVES[status]),
         "can_reopen": status == V.CLOSED and not report.duplicate_of_report_id and report.current_status_id != V.MERGED_LEGACY_ID,

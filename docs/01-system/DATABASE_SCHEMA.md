@@ -7,9 +7,12 @@
 - **Edited 2026-11-10 (legacy retirement, batch 2):** the sections of the 21 tables of the retired endorsement-letter, adoption, holding, rescue and legacy claim and fee subsystems were removed (72 to 51 tables), and `report_media.holding_log_id`, `report_returns.holding_id`, `status_history.rescue_id` and `status_history.rescue_status_id` were dropped. `chat_threads.thread_type` is now `('Report','Direct')`. The list is in [DATABASE_FILES_AND_MIGRATIONS](../05-operations/database/DATABASE_FILES_AND_MIGRATIONS.md).
 - **Edited 2026-11-11 (Lost Pet end to end):** `reports.client_request_id` (varchar(64), nullable: a Lost Pet filing's retry key); on `lost_pet_alerts` the recovery record (`recovered_at`, `recovery_source`, `recovery_confirmed_by`, `recovery_recorded_by`, `recovery_recorded_at`, `recovery_note`, with two foreign keys to `users`); on `lost_pet_sightings` `sighting_type` (default `seen`), `on_behalf` (default false: second-hand observation) and `care_note`; and two new tables, `lost_pet_coordinations` and `lost_pet_coordination_messages` (51 to 53 tables). By hand from the models and `backend/app/db_migrations/case_alignment.py`, and mirrored in `Database3.4_subdivision.sql` and its `.txt`. The live database gets all of it at the next backend start; nothing was run against it. See [LOST_PET_LIFECYCLE.md](LOST_PET_LIFECYCLE.md).
 - **Edited 2026-11-11 (registration-first Lost Pet reports):** one column was added to `reports`, `pet_snapshot` (json, nullable), by hand from the model and `backend/app/db_migrations/case_alignment.py` (a MySQL server was not available to regenerate it). It holds the pet's details and the last-seen details as they were when a Lost Pet report was filed. The live database gets it at the next backend start. See [CASE_WORKFLOW_BACKEND.md](CASE_WORKFLOW_BACKEND.md).
+- **Edited 2026-11-12 (Lost & Found possible matches):** one table was added, `lost_found_matches`, by hand from the model `backend/app/models/lost_found_match.py` (a MySQL server was not available to regenerate it). It holds the possible matches between a Lost Pet report and a Found Animal report and what a Leader decided about each. The live database gets it at the next backend start (`Base.metadata.create_all`); nothing was run against it. See [LOST_FOUND_MATCHING.md](LOST_FOUND_MATCHING.md).
+- **Edited 2026-11-12 (case conversations and linked-report bridge):** `case_message_threads`, `case_message_members` and `case_messages` store participant-scoped Leader conversations and linked-report groups. Together with `lost_found_matches`, all four new tables are registered in the additive case-alignment checks and mirrored in both canonical SQL snapshots. Definitions were checked against the models without accessing the application database.
+- **Edited 2026-11-13 (Lost & Found notification alerts):** two tables, `case_alerts` and `case_alert_sends`, and the column `user_notification_preferences.push_lost_found_alerts`, written by hand from `backend/migrations/2026-11-12_lost_found_alerts.sql` and the models `backend/app/models/case_alert.py` and `notification_preference.py`. Unlike the earlier additions they are **not** created at start-up: the SQL file is applied once by hand, and the backend refuses to start until they exist. Nothing was run against a database. See [LOST_FOUND_ALERTS.md](LOST_FOUND_ALERTS.md).
 - **Regenerate** after any schema change; the SQLAlchemy models in `backend/app/models/` are the source of truth.
 
-53 tables.
+59 tables.
 
 ## Tables
 
@@ -22,9 +25,14 @@
 - `barangay_referral_updates`
 - `barangay_referrals`
 - `barangays`
+- `case_alert_sends`
+- `case_alerts`
 - `case_contact_logs`
 - `case_followups`
 - `case_links`
+- `case_message_threads`
+- `case_message_members`
+- `case_messages`
 - `chat_messages`
 - `chat_threads`
 - `coverage_settings`
@@ -33,6 +41,7 @@
 - `followup_repeated_incidents`
 - `landmarks`
 - `leader_identity_verifications`
+- `lost_found_matches`
 - `lost_pet_alerts`
 - `lost_pet_coordination_messages`
 - `lost_pet_coordinations`
@@ -219,6 +228,57 @@ Foreign keys: `barangay_id` → `barangays.barangay_id`, `outcome_recorded_by` �
 | hq_plus_code | varchar(20) | YES |  |  |  |
 | hq_lat | decimal(10,8) | YES |  |  |  |
 | hq_lng | decimal(11,8) | YES |  |  |  |
+
+## case_alert_sends
+
+**New 2026-11-13.** One row per planned send of a notification alert. The unique key (`alert_id`, `slot_at`) is what makes a send happen once: a second worker, a retry or a restart that claims the same occurrence is refused. `recipients` is how many residents it reached; `skipped_before` counts planned sends missed while the server was down (never sent late). Only from the SQL migration.
+
+| Column | Type | Null | Key | Default | Extra |
+|---|---|---|---|---|---|
+| send_id | int | NO | PRI |  | auto_increment |
+| alert_id | int | NO | MUL |  |  |
+| slot_at | datetime | NO |  |  |  |
+| status | varchar(10) | NO |  | sent |  |
+| recipients | int | NO |  | 0 |  |
+| skipped_before | int | NO |  | 0 |  |
+| sent_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+
+Unique key: `uq_case_alert_slot` (`alert_id`, `slot_at`). Foreign keys: `alert_id` → `case_alerts.alert_id` (cascade)
+
+## case_alerts
+
+**New 2026-11-13.** A notification alert a Subdivision Leader sends about ONE lost-pet or found-animal case: its own title and message, the photo choice, where a tap goes (`destination`: `notice`, `sighting`, `claim`, `inbox`), who receives it (`audience`: `all`, `helpers`) and its schedule (`mode`: `now`, `later`, `repeat`; `repeat_kind`: `every` with `every_minutes`, or `times` with `times_of_day`; `end_kind`: `resolved` with `end_at` as the latest end, `date`, or `count` with `max_sends`). `status`: `scheduled`, `active`, `paused`, `finished`, `stopped`, `cancelled`. It is not the Community notice (`lost_pet_alerts`) and never changes it. Only from the SQL migration.
+
+| Column | Type | Null | Key | Default | Extra |
+|---|---|---|---|---|---|
+| alert_id | int | NO | PRI |  | auto_increment |
+| report_id | int | NO | MUL |  |  |
+| subdivision_id | int | NO | MUL |  |  |
+| title | varchar(80) | NO |  |  |  |
+| message | varchar(300) | NO |  |  |  |
+| include_photo | tinyint(1) | NO |  | 1 |  |
+| destination | varchar(12) | NO |  | notice |  |
+| audience | varchar(10) | NO |  | all |  |
+| mode | varchar(8) | NO |  |  |  |
+| repeat_kind | varchar(8) | YES |  |  |  |
+| every_minutes | int | YES |  |  |  |
+| times_of_day | varchar(120) | YES |  |  |  |
+| start_at | datetime | NO |  |  |  |
+| end_kind | varchar(10) | YES |  |  |  |
+| end_at | datetime | YES |  |  |  |
+| max_sends | int | YES |  |  |  |
+| status | varchar(10) | NO | MUL | scheduled |  |
+| next_send_at | datetime | YES |  |  |  |
+| sends_done | int | NO |  | 0 |  |
+| stop_reason | varchar(255) | YES |  |  |  |
+| client_request_id | varchar(64) | YES | UNI |  |  |
+| created_by | int | YES | MUL |  |  |
+| created_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| updated_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
+| stopped_at | datetime | YES |  |  |  |
+| stopped_by | int | YES | MUL |  |  |
+
+Keys: `uq_case_alert_request` (`client_request_id`), `ix_case_alerts_report` (`report_id`), `ix_case_alerts_due` (`status`, `next_send_at`). Foreign keys: `report_id` → `reports.report_id` (cascade), `subdivision_id` → `subdivisions.subdivision_id`, `created_by`, `stopped_by` → `users.user_id` (set null)
 
 ## case_contact_logs
 
@@ -434,6 +494,28 @@ Foreign keys: `barangay_id` → `barangays.barangay_id`, `subdivision_id` → `s
 | created_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
 Foreign keys: `leader_id` → `users.user_id`, `match_id` → `report_matches.match_id`, `pet_id` → `pets.pet_id`, `report_id` → `reports.report_id`
+
+## lost_found_matches
+
+**New 2026-11-12.** A possible match between ONE Lost Pet report and ONE Found Animal report of the same subdivision, written by the background check when either report is filed. `status`: `pending` (only the Leaders were told), `confirmed` (a Leader linked the two reports and both residents were told), `rejected` (ruled out, kept so the pair is never suggested again; it can be reviewed again), `moot` (the found report was linked to another lost report). A link is never ownership and never a recovery. `level` is `strong` or `possible`; `reasons` holds the sentences that spoke in favour, strongest first. `link_id` (the `case_links` row) and `coordination_id` (the possible-recovery conversation) are plain integers set by a confirmation, not foreign keys. See [LOST_FOUND_MATCHING.md](LOST_FOUND_MATCHING.md).
+
+| Column | Type | Null | Key | Default | Extra |
+|---|---|---|---|---|---|
+| match_id | int | NO | PRI |  | auto_increment |
+| subdivision_id | int | NO | MUL |  |  |
+| lost_report_id | int | NO | MUL |  |  |
+| found_report_id | int | NO | MUL |  |  |
+| score | int | NO |  |  |  |
+| level | varchar(10) | NO |  |  |  |
+| reasons | json | YES |  |  |  |
+| status | varchar(12) | NO | MUL | pending |  |
+| created_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| decided_by | int | YES | MUL |  |  |
+| decided_at | datetime | YES |  |  |  |
+| link_id | int | YES |  |  |  |
+| coordination_id | int | YES |  |  |  |
+
+Unique key: `uq_lost_found_pair` (`lost_report_id`, `found_report_id`). Foreign keys: `subdivision_id` → `subdivisions.subdivision_id`, `lost_report_id`, `found_report_id` → `reports.report_id` (cascade), `decided_by` → `users.user_id` (set null)
 
 ## lost_pet_alerts
 
@@ -1207,6 +1289,7 @@ Rows keyed `case_settings:<subdivision_id>` (added 2026-11-09) hold a subdivisio
 | push_claims | tinyint(1) | NO |  | 1 |  |
 | push_adoptions | tinyint(1) | NO |  | 1 |  |
 | push_messages | tinyint(1) | NO |  | 1 |  |
+| push_lost_found_alerts | tinyint(1) | NO |  | 1 |  |
 | push_show_preview | tinyint(1) | NO |  | 1 |  |
 | updated_at | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
 
@@ -1238,3 +1321,51 @@ Foreign keys: `user_id` → `users.user_id`
 | updated_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
 
 Foreign keys: `barangay_id` → `barangays.barangay_id`, `position_id` → `positions.position_id`, `role_id` → `roles.role_id`, `subdivision_id` → `subdivisions.subdivision_id`
+
+## case_message_threads
+
+| Column | Type | Null | Key | Default |
+|---|---|---|---|---|
+| thread_id | INTEGER | NO | PRI |  |
+| subdivision_id | INTEGER | NO | MUL |  |
+| kind | VARCHAR(8) | NO |  |  |
+| report_id | INTEGER | NO | MUL |  |
+| related_report_id | INTEGER | YES | MUL |  |
+| match_id | INTEGER | YES | MUL |  |
+| link_id | INTEGER | YES |  |  |
+| status | VARCHAR(8) | NO | MUL | open |
+| closed_at | DATETIME | YES |  |  |
+| closed_by | INTEGER | YES |  |  |
+| close_reason | TEXT | YES |  |  |
+| created_by | INTEGER | YES |  |  |
+| created_at | DATETIME | NO |  | now() |
+
+Foreign keys: `closed_by` ? `users.user_id` (set null), `created_by` ? `users.user_id` (set null), `related_report_id` ? `reports.report_id` (cascade), `report_id` ? `reports.report_id` (cascade), `subdivision_id` ? `subdivisions.subdivision_id`
+
+## case_message_members
+
+| Column | Type | Null | Key | Default |
+|---|---|---|---|---|
+| member_id | INTEGER | NO | PRI |  |
+| thread_id | INTEGER | NO | MUL |  |
+| user_id | INTEGER | NO | MUL |  |
+| role | VARCHAR(10) | NO |  |  |
+| report_id | INTEGER | YES |  |  |
+| last_read_message_id | INTEGER | NO |  | 0 |
+| joined_at | DATETIME | NO |  | now() |
+
+Foreign keys: `thread_id` ? `case_message_threads.thread_id` (cascade), `user_id` ? `users.user_id` (cascade)
+
+## case_messages
+
+| Column | Type | Null | Key | Default |
+|---|---|---|---|---|
+| message_id | INTEGER | NO | PRI |  |
+| thread_id | INTEGER | NO | MUL |  |
+| sender_id | INTEGER | YES |  |  |
+| kind | VARCHAR(8) | NO |  | message |
+| body | TEXT | NO |  |  |
+| client_request_id | VARCHAR(64) | YES | UNI |  |
+| created_at | DATETIME | NO | MUL | now() |
+
+Foreign keys: `sender_id` ? `users.user_id` (set null), `thread_id` ? `case_message_threads.thread_id` (cascade)

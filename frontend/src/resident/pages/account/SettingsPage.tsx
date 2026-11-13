@@ -112,6 +112,7 @@ export default function SettingsPage() {
         <div className="rs-list">
           <ToggleRow title="Updates on my reports" meta="When a status changes or the subdivision writes to you" checked={draft.notifications.reportUpdates} onChange={topic('reportUpdates')} />
           <ToggleRow title="Sightings of my lost pet" meta="When a neighbour reports seeing your pet" checked={draft.notifications.sightings} onChange={topic('sightings')} />
+          <ToggleRow title="Lost & found alerts" meta="Alerts your Subdivision Leader sends about missing and found animals" checked={draft.notifications.lostFoundAlerts} onChange={topic('lostFoundAlerts')} />
           <ToggleRow title="Ownership claim updates" checked={draft.notifications.claims} onChange={topic('claims')} />
           {capabilities.communityToggles ? <ToggleRow title="New community notices" meta="Lost and found animals near you" checked={draft.notifications.community} onChange={topic('community')} /> : null}
           <ToggleRow title="Safety advisories" meta={capabilities.communityToggles ? 'Always on, for your safety' : 'New community notices and safety advisories always appear in the app'} checked disabled onChange={topic('advisories')} />

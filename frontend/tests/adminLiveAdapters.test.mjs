@@ -243,7 +243,8 @@ test('a pet record: type, colours, marks, photos, vaccination as the owner decla
   const p = petFromApi(pet, NOW);
   assert.deepEqual([p.id, p.type, p.sex, p.size, p.vaccination, p.ownerId, p.photos, p.microchipped], ['31', 'dog', 'female', 'small', 'up_to_date', '9', 2, false]);
   assert.equal(p.breed, 'Not recorded');
-  assert.equal(p.color, 'Brown, White, Brown and white');
+  assert.equal(p.color, 'Brown and white');
+  assert.equal(petFromApi({ ...pet, color_markings: null }, NOW).color, 'Brown, White');
   assert.deepEqual(p.markings, ['white patch', 'torn left ear', 'red collar']);
   assert.equal(p.ageText, 'Born 2022-05-01');
   assert.equal(petFromApi({ ...pet, vaccine_expiry: '2026-01-01' }, NOW).vaccination, 'overdue');
@@ -263,7 +264,7 @@ test('notices: a lost-pet alert is a draft until the Leader publishes it, and a 
   const closed = noticeFromAlert(alert({ status: 'closed', closed_at: '2026-11-05T00:00:00+00:00', close_outcome: 'not_found', close_reason: 'Never seen again.' }), lookup);
   assert.deepEqual([closed.status, closed.archivedReason], ['archived', 'Never seen again.']);
   const found = noticeFromAlert(alert({ alert_type: 'found_animal', pet: { name: 'Found animal', photo_url: null, species: 'Cat', breed: null, color: null, description: null } }), lookup);
-  assert.deepEqual([found.type, found.title, found.media], ['found_animal', 'Found cat near Near the clubhouse', []]);
+  assert.deepEqual([found.type, found.title, found.media], ['found_animal', 'Found cat near the clubhouse', []]);
   assert.deepEqual([noticeRef('alert-12'), noticeRef('ann-7'), noticeRef('notice-3'), noticeRef('new')], [{ kind: 'alert', id: 12 }, { kind: 'announcement', id: 7 }, null, null]);
 });
 

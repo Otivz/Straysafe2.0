@@ -41,7 +41,7 @@ const blankSettings = (): Settings => ({
 
 const emptyState = (name: string, email: string, userId: string): AdminState => ({
   admin: { id: userId, name, title: 'Subdivision Leader', email, phone: '', role: 'Subdivision Leader', subdivision: '', memberSince: '' },
-  cases: [], residents: [], pets: [], notices: [], notifications: [], settings: blankSettings(), seq: 0,
+  cases: [], residents: [], pets: [], notices: [], notifications: [], matches: [], settings: blankSettings(), seq: 0,
 });
 
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -96,13 +96,14 @@ export function LiveAdminDataProvider({ children }: { children: ReactNode }) {
     if (subdivisionId === null) return;           // shown as an error by the value below, without setting state here
     const token = ++loadToken.current;           // (the 'loading' state is set by reload(); the first load starts in it)
 
-    const [sum, queue, users, pets, alerts, anns, notifs, cs, cats, prefs, me, coverage] = await Promise.allSettled([
+    const [sum, queue, users, pets, alerts, anns, notifs, cs, cats, prefs, me, coverage, matchList] = await Promise.allSettled([
       adminApi.caseSummaries(), adminApi.workQueue(), adminApi.users(), adminApi.pets(subdivisionId), adminApi.alerts(), adminApi.announcements(subdivisionId),
       adminApi.notifications(), adminApi.settings(subdivisionId), adminApi.categories(), adminApi.preferences(), adminApi.user(userId), adminApi.coverage(),
+      adminApi.lostFoundMatches(),
     ]);
     if (token !== loadToken.current) return;                       // a newer load has started; this answer is out of date
 
-    for (const r of [sum, queue, users, pets, alerts, anns, notifs, cs, cats, prefs, me, coverage]) if (r.status === 'rejected' && sessionEnded(r.reason)) return;
+    for (const r of [sum, queue, users, pets, alerts, anns, notifs, cs, cats, prefs, me, coverage, matchList]) if (r.status === 'rejected' && sessionEnded(r.reason)) return;
 
     // The case list is the heart of the interface: without it there is nothing to show, and nothing is invented in its place.
     if (sum.status === 'rejected') {
@@ -149,6 +150,7 @@ export function LiveAdminDataProvider({ children }: { children: ReactNode }) {
       ...(annList ?? []).filter((a) => ad.ADVISORY_CATEGORIES.has(a.category)).map(ad.noticeFromAnnouncement),
     ];
     const notifList = part('notifications', 'Notifications', notifs);
+    const matchRows = part('matches', 'The possible matches between lost and found reports', matchList);
 
     const csv = part('settings', 'The settings', cs);
     const catv = part('settings', 'The settings', cats);
@@ -174,11 +176,17 @@ export function LiveAdminDataProvider({ children }: { children: ReactNode }) {
     setState((s) => ({
       ...s,
       admin: meUser ? ad.profileFromUser(meUser) : s.admin,
-      cases,
+      // A case that was opened in full while this refresh was still running (its own read can finish first) keeps that full record: `prev` above was taken
+      // before it landed, so the newest state is read here. Only its status, priority and update time come from this refresh.
+      cases: cases.map((c) => {
+        const open = opened.current.has(c.id) ? s.cases.find((x) => x.id === c.id) : undefined;
+        return open ? { ...open, status: c.status, priority: c.priority, updatedAt: c.updatedAt } : c;
+      }),
       residents: userList ? [...directory.current.residents.values()] : s.residents,
       pets: petList ? petList.map((p) => ad.petFromApi(p, now)) : s.pets,
       notices: alertList || annList ? notices.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) : s.notices,
       notifications: notifList ? notifList.map(ad.notificationFromApi).sort((a, b) => b.at.localeCompare(a.at)) : s.notifications,
+      matches: matchRows ? matchRows.map((m) => ad.matchFromApi(m, lk)) : s.matches,
       settings: csv && catv && prefv ? ad.settingsFrom(csv, catv, prefv) : s.settings,
     }));
     lastLoadAt.current = Date.now();
@@ -241,6 +249,18 @@ export function LiveAdminDataProvider({ children }: { children: ReactNode }) {
     } catch (err) { sessionEnded(err); }          // a missed poll is not worth a message; the next one tries again
   }, [sessionEnded]);
 
+  /** The possible matches again (a Leader decided one). A decision is saved before this runs: a failed re-read is only said, never turned into a failure. */
+  const refreshMatches = useCallback(async () => {
+    try {
+      const list = await adminApi.lostFoundMatches();
+      const lk = lookup();
+      setState((s) => ({ ...s, matches: list.map((m) => ad.matchFromApi(m, lk)) }));
+      setIssue('matches', null);
+    } catch (err) {
+      if (!sessionEnded(err)) setIssue('matches', 'Your decision was saved, but the possible matches could not be read back. Reload to see them.');
+    }
+  }, [lookup, sessionEnded, setIssue]);
+
   /** The pet registry again (a pet record was touched). */
   const refreshPets = useCallback(async () => {
     if (subdivisionId === null) return;
@@ -291,10 +311,11 @@ export function LiveAdminDataProvider({ children }: { children: ReactNode }) {
       result.notices ? refreshNotices() : undefined,
       result.notifications ? refreshNotifications() : undefined,
       result.pets ? refreshPets() : undefined,
+      result.matches ? refreshMatches() : undefined,
       result.settings || result.profile ? refreshSettings() : undefined,
     ]);
     if (result.warnings?.length) setIssue('after-save', `${result.warnings.join(' ')} What you saved is kept.`);
-  }, [loadCase, refreshNotices, refreshNotifications, refreshPets, refreshSettings, sessionEnded, setIssue, subdivisionId, userId]);
+  }, [loadCase, refreshMatches, refreshNotices, refreshNotifications, refreshPets, refreshSettings, sessionEnded, setIssue, subdivisionId, userId]);
 
   const reload = useCallback(() => {
     setStatus('loading');
@@ -313,6 +334,15 @@ export function LiveAdminDataProvider({ children }: { children: ReactNode }) {
     return () => { clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
   }, [loadAll, loadCase, refreshNotifications]);
 
+  const matchDetail = useCallback(async (matchId: string) => {
+    try {
+      return ad.matchFromApi(await adminApi.lostFoundMatch(Number(matchId)), lookup());
+    } catch (err) {
+      sessionEnded(err);
+      throw err instanceof AdminApiError ? err : new AdminApiError('server');
+    }
+  }, [lookup, sessionEnded]);
+
   const fetchAnalytics = useCallback(async (range: DateRange) => {
     try {
       const last = addDays(range.to, -1);
@@ -324,13 +354,23 @@ export function LiveAdminDataProvider({ children }: { children: ReactNode }) {
     }
   }, [sessionEnded]);
 
+  const alertAudience = useCallback(async (caseId: string) => {
+    try {
+      const n = await adminApi.caseAlertAudience(reportIdOf(caseId) ?? 0);
+      return { all: n.all, helpers: n.helpers, residents: n.residents, turnedOff: n.turned_off, pushReady: n.push_ready === true };
+    } catch (err) {
+      sessionEnded(err);
+      throw err instanceof AdminApiError ? err : new AdminApiError('server');
+    }
+  }, [sessionEnded]);
+
   // A Leader with no subdivision has nothing to load: say so, rather than showing an empty app as if it were a quiet day.
   const unassigned = subdivisionId === null;
   const value = useMemo(() => ({
     state, status: unassigned ? 'error' as const : status,
     loadError: unassigned ? 'Your account is not assigned to a subdivision, so there is nothing to show yet. Ask the system administrator to assign one.' : loadError,
-    issues, dispatch, reload, loadCase, detailStatus, fetchAnalytics, capabilities: LIVE_CAPABILITIES,
-  }), [state, status, unassigned, loadError, issues, dispatch, reload, loadCase, detailStatus, fetchAnalytics]);
+    issues, dispatch, reload, loadCase, detailStatus, matchDetail, alertAudience, fetchAnalytics, capabilities: LIVE_CAPABILITIES,
+  }), [state, status, unassigned, loadError, issues, dispatch, reload, loadCase, detailStatus, matchDetail, alertAudience, fetchAnalytics]);
 
   return <AdminDataContext.Provider value={value}>{children}</AdminDataContext.Provider>;
 }

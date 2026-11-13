@@ -1,7 +1,7 @@
 /**
  * The Admin UI's calls to the existing backend, and the shapes the backend answers with. Nothing here invents an endpoint:
  * every path below is one the backend already serves (routes/cases.py, reports.py, warnings.py, users.py, pets.py,
- * lost_pet_alerts.py, announcements.py, notifications.py, analytics.py). Types only describe what the screens read.
+ * lost_pet_alerts.py, lost_found.py, announcements.py, notifications.py, analytics.py). Types only describe what the screens read.
  *
  * Type-only imports, so the pure adapters (adapters.ts) that share these types can run under `node --test`.
  */
@@ -125,6 +125,10 @@ export interface ApiCaseDetail {
   warnings: ApiWarning[];
   claims: ApiClaim[];
   links: ApiLink[];
+  /** Notification alerts sent or scheduled about this case (missing pet or found animal only). */
+  alerts?: ApiCaseAlert[];
+  /** The Leader's conversations on this case (missing pet or found animal only). */
+  threads?: ApiThread[];
   allowed_moves: CaseStatus[];
   can_reopen: boolean;
   warning_eligibility: { ok: boolean; reason: string | null };
@@ -172,6 +176,47 @@ export interface ApiQueue {
   coordinations?: { coordination_id: number; report_id: number; alert_id: number; mode: string; status: string; requested_at: string | null; owner_name: string | null; finder_name: string | null }[];
 }
 
+// ------------------------------------------------------------------------------------- lost and found possible matches
+/** One side of a possible match (routes/lost_found.py): who reported it, what it says, where and when. */
+/** A conversation of a case (backend services/case_messaging.py). People are named in full: this is the Leader's view. */
+export interface ApiThread {
+  thread_id: number; kind: 'direct' | 'bridge'; status: 'open' | 'closed'; can_reply: boolean; ended_reason: string | null;
+  report_id: number; related_report_id: number | null; match_id: number | null; link_id: number | null;
+  unread: number; message_count: number; last_at: string | null; last_text: string; created_at: string | null;
+  people: { user_id: number; role: 'leader' | 'owner' | 'finder' | 'reporter'; label: string; name: string; me: boolean; report_id: number | null }[];
+}
+export interface ApiThreadMessage { message_id: number; kind: 'message' | 'system'; sender_id: number | null; sender_name: string | null; sender_role: string; label: string; mine: boolean; body: string; at: string }
+export interface ApiThreadView extends ApiThread { messages: ApiThreadMessage[] }
+/** A notification alert (backend services/case_alerts.py alert_view). Times are naive server times. */
+export interface ApiCaseAlert {
+  alert_id: number; report_id: number; title: string; message: string; include_photo: boolean; destination: 'notice' | 'sighting' | 'claim' | 'inbox';
+  audience: 'all' | 'helpers'; status: 'scheduled' | 'active' | 'paused' | 'finished' | 'stopped' | 'cancelled'; stop_reason: string | null;
+  schedule: { mode: 'now' | 'later' | 'repeat'; repeat: 'every' | 'times' | null; every_minutes: number | null; times: string[]; start_at: string;
+    end_kind: 'resolved' | 'date' | 'count' | null; end_at: string | null; max_sends: number | null };
+  next_send_at: string | null; upcoming: string[]; sends_done: number; created_at: string; created_by: number | null; created_by_name: string | null; stopped_at: string | null;
+  sends: { slot_at: string; sent_at: string; recipients: number; skipped_before: number }[];
+}
+export interface ApiAlertBody {
+  title: string; message: string; include_photo: boolean; destination: string; audience: string; client_request_id?: string;
+  schedule: { mode: string; at?: string | null; repeat?: string; every?: number; unit?: string; times?: string[]; start_at?: string | null; until?: string; until_at?: string | null;
+    count?: number; latest_end?: string | null };
+}
+
+export interface ApiMatchSide {
+  report_id: number; kind: 'lost' | 'found'; title: string; photo_url: string | null; species: string | null; breed: string | null;
+  colors: string[]; size: string | null; features: string[]; collar: string | null; place: string | null; at: string | null; reported_at: string | null;
+  words: string | null; open: boolean; reporter: { user_id: number; name: string; phone: string | null } | null;
+}
+export type ApiMatchStatus = 'pending' | 'confirmed' | 'rejected' | 'moot';
+export interface ApiMatch {
+  match_id: number; subdivision_id: number; lost_report_id: number; found_report_id: number; score: number; level: 'strong' | 'possible' | 'manual'; status: ApiMatchStatus;
+  reasons: string[]; created_at: string | null; decided_at: string | null; decided_by: number | null; link_id: number | null; coordination_id: number | null;
+  lost: ApiMatchSide; found: ApiMatchSide; coordination?: { coordination_id: number; mode: 'none' | 'direct' | 'leader'; status: 'open' | 'resolved' } | null;
+  /** Only on the one-match read: the side-by-side rows and the reasons in favour. */
+  rows?: ApiMatchRow[]; comparison_reasons?: string[];
+}
+export interface ApiMatchRow { key: string; label: string; lost: string; found: string; verdict: 'match' | 'similar' | 'differs' | 'unknown'; note: string; reason: string | null }
+
 // ----------------------------------------------------------------------------------------------------- directories
 export interface ApiUser {
   user_id: number; name: string; email: string; phone: string | null; role_id: number; address: string | null; status: string | null; is_verified: boolean | null;
@@ -198,10 +243,16 @@ export interface ApiAnnouncement {
   announcement_id: number; title: string; category: string; visibility: string; content: string; pinned: boolean; expiration: string | null;
   location: string | null; posted_by: string; posted_on: string; status: string; media: { media_id: number; file_url: string; media_type: string; caption: string | null }[];
 }
-export interface ApiNotification { notification_id: number; type: string | null; title: string; message: string | null; related_id: number | null; is_read: boolean; created_at: string }
+export interface ApiNotification {
+  notification_id: number; type: string | null; title: string; message: string | null; related_id: number | null; is_read: boolean; created_at: string;
+  /** Where a tap goes, when the server says (a lost & found alert: its notice, the notice's form, or the alert itself). */
+  link?: string | null;
+}
 export interface ApiNotificationPrefs {
   email_reports: boolean; email_rescues: boolean; email_pet_matches: boolean; email_claims: boolean; email_reminders: boolean;
   push_enabled: boolean; push_reports: boolean; push_rescues: boolean; push_pet_matches: boolean; push_claims: boolean; push_adoptions: boolean; push_messages: boolean; push_show_preview: boolean;
+  /** Lost & found alerts from the Subdivision Leader (on unless the resident turned them off). */
+  push_lost_found_alerts?: boolean;
 }
 
 // ---------------------------------------------------------------------------------------------------------- settings
@@ -286,6 +337,30 @@ export const adminApi = {
   reviewSighting: (sightingId: number, status: 'unverified' | 'verified' | 'dismissed', note: string | null) => httpPost(`/lost-pet-alerts/sightings/${sightingId}/review`, { status, note }),
   /** The Leader finished helping an owner and a neighbour get in touch. */
   resolveCoordination: (coordinationId: number, note: string | null) => httpPost(`/lost-pet-alerts/coordinations/${coordinationId}/resolve`, { note }),
+
+  /** The possible matches of the Leader's subdivision between a lost-pet report and a found-animal report (waiting ones first). Nothing is told to a resident until a Leader confirms. */
+  lostFoundMatches: () => httpGet<ApiMatch[]>('/lost-found/matches'),
+  /** One match with the side-by-side comparison. */
+  lostFoundMatch: (matchId: number) => httpGet<ApiMatch>(`/lost-found/matches/${matchId}`),
+  /** confirm: link the two reports and tell both residents; reject: rule the pair out (nobody is told); reopen: review a ruled-out pair again. */
+  decideMatch: (matchId: number, decision: 'confirm' | 'reject' | 'reopen') => httpPost<ApiMatch>(`/lost-found/matches/${matchId}/decision`, { decision }),
+  /** Notification alerts of a case: residents reached by each choice; create, change, pause, resume, stop. They never touch the Community notice. */
+  caseAlertAudience: (reportId: number) => httpGet<{ all: number; helpers: number; residents: number; turned_off: number; push_ready: boolean }>(`/case-alerts/reports/${reportId}/audience`),
+  createCaseAlert: (reportId: number, body: ApiAlertBody) => httpPost<ApiCaseAlert>(`/case-alerts/reports/${reportId}`, body),
+  updateCaseAlert: (alertId: number, body: ApiAlertBody) => httpPut<ApiCaseAlert>(`/case-alerts/${alertId}`, body),
+  pauseCaseAlert: (alertId: number) => httpPost<ApiCaseAlert>(`/case-alerts/${alertId}/pause`),
+  resumeCaseAlert: (alertId: number) => httpPost<ApiCaseAlert>(`/case-alerts/${alertId}/resume`),
+  stopCaseAlert: (alertId: number) => httpPost<ApiCaseAlert>(`/case-alerts/${alertId}/stop`),
+  /** Link a missing-pet report and a found-animal report by hand (either order): both residents are told and the conversation between them opens. */
+  linkLostFound: (reportId: number, otherReportId: number) => httpPost<ApiMatch>('/lost-found/links', { report_id: reportId, other_report_id: otherReportId }),
+  /** Remove a link a Leader made: the pair is ruled out (kept), its conversation closes, both residents are told. */
+  unlinkMatch: (matchId: number) => httpPost<ApiMatch>(`/lost-found/matches/${matchId}/unlink`),
+
+  /** "Contact the owner" / "Contact the reporter": the Leader's 1-to-1 conversation with one person of a report (the same one when opened again). */
+  openReportThread: (reportId: number, party: 'owner' | 'reporter') => httpPost<ApiThreadView>(`/lost-found/reports/${reportId}/threads`, { party }),
+  thread: (threadId: number) => httpGet<ApiThreadView>(`/case-messages/${threadId}`),
+  sendThreadMessage: (threadId: number, body: string, clientRequestId: string) => httpPost<ApiThreadView>(`/case-messages/${threadId}/messages`, { body, client_request_id: clientRequestId }),
+  readThread: (threadId: number, throughMessageId?: number) => httpPost<ApiThread>(`/case-messages/${threadId}/read`, throughMessageId === undefined ? {} : { through_message_id: throughMessageId }),
   announcements: (subdivisionId: number) => httpGet<ApiAnnouncement[]>(`/announcements/subdivision/${subdivisionId}`),
   createAnnouncement: (body: Record<string, unknown>) => httpPost<ApiAnnouncement>('/announcements/', body),
   updateAnnouncement: (id: number, body: Record<string, unknown>) => httpPut<ApiAnnouncement>(`/announcements/${id}`, body),

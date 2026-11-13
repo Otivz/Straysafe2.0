@@ -34,6 +34,9 @@ from app.routes import push as push_routes
 from app.services.push_service import start_push_queue_worker  # also registers the push hook
 from app.routes import ai_jobs as ai_jobs_routes
 from app.routes import manual_matching as manual_matching_routes  # also registers manual_match_decisions for create_all
+from app.routes import lost_found as lost_found_routes
+from app.routes import case_alerts as case_alert_routes
+from app.routes import case_messages as case_message_routes
 from app.routes import pet_match_confirmations as pet_match_confirmation_routes  # owner-first pet matching (owner side)
 from app.routes import leader_identity as leader_identity_routes  # Phase 6 leader identity verification
 from app.routes import lost_pet_alerts as lost_pet_alert_routes  # neighbor-to-neighbor lost pet sightings
@@ -378,8 +381,8 @@ def ensure_pet_history_table():
         except Exception as e:
             print(f"Notice in ensure_pet_history_table: {e}")
 
-# Create tables
-Base.metadata.create_all(bind=engine)
+# Create tables. Tables marked with a migration (models/case_alert.py) come only from their SQL file in backend/migrations/.
+Base.metadata.create_all(bind=engine, tables=[t for t in Base.metadata.sorted_tables if not t.info.get("migration")])
 ensure_report_media_status_column()
 ensure_report_media_animal_type_column()
 ensure_report_media_dominant_color_column()
@@ -1386,6 +1389,10 @@ ensure_report_visibility_review()
 # against tables its own queries cannot read. A merely degraded schema (a missing index, say) starts, with an ERROR line per gap.
 from app.db_migrations.case_alignment import run_case_alignment  # noqa: E402
 _case_alignment = run_case_alignment(engine, strict=True)
+# Lost & found notification alerts (2026-11-12): applied by backend/migrations/2026-11-12_lost_found_alerts.sql, never here. A read-only
+# check: the backend does not start until the migration is applied, and says which file to run.
+from app.db_migrations.lost_found_alerts import require as require_lost_found_alert_schema  # noqa: E402
+require_lost_found_alert_schema(engine)
 
 async def backfill_ai_suggestions_background():
     """Run in background after startup to backfill missing AI suggestions without blocking HTTP requests."""
@@ -1572,6 +1579,9 @@ app.include_router(lost_pet_alert_routes.router)
 from app.routes import barangay_referrals as barangay_referral_routes  # noqa: E402  (Subdivision-only referral log; registers its tables)
 app.include_router(barangay_referral_routes.router)
 app.include_router(case_routes.router)
+app.include_router(lost_found_routes.router)
+app.include_router(case_alert_routes.router)
+app.include_router(case_message_routes.router)
 app.include_router(ownership_claim_routes.router)
 app.include_router(landmarks.router)
 app.include_router(admin.router)

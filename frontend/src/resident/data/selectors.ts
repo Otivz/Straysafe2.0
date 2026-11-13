@@ -4,6 +4,9 @@ import type { Claim, Notice, NoticeType, Pet, Report, ReportUpdate, ResidentStat
 
 export const reportById = (s: ResidentState, id: string | undefined) => s.reports.find((r) => r.id === id);
 export const noticeById = (s: ResidentState, id: string | undefined) => s.notices.find((n) => n.id === id);
+/** All unread, actionable conversations: an owner/finder bridge must not disappear behind Home's ordinary three-item preview. */
+export const conversationAttention = (s: Pick<ResidentState, 'conversations'>) =>
+  [...(s.conversations ?? [])].filter((c) => c.status === 'open' && c.canReply && c.unread > 0).sort((a, b) => b.lastAt.localeCompare(a.lastAt));
 export const claimById = (s: ResidentState, id: string | undefined) => s.claims.find((c) => c.id === id);
 export const petById = (s: ResidentState, id: string | null | undefined) => s.pets.find((p) => p.id === id);
 export const nextReportId = (s: ResidentState) => refId(s.nextRef);
@@ -51,6 +54,15 @@ export function noticeEndedLabel(n: Notice): string {
   if (n.status === 'requested') return 'Not published';
   if (n.type === 'lost_pet') return n.closeOutcome === 'recovered' || n.recoveredAt ? 'Pet is home' : 'Closed';
   return n.closeOutcome === 'reunited' || n.closeOutcome === 'recovered' ? 'Recovered' : 'Closed';
+}
+
+const ANIMAL_WORD: Partial<Record<string, string>> = { dog: 'dog', cat: 'cat', bird: 'bird' };
+/** How a notice is named in a list: the pet's own name when it has one ("Mochi"), else what it is ("Lost dog", "Found dog"). */
+export function noticeName(n: Notice): string {
+  if (n.type === 'safety_advisory') return n.title;
+  const animal = (n.animalType && ANIMAL_WORD[n.animalType]) || (n.type === 'lost_pet' ? 'pet' : 'animal');
+  if (n.type === 'lost_pet') return n.petName?.trim() || `Lost ${animal}`;
+  return `Found ${animal}`;
 }
 
 export const latestAdvisory = (s: ResidentState) => feed(s, 'safety_advisory')[0];

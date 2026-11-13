@@ -20,6 +20,15 @@ export function StatusBadge({ status, large }: { status: CaseStatus; large?: boo
   return <Badge tone={s.tone} dot large={large}>{s.label}</Badge>;
 }
 
+/**
+ * A missing-pet or found-animal report is "Under monitoring" from the moment it is filed: it has no review or progress steps, so it shows no status
+ * to move through. Every other kind of report shows its status; a closed report of any kind shows "Closed".
+ */
+export function CaseStatusBadge({ c, large }: { c: Pick<Case, 'category' | 'status'>; large?: boolean }) {
+  if (c.status !== 'closed' && (c.category === 'lost_pet' || c.category === 'found_animal')) return <Badge tone="brand" dot large={large}>Under monitoring</Badge>;
+  return <StatusBadge status={c.status} large={large} />;
+}
+
 /** Urgent and High are marked; Normal and Low stay quiet so the list is not a wall of badges. */
 export function PriorityMark({ priority }: { priority: Priority }) {
   return (

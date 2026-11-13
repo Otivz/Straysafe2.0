@@ -58,7 +58,19 @@ def get_my_notifications(
     query = db.query(Notification).filter(Notification.user_id == current_user.user_id)
     if not include_archived:
         query = query.filter(Notification.is_archived == False)
-    return redact_report_notifications(query.order_by(Notification.created_at.desc()).all(), current_user, db)
+    return _with_links(db, redact_report_notifications(query.order_by(Notification.created_at.desc()).all(), current_user, db))
+
+
+def _with_links(db: Session, rows: List[Notification]) -> List[NotificationResponse]:
+    """A lost & found alert says where a tap goes (the notice, its sighting or claim form, or the alert itself); nothing else changes."""
+    from app.services import case_alerts
+    out = []
+    for n in rows:
+        item = NotificationResponse.model_validate(n)
+        if n.type == case_alerts.NOTIF_TYPE:
+            item.link = case_alerts.link_for(db, n.related_id)
+        out.append(item)
+    return out
 
 
 @router.get("/user/{user_id}", response_model=List[NotificationResponse])
@@ -283,7 +295,7 @@ def update_my_notification_preferences(
     if pref_update.email_reminders is not None:
         pref.email_reminders = pref_update.email_reminders
     for field in ("push_enabled", "push_reports", "push_rescues", "push_pet_matches", "push_claims",
-                  "push_adoptions", "push_messages", "push_show_preview"):
+                  "push_adoptions", "push_messages", "push_lost_found_alerts", "push_show_preview"):
         value = getattr(pref_update, field)
         if value is not None:
             setattr(pref, field, value)

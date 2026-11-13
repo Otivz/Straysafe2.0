@@ -290,9 +290,123 @@ export interface Case {
   referrals: Referral[];
   relatedCaseIds: string[];
   notes: Note[];
+  /** The Leader's conversations on a missing pet or a found animal: one per person contacted, and the bridge of each linked pair. Empty until the case is opened. */
+  threads: CaseThread[];
+  /** Notification alerts sent or scheduled about a missing pet or a found animal (never the Community notice). Empty until the case is opened. */
+  alerts: CaseAlert[];
   timeline: TimelineEvent[];
   closure: Closure | null;
 }
+
+/** A notification alert's state: scheduled (nothing sent yet), active (repeating), paused, finished, stopped, cancelled (stopped before sending). */
+export type AlertStatus = 'scheduled' | 'active' | 'paused' | 'finished' | 'stopped' | 'cancelled';
+/** Where a tap on the alert goes: the Community notice, its sighting form (missing pet), its claim form (found animal), or the alert itself. */
+export type AlertDestination = 'notice' | 'sighting' | 'claim' | 'inbox';
+export interface AlertSchedule {
+  mode: 'now' | 'later' | 'repeat';
+  repeat: 'every' | 'times' | null;
+  everyMinutes: number | null;
+  /** "07:00" */
+  times: string[];
+  startAt: string;
+  endKind: 'resolved' | 'date' | 'count' | null;
+  /** The end, or the latest end of "until resolved". */
+  endAt: string | null;
+  maxSends: number | null;
+}
+/**
+ * A push notification the Leader sends about this case (backend services/case_alerts.py): its own title and message, the photo or not, where a tap goes,
+ * who receives it and when. It never creates, publishes or edits the Community notice.
+ */
+export interface CaseAlert {
+  id: string;
+  title: string;
+  message: string;
+  includePhoto: boolean;
+  destination: AlertDestination;
+  audience: 'all' | 'helpers';
+  status: AlertStatus;
+  stopReason: string | null;
+  schedule: AlertSchedule;
+  nextSendAt: string | null;
+  /** The next few planned sends. */
+  upcoming: string[];
+  sendsDone: number;
+  createdAt: string;
+  createdBy: string;
+  /** Newest first. `skippedBefore`: planned sends missed while the server was down (never sent late). */
+  sends: { slotAt: string; sentAt: string; recipients: number; skippedBefore: number }[];
+}
+/** How many residents each choice reaches now. */
+export interface AlertAudience {
+  all: number;
+  helpers: number;
+  residents: number;
+  turnedOff: number;
+  /** Phones can be reached (Web Push keys or the Firebase service account are set on the server). Without it alerts reach only the in-app list. */
+  pushReady: boolean;
+}
+/** What the alert window sends to the server. Times are local; the server reads them as the subdivision's time. */
+export interface AlertInput {
+  title: string;
+  message: string;
+  includePhoto: boolean;
+  destination: AlertDestination;
+  audience: 'all' | 'helpers';
+  schedule: {
+    mode: 'now' | 'later' | 'repeat';
+    at?: string;
+    repeat?: 'every' | 'times';
+    every?: number;
+    unit?: 'minutes' | 'hours' | 'days';
+    times?: string[];
+    startAt?: string | null;
+    until?: 'resolved' | 'date' | 'count';
+    untilAt?: string;
+    count?: number;
+    latestEnd?: string;
+  };
+}
+
+/** Who is in a conversation, as the Leader reads it (full names). `userId` is the resident's id, as on `Person.residentId`. */
+export interface ThreadPerson { userId: string; role: 'leader' | 'owner' | 'finder' | 'reporter'; name: string }
+
+/**
+ * A conversation of a case (backend: services/case_messaging.py). `direct`: the Leader and one resident ("Contact the owner"). `bridge`: opened the
+ * moment two reports are linked, for the owner, the finder and the Leader. What the Leader writes writes itself into the Activity.
+ */
+export interface CaseThread {
+  id: string;
+  kind: 'direct' | 'bridge';
+  /** closed: the link it was opened for was removed, or a report of it was closed. It can still be read. */
+  status: 'open' | 'closed';
+  canReply: boolean;
+  endedReason: string | null;
+  /** A bridge: the possible match (the linked pair) it belongs to. */
+  matchId: string | null;
+  unread: number;
+  messageCount: number;
+  lastAt: string;
+  people: ThreadPerson[];
+}
+
+export interface ThreadMessage {
+  id: string;
+  /** system: the thread was opened or closed (no sender). */
+  kind: 'message' | 'system';
+  senderName: string | null;
+  /** The sender's role label ("Owner", "Subdivision Leader"). */
+  label: string;
+  mine: boolean;
+  body: string;
+  at: string;
+}
+
+/** A conversation read in full. */
+export interface ThreadView extends CaseThread { messages: ThreadMessage[] }
+
+/** Who a Leader is about to write to (1-to-1): one person of the report or of a linked report. */
+export type ThreadTarget = { kind: 'direct'; party: 'owner' | 'reporter'; name: string; label: string; reportId?: string };
 
 /** One thing a neighbour told the owner about a missing pet: an ordinary sighting, or "I may have this pet safely with me" (a possible recovery). */
 export interface LostPetSighting {
@@ -360,6 +474,62 @@ export interface LostPetCase {
 
 /** An owner and a neighbour who asked the Leader to help them get in touch: a real request for the Leader's time. */
 export interface MediationRequest { id: string; requestedAt: string | null; ownerName: string; finderName: string }
+
+// ----------------------------------------------------------------------------------- lost and found possible matches
+/**
+ * One side of a possible match: a missing-pet report or a found-animal report. The reporter is private to the Leader, the same as on the case.
+ * What the report says is shown in words ("Not noted" is left to the screen), never as a decision.
+ */
+export interface MatchSide {
+  /** The case reference of the report (SS-2026-0012). */
+  caseId: string;
+  kind: 'lost' | 'found';
+  title: string;
+  photoUrl?: string;
+  species: string;
+  breed: string;
+  colors: string[];
+  size: string;
+  features: string[];
+  collar: string;
+  place: string;
+  /** When the pet was last seen / when the animal was found. */
+  at: string | null;
+  reportedAt: string | null;
+  /** What the reporter wrote. */
+  words: string;
+  /** False once the report is closed: it can no longer be linked. */
+  open: boolean;
+  reporter: { residentId: string | null; name: string; phone: string } | null;
+}
+
+/** pending: waiting for a Leader. confirmed: linked (both residents were told). rejected: ruled out, kept so it is never suggested again. moot: the found report was linked to another lost report. */
+export type MatchStatus = 'pending' | 'confirmed' | 'rejected' | 'moot';
+/** `manual`: a Leader linked the two reports themselves and they share too little to be compared as a suggestion. */
+export type MatchLevel = 'strong' | 'possible' | 'manual';
+export interface MatchRow { key: string; label: string; lost: string; found: string; verdict: 'match' | 'similar' | 'differs' | 'unknown'; note: string }
+
+/**
+ * A lost-pet report and a found-animal report that may describe the same animal. Only a Leader's confirmation links them: a link is never
+ * proof of ownership and never a recovery (only the owner's confirmation recovers a pet).
+ */
+export interface PossibleMatch {
+  /** The server's id of the match, as text. */
+  id: string;
+  status: MatchStatus;
+  level: MatchLevel;
+  score: number;
+  /** Why they may match, strongest first. */
+  reasons: string[];
+  lost: MatchSide;
+  found: MatchSide;
+  createdAt: string | null;
+  decidedAt: string | null;
+  /** After a confirmation: how the owner and the finder get in touch (they choose; the Leader is asked only when one of them wants help). */
+  coordination: { mode: 'none' | 'direct' | 'leader'; status: 'open' | 'resolved' } | null;
+  /** Only once the match was opened in full. */
+  rows?: MatchRow[];
+}
 
 export interface Resident {
   id: string;
@@ -474,6 +644,8 @@ export interface AdminState {
   pets: Pet[];
   notices: Notice[];
   notifications: AdminNotification[];
+  /** The possible matches between missing-pet and found-animal reports (waiting ones first). */
+  matches: PossibleMatch[];
   settings: Settings;
   /** Id counter (not used by the connected data layer). */
   seq: number;

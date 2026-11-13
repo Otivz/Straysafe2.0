@@ -7,7 +7,7 @@ import { useToast } from '../components/toast';
 import { CLAIM_STATUS, CATEGORIES } from '../data/constants';
 import { useAdminData } from '../data/context';
 import { petById, relatedCandidates, residentById } from '../data/selectors';
-import type { ClaimStatus } from '../data/types';
+import type { Case, ClaimStatus } from '../data/types';
 import { fmtDateTime, plural } from '../../preview/lib/format';
 import { useSubmit } from '../lib/useSubmit';
 import { SearchX } from 'lucide-react';
@@ -76,7 +76,7 @@ export function ClaimReviewDialog({ c, claimId, onClose }: CaseDialogProps & { c
           {capabilities.acceptConfirmsOwnership ? (
             <Callout tone="sage" title="Accepting records:">ownership as <strong>Confirmed</strong>{claimant ? <> (owner: {claimant.name})</> : null}{pet ? <>, and the animal as <strong>identified</strong> as {pet.name}</> : null}.{otherOpen > 0 ? ` ${plural(otherOpen, 'other claim')} ${otherOpen === 1 ? 'is' : 'are'} still open. Review ${otherOpen === 1 ? 'it' : 'them'} too.` : ''}</Callout>
           ) : (
-            <Callout tone="sage" title="Accepting records the claim as accepted.">The case’s ownership stays <strong>under review</strong> until you record the ownership decision, with the evidence you relied on, on the Assessment tab{claimant ? <> (the claimant is {claimant.name})</> : null}.{otherOpen > 0 ? ` ${plural(otherOpen, 'other claim')} ${otherOpen === 1 ? 'is' : 'are'} still open. Review ${otherOpen === 1 ? 'it' : 'them'} too.` : ''}</Callout>
+            <Callout tone="sage" title="Accepting records the claim as accepted.">The case’s ownership stays <strong>under review</strong> until you record the ownership decision, with the evidence you relied on, {c.category === 'found_animal' ? 'under “Who does it belong to?” on the report' : 'on the Assessment tab'}{claimant ? <> (the claimant is {claimant.name})</> : null}.{otherOpen > 0 ? ` ${plural(otherOpen, 'other claim')} ${otherOpen === 1 ? 'is' : 'are'} still open. Review ${otherOpen === 1 ? 'it' : 'them'} too.` : ''}</Callout>
           )}
           <Checkbox label="I compared distinguishing marks and records, and did not rely on registration alone." checked={ack} onChange={(e) => setAck(e.target.checked)} />
           {errors.ack ? <p className="sa-error" role="alert">{errors.ack}</p> : null}
@@ -96,8 +96,10 @@ export function LinkReportsDialog({ c, onClose }: CaseDialogProps) {
   const [q, setQ] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
 
-  const suggestions = relatedCandidates(state.cases, c, 5);
-  const pool = state.cases.filter((x) => x.id !== c.id && !c.relatedCaseIds.includes(x.id));
+  const monitored = c.category === 'lost_pet' || c.category === 'found_animal';
+  const eligible = (other: Case) => !monitored || (other.status !== 'closed' && other.category === (c.category === 'lost_pet' ? 'found_animal' : 'lost_pet'));
+  const suggestions = relatedCandidates(state.cases, c, 5).filter((x) => eligible(x.case));
+  const pool = state.cases.filter((x) => x.id !== c.id && !c.relatedCaseIds.includes(x.id) && eligible(x));
   const query = q.trim().toLowerCase();
   const found = query ? pool.filter((x) => [x.id, x.title, x.location.area, x.animal.description].some((t) => t.toLowerCase().includes(query))).slice(0, 8) : [];
   const rows = query ? found.map((x) => ({ case: x, reasons: [] as string[] })) : suggestions;
@@ -106,7 +108,7 @@ export function LinkReportsDialog({ c, onClose }: CaseDialogProps) {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (picked.length === 0) return;
-    if (await run(() => dispatch({ type: 'case/linkCases', id: c.id, otherIds: picked }))) { toast.success(`${plural(picked.length, 'report')} linked`); onClose(); }
+    if (await run(() => dispatch({ type: 'case/linkCases', id: c.id, otherIds: picked, sameAnimal: monitored }))) { toast.success(`${plural(picked.length, 'report')} linked`); onClose(); }
   };
 
   return (
@@ -116,7 +118,7 @@ export function LinkReportsDialog({ c, onClose }: CaseDialogProps) {
         <FormFooter pending={pending} label="Link selected" requestClose={requestClose} />
       </>
     )}>
-      <Callout>Each report stays a separate record with its own evidence and history. Linking only connects them, and you can unlink at any time.</Callout>
+      <Callout>Each report stays a separate record with its own evidence and history. Linking only connects them, and you can unlink at any time.{monitored ? ' It also opens a direct conversation between the owner and the finder in their Resident app. Linking never confirms ownership or recovery.' : ''}</Callout>
       <SearchInput aria-label="Find a report" placeholder="Search by reference, concern or location" value={q} onChange={(e) => setQ(e.target.value)} />
       <div>
         <p className="sa-label mb-2">{query ? `Search results (${found.length})` : 'Possibly related'}</p>

@@ -148,6 +148,12 @@
   .rs-row--danger, .rs-row--danger .rs-row__icon { color: var(--sa-red-ink); }
   .rs-row--danger .rs-row__icon { background: var(--sa-red-soft); }
   .rs-row--toggle { cursor: default; }
+  .rs-row--static { cursor: default; }
+  /* something kept folded until asked for (a report's details on the owner's screen) */
+  .rs-details { padding: 12px 14px; border: 1px solid var(--sa-line); border-radius: 14px; background: var(--sa-surface); }
+  .rs-details > summary { cursor: pointer; font-weight: 650; }
+  .rs-details[open] > summary { margin-bottom: 12px; }
+  .rs-details > * + * { margin-top: 10px; }
   .rs-row--disabled { align-items: flex-start; cursor: default; }
   .rs-row--disabled .rs-row__icon { background: var(--sa-sand); color: var(--sa-ink-3); }
   .rs-row--disabled .rs-row__title { color: var(--sa-ink-2); }
@@ -450,6 +456,12 @@
   .rs-pethero { display: flex; align-items: center; gap: 14px; }
   .rs-pethero__photo { display: grid; place-items: center; flex-shrink: 0; width: 88px; height: 88px; overflow: hidden; border: 1px solid var(--sa-line); border-radius: 22px; background: var(--sa-sand); color: var(--sa-ink-3); }
   .rs-pethero__photo img { width: 100%; height: 100%; object-fit: cover; }
+  .rs-stack-xs { display: flex; flex-direction: column; gap: 4px; }
+  /* one line of facts with its icon (where and when a pet was last seen) */
+  .rs-line { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 15px; line-height: 1.45; }
+  .rs-line > svg { flex-shrink: 0; margin-top: 3px; color: var(--sa-ink-3); }
+  /* the owner's own words, quoted */
+  .rs-quote { margin: 0; padding: 10px 12px; border-left: 3px solid var(--sa-line); border-radius: 0 8px 8px 0; background: color-mix(in srgb, var(--sa-sand) 60%, var(--sa-surface)); font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
   .rs-tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
   .rs-tags li { padding: 6px 12px; border-radius: 999px; background: var(--sa-sand); color: var(--sa-ink-2); font-size: 14px; }
 

@@ -99,6 +99,30 @@ jobs:
           ls dist/assets | grep -q '^ConnectionPage-' || { echo "::error::Connection Settings is missing from this build (expected vite --mode android-debug)"; exit 1; }
           grep -Eq '"androidScheme": *"http"' android/app/src/main/assets/capacitor.config.json || { echo "::error::The app's page is not http://localhost (STRAYSAFE_ANDROID_DEBUG was not applied)"; exit 1; }
 
+      # Push notifications need the app's Firebase file. It is never committed: save its whole text as the repository secret GOOGLE_SERVICES_JSON
+      # (Settings -> Secrets and variables -> Actions -> Secrets). Without it the APK is built and works the same, only without push.
+      - name: Add the Firebase file for push notifications (when the repository has it)
+        working-directory: frontend/android/app
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -z "$GOOGLE_SERVICES_JSON" ]; then
+            echo "::notice::No GOOGLE_SERVICES_JSON secret: this APK is built without push notifications (docs/05-operations/push/FIREBASE_PUSH_SETUP.md)."
+            exit 0
+          fi
+          printf '%s' "$GOOGLE_SERVICES_JSON" > google-services.json
+          python3 - <<'PY'
+          import json, sys
+          try:
+              data = json.load(open("google-services.json"))
+              names = [c["client_info"]["android_client_info"]["package_name"] for c in data.get("client", [])]
+          except Exception as e:
+              sys.exit(f"::error::GOOGLE_SERVICES_JSON is not a google-services.json file ({type(e).__name__}).")
+          if "com.straysafe.app" not in names:
+              sys.exit(f"::error::GOOGLE_SERVICES_JSON is for {names}, not for com.straysafe.app. Download the file of the com.straysafe.app Android app.")
+          print("Push notifications: on (google-services.json for com.straysafe.app added from the repository secret).")
+          PY
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

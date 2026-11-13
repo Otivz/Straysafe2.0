@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Dialog } from '../components/Dialog';
+import { Button } from '../components/Button';
 import { Field, FieldGroup, Input, OptionGroup, Select, Textarea } from '../components/form';
 import { Callout, FormError, Kv } from '../components/layout';
 import { useToast } from '../components/toast';
@@ -14,11 +15,19 @@ const CHANNELS = ['Phone call', 'Message', 'In person', 'Email', 'Written letter
 /** How a channel the Leader names is stored as a contact method. */
 const METHOD_OF: Record<string, ContactMethod> = { 'Phone call': 'phone', Message: 'message', 'In person': 'in_person', Email: 'message', 'Written letter': 'letter' };
 
+/** What a Leader can ask the Barangay for on a missing pet or a found animal: one choice and an optional note, not a form to write. */
+const ASSISTANCE = [
+  { value: 'search', label: 'Help searching for the animal' },
+  { value: 'secure', label: 'Help securing or catching the animal' },
+  { value: 'shelter', label: 'Temporary shelter or holding' },
+  { value: 'reach', label: 'Help reaching the owner or the finder' },
+  { value: 'announce', label: 'A Barangay announcement' },
+  { value: 'other', label: 'Something else' },
+];
+
 const SUGGESTED_REASON: Partial<Record<CategoryId, string>> = {
-  lost_pet: 'Asking the Barangay for help looking for a missing pet.',
   safety: 'Help locating and containing an animal that poses a risk to residents.',
   injured: 'Injured animal needs veterinary or rehabilitation care.',
-  found_animal: 'Found animal with an unknown owner. Asking whether a lost-animal report exists.',
   nuisance: 'Repeated nuisance that needs the authority’s involvement.',
 };
 
@@ -31,11 +40,14 @@ export function ReferralDialog({ c, onClose }: CaseDialogProps) {
   const { dispatch } = useAdminData();
   const toast = useToast();
   const { pending, error, run } = useSubmit();
-  const lost = c.category === 'lost_pet';
-  const [orgId, setOrgId] = useState<string>(ORGANIZATIONS[0].id);
-  const [otherName, setOtherName] = useState('');
+  // A missing pet and a found animal are asked for in one choice and an optional note; the other kinds of case keep the written reason
+  const monitored = c.category === 'lost_pet' || c.category === 'found_animal';
+  const [help, setHelp] = useState(ASSISTANCE[0].value);
+  const orgId = 'barangay';
+  const orgName = ORGANIZATIONS.find((o) => o.id === 'barangay')!.name;
   const [reason, setReason] = useState(SUGGESTED_REASON[c.category] ?? '');
-  const [contacted, setContacted] = useState<'yes' | 'no'>('yes');
+  // For a missing pet or a found animal the help is first written down; saying someone was reached is something the Leader chooses to claim
+  const [contacted, setContacted] = useState<'yes' | 'no'>(monitored ? 'no' : 'yes');
   const [at, setAt] = useState(() => toLocalInput(new Date()));
   const [person, setPerson] = useState('');
   const [channel, setChannel] = useState(CHANNELS[0]);
@@ -46,14 +58,12 @@ export function ReferralDialog({ c, onClose }: CaseDialogProps) {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const next: Record<string, string> = {};
-    if (orgId === 'other' && !otherName.trim()) next.org = 'Enter the organization’s name.';
-    if (reason.trim().length < 10) next.reason = lost ? 'Say what help you are asking for.' : 'Say why you are referring this case.';
+    if (!monitored && reason.trim().length < 10) next.reason = 'Say why you are referring this case.';
     if (reached && !isValidLocalInput(at)) next.at = 'Choose when you contacted them.';
     setErrors(next);
     if (Object.keys(next).length) return;
-    const orgName = orgId === 'other' ? otherName.trim() : ORGANIZATIONS.find((o) => o.id === orgId)!.name;
     const ok = await run(() => dispatch({
-      type: 'case/createReferral', id: c.id, orgId, orgName, reason: reason.trim(), referredAt: reached ? fromLocalInput(at) : new Date().toISOString(),
+      type: 'case/createReferral', id: c.id, orgId, orgName, reason: monitored ? ASSISTANCE.find((x) => x.value === help)!.label : reason.trim(), referredAt: reached ? fromLocalInput(at) : new Date().toISOString(),
       contactPerson: reached ? person.trim() || 'Not recorded' : 'Not recorded', contactChannel: reached ? channel : '', notes: notes.trim(), contacted: reached,
     }));
     if (ok) { toast.success(reached ? `Referral to ${orgName} recorded` : `Help from ${orgName} written down. Nobody has been contacted yet`); onClose(); }
@@ -61,20 +71,18 @@ export function ReferralDialog({ c, onClose }: CaseDialogProps) {
 
   return (
     <Dialog
-      size="lg" title={lost ? 'Ask for help' : 'Create external referral'}
-      description={lost ? 'Write down who can help look for the pet, and whether you have already contacted them.' : 'Record who you contacted and why. The case stays with the subdivision.'}
-      onClose={onClose} dirty={reason !== (SUGGESTED_REASON[c.category] ?? '') || notes !== '' || person !== '' || !reached} onSubmit={submit}
+      size="lg" title="Ask the Barangay for help"
+      description={monitored ? 'Choose the help you need and say whether you have already contacted them.' : 'Record who you contacted and why. The case stays with the subdivision.'}
+      onClose={onClose} dirty={(monitored ? help !== ASSISTANCE[0].value : reason !== (SUGGESTED_REASON[c.category] ?? '')) || notes !== '' || person !== '' || reached === monitored} onSubmit={submit}
       footer={({ requestClose }) => <FormFooter pending={pending} label={reached ? 'Create referral' : 'Write it down'} requestClose={requestClose} />}
     >
-      <Kv rows={[['Related case', <span><span className="sa-ref">{c.id}</span> · {c.title}</span>], ['Category', CATEGORIES[c.category].label]]} />
-      <Field label="Organization" required error={errors.org}>
-        <Select value={orgId} onChange={(e) => setOrgId(e.target.value)}>
-          {ORGANIZATIONS.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-          <option value="other">Another organization…</option>
-        </Select>
-      </Field>
-      {orgId === 'other' ? <Field label="Organization name" required error={errors.org}><Input value={otherName} onChange={(e) => setOtherName(e.target.value)} /></Field> : null}
-      <Field label={lost ? 'What help you are asking for' : 'Reason for referral'} required error={errors.reason}><Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} /></Field>
+      {monitored ? null : <Kv rows={[['Related case', <span><span className="sa-ref">{c.id}</span> · {c.title}</span>], ['Category', CATEGORIES[c.category].label]]} />}
+      <p className="sa-small sa-text-2">Assistance partner: <strong>{orgName}</strong></p>
+      {monitored ? (
+        <Field label="What help do you need?" required><Select value={help} onChange={(e) => setHelp(e.target.value)}>{ASSISTANCE.map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}</Select></Field>
+      ) : (
+        <Field label="Reason for referral" required error={errors.reason}><Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} /></Field>
+      )}
       <FieldGroup label="Have you already contacted them?">
         <OptionGroup
           name="contacted" label="Have you already contacted them?" value={contacted} onChange={setContacted}
@@ -120,6 +128,7 @@ export function CoordinationDialog({ c, referralId, contact: asContact, onClose 
   const [followAt, setFollowAt] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   if (!r) return null;
+  if (r.orgId !== 'barangay') return <Dialog title="Historical assistance record" description={r.orgName} onClose={onClose} footer={<Button onClick={onClose}>Close</Button>}><Callout>This earlier record is kept as history. New assistance and updates are handled with the Barangay.</Callout><p className="sa-prose">{r.reason}</p></Dialog>;
   const finished = status === 'completed' || status === 'declined';
 
   const submit = async (e: FormEvent) => {

@@ -13,7 +13,7 @@ import { useNow } from '../../lib/hooks';
 
 type Tab = 'all' | 'unread';
 
-/** R33 — Notifications: report updates, sightings, claim updates and community notices. */
+/** R33 — Notifications: report updates, sightings, claim updates, community notices and the Subdivision Leader's lost & found alerts. */
 export default function NotificationsPage() {
   const { state, local } = useResidentData();
   const navigate = useNavigate();
@@ -34,7 +34,7 @@ export default function NotificationsPage() {
 
       {shown.length === 0 ? (
         <EmptyState icon={BellOff} title={tab === 'unread' ? 'You’re all caught up' : 'No notifications yet'}>
-          {tab === 'unread' ? 'There is nothing new to read.' : 'Updates about your reports, sightings and claims will appear here.'}
+          {tab === 'unread' ? 'There is nothing new to read.' : 'Updates about your reports, sightings, claims and lost & found alerts will appear here.'}
         </EmptyState>
       ) : (
         <ul className="rs-notifs" aria-label="Notifications, newest first">
@@ -47,7 +47,7 @@ export default function NotificationsPage() {
                   <span className="rs-notif__text">
                     <span className="rs-notif__title">{n.title}{!n.read ? <span className="rs-sr-only"> (unread)</span> : null}</span>
                     <span className="rs-notif__body">{n.body}</span>
-                    <span className="rs-meta">{relative(n.at, now)}</span>
+                    <span className="rs-meta">{n.kind === 'alert' ? `From your Subdivision Leader · ${relative(n.at, now)}` : relative(n.at, now)}</span>
                   </span>
                   {!n.read ? <span className="rs-notif__dot" aria-hidden="true" /> : null}
                 </button>

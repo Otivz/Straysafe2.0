@@ -21,6 +21,9 @@ const config: CapacitorConfig = {
     // Capacitor 8's built-in system bars: the web view is inset for the status bar, navigation bar, display cutout and on-screen
     // keyboard (env(safe-area-inset-*) is 0 on older web views and real on newer ones; the Resident CSS uses it for its bottom bars).
     SystemBars: { insetsHandling: 'native' },
+    // Push notifications (Firebase Cloud Messaging, src/resident/native/push.ts): shown with sound even while the app is open, as they are when
+    // it is closed. Nothing arrives until the Firebase files are added (docs/05-operations/push/FIREBASE_PUSH_SETUP.md).
+    PushNotifications: { presentationOptions: ['sound', 'alert'] },
   },
 };
 

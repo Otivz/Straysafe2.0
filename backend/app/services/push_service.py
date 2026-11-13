@@ -1,12 +1,16 @@
 """
-Web Push delivery (PUSH_NOTIFICATION_IMPLEMENTATION.md).
+Push delivery (PUSH_NOTIFICATION_IMPLEMENTATION.md): Web Push for browsers and, since 2026-11-12, Firebase Cloud Messaging (FCM) for the
+Android app (docs/05-operations/push/FIREBASE_PUSH_SETUP.md).
 
   1. Hook: every committed `notifications` row of a pushable type becomes one queued `push_deliveries` row per active
      device of that user (rolled-back changes queue nothing). No change to the ~95 places that add notifications.
   2. Worker: sends queued deliveries, re-checking everything just before sending (account active, preferences,
      report access: a report that became private never reaches a lock screen), retries 5xx/timeouts after 1, 5 and
      15 minutes, revokes devices the push service says are gone (404/410), drops what is older than 24 hours.
-Push is off (and nothing else changes) while the VAPID keys aren't configured.
+  3. Each delivery is CLAIMED (queued -> sending, committed) before the network call, so two workers never send the same one; a claim left
+     behind by a crash is marked failed after 10 minutes instead of being sent twice.
+A channel is off (and nothing else changes) while its keys aren't configured: VAPID keys for Web Push, FCM_SERVICE_ACCOUNT_FILE (the path
+to the Firebase service-account JSON, kept outside the repository) for FCM. FCM uses the HTTP v1 API through google-auth and requests.
 """
 import asyncio
 import hashlib
@@ -41,8 +45,23 @@ def vapid_public_key() -> Optional[str]:
     return (os.getenv("VAPID_PUBLIC_KEY") or "").strip() or None
 
 
-def push_configured() -> bool:
+def vapid_configured() -> bool:
     return bool(vapid_public_key() and (os.getenv("VAPID_PRIVATE_KEY") or "").strip())
+
+
+def fcm_service_account_file() -> Optional[str]:
+    return (os.getenv("FCM_SERVICE_ACCOUNT_FILE") or "").strip() or None
+
+
+def fcm_configured() -> bool:
+    """FCM is on when the service-account file the variable names exists (its contents are never logged or returned)."""
+    path = fcm_service_account_file()
+    return bool(path and os.path.isfile(path))
+
+
+def push_configured() -> bool:
+    """Any push channel is on."""
+    return vapid_configured() or fcm_configured()
 
 
 def endpoint_allowed(endpoint: str) -> bool:
@@ -134,6 +153,47 @@ def webpush_send(sub: PushSubscription, data: str, ttl: int) -> PushResult:
         raise
 
 
+FCM_SCOPE = "https://www.googleapis.com/auth/firebase.messaging"
+_fcm: dict = {"session": None, "project": None, "path": None}
+DEFAULT_CHANNEL = "straysafe_updates"           # Android notification channels the app creates (frontend/src/resident/native/push.ts)
+ALERT_CHANNEL = "lost_found_alerts"
+
+
+def _fcm_session():
+    path = fcm_service_account_file()
+    if _fcm["session"] is None or _fcm["path"] != path:
+        from google.auth.transport.requests import AuthorizedSession
+        from google.oauth2 import service_account
+        creds = service_account.Credentials.from_service_account_file(path, scopes=[FCM_SCOPE])
+        _fcm.update(session=AuthorizedSession(creds), project=creds.project_id, path=path)
+    return _fcm["session"], _fcm["project"]
+
+
+def fcm_message(token: str, payload: dict, ttl: int) -> dict:
+    """The FCM HTTP v1 message for one device. A newer push with the same tag replaces the older one on the phone."""
+    tag = str(payload.get("tag") or "straysafe")[:64]
+    notification = {"title": payload.get("title") or pc.GENERIC_TITLE, "body": payload.get("body") or ""}
+    if payload.get("image"):
+        notification["image"] = payload["image"]
+    return {"message": {
+        "token": token,
+        "notification": notification,
+        "data": {"url": str(payload.get("url") or ""), "tag": tag, "notification_id": str(payload.get("notification_id") or "")},
+        "android": {"priority": "high", "ttl": f"{int(ttl)}s", "collapse_key": tag,
+                    "notification": {"tag": tag, "channel_id": payload.get("channel") or DEFAULT_CHANNEL, "icon": "ic_stat_straysafe", "color": "#C65A17"}},
+    }}
+
+
+def fcm_send(sub: PushSubscription, data: str, ttl: int) -> PushResult:
+    """Send one FCM message. A token Google says is gone (unregistered, invalid, another project's) comes back as 404, so it is revoked."""
+    session, project = _fcm_session()
+    resp = session.post(f"https://fcm.googleapis.com/v1/projects/{project}/messages:send", json=fcm_message(sub.endpoint, json.loads(data), ttl), timeout=10)
+    text = (resp.text or "")[:300]
+    if resp.status_code in (400, 403, 404) and any(k in text for k in ("UNREGISTERED", "registration token", "SENDER_ID_MISMATCH", "not found")):
+        return PushResult(404, text)
+    return PushResult(resp.status_code, text)
+
+
 def _preferences(db: Session, user_id: int):
     from app.models.notification_preference import UserNotificationPreference
     return db.query(UserNotificationPreference).filter(UserNotificationPreference.user_id == user_id).first()
@@ -181,21 +241,34 @@ def payload_for(db: Session, notif: Notification, user) -> dict:
     prefs = _preferences(db, user.user_id)
     show = True if prefs is None else bool(prefs.push_show_preview)
     title, body = pc.push_text(notif.title, notif.message, show)
-    return {
+    out = {
         "title": title, "body": body,
         "url": pc.notification_link(user.role_id, notif.type, notif.related_id, notif.title or ""),
         "tag": pc.push_tag(notif.type, notif.related_id),
         "notification_id": notif.notification_id,
     }
+    if notif.type == "case_alert":
+        # a lost & found alert: the exact screen a tap opens, and the animal's photo when the alert includes it and previews are on
+        from app.services import case_alerts
+        out["url"] = case_alerts.link_for(db, notif.related_id)
+        out["channel"] = ALERT_CHANNEL
+        image = case_alerts.image_for(db, notif.related_id) if show else None
+        if image:
+            out["image"] = image
+    return out
 
 
-def send_due(db: Session, sender: Callable[[PushSubscription, str, int], PushResult] = webpush_send,
+def send_due(db: Session, sender: Optional[Callable[[PushSubscription, str, int], PushResult]] = None,
              at: Optional[datetime] = None) -> dict:
-    """Send the queued deliveries that are due. No commit. Returns counts by outcome."""
+    """Send the queued deliveries that are due, each claimed (and the claim committed) first. Returns counts by outcome.
+    `sender` replaces both channels (tests); otherwise a device's channel picks Web Push or FCM."""
     from app.models.user import User
     t = at or now()
     counts = {"sent": 0, "skipped": 0, "retry": 0, "failed": 0, "revoked": 0}
     sent_now: set = set()  # sent in this run (not flushed yet): for the chat throttle
+    # a claim a crashed worker left behind is not sent again (it may have gone out): it is marked failed
+    db.query(PushDelivery).filter(PushDelivery.status == "sending", PushDelivery.next_attempt_at < t - timedelta(minutes=10)).update(
+        {"status": "failed", "last_error": "interrupted while sending"}, synchronize_session=False)
     due = db.query(PushDelivery).filter(
         PushDelivery.status == "queued",
         (PushDelivery.next_attempt_at.is_(None)) | (PushDelivery.next_attempt_at <= t),
@@ -215,9 +288,15 @@ def send_due(db: Session, sender: Callable[[PushSubscription, str, int], PushRes
             counts["skipped"] += 1
             continue
         data = json.dumps(payload_for(db, notif, user))
-        d.attempts += 1
+        # the claim: only one worker turns this row from queued to sending
+        if not db.query(PushDelivery).filter(PushDelivery.delivery_id == d.delivery_id, PushDelivery.status == "queued").update(
+                {"status": "sending", "next_attempt_at": t}, synchronize_session=False):
+            continue
+        db.commit()
+        d.attempts = (d.attempts or 0) + 1
+        send = sender or (fcm_send if sub.channel == "fcm" else webpush_send)
         try:
-            res = sender(sub, data, pc.TTL_SECONDS)
+            res = send(sub, data, pc.TTL_SECONDS)
             code, err = res.status_code, res.text
         except Exception as e:
             code, err = 0, str(e)[:200]
@@ -237,6 +316,7 @@ def send_due(db: Session, sender: Callable[[PushSubscription, str, int], PushRes
             d.status, d.last_error = "failed", f"gave up after {d.attempts} tries ({code or 'network'}) {err}"[:500]
             counts["failed"] += 1
         else:
+            d.status = "queued"
             d.next_attempt_at = t + timedelta(minutes=RETRY_DELAYS_MIN[d.attempts - 1])
             d.last_error = f"retrying ({code or 'network'}) {err}"[:500]
             counts["retry"] += 1

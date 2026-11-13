@@ -68,7 +68,7 @@ function ReferralCard({ r, c, openDialog }: { r: Referral; c: Case; openDialog: 
           <p className="sa-semibold">{r.orgName}</p>
           <p className="sa-meta mt-0.5">{r.status === 'to_contact' ? `Written down ${fmtDateTime(r.referredAt)} · nobody contacted yet` : `Referred ${fmtDateTime(r.referredAt)} · ${r.contactPerson} · ${r.contactChannel}`}</p>
         </div>
-        <div className="flex items-center gap-2"><Badge tone={s.tone} dot>{s.label}</Badge>{c.status !== 'closed' ? <Button size="sm" icon={Handshake} onClick={() => openDialog({ kind: 'coordination', referralId: r.id, ...(r.status === 'to_contact' ? { contact: true } : {}) })}>{r.status === 'to_contact' ? 'Record contact attempt' : 'Record update'}</Button> : null}</div>
+        <div className="flex items-center gap-2"><Badge tone={s.tone} dot>{s.label}</Badge>{c.status !== 'closed' && r.orgId === 'barangay' ? <Button size="sm" icon={Handshake} onClick={() => openDialog({ kind: 'coordination', referralId: r.id, ...(r.status === 'to_contact' ? { contact: true } : {}) })}>{r.status === 'to_contact' ? 'Record contact attempt' : 'Record update'}</Button> : null}</div>
       </div>
       <Kv wide rows={[
         ['Reason', r.reason],
@@ -135,7 +135,7 @@ export default function ActionsTab({ c, now, openDialog }: Props) {
           {!closed && ownerRelevant ? <Button icon={MessageSquare} onClick={() => openDialog({ kind: 'followUp', mode: 'owner' })}>Record owner coordination</Button> : null}
           {!closed && warningRelevant ? <Button icon={AlertTriangle} disabled={!eligibility.ok} onClick={() => openDialog({ kind: 'warning' })}>Issue warning</Button> : null}
           {!closed && hasActive ? <Button icon={ClipboardCheck} onClick={() => openDialog({ kind: 'compliance' })}>Record compliance</Button> : null}
-          {!closed ? <Button variant={c.priority === 'urgent' ? 'primary' : 'secondary'} icon={Landmark} onClick={() => openDialog({ kind: 'referral' })}>{c.category === 'lost_pet' ? 'Ask for help' : 'Create external referral'}</Button> : null}
+          {!closed ? <Button variant={c.priority === 'urgent' ? 'primary' : 'secondary'} icon={Landmark} onClick={() => openDialog({ kind: 'referral' })}>Ask the Barangay for help</Button> : null}
           <Button icon={NotebookPen} onClick={() => openDialog({ kind: 'note' })}>Add internal note</Button>
         </div>
         {!closed && warningRelevant && !eligibility.ok ? <p className="sa-hint mt-2">Issuing a warning is not available yet. {eligibility.reason}</p> : null}

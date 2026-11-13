@@ -56,6 +56,11 @@ export default function SightingPage() {
     );
   }
 
+  // the question names the pet ("When did you see Mochi?"); a found animal, or a pet without a name, is "it"
+  const lost = notice.type === 'lost_pet';
+  const it = lost && notice.petName ? notice.petName : 'it';
+  const title = lost ? 'I saw this pet' : 'I saw this animal';
+
   const submit = async (ev: FormEvent) => {
     ev.preventDefault();
     const found: Errors = {};
@@ -78,8 +83,8 @@ export default function SightingPage() {
 
   return (
     <Screen
-      title="Report a sighting"
-      subtitle={notice.title}
+      title={title}
+      subtitle={lost && notice.petName ? notice.petName : notice.title}
       onBack={guard.leave}
       footer={(
         <>
@@ -91,16 +96,16 @@ export default function SightingPage() {
       {notice.mine ? (
         <Callout tone="info">Add a sighting someone told you about, so it is kept in the history and shared with the subdivision.</Callout>
       ) : (
-        <Callout tone="info">Your name is never shown. The person who posted this notice and subdivision administrators see the spot you pin; other neighbours see only a general area. Please do not chase or corner the animal, and do not post your own contact details.</Callout>
+        <p className="rs-hint">Your name is never shown. Only the owner and the Subdivision Leader see the exact spot.</p>
       )}
       {error ? <FormError message={error} /> : null}
       <form id="sighting-form" className="rs-stack" onSubmit={(e) => void submit(e)} noValidate>
         <div ref={ref} className="rs-stack">
-          <Field label="When did you see it?" required error={errors.observedAt}>
+          <Field label={`When did you see ${it}?`} required error={errors.observedAt}>
             <Input type="datetime-local" value={observedAt} max={toLocalInput(now)} onChange={(e) => { setObservedAt(e.target.value); setErrors((p) => ({ ...p, observedAt: undefined })); }} />
           </Field>
 
-          <FieldGroup label="Where did you see it?" required error={errors.location}>
+          <FieldGroup label={`Where did you see ${it}?`} required error={errors.location}>
             <button type="button" className="rs-locfield" aria-invalid={errors.location ? true : undefined} onClick={() => setPicking(true)}>
               <MapPin size={19} aria-hidden="true" />
               <span>{location ? location.label : 'Choose the place'}</span>
@@ -121,7 +126,7 @@ export default function SightingPage() {
       </form>
 
       {picking ? (
-        <Sheet title="Where did you see it?" tall onClose={() => setPicking(false)}>
+        <Sheet title={`Where did you see ${it}?`} tall onClose={() => setPicking(false)}>
           <LocationPicker
             initial={location}
             confirmLabel="Use this place"

@@ -3,8 +3,10 @@
 **Goal:** a user gets a notification on their phone or computer even when StraySafe isn't open (new report,
 rescue update, possible pet match, claim decision, chat message...). Tapping it opens the right page.
 
-Status: **Phase 1 (Web Push) implemented** (2026-10-12). Phase 2 (Android / FCM, P17) not started. Section 10
-records how it was built.
+Status: **Phase 1 (Web Push) implemented** (2026-10-12). **Phase 2 (Android / FCM, P17) implemented 2026-11-13** and waiting
+for the developer's Firebase setup ([docs/05-operations/push/FIREBASE_PUSH_SETUP.md](docs/05-operations/push/FIREBASE_PUSH_SETUP.md)):
+until then the server answers the app's registration with 503 and notifications reach the in-app list only. Section 10
+records how Phase 1 was built; the Phase 2 notes are under P6 and P17.
 
 ---
 
@@ -147,7 +149,12 @@ a change that was rolled back.
   `after_commit` creates the `push_deliveries` rows; `after_rollback` clears them. Imported once in `main.py`.
 - [x] **P6. Sender** (`app/services/push_service.py`):
   - Web Push through `pywebpush`, with payload `{title, body, url, tag, notification_id}`.
-  - Phase 2: FCM through `firebase-admin`.
+  - Phase 2 (2026-11-13): FCM HTTP v1 through Google's `google-auth` (already installed; `firebase-admin` was not needed),
+    on only when `FCM_SERVICE_ACCOUNT_FILE` names an existing file. Each delivery is claimed (`queued` → `sending`) before
+    the network call, so two workers never send it twice; a claim left by a crash is marked failed after 10 minutes. A token
+    Google no longer accepts (unregistered, invalid, another project) revokes the device. Messages carry the Android
+    channel (`straysafe_updates`, or `lost_found_alerts` for the Leader's alerts, category `alerts` → `push_lost_found_alerts`),
+    the tag (one notification per alert) and `data.url`. Tests: `tests/test_push_fcm.py` (a fake Google endpoint).
   - Before each send:
     - recheck that the account is active;
     - recheck the preferences;
@@ -190,9 +197,13 @@ a change that was rolled back.
     "Show message preview on lock screen", and "Send test notification".
   - If the browser blocked permission: a short "how to allow it" note.
 - [x] **P16. Logout:** call `disablePush()` for this device before clearing the session.
-- [ ] **P17. Phase 2, Android app:** `@capacitor/push-notifications`; on app start, register and send the FCM token
-  to `/push/subscribe` with `channel: "fcm"`; a tap uses the same `url`. Needs `google-services.json` in
-  `frontend/android/app/`.
+- [x] **P17. Phase 2, Android app (2026-11-13):** `@capacitor/push-notifications` 8.1.3 (`src/resident/native/push.ts`,
+  mounted by `PushRegistration` while a resident is signed in): after sign-in it creates the two channels, asks for
+  permission (Android 13+), registers and sends the FCM token to `/push/subscribe` with `channel: "fcm"`; sign-out
+  removes it first (`/push/unsubscribe`); a tap opens `data.url` (paths inside the Resident app only). The manifest declares
+  `POST_NOTIFICATIONS` and the default icon, colour and channel; `capacitor.config.ts` shows notifications while the app is
+  open. `google-services.json` is never committed: the APK workflow writes it from the repository secret
+  `GOOGLE_SERVICES_JSON` (and builds without push when the secret is absent).
 
 ## 6. Tests: `tests/test_push_notifications.py` (throwaway SQLite, the push service faked)
 

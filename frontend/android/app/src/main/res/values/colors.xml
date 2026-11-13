@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- StraySafe's brand orange: the colour Android gives the notification icon and its accents (the server sends the same in each message). -->
+    <color name="straysafe_brand">#C65A17</color>
+</resources>

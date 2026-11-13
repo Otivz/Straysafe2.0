@@ -85,8 +85,11 @@ def notify_report_submitted(
     animal_breed: Optional[str],
     landmark: Optional[str],
     priority: str,
+    family: Optional[str] = None,
+    reference: Optional[str] = None,
 ) -> None:
-    """Dispatches submission confirmation to the reporting resident."""
+    """Dispatches submission confirmation to the reporting resident. A missing pet gets no in-app line here (its notice going out
+    says it: "Your missing-pet notice is live"); a found animal gets one in plain words with its case number. Emails are unchanged."""
     subject, text_b, html_b = email_templates.render_report_submitted_email(
         user_name=resident.name,
         report_id=report_id,
@@ -106,11 +109,29 @@ def notify_report_submitted(
         "related_entity_type": "report",
         "related_entity_id": report_id,
     }
+    if family == "lost_pet":
+        title = message = None
+    elif family == "found_animal":
+        title = f"Your report {reference or f'#{report_id}'} was received"
+        message = "Your Subdivision Leader will share it in Community if it helps find the owner."
+    else:
+        title = f"Report #{report_id} Submitted Successfully"
+        message = f"Your stray report #{report_id} ({animal_breed or animal_type or 'Animal'}) was received and is pending official review."
+    if title is None:
+        # the email stays exactly as before; only the duplicate in-app line is left out
+        try:
+            if resident.email and is_valid_email(resident.email):
+                queue_email(db=db, recipient_email=resident.email, subject=subject, text_body=text_b, html_body=html_b,
+                            template_key="report_submitted", category="reports", user_id=resident.user_id,
+                            idempotency_key=f"report_submitted_{report_id}", related_entity_type="report", related_entity_id=report_id)
+        except Exception as email_err:
+            logger.warning(f"Failed to queue notification email for user #{resident.user_id}: {email_err}")
+        return
     dispatch_notification(
         db=db,
         user_id=resident.user_id,
-        title=f"Report #{report_id} Submitted Successfully",
-        message=f"Your stray report #{report_id} ({animal_breed or animal_type or 'Animal'}) was received and is pending official review.",
+        title=title,
+        message=message,
         notification_type="status_update",
         related_id=report_id,
         email_data=email_data,

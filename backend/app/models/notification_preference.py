@@ -24,6 +24,9 @@ class UserNotificationPreference(Base):
     push_claims: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     push_adoptions: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     push_messages: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Lost & found alerts the Subdivision Leader sends (docs/01-system/LOST_FOUND_ALERTS.md). Off: none reach this resident, in the app
+    # or on a phone. Added by backend/migrations/2026-11-12_lost_found_alerts.sql.
+    push_lost_found_alerts: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Off: the lock screen shows only "You have a new StraySafe update"
     push_show_preview: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     

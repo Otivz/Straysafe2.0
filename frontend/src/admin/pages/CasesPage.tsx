@@ -2,7 +2,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowRight, FolderOpen, SearchX } from 'lucide-react';
 import { adminPath } from '../config';
 import { LinkButton, Button } from '../components/Button';
-import { ClosureOutcome, PriorityMark, StatusBadge } from '../components/Badge';
+import { CaseStatusBadge, ClosureOutcome, PriorityMark } from '../components/Badge';
 import { Segmented, Select, SearchInput } from '../components/form';
 import { EmptyState, PageHeader, Panel } from '../components/layout';
 import { ANIMAL_TYPES, CATEGORIES, CATEGORY_IDS, PRIORITIES, PRIORITY_IDS } from '../data/constants';
@@ -124,7 +124,7 @@ export default function CasesPage() {
                       <td className="hidden max-w-[220px] xl:table-cell"><span className="sa-small sa-text-2 sa-clamp-2">{c.location.area}</span></td>
                       <td className="whitespace-nowrap"><p className="sa-small">{fmtDate(c.reportedAt)}</p>{ago(c.reportedAt, now) ? <p className="sa-meta">{ago(c.reportedAt, now)}</p> : null}</td>
                       <td><PriorityMark priority={c.priority} /></td>
-                      <td><div className="flex flex-col items-start gap-1"><StatusBadge status={c.status} /><ClosureOutcome c={c} /></div></td>
+                      <td><div className="flex flex-col items-start gap-1"><CaseStatusBadge c={c} /><ClosureOutcome c={c} /></div></td>
                       <td className="sa-right"><LinkButton size="sm" to={adminPath(`/cases/${c.id}`)} aria-label={`View ${c.id}`} onClick={(e) => e.stopPropagation()}>View<ArrowRight size={14} aria-hidden="true" /></LinkButton></td>
                     </tr>
                   ))}

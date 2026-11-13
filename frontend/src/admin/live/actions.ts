@@ -7,10 +7,10 @@
  */
 import { AdminApiError, errorMessage } from '../../preview/lib/errors';
 import { toServer } from '../../live/dates';
-import { reportIdOf } from '../../live/refs';
+import { caseRef, reportIdOf } from '../../live/refs';
 import type { AdminAction } from '../data/actions';
-import type { Assessment, Case, CategoryId, ContactMethod, IdentityReview, Notice, OwnershipReview, Resident, Settings } from '../data/types';
-import { adminApi, type ApiCaseSettings } from './api';
+import type { AlertInput, Assessment, Case, CategoryId, ContactMethod, IdentityReview, Notice, OwnershipReview, Resident, Settings } from '../data/types';
+import { adminApi, type ApiAlertBody, type ApiCaseSettings } from './api';
 import { caseSettingsTo, notificationFlagsFrom, noticeRef, orgTypeOf } from './adapters';
 
 /** What an action needs to know about the screen's current data. Read at the moment the action runs. */
@@ -34,6 +34,8 @@ export interface ActionResult {
   profile?: boolean;
   /** The pet registry was touched. */
   pets?: boolean;
+  /** The possible matches between missing-pet and found-animal reports changed. */
+  matches?: boolean;
   /** Things that did not go as hoped although the change itself was saved (for example a photo that would not upload). */
   warnings?: string[];
 }
@@ -77,6 +79,19 @@ function assessmentBody(c: Case | undefined, a: Omit<Assessment, 'savedAt' | 'sa
     };
   }
   return body;
+}
+
+/** An alert as the server takes it. Times from the window are local wall-clock values, as every other time the screens send. */
+function alertBody(x: AlertInput, requestId?: string): ApiAlertBody {
+  const s = x.schedule;
+  return {
+    title: x.title.trim(), message: x.message.trim(), include_photo: x.includePhoto, destination: x.destination, audience: x.audience,
+    ...(requestId ? { client_request_id: requestId } : {}),
+    schedule: {
+      mode: s.mode, at: toServer(s.at), repeat: s.repeat, every: s.every, unit: s.unit, times: s.times, start_at: toServer(s.startAt), until: s.until,
+      until_at: toServer(s.untilAt), count: s.count, latest_end: toServer(s.latestEnd),
+    },
+  };
 }
 
 export async function runAction(a: AdminAction, ctx: ActionContext): Promise<ActionResult> {
@@ -136,28 +151,50 @@ export async function runAction(a: AdminAction, ctx: ActionContext): Promise<Act
     // The one recovery operation: the server records the owner's confirmation, resolves the notice, closes the case and puts the pet back to Active.
     case 'lost/recordRecovery':
       await adminApi.recordRecovery(numeric(a.alertId, 'notice'), { source: a.source, confirmed_at: toServer(a.confirmedAt), note: a.note?.trim() || null });
-      return done({ cases: [a.id], notices: true, pets: true });
+      return done({ cases: [a.id], notices: true, pets: true, matches: true });
     case 'lost/reviewSighting': await adminApi.reviewSighting(numeric(a.sightingId, 'sighting'), a.status, a.note?.trim() || null); return done({ cases: [a.id] });
     case 'lost/resolveConversation': await adminApi.resolveCoordination(numeric(a.conversationId, 'conversation'), a.note?.trim() || null); return done({ cases: [a.id] });
+
+    // The server decides, locks both reports, and answers with the match as it now stands; both reports are read again (a link, a history line, a conversation).
+    case 'match/decide': {
+      const m = await adminApi.decideMatch(numeric(a.matchId, 'possible match'), a.decision);
+      return done({ cases: [caseRef(m.lost_report_id, null), caseRef(m.found_report_id, null)], matches: true, notifications: true });
+    }
+    case 'match/unlink': {
+      const m = await adminApi.unlinkMatch(numeric(a.matchId, 'linked match'));
+      return done({ cases: [caseRef(m.lost_report_id, null), caseRef(m.found_report_id, null)], matches: true, notifications: true });
+    }
+    // Notification alerts: their own message, recipients and schedule. They never create, publish or edit the Community notice.
+    case 'alert/create': await adminApi.createCaseAlert(reportId(a.id), alertBody(a.alert, a.requestId)); return done({ cases: [a.id] });
+    case 'alert/update': await adminApi.updateCaseAlert(numeric(a.alertId, 'alert'), alertBody(a.alert)); return done({ cases: [a.id] });
+    case 'alert/pause': await adminApi.pauseCaseAlert(numeric(a.alertId, 'alert')); return done({ cases: [a.id] });
+    case 'alert/resume': await adminApi.resumeCaseAlert(numeric(a.alertId, 'alert')); return done({ cases: [a.id] });
+    case 'alert/stop': await adminApi.stopCaseAlert(numeric(a.alertId, 'alert')); return done({ cases: [a.id] });
+
+    case 'thread/send': {
+      const saved = await adminApi.sendThreadMessage(numeric(a.threadId, 'conversation'), a.body.trim(), a.clientRequestId);
+      return done({ cases: [...new Set([a.id, caseRef(saved.report_id, null), ...(saved.related_report_id ? [caseRef(saved.related_report_id, null)] : [])])], notifications: true });
+    }
 
     case 'case/reviewClaim': await adminApi.reviewClaim(reportId(a.id), numeric(a.claimId, 'claim'), a.decision, a.note); return done({ cases: [a.id] });
 
     case 'case/linkCases':
-      await adminApi.link(reportId(a.id), { report_ids: a.otherIds.map(reportId), link_type: 'related' });
-      return done({ cases: [a.id, ...a.otherIds] });
+      await adminApi.link(reportId(a.id), { report_ids: a.otherIds.map(reportId), link_type: a.sameAnimal ? 'same_animal' : 'related' });
+      return done({ cases: [a.id, ...a.otherIds], matches: true, notifications: true });
     case 'case/unlinkCase': {
       const rid = reportId(a.id);
       const other = reportId(a.otherId);
       const detail = await adminApi.caseDetail(rid);                  // the link's id is the server's; read it fresh
       const link = detail.links.find((l) => l.report_id === other) ?? fail('That link no longer exists.', 404);
       await adminApi.unlink(rid, link.link_id, 'Unlinked by the case officer.');
-      return done({ cases: [a.id, a.otherId] });
+      return done({ cases: [a.id, a.otherId], matches: true, notifications: true });
     }
 
     case 'case/close':
       await adminApi.close(reportId(a.id), { disposition: a.disposition, reason: a.reason, end_open_items: a.endOpenItems, post_closure_check_at: toServer(a.followUpCheckAt) });
-      return done({ cases: [a.id], notices: true });
-    case 'case/reopen': await adminApi.reopen(reportId(a.id), a.reason); return done({ cases: [a.id] });
+      return done({ cases: [a.id], notices: true, matches: true });
+    // (a report that closes or reopens changes which possible matches can still be decided)
+    case 'case/reopen': await adminApi.reopen(reportId(a.id), a.reason); return done({ cases: [a.id], matches: true });
 
     // --------------------------------------------------------------------------------------------------- notices
     case 'notice/save': return saveNotice(a.notice, a.publish, ctx);

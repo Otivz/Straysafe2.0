@@ -7,6 +7,7 @@ import { Frame } from './layout/Frame';
 import GuestLayout from './layout/GuestLayout';
 import ResidentLayout from './layout/ResidentLayout';
 import { ResidentModeContext, useResidentMode, type ResidentMode } from './mode';
+import { PushRegistration } from './native/PushRegistration';
 import HomePage from './pages/HomePage';
 import NotFoundPage from './pages/NotFoundPage';
 import EditProfilePage from './pages/account/EditProfilePage';
@@ -44,12 +45,14 @@ import AddUpdatePage from './pages/reports/AddUpdatePage';
 import MyReportsPage from './pages/reports/MyReportsPage';
 import RecoveryPage from './pages/reports/RecoveryPage';
 import ReportDetailsPage from './pages/reports/ReportDetailsPage';
+import ConversationPage from './pages/reports/ConversationPage';
 
 /** Signed-in frame: data store + layout. Child routes render inside the layout's <Outlet />. */
 function SignedIn() {
   const { DataProvider } = useResidentMode();
   return (
     <DataProvider>
+      <PushRegistration />
       <ResidentLayout />
     </DataProvider>
   );
@@ -94,6 +97,7 @@ export default function ResidentApp({ mode }: { mode: ResidentMode }) {
                 <Route path="reports/:reportId" element={<ReportDetailsPage />} />
                 <Route path="reports/:reportId/update" element={<AddUpdatePage />} />
                 <Route path="reports/:reportId/recovered" element={<RecoveryPage />} />
+                <Route path="conversations/:conversationId" element={<ConversationPage />} />
 
                 <Route path="community" element={<CommunityPage />} />
                 <Route path="community/lost" element={<NoticeDirectoryPage key="lost" kind="lost_pet" />} />

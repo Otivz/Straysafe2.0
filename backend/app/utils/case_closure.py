@@ -101,6 +101,136 @@ def _restore_pet_after_lost_report(session: Session, report) -> None:
         pass
 
 
+def _close_case_message_threads(session: Session, report_id: int, report) -> None:
+    """Close any open Subdivision Leader-to-resident or resident-to-resident conversations when a report closes."""
+    try:
+        from app.services import case_messaging
+        actor_id = getattr(report, "closed_by", None) if report is not None else None
+        reason = getattr(report, "closure_reason", None) if report is not None else None
+        case_messaging.close_for_report(session, report_id, actor_id, reason or "The report is closed, so this conversation has ended.")
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def close_linked_reports(session: Session, report_id: int, closing_report, visited=None) -> int:
+    """
+    When any report in a linked pair or cluster closes, automatically close all active linked reports as well.
+    Closes their message threads, pending follow-ups, and alerts, and records status history and notifications.
+    """
+    if visited is None:
+        visited = set()
+    visited.add(report_id)
+
+    try:
+        from app.models.case_records import CaseFollowUp, CaseLink
+        from app.models.lost_found_match import LostFoundMatch
+        from app.models.report import Report, StatusHistory
+        from app.models.audit_log import AuditLog
+        from app.models.notification import Notification
+        from app.utils import case_state
+        from app.utils import case_vocab as V
+    except ImportError:
+        return 0
+
+    closed_count = 0
+    with session.no_autoflush:
+        links = session.query(CaseLink).filter(
+            ((CaseLink.report_id == report_id) | (CaseLink.related_report_id == report_id)),
+            CaseLink.unlinked_at.is_(None)
+        ).all()
+
+        linked_report_ids = set()
+        for link in links:
+            other_id = link.related_report_id if link.report_id == report_id else link.report_id
+            if other_id and other_id not in visited:
+                linked_report_ids.add(other_id)
+
+        matches = session.query(LostFoundMatch).filter(
+            ((LostFoundMatch.lost_report_id == report_id) | (LostFoundMatch.found_report_id == report_id)),
+            LostFoundMatch.status == "confirmed"
+        ).all()
+
+        for match in matches:
+            other_id = match.found_report_id if match.lost_report_id == report_id else match.lost_report_id
+            if other_id and other_id not in visited:
+                linked_report_ids.add(other_id)
+
+        for other_id in linked_report_ids:
+            visited.add(other_id)
+            linked_rep = session.get(Report, other_id)
+            if linked_rep is None or case_state.is_closed(linked_rep):
+                continue
+
+            old_status = case_state.case_status_of(linked_rep)
+            now = getattr(closing_report, "closed_at", None) or _now()
+            actor_id = getattr(closing_report, "closed_by", None)
+
+            disp = getattr(closing_report, "closure_disposition", None) or "resolved_intervention"
+            if disp == "pet_recovered" and not V.is_lost_pet_report(linked_rep):
+                disp = "resolved_intervention"
+            elif disp not in V.DISPOSITIONS:
+                disp = "resolved_intervention"
+
+            target_legacy_id = V.DISPOSITIONS[disp][1]
+            parent_reason = getattr(closing_report, "closure_reason", None)
+            reason = f"Linked report #{report_id} was closed: {parent_reason or 'Case closed.'}"
+
+            linked_rep.case_status = V.CLOSED
+            linked_rep.closure_disposition = disp
+            linked_rep.closure_reason = reason
+            linked_rep.closed_at = now
+            linked_rep.closed_by = actor_id
+            linked_rep.current_status_id = target_legacy_id
+
+            # End side records for the linked report
+            close_lost_pet_alerts(session, linked_rep.report_id, target_legacy_id, linked_rep)
+            _restore_pet_after_lost_report(session, linked_rep)
+            _close_case_message_threads(session, linked_rep.report_id, linked_rep)
+            close_open_followups(session, linked_rep.report_id, target_legacy_id)
+
+            for f in session.query(CaseFollowUp).filter(
+                CaseFollowUp.report_id == linked_rep.report_id,
+                CaseFollowUp.status == "pending"
+            ).all():
+                f.status = "cancelled"
+                f.cancel_reason = f"Linked report #{report_id} was closed."
+
+            session.add(StatusHistory(
+                report_id=linked_rep.report_id,
+                report_status_id=target_legacy_id,
+                updated_by=actor_id,
+                latitude=linked_rep.latitude,
+                longitude=linked_rep.longitude,
+                landmark=linked_rep.landmark,
+                remarks=f"Case closed automatically (linked report #{report_id} was closed)."
+            ))
+
+            session.add(AuditLog(
+                user_id=actor_id,
+                action="CASE_CLOSED_LINKED",
+                target_table="reports",
+                target_id=linked_rep.report_id,
+                description=f"Report #{linked_rep.report_id} closed automatically because linked report #{report_id} was closed.",
+                log_type="operation",
+                old_values={"case_status": old_status},
+                new_values={"case_status": V.CLOSED, "disposition": disp, "linked_closing_report_id": report_id}
+            ))
+
+            if linked_rep.user_id and linked_rep.user_id != actor_id:
+                session.add(Notification(
+                    user_id=linked_rep.user_id,
+                    title=f"Report #{linked_rep.report_id} closed",
+                    message=f"Your report #{linked_rep.report_id} was closed because linked report #{report_id} was closed.",
+                    type="status_update",
+                    related_id=linked_rep.report_id
+                ))
+
+            closed_count += 1
+            closed_count += close_linked_reports(session, linked_rep.report_id, linked_rep, visited=visited)
+
+    return closed_count
+
+
 @event.listens_for(Session, "before_flush")
 def _sync_side_records_with_closed_reports(session: Session, flush_context, instances):
     from app.models.report import Report
@@ -109,11 +239,16 @@ def _sync_side_records_with_closed_reports(session: Session, flush_context, inst
         if not isinstance(obj, Report):
             continue
         hist = inspect(obj).attrs.current_status_id.history
-        if not hist.has_changes():
+        case_hist = inspect(obj).attrs.case_status.history
+        if not hist.has_changes() and not case_hist.has_changes():
             continue
         new_status = obj.current_status_id
-        if (new_status in CLOSED_REPORT_STATUS_IDS or new_status == 13) and obj.report_id is not None:
-            if new_status in CLOSED_REPORT_STATUS_IDS:
+        if (new_status in CLOSED_REPORT_STATUS_IDS or new_status == 13 or obj.case_status == "closed") and obj.report_id is not None:
+            if new_status in CLOSED_REPORT_STATUS_IDS or obj.case_status == "closed":
                 close_lost_pet_alerts(session, obj.report_id, new_status, obj)
                 _restore_pet_after_lost_report(session, obj)
+                _close_case_message_threads(session, obj.report_id, obj)
+                from app.services import case_alerts
+                case_alerts.stop_for_report(session, obj.report_id, "the case was resolved")
+                close_linked_reports(session, obj.report_id, obj)
             close_open_followups(session, obj.report_id, new_status)

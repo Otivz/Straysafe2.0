@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Camera, ChevronRight, ImageIcon, MapPin } from 'lucide-react';
-import { fmtDateTime, fmtDay, relative } from '../../preview/lib/format';
+import { Camera, ChevronRight, ImageIcon, MapPin, PawPrint } from 'lucide-react';
+import { fmtDateTime, fmtDay, fmtTime, relative } from '../../preview/lib/format';
+import { placePhrase } from '../../preview/lib/place';
 import { residentPath } from '../config';
 import { NOTICE_TYPES } from '../data/constants';
+import { noticeName } from '../data/selectors';
 import type { Media, Notice, Report, Sighting } from '../data/types';
 import { CATEGORY_ICON, NOTICE_ICON } from './icons';
 import { MediaThumbs, Pill, StatusPill } from './ui';
@@ -27,24 +29,62 @@ export function ReportCard({ report, now }: { report: Report; now: Date }) {
   );
 }
 
+const lowerFirst = (t: string) => (t ? t[0].toLowerCase() + t.slice(1) : t);
+
+/** What the animal looks like, in a few words ("Shih Tzu · white and golden"), from what the server shared; else the notice's own words. */
+function looksOf(n: Notice): string {
+  const id = n.identity;
+  const words = [id?.breed?.trim(), id?.color?.trim() ? lowerFirst(id.color.trim()) : ''].filter(Boolean).join(' · ');
+  return words || n.description;
+}
+
 /**
- * One community notice in a list. Private reports can never appear here. A missing pet leads with its photo and when it was last seen:
- * that is what a neighbour scans for.
+ * One community notice in a list. Private reports can never appear here. A missing pet leads with its photo and its name, then what it looks
+ * like, then since when and where it is missing: that is what a neighbour scans for. `kicker` names the kind of notice where kinds are mixed
+ * (Home); a list of one kind (a Community tab, the directory) leaves it out.
  */
-export function NoticeCard({ notice }: { notice: Notice }) {
+export function NoticeCard({ notice, kicker = true }: { notice: Notice; kicker?: boolean }) {
   const Icon = NOTICE_ICON[notice.type];
   const photo = notice.photoUrls?.[0];
   const lost = notice.type === 'lost_pet';
-  const when = lost && notice.lastSeenAt ? `Last seen ${relative(notice.lastSeenAt, new Date())}` : fmtDay(notice.publishedAt);
+  const advisory = notice.type === 'safety_advisory';
+  const at = notice.lastSeenAt ?? notice.publishedAt;
+  const sightings = notice.sightingCount ?? notice.sightings.length;
+  const when = advisory ? fmtDay(notice.publishedAt) : lost ? `Missing since ${fmtDay(at)}, ${fmtTime(at)}` : `Found ${fmtDay(at)}`;
+  const meta = [when, notice.area, lost && sightings > 0 ? `${sightings} ${sightings === 1 ? 'sighting' : 'sightings'}` : ''].filter(Boolean).join(' · ');
   return (
-    <Link to={residentPath(`/community/${notice.id}`)} className={`rs-card rs-card--link rs-card--${notice.type === 'safety_advisory' ? 'advisory' : 'plain'}`}>
+    <Link to={residentPath(`/community/${notice.id}`)} className={`rs-card rs-card--link rs-card--${advisory ? 'advisory' : 'plain'}`}>
       <span className={`rs-card__icon${photo ? ' rs-card__icon--photo' : ''}`}>{photo ? <img src={photo} alt="" loading="lazy" /> : <Icon size={19} aria-hidden="true" />}</span>
       <span className="rs-card__text">
-        <span className="rs-card__kicker">{NOTICE_TYPES[notice.type].label}{notice.mine ? <Pill tone="brand">Your notice</Pill> : null}</span>
-        <span className="rs-card__title">{notice.title}</span>
-        <span className="rs-card__desc">{notice.description}</span>
-        <span className="rs-card__meta">{when} · {notice.area}</span>
+        {kicker || notice.mine ? <span className="rs-card__kicker">{kicker ? NOTICE_TYPES[notice.type].label : null}{notice.mine ? <Pill tone="brand">Your notice</Pill> : null}</span> : null}
+        <span className="rs-card__title">{noticeName(notice)}</span>
+        {(advisory ? notice.description : looksOf(notice)) ? <span className="rs-card__desc">{advisory ? notice.description : looksOf(notice)}</span> : null}
+        <span className="rs-card__meta">{meta}</span>
       </span>
+    </Link>
+  );
+}
+
+/**
+ * The resident's own missing pet, once, at the top of Home: whether anyone has seen it, and since when it is missing. It opens the report,
+ * which is the owner's one screen for it (the notice, the sightings, the alerts and "My pet is home").
+ */
+export function MissingPetCard({ report, notice, now }: { report: Report; notice?: Notice; now: Date }) {
+  const photo = notice?.photoUrls?.[0] ?? report.media.find((m) => m.kind === 'photo' && m.url)?.url;
+  const name = report.petName?.trim() || 'Your pet';
+  const count = notice ? (notice.sightingCount ?? notice.sightings.length) : 0;
+  const latest = notice ? [...notice.sightings].sort((a, b) => b.observedAt.localeCompare(a.observedAt))[0] ?? notice.latestSighting : undefined;
+  const seen = count === 0 ? 'No sightings yet' : `${count} ${count === 1 ? 'sighting' : 'sightings'}${latest ? `, the latest ${lowerFirst(relative(latest.observedAt, now))}` : ''}`;
+  const where = report.location.label && report.location.label !== 'Pinned on the map' ? ` · ${placePhrase(report.location.label)}` : '';
+  return (
+    <Link to={residentPath(`/reports/${report.id}`)} className="rs-card rs-card--link rs-card--plain">
+      <span className={`rs-card__icon${photo ? ' rs-card__icon--photo' : ''}`}>{photo ? <img src={photo} alt="" loading="lazy" /> : <PawPrint size={19} aria-hidden="true" />}</span>
+      <span className="rs-card__text">
+        <span className="rs-card__title">{name} is missing</span>
+        <span className="rs-card__desc">{seen}</span>
+        <span className="rs-card__meta">Since {fmtDay(report.observedAt)}, {fmtTime(report.observedAt)}{where}</span>
+      </span>
+      <ChevronRight size={18} className="rs-row__chev" aria-hidden="true" />
     </Link>
   );
 }

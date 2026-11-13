@@ -1,11 +1,14 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, CalendarClock, CircleCheck, Clock3, Handshake, Landmark, PawPrint } from 'lucide-react';
 import { adminPath } from '../config';
 import { LinkButton } from '../components/Button';
 import { EmptyState, Panel } from '../components/layout';
+import { MatchCard } from '../components/MatchParts';
 import { CATEGORIES } from '../data/constants';
 import { useAdminData } from '../data/context';
-import { attentionItems, dashboardCounts, isLostPet, isOpen, mediationOf, pendingFollowUps, recentActivity, type ReasonKind } from '../data/selectors';
+import { attentionItems, dashboardCounts, isLostOrFound, isOpen, matchesToReview, mediationOf, pendingFollowUps, recentActivity, type ReasonKind } from '../data/selectors';
+import { MatchCompareDialog } from '../dialogs/MatchDialogs';
 import { addDays, fmtTime, fmtWeekday, greeting, plural, relative, sameDay } from '../../preview/lib/format';
 import { usePageTitle } from '../lib/hooks';
 import { useNow } from '../../preview/lib/hooks';
@@ -21,17 +24,22 @@ export default function DashboardPage() {
   usePageTitle('Dashboard');
   const { state } = useAdminData();
   const now = useNow();
+  const [reviewing, setReviewing] = useState<string | null>(null);
 
   const counts = dashboardCounts(state.cases, now);
+  // Possible matches between a missing-pet and a found-animal report: found by the system, decided only by a Leader
+  const toReview = matchesToReview(state.matches);
   const attention = attentionItems(state.cases, now);
   const horizon = addDays(now, 7);
   const upcoming = pendingFollowUps(state.cases).filter((x) => { const t = new Date(x.followUp.dueAt!); return t >= now && t <= horizon; }).slice(0, 7);
   const recent = recentActivity(state.cases, 7);
 
-  // Missing pets are listed on their own: each is visible, none is a task by itself (its notice is published when the report is filed)
-  const missing = state.cases.filter((c) => isOpen(c) && isLostPet(c)).sort((x, y) => y.reportedAt.localeCompare(x.reportedAt));
+  // Missing pets and found animals are listed on their own: each is visible, none is a task by itself (they are monitored from the start; a missing
+  // pet's notice is published when the report is filed)
+  const watched = state.cases.filter((c) => isOpen(c) && isLostOrFound(c)).sort((x, y) => y.reportedAt.localeCompare(x.reportedAt));
 
   const parts: string[] = [];
+  if (toReview.length) parts.push(`${plural(toReview.length, 'possible match', 'possible matches')} between a missing pet and a found animal ${toReview.length === 1 ? 'is' : 'are'} waiting for you to confirm`);
   if (counts.mediation) parts.push(`${plural(counts.mediation, 'owner and neighbour')} ${counts.mediation === 1 ? 'is' : 'are'} waiting for your help to get in touch`);
   if (counts.urgent) parts.push(`${plural(counts.urgent, 'urgent case')} ${counts.urgent === 1 ? 'is' : 'are'} open`);
   if (counts.newReports) parts.push(`${plural(counts.newReports, 'new report')} ${counts.newReports === 1 ? 'is' : 'are'} waiting for review`);
@@ -62,6 +70,16 @@ export default function DashboardPage() {
         <Link role="listitem" className={cx('sa-stat', counts.urgent > 0 && 'sa-stat--alert')} to={`${adminPath('/cases')}?status=open&priority=urgent`}><span className="sa-stat__value sa-num">{counts.urgent}</span><span className="sa-stat__label">Urgent cases</span></Link>
         <a role="listitem" className="sa-stat" href="#attention"><span className="sa-stat__value sa-num">{counts.followUpsDue}</span><span className="sa-stat__label">Follow-ups due</span></a>
       </div>
+
+      {toReview.length > 0 ? (
+        <section aria-labelledby="matches-h" id="matches" className="scroll-mt-6">
+          <h2 id="matches-h" className="sa-h2 mb-3">Possible matches to review ({toReview.length})</h2>
+          <Panel className="overflow-hidden">
+            <ul className="m-0 list-none p-0">{toReview.slice(0, 5).map((m) => <MatchCard key={m.id} m={m} now={now} onReview={setReviewing} />)}</ul>
+            {toReview.length > 5 ? <div className="sa-pager"><span>{toReview.length - 5} more after these</span></div> : null}
+          </Panel>
+        </section>
+      ) : null}
 
       <div className="sa-grid">
         <section aria-labelledby="attention-h" id="attention" className="scroll-mt-6">
@@ -95,24 +113,24 @@ export default function DashboardPage() {
 
         <div className="sa-stack">
           <section aria-labelledby="missing-h">
-            <h2 id="missing-h" className="sa-h2 mb-3">Missing pets{missing.length > 0 ? ` (${missing.length})` : ''}</h2>
+            <h2 id="missing-h" className="sa-h2 mb-3">Missing and found animals{watched.length > 0 ? ` (${watched.length})` : ''}</h2>
             <Panel className="overflow-hidden">
-              {missing.length === 0 ? (
-                <EmptyState icon={PawPrint} title="No missing pets" compact>When an owner reports a pet missing, its notice is published at once and it is listed here. Nothing needs your approval.</EmptyState>
+              {watched.length === 0 ? (
+                <EmptyState icon={PawPrint} title="No missing or found animals" compact>When a resident reports a missing pet or a found animal it is listed here and monitored from the start. Nothing needs your approval.</EmptyState>
               ) : (
                 <ul className="sa-feed">
-                  {missing.slice(0, 5).map((c) => (
+                  {watched.slice(0, 5).map((c) => (
                     <li key={c.id}>
                       <span className="sa-feed__dot" aria-hidden="true" />
                       <div className="min-w-0">
                         <p className="font-medium"><Link to={link(c.id)}>{c.title}</Link></p>
-                        <p className="sa-meta mt-0.5"><span className="sa-ref">{c.id}</span> · reported {relative(c.reportedAt, now)}{mediationOf(c).length > 0 ? ' · asking for your help' : ''}</p>
+                        <p className="sa-meta mt-0.5"><span className="sa-ref">{c.id}</span> · {c.category === 'found_animal' ? 'found' : 'missing'} · reported {relative(c.reportedAt, now)}{mediationOf(c).length > 0 ? ' · asking for your help' : ''}</p>
                       </div>
                     </li>
                   ))}
                 </ul>
               )}
-              {missing.length > 5 ? <div className="sa-pager"><span>{missing.length - 5} more</span><Link to={`${adminPath('/cases')}?status=open&category=lost_pet`} className="font-semibold">View in Cases</Link></div> : null}
+              {watched.length > 5 ? <div className="sa-pager"><span>{watched.length - 5} more</span><Link to={`${adminPath('/cases')}?status=open`} className="font-semibold">View in Cases</Link></div> : null}
             </Panel>
           </section>
 
@@ -158,6 +176,8 @@ export default function DashboardPage() {
           </section>
         </div>
       </div>
+
+      {reviewing ? <MatchCompareDialog matchId={reviewing} onClose={() => setReviewing(null)} /> : null}
     </div>
   );
 }

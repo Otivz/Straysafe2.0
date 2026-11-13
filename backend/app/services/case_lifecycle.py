@@ -91,6 +91,11 @@ def audit(db: Session, actor: Optional[User], action: str, report: Report, descr
 
 def history(db: Session, report: Report, actor: Optional[User], remarks: str) -> None:
     """A neutral line on the report's timeline. Residents can read it: never put a reason, a note or a name here."""
+    last = db.query(StatusHistory).filter(
+        StatusHistory.report_id == report.report_id
+    ).order_by(StatusHistory.history_id.desc()).first()
+    if last is not None and last.report_status_id == report.current_status_id and (last.remarks or "") == (remarks or ""):
+        return
     db.add(StatusHistory(report_id=report.report_id, report_status_id=report.current_status_id,
                          updated_by=actor.user_id if actor else None, latitude=report.latitude,
                          longitude=report.longitude, landmark=report.landmark, remarks=remarks))
@@ -306,6 +311,8 @@ def close_case(db: Session, report: Report, actor: User, data: CloseIn, ip: Opti
     report.closure_disposition, report.closure_reason = data.disposition, reason
     report.closed_at, report.closed_by = now, actor.user_id
     _apply_status(report, V.CLOSED)
+    from app.services import case_messaging
+    case_messaging.close_for_report(db, report.report_id, actor.user_id, f"The report is closed ({label}).")
 
     ended = 0
     if data.end_open_items:
@@ -379,6 +386,8 @@ def withdraw_case(db: Session, report: Report, actor: User, ip: Optional[str] = 
     report.closure_disposition, report.closure_reason = "withdrawn_by_reporter", "Withdrawn by the reporter."
     report.closed_at, report.closed_by = now, actor.user_id
     _apply_status(report, V.CLOSED)
+    from app.services import case_messaging
+    case_messaging.close_for_report(db, report.report_id, actor.user_id, "The report was withdrawn by the person who filed it.")
     for f in db.query(CaseFollowUp).filter(CaseFollowUp.report_id == report.report_id, CaseFollowUp.status == "pending").all():
         f.status, f.cancel_reason = "cancelled", "The report was withdrawn."
     history(db, report, actor, "Report withdrawn by the reporter.")

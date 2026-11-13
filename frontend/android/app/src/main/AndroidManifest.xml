@@ -27,6 +27,12 @@
 
         </activity>
 
+        <!-- Push notifications (Firebase Cloud Messaging): the small white status-bar icon, its colour, and the channel used when a message names
+             none. The app creates its channels at sign-in (src/resident/native/push.ts); the server names one in every message. -->
+        <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_stat_straysafe" />
+        <meta-data android:name="com.google.firebase.messaging.default_notification_color" android:resource="@color/straysafe_brand" />
+        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="straysafe_updates" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -43,10 +49,12 @@
          Location (coarse and fine are requested together, as Android 12+ asks): "use my current location" on the report map, asked for
          when the resident taps it, while the app is open. No background location, no continuous tracking.
          Photos and videos are chosen through the system picker (an <input type="file">, no capture), which needs no storage or camera
-         permission. A "take a photo now" button would need CAMERA added back. -->
+         permission. A "take a photo now" button would need CAMERA added back.
+         POST_NOTIFICATIONS: push notifications (Android 13 and later asks the resident once, after they sign in). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 </manifest>

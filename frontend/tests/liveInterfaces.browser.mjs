@@ -146,7 +146,7 @@ try {
     // Five seeded cases are open. The nuisance and safety reports are new; the lost-pet report is not a report waiting for review (its notice is
     // published by itself); the injured and found cases are under review.
     assert(counts.some((c) => /^2 New reports/.test(c)), `new reports: ${counts}`);
-    assert((await page.text()).includes('Missing pets'), 'the missing pet is listed on its own');
+    assert((await page.text()).includes('Missing and found animals'), 'the missing pet and the found animal are listed on their own, never as new reports to review');
     const attention = await page.evaluate(`document.querySelector('#attention')?.innerText || ''`);
     assert(!attention.includes(ref(LOST)), 'and it is not a task for being new');
     assert(counts.some((c) => /^5 Active cases/.test(c)), `active cases: ${counts}`);
@@ -305,17 +305,22 @@ try {
     assert.equal((await leaderApi.get(`/cases/${SAFETY}`)).body.priority, 'urgent');
   });
 
-  await step('admin: an external referral is created, then updated with what the organisation said', async () => {
+  await step('admin: Barangay assistance is created (other organisations are rejected), then updated with what the Barangay said', async () => {
+    const nonBarangay = await leaderApi.post(`/cases/${SAFETY}/referrals`, {
+      org_type: 'vet_office', org_name: 'City Veterinary Office', reason: 'Testing non-barangay referral rejection.', contact_method: 'phone', contacted: true,
+    });
+    assert.equal(nonBarangay.status, 422, 'only Barangay assistance is accepted for new referrals');
     await page.click('Actions & follow-ups', { selector: '[role=tab]' });
-    await page.click('Create external referral');
+    await page.click('Ask the Barangay for help');
     await page.waitText('Record who you contacted and why');
-    await page.choose('Organization', 'City Veterinary Office');
-    await page.fill('Reason for referral', 'A large dog showed aggression toward joggers and the owner is unknown; we need veterinary advice.');
+    await page.waitText('Assistance partner: Barangay Hall — Peace & Order');
+    await page.fill('Reason for referral', 'A large dog showed aggression toward joggers and the owner is unknown; we need Barangay assistance.');
     await page.click('Create referral', { selector: 'button[type=submit]' });
-    await page.waitText('Referral to City Veterinary Office recorded');
+    await page.waitText('Referral to Barangay Hall — Peace & Order recorded');
     let saved = (await leaderApi.get(`/cases/${SAFETY}`)).body;
     assert.equal(saved.referrals.length, 1);
-    assert.equal(saved.referrals[0].org_name, 'City Veterinary Office');
+    assert.equal(saved.referrals[0].org_type, 'barangay');
+    assert(saved.referrals[0].org_name.startsWith('Barangay '), `saved under the subdivision's Barangay: ${saved.referrals[0].org_name}`);
     await page.click('Record update');
     await page.waitText('What they told you');
     await page.choose('Referral status', 'Acknowledged');
@@ -324,7 +329,7 @@ try {
     await page.waitText('Coordination update recorded');
     saved = (await leaderApi.get(`/cases/${SAFETY}`)).body;
     assert.equal(saved.referrals[0].status, 'acknowledged');
-    assert(JSON.stringify(saved.referrals[0]).includes('call back tomorrow morning'), 'what the organisation said is kept with the referral');
+    assert(JSON.stringify(saved.referrals[0]).includes('call back tomorrow morning'), 'what the Barangay said is kept with the referral');
   });
 
   await step('admin: owner coordination is recorded, and a follow-up is scheduled and then marked done', async () => {
@@ -830,16 +835,18 @@ try {
     assert.notEqual(JSON.stringify((await rita.get('/notifications/preferences')).body), before, 'the switch was saved');
   });
 
-  await step('resident: community shows the lost-pet notice, the found-animal notice and the safety advisory', async () => {
+  await step('resident: community shows the lost-pet notice, the found-animal notice and the safety advisory, one kind at a time', async () => {
     await page.goto(`${RESIDENT}/community`);
+    await page.waitText('Lost dog');                                                     // the lost pets come first
+    await page.click('Found animals', { selector: 'button' });
+    await page.waitText('Found dog');
+    await page.click('Advisories', { selector: 'button' });
     await page.waitText('Rabies vaccination reminder');
-    const text = await page.text();
-    assert(text.includes('Lost dog: ') || text.includes('Lost dog'), 'the lost-pet notice');
-    assert(text.includes('Found: dog'), 'the found-animal notice');
   });
 
   await step('resident: an ownership claim on the found-animal notice is sent and its status is shown', async () => {
-    await page.click('Found: dog', { selector: 'a', contains: true });
+    await page.click('Found animals', { selector: 'button' });
+    await page.click('Found dog', { selector: 'a', contains: true });
     await page.waitText('This may be my animal');
     await page.click('This may be my animal');
     await page.waitText('Claim this animal');
@@ -858,11 +865,12 @@ try {
     await signInResident(ACCOUNTS.owner, PASSWORD);
     await page.waitText('Selera Homes');
     await page.goto(`${RESIDENT}/community`);
-    await page.waitText('Rabies vaccination reminder');
-    await page.click('Lost dog', { selector: 'a', contains: true });
+    // Mochi's card leads with her name (an older notice without a pet name is "Lost dog")
+    await page.waitFor(`[...document.querySelectorAll('.rs-card__title')].some((t) => t.innerText.trim() === 'Mochi')`, 'Mochi\'s card');
+    await page.evaluate(`[...document.querySelectorAll('a.rs-card')].find((a) => a.querySelector('.rs-card__title')?.innerText.trim() === 'Mochi').click()`);
     await page.waitText('I saw this pet');
     await page.click('I saw this pet');
-    await page.waitText('Report a sighting');
+    await page.waitText('What did you see?');                                             // the sighting form
     await page.click('Choose', { selector: 'button' });                                  // the place picker opens in a sheet
     await page.click('Selera Homes Main Entrance Gate', { selector: 'button' });
     await page.waitText('Pin placed, inside the reporting area');
@@ -947,8 +955,8 @@ try {
     await page.waitText('Needs your attention');
     await page.goto(`${ADMIN}/cases/${ref(5)}`);
     await page.waitText('Friendly brown dog'.slice(0, 8)).catch(() => undefined);
-    await page.click('Assessment', { selector: '[role=tab]' });
-    await page.waitText('Ownership claims');
+    await page.waitText('says this is their pet');                       // a claim waiting for an answer is asked about where the Leader looks first
+    assert.equal(await page.evaluate(`document.querySelectorAll('[role=tab]').length`), 0, 'a found animal is monitored from the start: no tabs and no Assessment');
     await page.waitText('Rita Reporter');
   });
 
@@ -977,8 +985,8 @@ try {
     await page.clearSession();
     await signInAdmin(ACCOUNTS.leader, PASSWORD);
     await page.waitText('Needs your attention');
-    await page.goto(`${ADMIN}/cases/${ref(FOUND)}?tab=assessment`);
-    await page.waitText('Ownership claims');
+    await page.goto(`${ADMIN}/cases/${ref(FOUND)}`);
+    await page.waitText('says this is their pet');
     await page.click('Review claim');
     await page.click('Accept the claim', { selector: 'label' });
     await page.fill('Verification notes', 'The marks and the vaccination card match the animal.', { within: DIALOG });
@@ -989,6 +997,7 @@ try {
     assert.equal(claim.status, 'accepted');
     // The server's rule: accepting a claim does not confirm ownership; the case stays "under review" until the Leader records that decision.
     assert.equal((await leaderApi.get(`/cases/${FOUND}`)).body.ownership.status, 'under_review');
+    await page.click('Who does it belong to?', { selector: 'summary' });
     await page.waitText('Accepting one does not confirm ownership');                  // and the screen no longer promises otherwise
     await page.clearSession();
     await signInResident(ACCOUNTS.resident, PASSWORD);
@@ -997,47 +1006,39 @@ try {
     await page.waitText('Your claim was approved');                                   // what the claimant sees
   });
 
-  await step('admin: a lost-pet case shows the registered pet, the owner to contact and when and where it was last seen, and the reporter\'s link is not a confirmed identity', async () => {
+  await step('admin: a missing pet\'s page shows the animal, the owner to contact and when and where it was last seen first, with no tabs and no identity step', async () => {
     await page.clearSession();
     await signInAdmin(ACCOUNTS.leader, PASSWORD);
     await page.waitText('Needs your attention');
     await page.goto(`${ADMIN}/cases/${ref(mochiReport.report_id)}`);
-    await page.waitText('Registered owner');
+    await page.waitText('Rita Reporter');
     let text = await page.text();
-    for (const shown of ['Registered pet', 'Mochi', 'Shih Tzu', 'Declared by the owner', 'Linked by the reporter', 'Rita Reporter', 'rita@e2e-straysafe.com', 'Last seen', 'Selera Homes Main Entrance Gate',
-      'A registration is declared, not verified.', 'The registry still matches what was reported.', 'The owner is the person who filed this report.']) assert(text.includes(shown), `${shown} is shown`);
+    for (const shown of ['Mochi', 'Shih Tzu', 'Rita Reporter', 'rita@e2e-straysafe.com', 'Selera Homes Main Entrance Gate', 'Open the pet record']) assert(text.includes(shown), `${shown} is shown`);
+    assert(/last seen/i.test(text) && /owner/i.test(text), 'when it was last seen, and the owner to contact');
     assert(!text.includes('Identity confirmed'), 'a reporter naming her own pet is not a confirmed identity');
+    assert.equal(await page.evaluate(`document.querySelectorAll('[role=tab]').length`), 0, 'no tabs, so no Assessment to record an identity decision on');
 
-    // The owner edits the record after filing: the case still shows what the report was filed with, and says what changed
+    // The owner edits the record after filing: the page still tells what the report was filed with, and says what changed
     const rita = await apiLogin(stack.apiUrl, ACCOUNTS.resident, PASSWORD);
     const mochi = (await rita.get('/pets/')).body.find((p) => p.pet_name === 'Mochi');
     const edited = await rita.put(`/pets/${mochi.pet_id}`, { color_markings: 'White and gold, with a pink bow' });
     assert.equal(edited.status, 200, JSON.stringify(edited.body));
     await page.goto(`${ADMIN}/cases/${ref(mochiReport.report_id)}`);
-    await page.waitText('The registry has changed since this report was filed: colour.');
-    // (the page being left can already say this, so wait for the freshly loaded page to show both parts)
-    await page.waitFor(`document.body.innerText.includes('As reported') && document.body.innerText.includes('pink bow')`, 'the record today beside what was reported');
+    await page.waitText('the record changed since this report: colour');
     text = await page.text();
-    assert(text.includes('As reported') && text.includes('pink bow'), 'the record today is shown');
+    assert(!text.includes('pink bow'), 'it shows what the report was filed with, not the record as it is now');
 
-    // The team decides the identity itself, with how it checked
-    await page.click('Assessment', { selector: '[role=tab]' });
-    await page.waitText('Linked by the reporter. You have not decided yet.');
-    await page.fill('Identification notes', 'The guard recognised Mochi at the gate and the collar matches the registry photo.');
-    await page.click('Save identity');
-    await page.waitText('Animal identity saved');
+    // Nobody decided the identity: the reporter's own link is only that
     const after = (await leaderApi.get(`/cases/${mochiReport.report_id}`)).body;
-    assert.deepEqual([after.identity.status, after.identity.decided, after.pet.linked_by_reporter], ['identified', true, false], 'now it is the team\'s decision');
-    await page.click('Missing pet', { selector: '[role=tab]' });
-    await page.waitText('Identity confirmed');
-    assert(!(await page.text()).includes('Linked by the reporter'), 'no longer only the reporter\'s link');
+    assert.deepEqual([after.identity.status, after.identity.decided, after.pet.linked_by_reporter], ['identified', false, true], 'nobody decided the identity: the reporter\'s own link is only that');
   });
 
-  await step('admin: an older lost-pet report with no registered pet says so, with no empty panel', async () => {
+  await step('admin: an older missing-pet report with no registered pet still has its page, with nothing made up', async () => {
     await page.goto(`${ADMIN}/cases/${ref(LOST)}`);
-    await page.waitText('No registered pet is linked to this report.');
+    await page.waitText('Missing dog');
     const text = await page.text();
-    assert(!text.includes('Registered owner') && !text.includes('Declared by the owner'), 'nothing is made up for it');
+    assert(/reported by/i.test(text), 'the person who reported it is the one to talk to');
+    assert(!text.includes('Open the pet record') && !/declared by the owner/i.test(text) && !text.includes('Registered owner'), 'nothing is made up for a pet that was never registered');
   });
 
   await step('admin: the Leader links a pet record the office entered to a resident, and nothing moves until the resident confirms', async () => {
@@ -1101,27 +1102,26 @@ try {
     await signInResident(ACCOUNTS.resident, PASSWORD);
     await page.waitText('Selera Homes');
     await page.goto(`${RESIDENT}/community`);
-    await page.waitText('Rabies vaccination reminder');
+    await page.waitFor(`[...document.querySelectorAll('.rs-card__title')].some((t) => t.innerText.trim() === 'Mochi')`, 'Mochi\'s card, by her name');
     let text = await page.text();
-    for (const shown of ['Lost pets', 'Found animals', 'View all', 'Safety advisories']) assert(text.includes(shown), `${shown} is on the overview`);
+    for (const shown of ['Lost pets', 'Found animals', 'Advisories']) assert(text.includes(shown), `${shown} is a tab of the overview`);
     assert(!text.includes('barks all night'), 'a private complaint is never in Community');
     assert(page.requests.some((u) => u.includes('/lost-pet-alerts/community/summary')), 'the overview asks for a short preview and the totals');
     await checkResponsive('community-overview', true);
-    await page.click('View all', { selector: 'a' });                                   // the first one is the lost pets'
-    // (the overview already shows these notices, so wait for what only the directory says: how many there are)
+    // one search box: it filters the list as you type, and offers the directory (searched by the server) for everything
+    await page.fill('Search the Community', 'Pepper');
+    await page.waitFor(`(() => { const t = [...document.querySelectorAll('.rs-card__title')].map((e) => e.innerText.trim()); return t.length === 1 && t[0] === 'Pepper'; })()`, 'only Pepper while searching');
+    await page.click('Search all', { selector: 'a' });
     await page.waitFor(`/[0-9]+ notices?/.test(document.body.innerText)`, 'the directory to show how many notices it holds');
     assert((await page.path()).includes('/community/lost'), await page.path());
-    text = await page.text();
-    assert(text.includes('Lost cat: Pepper'), 'Pepper\'s notice, published by her report, is listed too');
-    await page.fill('Search lost pets', 'Pepper');
-    await page.gone('Lost dog: Mochi');
     assert(page.requests.some((u) => u.includes('/lost-pet-alerts/active') && u.includes('q=Pepper') && u.includes('alert_type=lost_pet')), 'the server did the searching');
+    const titles = () => page.evaluate(`[...document.querySelectorAll('.rs-card__title')].map((e) => e.innerText.trim())`);
     await page.fill('Search lost pets', '');
-    await page.waitText('Lost dog: Mochi');
+    await page.waitFor(`[...document.querySelectorAll('.rs-card__title')].some((t) => t.innerText.trim() === 'Mochi')`, 'Mochi listed again');
+    assert((await titles()).includes('Pepper'), 'Pepper\'s notice, published by her report, is listed too');
     await page.click('Cats', { selector: 'button' });
-    await page.gone('Lost dog: Mochi');
-    await page.waitText('Lost cat: Pepper');                                              // (the list is empty while the new search is read)
-    assert(!(await page.text()).includes('Lost dog: Mochi'), 'the animal filter keeps the cat and drops the dogs');
+    await page.waitFor(`(() => { const t = [...document.querySelectorAll('.rs-card__title')].map((e) => e.innerText.trim()); return t.includes('Pepper') && !t.includes('Mochi'); })()`, 'the cats only');
+    assert(!(await titles()).includes('Mochi'), 'the animal filter keeps the cat and drops the dogs');
     await checkResponsive('community-directory');
     // the list is bounded by the server, not by the screen
     const first = (await rita.get('/lost-pet-alerts/active?alert_type=lost_pet&limit=1')).body;
@@ -1142,8 +1142,8 @@ try {
     assert(history.some((t) => /neighbor reported seeing the pet/i.test(t)), `the sighting is on the case activity: ${history}`);
     // the notification opens the sightings of HER notice (an alert's number is never read as a report's)
     await page.goto(`${RESIDENT}/notifications`);
-    await page.waitText('New Lost Pet Sighting!');
-    await page.click('New Lost Pet Sighting!', { selector: 'button' });
+    await page.waitText('Someone saw Mochi');
+    await page.click('Someone saw Mochi', { selector: 'button' });
     await page.waitText('The most recent is at the top.');                               // only the sightings screen says this
     assert((await page.path()).endsWith(`/community/alert-${mochiAlert.alert_id}/sightings`), await page.path());
     assert(!(await page.text()).includes('Owen'), 'the sightings never name the neighbour');
@@ -1241,25 +1241,31 @@ try {
     assert(text.includes('Rita Reporter and Owen Owner asked you to help them get in touch'), 'the request is on the dashboard');
     assert(text.includes('waiting for your help to get in touch'), 'and in its opening sentence');
     await page.goto(`${ADMIN}/cases/${ref(mochiReport.report_id)}`);
-    await page.waitText('Getting in touch');
+    await page.waitText('asked you to help them get in touch');
     text = await page.text();
-    for (const shown of ['Waiting for you', 'Rita Reporter and Owen Owner', 'Rita Reporter asked you to help', 'Record owner confirmation', 'Possible recoveries', 'Where it was last seen']) assert(text.includes(shown), `${shown} is shown`);
-    const digits = text.replace(/[^0-9]/g, '');
+    for (const shown of ['Rita Reporter and Owen Owner asked you to help them get in touch', 'Direct messages between them are closed', 'Owen Owner may have Mochi safe with them', 'Mochi', 'Published', 'notified']) assert(text.includes(shown), `${shown} is shown`);
+    assert(/Needs you · \d/.test(text), 'the one status says something needs the Leader');
+    let digits = text.replace(/[^0-9]/g, '');
+    assert(!digits.includes('09179998888'), 'the neighbour\'s number is not on the page until the Leader opens the request');
+    await page.click('Help them', { selector: 'button' });
+    await page.waitText('Contact them, write down what you did');
+    text = await page.text();
+    digits = text.replace(/[^0-9]/g, '');
     assert(digits.includes('09175550188') && digits.includes('09179998888'), 'both people\'s phone numbers are shown, now that one of them asked for help');
     assert(!text.includes('Start review') && !text.includes('Mark in progress'), 'there is no review or progress step to click for a missing pet');
-    assert(!text.includes('Create notice') && text.includes('Published automatically'), 'the notice was published by the report: nothing to create or approve');
+    assert(!text.includes('Create notice'), 'the notice was published by the report: nothing to create or approve');
     assert(!text.includes('pink collar'), 'the Leader does not see the private messages');
     await checkResponsive('leader-lost-pet-case', true);
     // the Leader records the contact work with the existing contact log, then finishes the request
-    await page.click('Record contact', { selector: 'button' });
-    await page.waitText('Record owner coordination');
+    await page.click('Write down what you did', { selector: 'button' });
+    await page.waitText('Record a contact');
     await page.fill('Who you spoke with', 'Rita Reporter (owner) and Owen Owner (neighbour)', { within: DIALOG });
-    await page.fill('What was discussed', 'Called both. Owen keeps the dog in his carport and Rita is on her way to collect it.', { within: DIALOG });
-    await page.click('Record coordination', { selector: 'button[type=submit]' });
-    await page.waitText('Owner coordination recorded');
+    await page.fill('What came of it', 'Called both. Owen keeps the dog in his carport and Rita is on her way to collect it.', { within: DIALOG });
+    await page.click('Record contact', { selector: 'button[type=submit]' });
+    await page.waitText('Contact recorded');
     assert((await leaderApi.get(`/cases/${mochiReport.report_id}`)).body.contacts.length >= 1, 'the contact is in the case\'s contact log');
     // the Leader decides whether the neighbour's report checks out
-    await page.click('Review', { selector: 'button' });                                  // the possible recovery comes first in the list
+    await page.click('Review', { selector: 'button' });                                  // the possible recovery
     await page.waitText('Review this possible recovery');
     await page.click('It looks like the missing pet', { selector: 'label' });
     await page.fill('Note', 'Owen sent a photo and the collar matches.', { within: DIALOG });
@@ -1268,6 +1274,7 @@ try {
     const reviewed = (await leaderApi.get(`/lost-pet-alerts/${mochiAlert.alert_id}`)).body.sightings.find((s) => s.sighting_type === 'secured');
     assert.deepEqual([reviewed.status, reviewed.reviewed_by], ['verified', 'Lena Leader'], 'who reviewed it and what they decided is kept');
     assert.equal((await leaderApi.get(`/lost-pet-alerts/${mochiAlert.alert_id}`)).body.status, 'active', 'a verified lead still does not recover the pet');
+    if (!(await page.has('Mark as finished'))) await page.click('Help them', { selector: 'button' });
     await page.click('Mark as finished', { selector: 'button' });
     await page.waitText('Mark this request as finished');
     await page.fill('What was the result?', 'Both were reached; the owner is collecting the pet.', { within: DIALOG });
@@ -1276,6 +1283,7 @@ try {
     const done = (await leaderApi.get(`/lost-pet-alerts/${mochiAlert.alert_id}`)).body.coordinations[0];
     assert.deepEqual([done.status, done.resolution_note], ['resolved', 'Both were reached; the owner is collecting the pet.']);
     assert.equal((await leaderApi.get('/cases/work-queue')).body.coordinations.length, 0, 'it is no longer waiting for the Leader');
+    await page.waitText('Nothing needs you right now');                                   // and the report is back to being monitored
     // the resident who asked sees that it is finished
     const owen = await apiLogin(stack.apiUrl, ACCOUNTS.owner, PASSWORD);
     assert((await owen.get('/notifications/me')).body.some((n) => n.type === 'lost_pet_coordination' && /finished helping/i.test(n.title)), 'both were told');
@@ -1283,18 +1291,17 @@ try {
 
   await step('admin: asking the Barangay for help is written down without claiming contact; only a recorded attempt counts as contact', async () => {
     await page.click('Ask for help', { selector: 'button' });
-    await page.waitText('Write down who can help look for the pet');
+    await page.waitText('Choose the help you need');
     await page.click('Not yet', { selector: 'label' });
     await page.click('Write it down', { selector: 'button[type=submit]' });
-    await page.waitText('Nobody has been contacted yet');
+    await page.waitText('is written down, but nobody has been contacted');
     let referral = (await leaderApi.get(`/cases/${mochiReport.report_id}`)).body.referrals[0];
     assert.equal(referral.status, 'to_contact', 'saving a referral is not proof the Barangay was contacted');
     assert.equal(referral.updates.length, 0, 'no contact is recorded');
-    await page.waitText('Not contacted yet');
     await page.goto(`${ADMIN}/dashboard`);
     await page.waitText('written down but nobody has contacted them yet');                // it is a task until someone makes the call
     await page.goto(`${ADMIN}/cases/${ref(mochiReport.report_id)}`);
-    await page.click('Record contact attempt', { selector: 'button' });
+    await page.click('Record contact', { selector: 'button' });
     await page.waitText('not contacted yet');
     await page.fill('Who you spoke with', 'Duty officer', { within: DIALOG });
     await page.choose('What came of it', 'Tried, no answer');
@@ -1307,7 +1314,9 @@ try {
   });
 
   await step('admin: the Leader records that the owner confirmed by phone: one operation resolves the notice, closes the case and restores the pet', async () => {
-    await page.click('Record owner confirmation', { selector: 'button' });
+    assert(!(await page.has('Record the owner’s confirmation')), 'recovery is not offered on a report that is only being monitored');
+    await page.click('Resolve this report', { selector: 'summary' });
+    await page.click('Record the owner’s confirmation', { selector: 'button' });
     await page.waitText('Only the owner can say the pet is home.');
     await page.click('By phone', { selector: 'label' });
     await page.fill('Notes', 'She called me from the carport: Mochi is with her.', { within: DIALOG });

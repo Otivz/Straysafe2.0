@@ -11,13 +11,15 @@ import { caseRef } from '../../live/refs.ts';
 import { fmtDay } from '../../preview/lib/format.ts';
 import type {
   AdminNotification, AdminProfile, AnimalType, Case, CategoryId, ClaimStatus, Closure, ComplianceObservation, DispositionId, EventKind, Evidence,
-  FollowUp, LostPetCase, LostPetConversation, LostPetPerson, LostPetSighting, Note, Notice, NoticeStatus, OwnerContact, OwnershipClaim, Pet, PetFacts, Policy, Referral, ReferralNote,
-  RegisteredPet, Resident, Settings, TimelineEvent, Warning,
+  FollowUp, LostPetCase, LostPetConversation, LostPetPerson, LostPetSighting, MatchSide, Note, Notice, NoticeStatus, OwnerContact, OwnershipClaim, Pet, PetFacts, Policy, PossibleMatch, Referral, ReferralNote,
+  RegisteredPet, Resident, Settings, TimelineEvent, Warning, CaseThread, ThreadView, CaseAlert,
 } from '../data/types.ts';
 import type {
   ApiAlert, ApiAnalytics, ApiAnnouncement, ApiCasePet, ApiCaseDetail, ApiCaseSettings, ApiCaseSummary, ApiCategories, ApiClosure, ApiHistory, ApiLostCoordination, ApiLostParty,
-  ApiLostSighting, ApiMedia, ApiNote, ApiNotification, ApiNotificationPrefs, ApiPet, ApiPetFacts, ApiQueue, ApiReport, ApiUser,
+  ApiLostSighting, ApiMatch, ApiMatchSide, ApiMedia, ApiNote, ApiNotification, ApiNotificationPrefs, ApiPet, ApiPetFacts, ApiQueue, ApiReport, ApiUser, ApiThread, ApiThreadView,
+  ApiCaseAlert,
 } from './api.ts';
+import { placePhrase } from '../../preview/lib/place.ts';
 
 /** What the adapters need to know about the rest of the loaded data (names and references), supplied by the provider. */
 export interface Lookup {
@@ -231,7 +233,7 @@ export function caseFromSummary(s: ApiCaseSummary, lookup: Lookup): Case {
     },
     identity: { status: s.identity_status, matches: matchesOf(s.identity_status, s.pet_id), note: '', decided: s.identity_decided },
     ownership: { status: s.ownership_status, ownerResidentId: idOf(s.ownership_owner_id), evidence: [], note: '' },
-    claims: [], followUps: [], ownerContacts: [], warnings: [], referrals: [], relatedCaseIds: [], notes: [],
+    claims: [], followUps: [], ownerContacts: [], warnings: [], referrals: [], relatedCaseIds: [], notes: [], threads: [], alerts: [],
     timeline: s.last_event ? [eventFromHistory({ history_id: s.last_event.history_id, remarks: s.last_event.text, created_at: s.last_event.at, updater_name: s.last_event.by_name })] : [],
     closure: s.closure ? closureOf(s.closure, lookup) : null,
   };
@@ -377,6 +379,8 @@ export function applyDetail(base: Case, d: ApiCaseDetail, report: ApiReport | nu
     referrals: d.referrals.map(referralFromApi),
     relatedCaseIds: d.links.map((l) => lookup.refOf(l.report_id)),
     notes: noteList,
+    threads: (d.threads ?? []).map(threadFromApi),
+    alerts: (d.alerts ?? []).map(alertFromApi),
     timeline,
     closure: closureWithCheck,
   };
@@ -426,6 +430,62 @@ export function applyQueue(cases: Case[], queue: ApiQueue, opened: ReadonlySet<s
   return cases.map((c) => by.get(c.id) ?? c);
 }
 
+// ------------------------------------------------------------------------------------- lost and found possible matches
+function matchSideFrom(s: ApiMatchSide, lookup: Pick<Lookup, 'refOf'>): MatchSide {
+  return {
+    caseId: lookup.refOf(s.report_id), kind: s.kind, title: s.title, photoUrl: s.photo_url ?? undefined,
+    species: s.species ? upperFirst(s.species) : '', breed: s.breed ?? '', colors: s.colors ?? [], size: s.size ? upperFirst(s.size) : '', features: s.features ?? [], collar: s.collar ?? '',
+    place: s.place ?? '', at: fromServerOrNull(s.at), reportedAt: fromServerOrNull(s.reported_at), words: s.words ?? '', open: s.open,
+    reporter: s.reporter ? { residentId: idOf(s.reporter.user_id), name: s.reporter.name, phone: s.reporter.phone?.trim() || NO_REPORTER_DETAIL } : null,
+  };
+}
+
+/** A notification alert as the case page reads it. Times are naive server times, turned into instants here like every other time. */
+export function alertFromApi(a: ApiCaseAlert): CaseAlert {
+  return {
+    id: String(a.alert_id), title: a.title, message: a.message, includePhoto: a.include_photo, destination: a.destination, audience: a.audience, status: a.status,
+    stopReason: a.stop_reason,
+    schedule: {
+      mode: a.schedule.mode, repeat: a.schedule.repeat, everyMinutes: a.schedule.every_minutes, times: a.schedule.times ?? [], startAt: fromServer(a.schedule.start_at),
+      endKind: a.schedule.end_kind, endAt: fromServerOrNull(a.schedule.end_at), maxSends: a.schedule.max_sends,
+    },
+    nextSendAt: fromServerOrNull(a.next_send_at), upcoming: (a.upcoming ?? []).map((t) => fromServer(t)), sendsDone: a.sends_done,
+    createdAt: fromServer(a.created_at), createdBy: a.created_by_name ?? 'Subdivision Leader',
+    sends: (a.sends ?? []).map((x) => ({ slotAt: fromServer(x.slot_at), sentAt: fromServer(x.sent_at), recipients: x.recipients, skippedBefore: x.skipped_before })),
+  };
+}
+
+/** A conversation of a case: who is in it (full names, for the Leader), how many messages, how many the Leader has not read. */
+export function threadFromApi(t: ApiThread): CaseThread {
+  return {
+    id: String(t.thread_id), kind: t.kind, status: t.status, canReply: t.can_reply, endedReason: t.ended_reason, matchId: t.match_id === null ? null : String(t.match_id),
+    unread: t.unread, messageCount: t.message_count, lastAt: fromServer(t.last_at ?? t.created_at),
+    people: t.people.map((p) => ({ userId: String(p.user_id), role: p.role, name: p.name })),
+  };
+}
+
+/** A conversation read in full. The times are naive server times, turned into instants here like every other time. */
+export function threadViewFromApi(t: ApiThreadView): ThreadView {
+  return {
+    ...threadFromApi(t),
+    messages: t.messages.map((m) => ({ id: String(m.message_id), kind: m.kind, senderName: m.sender_name, label: m.label, mine: m.mine, body: m.body, at: fromServer(m.at) })),
+  };
+}
+
+/**
+ * A possible match as the screens read it. The two reports are named by their case references. In the comparison rows the "When" row holds
+ * times: they come as naive server times, so they are turned into instants here like every other time.
+ */
+export function matchFromApi(m: ApiMatch, lookup: Pick<Lookup, 'refOf'>): PossibleMatch {
+  return {
+    id: String(m.match_id), status: m.status, level: m.level, score: m.score, reasons: m.reasons ?? [],
+    lost: matchSideFrom(m.lost, lookup), found: matchSideFrom(m.found, lookup),
+    createdAt: fromServerOrNull(m.created_at), decidedAt: fromServerOrNull(m.decided_at),
+    coordination: m.coordination ? { mode: m.coordination.mode, status: m.coordination.status } : null,
+    ...(m.rows ? { rows: m.rows.map((r) => ({ key: r.key, label: r.label, lost: r.key === 'when' ? fromServer(r.lost) : r.lost, found: r.key === 'when' ? fromServer(r.found) : r.found, verdict: r.verdict, note: r.note })) } : {}),
+  };
+}
+
 // ------------------------------------------------------------------------------------------------------ directories
 /** "Blk 4 Lot 12, Molave St." -> the unit and the street. An address with no comma is all unit. */
 export function splitAddress(address: string | null | undefined): { unit: string; street: string } {
@@ -449,9 +509,11 @@ export function petFromApi(p: ApiPet, now: Date): Pet {
   const photoUrls = [p.photo_url, p.photo_front_url, p.photo_left_url, p.photo_right_url].filter((u): u is string => !!u);
   const expiry = p.vaccine_expiry ? new Date(`${p.vaccine_expiry}T00:00:00`) : null;
   const vaccination: Pet['vaccination'] = !p.is_vaccinated ? 'unknown' : expiry && !Number.isNaN(expiry.getTime()) && expiry.getTime() < now.getTime() ? 'overdue' : 'up_to_date';
-  const color = [p.primary_color, p.secondary_color, p.color_markings].map((c) => (c ?? '').trim()).filter(Boolean);
+  const userColor = (p.color_markings ?? '').trim();
+  const fallback = [p.primary_color, p.secondary_color].map((c) => (c ?? '').trim()).filter(Boolean);
+  const colorStr = userColor || [...new Set(fallback)].join(', ') || 'Not recorded';
   return {
-    id: String(p.pet_id), name: p.pet_name, type: animalTypeOf(p.pet_type), breed: p.breed?.trim() || 'Not recorded', color: [...new Set(color)].join(', ') || 'Not recorded',
+    id: String(p.pet_id), name: p.pet_name, type: animalTypeOf(p.pet_type), breed: p.breed?.trim() || 'Not recorded', color: colorStr,
     sex: SEX[(p.gender ?? '').toLowerCase()] ?? 'unknown', ageText: p.estimated_age?.trim() || (p.birth_date ? `Born ${p.birth_date}` : 'Not recorded'),
     size: SIZE[(p.size_category ?? '').toLowerCase()] ?? 'medium',
     markings: (p.distinctive_markings ?? '').split(/[,;]\s*/).map((m) => m.trim()).filter(Boolean),
@@ -486,7 +548,7 @@ export function noticeFromAlert(a: ApiAlert, lookup: Pick<Lookup, 'refOf' | 'nam
   const found = a.alert_type === 'found_animal';
   const species = (a.pet.species ?? '').trim().toLowerCase();
   const where = (a.last_seen.location ?? '').trim();
-  const title = found ? `Found ${species || 'animal'}${where ? ` near ${where}` : ''}` : `Missing ${species || 'pet'}${a.pet.name && a.pet.name !== 'Missing pet' ? `: ${a.pet.name}` : ''}`;
+  const title = found ? `Found ${species || 'animal'}${where ? ` ${placePhrase(where)}` : ''}` : `Missing ${species || 'pet'}${a.pet.name && a.pet.name !== 'Missing pet' ? `: ${a.pet.name}` : ''}`;
   // A notice a resident asked for (rather than one the Leader prepared) is shown as the resident's, for the review step
   const askedByResident = a.requested_by !== null && lookup.resident(a.requested_by) !== undefined;
   return {
@@ -524,8 +586,10 @@ export function notificationFromApi(n: ApiNotification): AdminNotification {
   const haystack = `${n.type ?? ''} ${n.title}`;
   // A Lost Pet notification for the Leader (an owner and a neighbour asked for help) carries the REPORT's id: it opens that case.
   const helpRequest = (n.type ?? '').toLowerCase() === 'lost_pet_leader';
-  const kind = helpRequest ? 'help_request' : NOTIFICATION_KIND.find(([re]) => re.test(haystack))?.[1] ?? 'case_activity';
-  const caseId = n.related_id !== null && (helpRequest || (REPORT_RELATED.test(n.type ?? '') && !/alert/i.test(n.type ?? ''))) ? caseRef(n.related_id, n.created_at) : undefined;
+  // A possible match waiting for the Leader carries the id of the report that was just filed: it opens that report, where the match is reviewed.
+  const matchReview = (n.type ?? '').toLowerCase() === 'lost_found_review';
+  const kind = helpRequest ? 'help_request' : matchReview ? 'case_activity' : NOTIFICATION_KIND.find(([re]) => re.test(haystack))?.[1] ?? 'case_activity';
+  const caseId = n.related_id !== null && (helpRequest || matchReview || (REPORT_RELATED.test(n.type ?? '') && !/alert/i.test(n.type ?? ''))) ? caseRef(n.related_id, n.created_at) : undefined;
   return { id: String(n.notification_id), kind, title: n.title, body: n.message ?? '', at: fromServer(n.created_at), read: n.is_read, ...(caseId ? { caseId } : {}) };
 }
 

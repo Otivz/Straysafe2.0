@@ -96,6 +96,10 @@ Refused, with the reason shown: `localhost`, `127.x`, `0.0.0.0`, `::1`, `*.local
 
 Photos in a report's case chat and in ownership claims go straight from the app to Cloudinary: add the repository **secrets** `VITE_CLOUDINARY_CLOUD_NAME` and `VITE_CLOUDINARY_UPLOAD_PRESET` (same values as the root `.env`). Without them the app builds but those uploads fail (the workflow warns). Photos on reports go through the backend.
 
+### Push notifications and the Firebase secret (2026-11-13)
+
+The app registers for push notifications after a resident signs in (`@capacitor/push-notifications`, `src/resident/native/push.ts`; Android 13 and later asks once for permission, declared as `POST_NOTIFICATIONS`). It needs the app's Firebase file: save the whole text of `google-services.json` as the repository **secret** `GOOGLE_SERVICES_JSON`. The workflow step "Add the Firebase file for push notifications" writes it into `frontend/android/app/` and checks it is for `com.straysafe.app`; without the secret the APK is built and works the same, only without push. The backend also needs its own key (`FCM_SERVICE_ACCOUNT_FILE`). All steps: [push/FIREBASE_PUSH_SETUP.md](push/FIREBASE_PUSH_SETUP.md). The file is never committed (`.gitignore`). For a local Android Studio build, run `npx cap sync android` after `npm install` so the plugin is wired into the Gradle project, and put the file in `frontend/android/app/` yourself.
+
 ## Debug versus release, in one table
 
 | | Debug app (`android-debug` + `assembleDebug`) | Release-style (`android` + `assembleRelease`) |

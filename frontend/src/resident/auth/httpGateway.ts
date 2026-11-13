@@ -17,6 +17,7 @@ import { API_BASE_URL, clearAuthStorage, logoutUser, updateStoredSessionUser } f
 import { ROLE_RESIDENT } from '../../live/config';
 import { httpGet, httpPost, toApiError } from '../../live/http';
 import { AdminApiError } from '../../preview/lib/errors';
+import { stopPush } from '../native/push';
 import type { ResidentGateway, ResidentSession, SignInResult, SignupProfile } from './gateway';
 
 interface LoginResponse {
@@ -205,6 +206,7 @@ export const httpGateway: ResidentGateway = {
   async signOut() {
     pendingToken = null;
     writePending(null);
+    await stopPush();              // the phone stops receiving this account's notifications (Android app; nothing in a browser)
     await logoutUser();            // revokes both tokens on the server, then clears every stored session
   },
 

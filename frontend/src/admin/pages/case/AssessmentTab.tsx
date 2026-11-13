@@ -274,10 +274,23 @@ function OwnershipSection({ c, locked, openDialog }: { c: Case; locked: boolean;
   );
 }
 
-/** A07 Case assessment, with A11 animal and ownership review. */
-export default function AssessmentTab({ c, openDialog }: { c: Case; openDialog: OpenCaseDialog }) {
+/**
+ * A07 Case assessment, with A11 animal and ownership review. `ownershipOnly` is for a found-animal report: it is monitored from the start, so it has no
+ * incident or identity assessment, only the ownership decision (and the claims residents made), which a Leader still records with evidence.
+ */
+export default function AssessmentTab({ c, openDialog, ownershipOnly = false }: { c: Case; openDialog: OpenCaseDialog; ownershipOnly?: boolean }) {
   const locked = c.status === 'closed';
   const domestic = c.animal.type !== 'wildlife';
+  if (ownershipOnly) {
+    return (
+      <div className="flex max-w-[880px] flex-col gap-5">
+        {locked ? <Callout>This case is closed, so ownership is read-only. Reopen the case to change it.</Callout> : null}
+        {domestic
+          ? <OwnershipSection key={JSON.stringify(c.ownership) + c.claims.map((x) => x.status).join()} c={c} locked={locked} openDialog={openDialog} />
+          : <Callout>This is a wild animal, so ownership does not apply. Coordinate with an appropriate wildlife responder under Actions &amp; follow-ups.</Callout>}
+      </div>
+    );
+  }
   return (
     <div className="flex max-w-[880px] flex-col gap-5">
       {locked ? <Callout>This case is closed, so the assessment is read-only. Reopen the case to change it.</Callout> : null}

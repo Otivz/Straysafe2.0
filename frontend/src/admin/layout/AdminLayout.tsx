@@ -7,6 +7,7 @@ import { IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/Dialog';
 import { Callout, ErrorState, PageSkeleton } from '../components/layout';
 import { useAdminData } from '../data/context';
+import { isLostOrFound } from '../data/selectors';
 import { NavGuardContext, type NavGuard } from '../lib/navGuard';
 import { NotificationsDrawer } from './NotificationsDrawer';
 import { SessionExpiredDialog, LogoutDialog } from './SessionDialogs';
@@ -41,7 +42,8 @@ export default function AdminLayout() {
   }, [pathname]);
 
   const unread = state.notifications.filter((n) => !n.read).length;
-  const newReports = state.cases.filter((c) => c.status === 'reported').length;
+  // A missing-pet or found-animal report is monitored from the start, so it is not a report waiting for review
+  const newReports = state.cases.filter((c) => c.status === 'reported' && !isLostOrFound(c)).length;
 
   return (
     <NavGuardContext.Provider value={guard}>

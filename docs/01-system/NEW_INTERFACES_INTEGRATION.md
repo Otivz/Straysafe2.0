@@ -49,7 +49,8 @@ Each live provider keeps the preview provider's contract (`state`, async `dispat
 | Lost Pet: record the owner's confirmation, review a sighting, finish a request for help | `POST /lost-pet-alerts/{id}/record-recovery` (`source` phone or in_person, `confirmed_at`, `note`), `POST /lost-pet-alerts/sightings/{id}/review`, `POST /lost-pet-alerts/coordinations/{id}/resolve` |
 | Ownership claims, related reports | `POST /cases/{id}/claims/{cid}/review`, `POST /cases/{id}/links` and `/unlink` |
 | Close, reopen | `POST /cases/{id}/close`, `POST /cases/{id}/reopen` |
-| Found-animal notices (a missing pet's notice is published by its report) | `POST /lost-pet-alerts/reports/{rid}/request`, `/{id}/activate`, `PATCH /{id}`, `/{id}/close` (a notice is kept on its case; its title is made from the report; discarding a draft closes it) |
+| Found-animal notices (a missing pet's notice is published by its report) | `POST /lost-pet-alerts/reports/{rid}/request`, `/{id}/activate`, `PATCH /{id}`, `/{id}/close` (a notice is kept on its case; its title is made from the report; discarding a draft closes it). Since 2026-11-13 also from the case page ("Publish notice" on the Community notice tile: the same two requests) |
+| Lost & found notification alerts (2026-11-13) | `GET /case-alerts/reports/{rid}/audience` when the window opens; `POST /case-alerts/reports/{rid}` (with `client_request_id`), `PUT /case-alerts/{aid}`, `POST /case-alerts/{aid}/pause`, `/resume`, `/stop`; the case's alerts come with `GET /cases/{id}` (`alerts`). An alert never touches the notice: [LOST_FOUND_ALERTS.md](LOST_FOUND_ALERTS.md) |
 | Safety advisories | `POST/PUT /announcements/`, `PATCH /announcements/{id}/status`, `DELETE`, `POST /{id}/media` (category Animal Advisory; no case; a photo that will not upload never undoes the save) |
 | Settings, policies, office profile, notification switches | `PUT /cases/settings/{sid}`, `PUT /notifications/preferences` |
 | Profile | `PUT /users/{id}` (name, email, phone) |
@@ -69,7 +70,8 @@ Each live provider keeps the preview provider's contract (`state`, async `dispat
 | Ownership claim, answer to "more information" | `POST /reports/{rid}/ownership-claims`, `POST /ownership-claims/{id}/info` |
 | Register or edit a pet | `POST /pets/`, `PUT /pets/{id}`, `POST /pets/{id}/photo` (Dog or Cat; a resident cannot set the owner, who registered it or a verification flag) |
 | Answer "is this your pet?" (a record the office linked) | `GET /pet-ownership/mine`, `POST /pet-ownership/{id}/accept` and `/reject` |
-| Notifications, switches, profile | `/notifications/me`, `PATCH /notifications/{id}/read`, `POST /notifications/mark-all-read/{uid}`, `/notifications/preferences`, `PUT /users/{id}` |
+| Notifications, switches, profile | `/notifications/me`, `PATCH /notifications/{id}/read`, `POST /notifications/mark-all-read/{uid}`, `/notifications/preferences`, `PUT /users/{id}` (a lost & found alert opens the `link` the server gives it; the switch "Lost & found alerts" is `push_lost_found_alerts`) |
+| Push on the Android app (2026-11-13) | after sign-in `POST /push/subscribe` `{channel: "fcm", token}` (503 until Firebase is set up: the app carries on without push); at sign-out `POST /push/unsubscribe` `{token}` first. A tap opens the notification's `data.url` inside the app |
 
 Privacy stays on the server: a resident receives only what `report_visibility.redact_response` allows (own exact pin; neighbours' notices rounded to an area; no staff notes, priority, assessment or other residents' names). The screens add nothing to it.
 

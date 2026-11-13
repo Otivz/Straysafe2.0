@@ -21,6 +21,8 @@ class NotificationResponse(NotificationBase):
     is_read: bool
     is_archived: bool = False
     created_at: datetime
+    # Where a tap goes, for notifications whose destination the type alone does not say (a lost & found alert)
+    link: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -40,6 +42,7 @@ class NotificationPreferenceResponse(BaseModel):
     push_claims: bool = True
     push_adoptions: bool = True
     push_messages: bool = True
+    push_lost_found_alerts: bool = True
     push_show_preview: bool = True
 
     class Config:
@@ -58,4 +61,5 @@ class NotificationPreferenceUpdate(BaseModel):
     push_claims: Optional[bool] = None
     push_adoptions: Optional[bool] = None
     push_messages: Optional[bool] = None
+    push_lost_found_alerts: Optional[bool] = None
     push_show_preview: Optional[bool] = None

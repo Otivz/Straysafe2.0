@@ -139,7 +139,8 @@ SIGHTING_COLUMNS: List[Tuple[str, str]] = [
 ]
 COORDINATION_MESSAGE_COLUMNS: List[Tuple[str, str]] = [("client_request_id", "VARCHAR(64) NULL")]
 CASE_TABLES = ("case_followups", "case_contact_logs", "case_links", "ownership_claims",
-               "lost_pet_coordinations", "lost_pet_coordination_messages")
+               "lost_pet_coordinations", "lost_pet_coordination_messages", "lost_found_matches",
+               "case_message_threads", "case_message_members", "case_messages")
 
 
 # ------------------------------------------------------------------------------------------------------- helpers
@@ -436,8 +437,8 @@ def ensure_coordination_message_columns(conn) -> List[str]:
 
 
 def ensure_case_record_tables(conn) -> List[str]:
-    """Follow-ups, contact logs, case links and ownership claims. Created from the models; existing tables are kept."""
-    import app.models  # noqa: F401  (registers every table, including the four below)
+    """Case records, matching and participant messages. Create missing tables without replacing existing records."""
+    import app.models  # noqa: F401  (registers every table in CASE_TABLES)
     from app.database import Base
     missing = [t for t in CASE_TABLES if not _has_table(conn, t)]
     if missing:

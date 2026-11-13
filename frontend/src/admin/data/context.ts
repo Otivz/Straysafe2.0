@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { AdminAction } from './actions';
 import type { DateRange, Analytics } from './selectors';
-import type { AdminState } from './types';
+import type { AdminState, AlertAudience, PossibleMatch } from './types';
 
 export type LoadStatus = 'loading' | 'ready' | 'error';
 /** Whether one case's full record (assessment, referrals, follow-ups, timeline, evidence) has been read. */
@@ -45,6 +45,10 @@ export interface AdminDataValue {
   /** Reads one case's full record. */
   loadCase(id: string): Promise<void>;
   detailStatus(id: string): { status: DetailStatus; error?: string };
+  /** One possible match with the side-by-side comparison the Leader reviews (read when the comparison is opened; never kept in the list). */
+  matchDetail(matchId: string): Promise<PossibleMatch>;
+  /** How many residents a notification alert about this case would reach now, for each choice of recipients (read when the alert window opens). */
+  alertAudience(caseId: string): Promise<AlertAudience>;
   /** The server's analytics for a date range. */
   fetchAnalytics?(range: DateRange): Promise<Analytics>;
   capabilities: AdminCapabilities;

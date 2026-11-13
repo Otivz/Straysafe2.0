@@ -6,12 +6,12 @@
  * exact pin; neighbours get rounded positions; staff notes, priority and other residents' names are never sent). These
  * functions only reshape that; they add nothing the server did not send.
  */
-import { fromServer } from '../../live/dates.ts';
+import { fromServer, fromServerOrNull } from '../../live/dates.ts';
 import type {
-  AnimalType, CategoryId, Claim, ClaimStatus, Coordination, Media, Notice, Notification, Office, OwnershipRequest, Pet, PetSex, Profile, Report, ReportUpdate, Settings, Sighting,
+  AnimalType, CaseConversation, CategoryId, Claim, ClaimStatus, Coordination, Media, Notice, Notification, Office, OwnershipRequest, Pet, PetSex, Profile, Report, ReportUpdate, Settings, Sighting,
 } from '../data/types.ts';
 import type {
-  ApiAnnouncement, ApiChatMessage, ApiCoordination, ApiNotification, ApiNotificationPrefs, ApiPet, ApiResidentAlert, ApiResidentCategories, ApiResidentClaim,
+  ApiAnnouncement, ApiCaseConversation, ApiChatMessage, ApiCoordination, ApiNotification, ApiNotificationPrefs, ApiPet, ApiResidentAlert, ApiResidentCategories, ApiResidentClaim,
   ApiOwnershipRequest, ApiResidentReport, ApiSighting, ApiUser,
 } from './api.ts';
 
@@ -77,7 +77,11 @@ export function updateFromHistory(h: { history_id: number; remarks: string | nul
   if (status) return { id: `h${h.history_id}`, at, kind: 'status', title: status[2] };
   if (/^case closed/i.test(text)) return { id: `h${h.history_id}`, at, kind: 'outcome', title: 'Closed', body: text.replace(/^case closed:?\s*/i, '').replace(/\.$/, '') || undefined };
   if (/^case reopened/i.test(text)) return { id: `h${h.history_id}`, at, kind: 'status', title: 'Reopened' };
-  return { id: `h${h.history_id}`, at, kind: 'message', title: clip(text, 120) };
+  // Any other line was written by the system (a notice went out, a neighbour reported a sighting). It is never a message from a person:
+  // only the case chat carries those (updateFromChat).
+  const notice = /^(?:missing-pet|found-animal) notice published to (\d+) residents?/i.exec(text);
+  if (notice) return { id: `h${h.history_id}`, at, kind: 'info', title: `Your notice went out to ${notice[1]} ${notice[1] === '1' ? 'neighbour' : 'neighbours'}` };
+  return { id: `h${h.history_id}`, at, kind: /sighting|seeing the pet|may have the pet|possible recovery/i.test(text) ? 'sighting' : 'info', title: clip(text, 120) };
 }
 
 /** What the resident said in the case chat is "you"; what the subdivision said is a message from them. */
@@ -210,6 +214,8 @@ export function noticeFromAlert(a: ApiResidentAlert, ctx: Pick<ResidentLookup, '
     ...(a.status === 'closed' && a.close_outcome ? { closeOutcome: a.close_outcome } : {}), ...(a.status === 'closed' && a.close_reason ? { closeReason: a.close_reason } : {}),
     viewerRole: a.viewer_role === 'finder' ? 'finder' : a.is_owner && !found ? 'owner' : 'neighbor',
     ...(a.secured_count ? { securedCount: a.secured_count } : {}),
+    ...(typeof a.residents_notified === 'number' ? { residentsNotified: a.residents_notified } : {}),
+    ...(a.leader_alerts ? { leaderAlerts: { sent: a.leader_alerts.sent, lastAt: fromServerOrNull(a.leader_alerts.last_at) } } : {}),
     ...(a.coordinations ? { coordinations: a.coordinations.map(coordinationFromApi).filter((c): c is Coordination => c !== null) } : {}),
   };
 }
@@ -263,10 +269,12 @@ const SEX_FROM: Record<string, PetSex> = { male: 'male', female: 'female' };
 const SEX_TO: Record<PetSex, string> = { male: 'Male', female: 'Female', unknown: 'Unknown' };
 
 export function petFromApi(p: ApiPet): Pet {
-  const color = [p.primary_color, p.secondary_color, p.color_markings].map((c) => (c ?? '').trim()).filter(Boolean);
+  const userColor = (p.color_markings ?? '').trim();
+  const fallback = [p.primary_color, p.secondary_color].map((c) => (c ?? '').trim()).filter(Boolean);
+  const colorStr = userColor || [...new Set(fallback)].join(', ');
   const photo = p.photo_url ?? p.photo_front_url ?? null;
   return {
-    id: String(p.pet_id), name: p.pet_name, type: animalTypeOf(p.pet_type), breed: p.breed?.trim() ?? '', color: [...new Set(color)].join(', '),
+    id: String(p.pet_id), name: p.pet_name, type: animalTypeOf(p.pet_type), breed: p.breed?.trim() ?? '', color: colorStr,
     ageText: p.estimated_age?.trim() ?? (p.birth_date ? `Born ${p.birth_date}` : ''), markings: (p.distinctive_markings ?? '').split(/[,;]\s*/).map((m) => m.trim()).filter(Boolean),
     description: (p.notes ?? '').trim(), ...(photo ? { photoUrl: photo, photoName: 'Photo' } : {}), registeredAt: fromServer(p.created_at),
     sex: SEX_FROM[(p.gender ?? '').toLowerCase()] ?? 'unknown', ...(p.status ? { status: p.status } : {}),
@@ -277,6 +285,7 @@ export function petFromApi(p: ApiPet): Pet {
 export function petToApi(p: Pet): Record<string, unknown> {
   return {
     pet_name: p.name, pet_type: ANIMAL_LABEL[p.type], breed: p.breed || null, color_markings: p.color || null, primary_color: null,
+    secondary_color: null, tertiary_color: null,
     estimated_age: p.ageText || null, distinctive_markings: p.markings.join(', ') || null, notes: p.description || null, gender: SEX_TO[p.sex],
   };
 }
@@ -298,7 +307,14 @@ export function notificationFromApi(n: ApiNotification, ctx: Pick<ResidentLookup
   const id = n.related_id;
   let kind: Notification['kind'] = 'report_update';
   let to = '/reports';
-  if (type.includes('pet_owner_confirmation')) {
+  if (type === 'case_alert') {
+    // A lost & found alert from the Subdivision Leader: the server says where a tap goes. Opening it changes nothing.
+    kind = 'alert';
+    const link = (n.link ?? '').trim().replace(/^\/resident-app(?=\/)/, '');
+    to = /^\/[a-z]/i.test(link) ? link : '/notifications';                // only a path inside this app
+  } else if (type === 'case_message' || type === 'lost_found_bridge' || type === 'lost_found_unlinked') {
+    to = id === null ? '/home' : `/conversations/${id}`;
+  } else if (type.includes('pet_owner_confirmation')) {
     to = '/pets';                                       // "is this your pet?": its related id is the pet, not a report
   } else if (type.includes('lost_pet_alert')) {
     // The older notice notification: its own text says whether it was about a sighting.
@@ -318,6 +334,16 @@ export function notificationFromApi(n: ApiNotification, ctx: Pick<ResidentLookup
     to = `/reports/${ctx.refOf(id)}`;
   }
   return { id: String(n.notification_id), kind, title: n.title, body: n.message ?? '', at: fromServer(n.created_at), read: n.is_read, to };
+}
+
+/** Keep the server's participant labels; never reconstruct a resident's identity from their report or account. */
+export function conversationFromApi(c: ApiCaseConversation): CaseConversation {
+  return {
+    id: String(c.thread_id), kind: c.kind, status: c.status, canReply: c.can_reply, endedReason: c.ended_reason,
+    myReportNumber: c.my_report_id, title: c.title, subtitle: c.subtitle, unread: c.unread, messageCount: c.message_count,
+    lastAt: fromServer(c.last_at) || fromServer(c.created_at), lastText: c.last_text,
+    people: c.people.map((p) => ({ id: String(p.user_id), name: p.name, label: p.label, me: p.me })),
+  };
 }
 
 // -------------------------------------------------------------------------------------------------- profile, settings
@@ -350,7 +376,10 @@ export function acceptingFrom(cats: Pick<ApiResidentCategories, 'categories'>): 
 /** The server's per-type, per-channel flags as the resident screen's switches. The community and advisory switches and SMS have no server flag. */
 export function settingsFrom(p: ApiNotificationPrefs): Settings {
   return {
-    notifications: { reportUpdates: p.email_reports || p.push_reports, sightings: p.email_pet_matches || p.push_pet_matches, claims: p.email_claims || p.push_claims, community: true, advisories: true },
+    notifications: {
+      reportUpdates: p.email_reports || p.push_reports, sightings: p.email_pet_matches || p.push_pet_matches, claims: p.email_claims || p.push_claims, community: true, advisories: true,
+      lostFoundAlerts: p.push_lost_found_alerts ?? true,
+    },
     channels: { push: p.push_enabled, email: p.email_reports || p.email_pet_matches || p.email_claims || p.email_reminders, sms: false },
   };
 }
@@ -363,5 +392,6 @@ export function preferencesFrom(s: Settings): Partial<ApiNotificationPrefs> {
     email_claims: email && s.notifications.claims, push_claims: s.notifications.claims,
     email_reminders: email && s.notifications.reportUpdates,
     push_enabled: s.channels.push,
+    push_lost_found_alerts: s.notifications.lostFoundAlerts,
   };
 }

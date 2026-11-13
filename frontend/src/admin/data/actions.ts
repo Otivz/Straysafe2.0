@@ -4,7 +4,7 @@
  * the result: nothing is applied to the screen's data until the request has succeeded and the touched records have been read back.
  */
 import type {
-  AdminProfile, Assessment, CaseStatus, ClaimStatus, ComplianceResult, ContactMethod, DispositionId, FollowUpKind, IdentityReview, Notice,
+  AdminProfile, AlertInput, Assessment, CaseStatus, ClaimStatus, ComplianceResult, ContactMethod, DispositionId, FollowUpKind, IdentityReview, Notice,
   OwnerContact, OwnershipReview, Priority, ReferralStatus, Resident, Settings, WarningDelivery,
 } from './types';
 
@@ -28,8 +28,20 @@ export type AdminAction =
   | { type: 'lost/reviewSighting'; id: string; sightingId: string; status: 'unverified' | 'verified' | 'dismissed'; note?: string }
   /** The Leader finished helping an owner and a neighbour get in touch. The contact work itself is in the case's contact log and follow-ups. */
   | { type: 'lost/resolveConversation'; id: string; conversationId: string; note?: string }
+  /**
+   * A Leader's decision on a possible match between a missing-pet report and a found-animal report. `confirm` links the two reports (nothing is merged
+   * or hidden) and tells both residents; `reject` rules the pair out and tells nobody; `reopen` reviews a ruled-out pair again. A link is never ownership
+   * and never a recovery.
+   */
+  | { type: 'match/decide'; matchId: string; decision: 'confirm' | 'reject' | 'reopen' }
+  | { type: 'match/unlink'; matchId: string }
+  /** Lost and found: a notification alert about the case (never the Community notice). `requestId` keeps a double tap from sending twice. */
+  | { type: 'alert/create'; id: string; alert: AlertInput; requestId: string }
+  | { type: 'alert/update'; id: string; alertId: string; alert: AlertInput }
+  | { type: 'alert/pause' | 'alert/resume' | 'alert/stop'; id: string; alertId: string }
+  | { type: 'thread/send'; id: string; threadId: string; body: string; clientRequestId: string }
   | { type: 'case/reviewClaim'; id: string; claimId: string; decision: ClaimStatus; note: string }
-  | { type: 'case/linkCases'; id: string; otherIds: string[] }
+  | { type: 'case/linkCases'; id: string; otherIds: string[]; sameAnimal?: boolean }
   | { type: 'case/unlinkCase'; id: string; otherId: string }
   | { type: 'case/close'; id: string; disposition: DispositionId; reason: string; followUpCheckAt: string | null; endOpenItems: boolean }
   | { type: 'case/reopen'; id: string; reason: string }

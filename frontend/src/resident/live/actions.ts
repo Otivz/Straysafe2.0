@@ -110,9 +110,10 @@ async function submitReport(ctx: ResidentActionContext): Promise<ResidentActionR
   const created = await residentApi.createReport({
     category_id: category, animal_type: ANIMAL_LABEL[animal], description: descriptionOf(draft), condition: extraLabel && draft.extra ? joinExtra(extraLabel, draft.extra) : null,
     latitude: loc.lat, longitude: loc.lng, landmark: label, animal_count: 1,
+    client_request_id: retryKeyOf(draft),
     // A lost report names the resident's own registered pet and says when it was last seen; the server builds what the report says
     // about the animal from the pet record, and refuses a pet that is not theirs or that already has an active lost report
-    ...(pet ? { pet_id: numeric(pet.id, 'pet'), last_seen_at: toServer(draft.observedAt), client_request_id: retryKeyOf(draft) } : { pet_id: null }),
+    ...(pet ? { pet_id: numeric(pet.id, 'pet'), last_seen_at: toServer(draft.observedAt) } : { pet_id: null }),
   });
 
   // The report is filed. Its photos come next, and a problem with them never undoes it. A missing pet's notice is published by the server in

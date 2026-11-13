@@ -83,3 +83,10 @@ ai_test_set/disagreements.csv
 # Android app packages: the APK is built by GitHub Actions and downloaded; never commit one
 *.apk
 *.aab
+
+# Firebase (push notifications): never commit these. The app's google-services.json reaches the Android build from the GOOGLE_SERVICES_JSON
+# repository secret; the server's service-account key stays outside the repository (FCM_SERVICE_ACCOUNT_FILE). docs/05-operations/push/FIREBASE_PUSH_SETUP.md
+google-services.json
+GoogleService-Info.plist
+*firebase-adminsdk*.json
+*service-account*.json

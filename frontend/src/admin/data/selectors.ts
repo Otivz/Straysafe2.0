@@ -1,7 +1,7 @@
 /** Pure, derived views over AdminState. Nothing here mutates; nothing here knows about React. */
 import { CATEGORIES, DISPOSITIONS, DISPOSITION_IDS, OUTCOME_GROUPS, PRIORITIES, REFERRAL_STATUS, REFERRAL_STATUS_IDS } from './constants';
 import type {
-  AdminState, Case, CaseStatus, CategoryId, DispositionId, FollowUp, LostPetConversation, MediationRequest, OutcomeGroup, Pet, Priority, ReferralStatus, Resident, TimelineEvent,
+  AdminState, Case, CaseStatus, CategoryId, DispositionId, FollowUp, LostPetConversation, MatchSide, MediationRequest, OutcomeGroup, Pet, Priority, PossibleMatch, ReferralStatus, Resident, TimelineEvent,
 } from './types';
 import { addDays, daysSince, dueInfo, fmtDay, median, relative, remaining, startOfDay, startOfWeek } from '../../preview/lib/format';
 
@@ -23,6 +23,52 @@ export const residentById = (s: AdminState, id: string | null | undefined) => s.
 export const petById = (s: AdminState, id: string | null | undefined) => s.pets.find((p) => p.id === id);
 export const pendingFollowUpsOf = (c: Case) => c.followUps.filter((f) => f.status === 'pending');
 export const isLostPet = (c: Case) => c.category === 'lost_pet';
+/**
+ * A missing-pet or a found-animal report. These are monitored from the moment they are filed: there is no review, assessment or status step for
+ * a Leader to click through, and the system looks for the matching report by itself (possible matches, below).
+ */
+export const isLostOrFound = (c: Case) => c.category === 'lost_pet' || c.category === 'found_animal';
+
+// ------------------------------------------------------------------------------------ lost and found possible matches
+/** The number inside a case reference: two references name the same report when their numbers agree (the year is only for reading). */
+export const sameReport = (a: string, b: string) => a === b || (caseNumber(a) !== '' && caseNumber(a) === caseNumber(b));
+
+/** A match a Leader can still decide: it is waiting, and both reports are still open. Strongest first. */
+export const isWaiting = (m: PossibleMatch) => m.status === 'pending' && m.lost.open && m.found.open;
+export function matchesToReview(matches: PossibleMatch[]): PossibleMatch[] {
+  return matches.filter(isWaiting).sort((a, b) => b.score - a.score || Number(b.id) - Number(a.id));
+}
+
+/** What a Leader needs on one report: the reports linked to it, the possible matches waiting for a decision, and the ones ruled out. */
+export interface CaseMatches { linked: PossibleMatch[]; waiting: PossibleMatch[]; ruledOut: PossibleMatch[] }
+export function matchesOf(matches: PossibleMatch[], caseId: string): CaseMatches {
+  const mine = matches.filter((m) => sameReport(m.lost.caseId, caseId) || sameReport(m.found.caseId, caseId));
+  const byStrength = (a: PossibleMatch, b: PossibleMatch) => b.score - a.score || Number(b.id) - Number(a.id);
+  return {
+    linked: mine.filter((m) => m.status === 'confirmed').sort((a, b) => (b.decidedAt ?? '').localeCompare(a.decidedAt ?? '')),
+    waiting: mine.filter(isWaiting).sort(byStrength),
+    ruledOut: mine.filter((m) => m.status === 'rejected').sort(byStrength),
+  };
+}
+export const levelLabel = (level: PossibleMatch['level']) => (level === 'strong' ? 'Strong match' : 'Possible match');
+
+/**
+ * One plain sentence for a possible match: "Found brown dog near Clubhouse may be Coco" on the dashboard and from the missing pet's side; "This animal may be
+ * Coco" from the found animal's own page. A missing pet with no name is "a missing pet".
+ */
+export function matchSentence(m: PossibleMatch, viewpoint?: string): string {
+  const lost = m.lost.title === 'Missing pet' ? 'a missing pet' : m.lost.title;
+  return viewpoint && sameReport(m.found.caseId, viewpoint) ? `This animal may be ${lost}` : `${m.found.title} may be ${lost}`;
+}
+
+/** One line for "Where things stand": what is waiting for the Leader first, then what is linked. */
+export function relatedSummary(m: CaseMatches): string {
+  if (m.waiting.length > 0) return `${m.waiting.length} possible ${m.waiting.length === 1 ? 'match' : 'matches'} to review`;
+  if (m.linked.length > 0) return `${m.linked.length} linked`;
+  return 'None yet';
+}
+/** The other report of a match, seen from this case. */
+export const partnerOf = (m: PossibleMatch, caseId: string): MatchSide => (sameReport(m.lost.caseId, caseId) ? m.found : m.lost);
 
 /**
  * The open requests to help an owner and a neighbour get in touch. Read from the case when it has been opened in full (it is then the fresher
@@ -61,7 +107,7 @@ export function attentionItems(cases: Case[], now: Date): AttentionItem[] {
       const first = asked[0];
       reasons.push({ kind: 'mediation', label: asked.length === 1 ? `${first.ownerName} and ${first.finderName} asked you to help them get in touch` : `${asked.length} requests to help an owner and a neighbour get in touch`, tone: 'amber' });
     }
-    if (c.status === 'reported' && c.priority !== 'urgent' && !isLostPet(c)) reasons.push({ kind: 'new', label: `New report · ${relative(c.reportedAt, now)}`, tone: 'amber' });
+    if (c.status === 'reported' && c.priority !== 'urgent' && !isLostOrFound(c)) reasons.push({ kind: 'new', label: `New report · ${relative(c.reportedAt, now)}`, tone: 'amber' });
     const pending = pendingFollowUpsOf(c).filter((f) => f.dueAt);
     const overdue = pending.filter((f) => dueInfo(f.dueAt, now).overdue).sort((a, b) => a.dueAt!.localeCompare(b.dueAt!))[0];
     const today = pending.filter((f) => dueInfo(f.dueAt, now).today)[0];
@@ -72,9 +118,9 @@ export function attentionItems(cases: Case[], now: Date): AttentionItem[] {
       if (left <= 0) reasons.push({ kind: 'observation', label: 'Observation period ended · record the outcome', tone: 'red' });
       else if (left <= 48 * 3_600_000) reasons.push({ kind: 'observation', label: `Observation ends soon · ${remaining(w.observationEnd!, now)}`, tone: 'amber' });
     }
-    const unsent = c.referrals.find((x) => x.status === 'to_contact');
+    const unsent = c.referrals.find((x) => x.orgId === 'barangay' && x.status === 'to_contact');
     if (unsent) reasons.push({ kind: 'barangay', label: `Help from ${unsent.orgName} is written down but nobody has contacted them yet`, tone: 'amber' });
-    for (const r of c.referrals.filter((x) => REFERRAL_STATUS[x.status].open && x.status !== 'to_contact')) {
+    for (const r of c.referrals.filter((x) => x.orgId === 'barangay' && REFERRAL_STATUS[x.status].open && x.status !== 'to_contact')) {
       if (r.status === 'no_response' || ((r.status === 'sent' || r.status === 'acknowledged') && daysSince(r.updatedAt, now) >= 3)) {
         reasons.push({ kind: 'awaiting', label: `Awaiting an update from ${r.orgName}`, tone: 'neutral' });
         break;
@@ -102,8 +148,8 @@ export function pendingFollowUps(cases: Case[]): FollowUpRef[] {
 export function dashboardCounts(cases: Case[], now: Date) {
   const endOfToday = addDays(startOfDay(now), 1).getTime();
   return {
-    // A missing-pet report is published by itself, so it is not a report waiting for review
-    newReports: cases.filter((c) => c.status === 'reported' && !isLostPet(c)).length,
+    // A missing-pet or found-animal report is monitored from the start, so it is not a report waiting for review
+    newReports: cases.filter((c) => c.status === 'reported' && !isLostOrFound(c)).length,
     active: cases.filter(isOpen).length,
     urgent: cases.filter((c) => isOpen(c) && c.priority === 'urgent').length,
     followUpsDue: pendingFollowUps(cases).filter((x) => new Date(x.followUp.dueAt!).getTime() < endOfToday).length,
@@ -162,12 +208,14 @@ export function currentActivity(c: Case, now: Date): string {
   if (r) return `External coordination · ${r.orgName}`;
   const f = pendingFollowUpsOf(c).filter((x) => x.dueAt).sort((a, b) => a.dueAt!.localeCompare(b.dueAt!))[0];
   if (f) return `Follow-up · ${dueInfo(f.dueAt, now).label.toLowerCase()}`;
+  if (isLostOrFound(c)) return 'Monitoring';
   return c.status === 'reported' ? 'Awaiting assessment' : c.status === 'under_review' ? 'Assessment in progress' : 'Monitoring';
 }
 
 export function allowedStatusMoves(c: Case): CaseStatus[] {
-  // A missing-pet case has no manual status to move: it stays open until the owner confirms the pet is home (or it is closed another way)
-  if (isLostPet(c)) return [];
+  // A missing-pet or found-animal case has no manual status to move: it is monitored until it is resolved (for a missing pet, when the owner
+  // confirms the pet is home) or closed another way
+  if (isLostOrFound(c)) return [];
   switch (c.status) {
     case 'reported': return ['under_review', 'in_progress'];
     case 'under_review': return ['in_progress'];

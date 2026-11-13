@@ -146,11 +146,11 @@ r3 = sight(aid, neighbor, seen_at=earlier.isoformat())
 check("duplicate: an immediate double tap at the same pin isn't a second record", r3.json().get("duplicate") is True)
 db.expire_all()
 check("duplicate: one record stored", db.query(LostPetSighting).filter(LostPetSighting.alert_id == aid).count() == 1)
-check("notify: the owner gets 'New Lost Pet Sighting!' (an ordinary sighting is not a Leader task)", notes(owner.user_id, "lost_pet_sighting") == 1
+check("notify: the owner is told someone saw the pet (an ordinary sighting is not a Leader task)", notes(owner.user_id, "lost_pet_sighting") == 1
       and notes(leader.user_id, "lost_pet_sighting") == 0 and notes(neighbor.user_id, "lost_pet_sighting") == 0)
 n = db.query(Notification).filter(Notification.user_id == owner.user_id, Notification.type == "lost_pet_sighting").one()
-check("notify: location, sighting time and report date in the message", n.title == "New Lost Pet Sighting!"
-      and "Near the clubhouse" in n.message and "Sighting time:" in n.message and "Reported on:" in n.message, n.message)
+check("notify: in plain words, with the place (never \"near Near ...\") and the time it was seen", n.title.startswith("Someone saw ")
+      and "near the clubhouse" in n.message and "near Near" not in n.message and " at " in n.message and "tracking map" not in n.message, f"{n.title} | {n.message}")
 with patch("app.utils.cloudinary_config.upload_to_cloudinary", return_value="https://img.test/sighting.jpg"):
     r = client.post(f"/lost-pet-alerts/{aid}/sightings", headers=H(neighbor2), data={
         "latitude": str(LAT - 0.0004), "longitude": str(LNG + 0.0003), "accuracy_confirmed": "true", "location_source": "device"},

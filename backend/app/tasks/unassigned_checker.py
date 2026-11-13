@@ -163,6 +163,19 @@ def check_and_notify_owner_followups() -> int:
         db.close()
 
 
+def send_due_case_alerts() -> dict:
+    """Lost & found notification alerts that are due (services/case_alerts.py). Each send is claimed once in the database."""
+    from app.services import case_alerts
+    db: Session = SessionLocal()
+    try:
+        return case_alerts.run_due(db)
+    except Exception as e:
+        logger.error(f"Error in send_due_case_alerts: {e}")
+        return {}
+    finally:
+        db.close()
+
+
 async def start_unassigned_reports_watcher(interval_seconds: int = 60, threshold_minutes: int = 30):
     """
     Background loop that wakes up every `interval_seconds` to check for stale unassigned reports
@@ -177,6 +190,7 @@ async def start_unassigned_reports_watcher(interval_seconds: int = 60, threshold
         try:
             await asyncio.to_thread(check_and_notify_unassigned_reports, threshold_minutes)
             await asyncio.to_thread(check_and_notify_owner_followups)
+            await asyncio.to_thread(send_due_case_alerts)
 
             iteration += 1
             # Run notification pruning roughly once per 24 hours (1440 iterations at 60s)

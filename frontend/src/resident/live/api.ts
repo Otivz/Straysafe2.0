@@ -77,6 +77,8 @@ export interface ApiResidentAlert {
   owner_first_name?: string | null; recovered_at?: string | null; secured_count?: number | null; viewer_role?: 'owner' | 'leader' | 'finder' | 'neighbor';
   sightings?: ApiSighting[]; coordinations?: ApiCoordination[];
   latest_sighting?: ApiSighting | null;
+  /** The owner (and the Leader) only: how many residents the notice reached, and how many alerts the Leader sent about the case. */
+  residents_notified?: number | null; leader_alerts?: { sent: number; last_at: string | null } | null;
 }
 /** The Community a page at a time (GET /lost-pet-alerts/active and /community/summary): the total says how many more there are. */
 export interface ApiCommunityPage { total: number; limit: number; offset: number; results: ApiResidentAlert[] }
@@ -90,7 +92,23 @@ export interface ApiResidentClaim {
 const PAGE = 100;
 const MAX_REPORTS = 500;       // a safety stop: a resident's own reports are read in pages until the server says there is no more
 
+export interface ApiCaseConversation {
+  thread_id: number; kind: 'direct' | 'bridge'; status: 'open' | 'closed'; can_reply: boolean; ended_reason: string | null;
+  report_id: number; related_report_id: number | null; my_report_id: number | null; title: string; subtitle: string;
+  unread: number; message_count: number; last_at: string | null; last_text: string; created_at: string;
+  people: Array<{ user_id: number; role: string; label: string; name: string; me: boolean; report_id: number | null }>;
+}
+export interface ApiCaseConversationMessage {
+  message_id: number; kind: 'message' | 'system'; sender_id: number | null; sender_name: string | null;
+  sender_role: string; label: string; mine: boolean; body: string; at: string;
+}
+export interface ApiCaseConversationDetail extends ApiCaseConversation { messages: ApiCaseConversationMessage[] }
+
 export const residentApi = {
+  conversations: () => httpGet<ApiCaseConversation[]>('/case-messages'),
+  conversation: (id: number) => httpGet<ApiCaseConversationDetail>(`/case-messages/${id}`),
+  sendConversationMessage: (id: number, body: string, clientRequestId: string) => httpPost<ApiCaseConversationDetail>(`/case-messages/${id}/messages`, { body, client_request_id: clientRequestId }),
+  readConversation: (id: number, throughMessageId: number) => httpPost<ApiCaseConversation>(`/case-messages/${id}/read`, { through_message_id: throughMessageId }),
   categories: () => httpGet<ApiResidentCategories>('/cases/categories'),
   coverage: () => httpGet<ApiCoverage>('/reports/coverage-area'),
   landmarks: (subdivisionId: number) => httpGet<ApiLandmark[]>('/landmarks', { subdivision_id: subdivisionId }),
@@ -117,9 +135,43 @@ export const residentApi = {
 
   alertsActive: () => httpGet<{ results: ApiResidentAlert[] }>('/lost-pet-alerts/active'),
   /** The Community overview: a few missing pets and a few found animals, with how many there are in all. */
-  communitySummary: () => httpGet<ApiCommunitySummary>('/lost-pet-alerts/community/summary'),
+  communitySummary: async () => {
+    try {
+      return await httpGet<ApiCommunitySummary>('/lost-pet-alerts/community/summary');
+    } catch (err: unknown) {
+      if ((err as { status?: number })?.status === 404) {
+        // Fallback for servers running earlier route schemas where /active is the endpoint
+        const res = await httpGet<{ results?: ApiResidentAlert[]; total?: number } | ApiResidentAlert[]>('/lost-pet-alerts/active');
+        const results = Array.isArray(res) ? res : (res?.results ?? []);
+        const lost = results.filter((a) => a.alert_type === 'lost_pet');
+        const found = results.filter((a) => a.alert_type === 'found_animal');
+        return {
+          lost: { total: lost.length, limit: lost.length, offset: 0, results: lost.slice(0, 4) },
+          found: { total: found.length, limit: found.length, offset: 0, results: found.slice(0, 4) },
+          preview: 4,
+        };
+      }
+      throw err;
+    }
+  },
   /** One page of the Community directory, searched and filtered on the server. */
-  communityPage: (q: CommunityQuery) => httpGet<ApiCommunityPage>('/lost-pet-alerts/active', { alert_type: q.alert_type, q: q.q || undefined, species: q.species, limit: q.limit ?? 20, offset: q.offset ?? 0 }),
+  communityPage: async (q: CommunityQuery) => {
+    const res = await httpGet<ApiCommunityPage | { results?: ApiResidentAlert[]; total?: number }>('/lost-pet-alerts/active', {
+      alert_type: q.alert_type,
+      q: q.q || undefined,
+      species: q.species,
+      limit: q.limit ?? 20,
+      offset: q.offset ?? 0,
+    });
+    const results = Array.isArray(res) ? res : (res?.results ?? []);
+    const total = 'total' in res && typeof res.total === 'number' ? res.total : results.length;
+    return {
+      results,
+      total,
+      limit: 'limit' in res && typeof res.limit === 'number' ? res.limit : (q.limit ?? 20),
+      offset: 'offset' in res && typeof res.offset === 'number' ? res.offset : (q.offset ?? 0),
+    };
+  },
   coordinationConsent: (id: number, allow: boolean) => httpPost<ApiCoordination>(`/lost-pet-alerts/coordinations/${id}/consent`, { allow }),
   coordinationMediation: (id: number) => httpPost<ApiCoordination>(`/lost-pet-alerts/coordinations/${id}/mediation`),
   coordinationMessages: (id: number) => httpGet<{ results: ApiCoordinationMessage[]; coordination: ApiCoordination }>(`/lost-pet-alerts/coordinations/${id}/messages`),

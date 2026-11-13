@@ -17,6 +17,7 @@ Rules kept here, on the server, whatever any screen shows:
   - what neighbors read is masked of phone numbers, e-mail addresses and house numbers (utils/public_text.py)
 """
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -136,6 +137,19 @@ def leader_ids(db: Session, subdivision_id: int) -> List[int]:
     return [u for (u,) in db.query(User.user_id).filter(User.role_id == 2, User.subdivision_id == subdivision_id, User.status == "Active").all()]
 
 
+_PLACE_PREPOSITIONS = re.compile(r"^(near|behind|beside|by|at|on|in|inside|outside|under|along|across|opposite|next to|in front of)\s", re.I)
+
+
+def place_phrase(label: Optional[str]) -> str:
+    """A place a resident typed, as part of a sentence: "near Gate 2", and "behind the chapel" as written (never "near Near the court")."""
+    text = (label or "").strip()
+    if not text:
+        return ""
+    if _PLACE_PREPOSITIONS.match(text):
+        return text[0].lower() + text[1:]
+    return f"near {text}"
+
+
 def first_name(db: Session, user_id: Optional[int]) -> Optional[str]:
     u = db.get(User, user_id) if user_id else None
     return ((u.name or "").split(" ")[0] or None) if u else None
@@ -176,14 +190,16 @@ def pet_card(db: Session, alert: LostPetAlert, privileged: bool = True) -> Dict[
         photo = pet.photo_url or pet.photo_front_url
     if not photo and rep is not None:
         photo = next((m.file_url for m in (rep.media or []) if m.file_url and m.media_type in ("Image", None)), None)
-    colors = [c for c in ((pet.color_markings if pet else None), (pet.primary_color if pet else None), (pet.secondary_color if pet else None)) if c]
+    user_color = (pet.color_markings or "").strip() if pet else ""
+    fallback_colors = [c for c in ((pet.primary_color if pet else None), (pet.secondary_color if pet else None)) if c]
+    color_str = user_color or (", ".join(dict.fromkeys(fallback_colors)) if fallback_colors else None) or (rep.animal_color if rep else None)
     hide_details = found and not privileged
     return {
         "name": redact_public_text((pet.pet_name if pet else None) or ("Found animal" if found else "Missing pet")),
         "photo_url": photo,
         "species": (pet.pet_type if pet else None) or (rep.animal_type if rep else None),
         "breed": redact_public_text((pet.breed if pet else None) or (rep.animal_breed if rep else None)),
-        "color": redact_public_text(", ".join(dict.fromkeys(colors)) or (rep.animal_color if rep else None)),
+        "color": redact_public_text(color_str),
         "distinguishing_marks": None if hide_details else redact_public_text(pet.distinctive_markings if pet else None),
         "description": None if hide_details else redact_public_text(rep.description if rep else None),
     }
@@ -310,6 +326,15 @@ def recovery_view(alert: LostPetAlert, is_priv: bool) -> Optional[Dict[str, Any]
     return out
 
 
+def _leader_alerts(db: Session, report_id: int) -> Optional[Dict[str, Any]]:
+    try:
+        from app.services import case_alerts
+        s = case_alerts.summary_for_owner(db, report_id)
+        return {"sent": s["sent"], "last_at": iso(s["last_at"])}
+    except Exception:  # noqa: BLE001  (a summary must never break the notice)
+        return None
+
+
 def alert_view(db: Session, alert: LostPetAlert, viewer: User, with_sightings: bool = False) -> Dict[str, Any]:
     is_priv = privileged(db, viewer, alert)
     role = viewer_role(db, viewer, alert, check_finder=with_sightings)
@@ -340,6 +365,8 @@ def alert_view(db: Session, alert: LostPetAlert, viewer: User, with_sightings: b
         "accepting_sightings": alert.status == ACTIVE,
         "is_owner": is_owner(db, viewer, alert), "can_manage": is_leader_of(viewer, alert.subdivision_id), "viewer_role": role,
         "residents_notified": alert.residents_notified if is_priv else None,
+        # how many notification alerts the Subdivision Leader sent about this case (the owner sees the Leader is reaching neighbours)
+        "leader_alerts": _leader_alerts(db, alert.report_id) if is_priv else None,
         # who asked for the notice: the Leader's own notice list tells a resident's request from the Leader's own (not for neighbors)
         "requested_by": alert.requested_by if is_priv else None,
     }
@@ -365,14 +392,14 @@ def broadcast(db: Session, alert: LostPetAlert, actor: Optional[User], now: date
     alert.closed_at = alert.closed_by = alert.close_outcome = alert.close_reason = None
     card = pet_card(db, alert, privileged=False)   # what neighbors may know: never the marks that prove ownership
     looks = ", ".join(x for x in (card["species"], card["breed"], card["color"]) if x)
-    where = alert.last_seen_location or "the subdivision"
+    where = place_phrase(alert.last_seen_location) or "in the subdivision"     # "near Gate 2", "behind the chapel" (never "near Near ...")
     residents = [u for (u,) in db.query(User.user_id).filter(User.role_id == 1, User.subdivision_id == alert.subdivision_id, User.status == "Active").all()]
     owners = owner_ids(db, alert.report)
     if found:
         alert.residents_notified = notify(
             db, [u for u in residents if u not in owners], "lost_pet_alert", alert.alert_id,
             "Found animal: is it yours?",
-            f"An animal ({looks or 'animal'}) was found near {where} on {fmt_date(alert.last_seen_at)}. If it is yours, open the "
+            f"An animal ({looks or 'animal'}) was found {where} on {fmt_date(alert.last_seen_at)}. If it is yours, open the "
             "notice and send an ownership claim. Please do not approach an animal you do not know.")
         notify(db, owners, "lost_pet_alert", alert.alert_id, "Your found-animal notice is live",
                f"Residents of the subdivision were told about the animal you reported ({alert.residents_notified} notified).")
@@ -380,13 +407,14 @@ def broadcast(db: Session, alert: LostPetAlert, actor: Optional[User], now: date
         alert.residents_notified = notify(
             db, [u for u in residents if u not in owners], "lost_pet_alert", alert.alert_id,
             f"Missing pet: {card['name']} - have you seen it?",
-            f"{card['name']} ({looks or 'pet'}) was last seen near {where} on {fmt_date(alert.last_seen_at)} at "
+            f"{card['name']} ({looks or 'pet'}) was last seen {where} on {fmt_date(alert.last_seen_at)} at "
             f"{fmt_time(alert.last_seen_at)}. If you spot it, open the notice and tap I saw this pet.")
         notify(db, owners, "lost_pet_alert", alert.alert_id, "Your missing-pet notice is live",
                f"Residents of the subdivision were told about {card['name']} ({alert.residents_notified} notified). "
                "You'll be notified of every sighting.")
     by = how or (f"by {actor.name}" if actor else "automatically")
-    history_line(db, alert.report, actor, f"{'Found-animal notice' if found else 'Missing-pet notice'} published to {alert.residents_notified} residents {by}.")
+    n = alert.residents_notified or 0
+    history_line(db, alert.report, actor, f"{'Found-animal notice' if found else 'Missing-pet notice'} published to {n} resident{'' if n == 1 else 's'} {by}.")
     log_activity(db=db, action="ACTIVATE_LOST_PET_ALERT", target_table="lost_pet_alerts", target_id=alert.alert_id,
                  description=f"{actor.name if actor else 'The system'} published the {'found-animal notice' if found else 'missing-pet notice'} "
                              f"for Report #{alert.report_id} ({alert.residents_notified} residents notified).",
@@ -448,8 +476,8 @@ def add_sighting(db: Session, alert: LostPetAlert, reporter: User, *, latitude: 
     db.flush()
     card = pet_card(db, alert)
     subd = db.get(Subdivision, alert.subdivision_id)
-    near = f"near {s.location_label}, {subd.subdivision_name}" if s.location_label and subd else (
-        f"near {s.location_label}" if s.location_label else f"in {subd.subdivision_name if subd else 'the subdivision'} (pinned on the map)")
+    near = f"{place_phrase(s.location_label)}, {subd.subdivision_name}" if s.location_label and subd else (
+        place_phrase(s.location_label) if s.location_label else f"in {subd.subdivision_name if subd else 'the subdivision'} (pinned on the map)")
     owners = owner_ids(db, alert.report)
     if sighting_type == "secured":
         history_line(db, alert.report, None, "A neighbor reported they may have the pet safely with them.")
@@ -466,9 +494,8 @@ def add_sighting(db: Session, alert: LostPetAlert, reporter: User, *, latitude: 
             coordination.finder_consent = True
     else:
         history_line(db, alert.report, None, f"A neighbor {'recorded a second-hand sighting of' if on_behalf else 'reported seeing'} the pet {near}.")
-        body = (f"A resident reported seeing {card['name']} {near}. Sighting time: {fmt_time(s.seen_at)}. "
-                f"Reported on: {fmt_date(now)}. View the latest sighting on the tracking map.")
-        notify(db, owners, "lost_pet_sighting", alert.alert_id, "New Lost Pet Sighting!", body, skip=reporter.user_id)
+        body = f"A neighbour saw {card['name']} {near} at {fmt_time(s.seen_at)}. Open the sightings to see where."
+        notify(db, owners, "lost_pet_sighting", alert.alert_id, f"Someone saw {card['name']}", body, skip=reporter.user_id)
     log_activity(db=db, action="SUBMIT_LOST_PET_SIGHTING" if sighting_type == "seen" else "SUBMIT_LOST_PET_LEAD", target_table="lost_pet_sightings",
                  target_id=s.sighting_id, description=f"{'Sighting' if sighting_type == 'seen' else 'Possible recovery report'} for neighborhood "
                  f"alert #{alert.alert_id} (Report #{alert.report_id}).", user_id=reporter.user_id, log_type="operation", request=req, commit=False)
@@ -749,9 +776,11 @@ def confirm_recovery(db: Session, alert: LostPetAlert, *, source: str, actor: Us
 
     # 5: what no longer means anything
     from app.models.case_records import CaseFollowUp
+    from app.services import case_messaging
     for f in db.query(CaseFollowUp).filter(CaseFollowUp.report_id == report.report_id, CaseFollowUp.status == "pending").all():
         f.status, f.cancel_reason = "cancelled", "The pet was recovered."
     resolve_open_coordinations(db, locked.alert_id, actor, "The pet was recovered.")
+    case_messaging.close_for_report(db, report.report_id, actor.user_id, "The owner confirmed the pet is safely home.")
 
     # 6: who is told
     card = pet_card(db, locked)

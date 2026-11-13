@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Camera, FileQuestion, Link2, Lock } from 'lucide-react';
 import { adminPath } from '../config';
-import { Badge, StatusBadge } from '../components/Badge';
+import { Badge, CaseStatusBadge } from '../components/Badge';
 import { Button, LinkButton } from '../components/Button';
 import { Block, Callout, EmptyState, Kv, Panel } from '../components/layout';
 import { PetAvatar } from '../components/PetAvatar';
@@ -116,7 +116,7 @@ export default function PetDetailsPage() {
                 <ul className="m-0 flex list-none flex-col gap-3 p-0">
                   {cases.map((c) => (
                     <li key={c.id}>
-                      <p className="flex flex-wrap items-center gap-2"><Link to={adminPath(`/cases/${c.id}`)} className="sa-ref">{c.id}</Link><StatusBadge status={c.status} /></p>
+                      <p className="flex flex-wrap items-center gap-2"><Link to={adminPath(`/cases/${c.id}`)} className="sa-ref">{c.id}</Link><CaseStatusBadge c={c} /></p>
                       <p className="mt-1 font-medium">{c.title}</p>
                       <p className="sa-meta mt-0.5">{CATEGORIES[c.category].label}</p>
                       <p className="mt-1.5"><Badge tone={decisionOf(c, pet.id).tone}>{decisionOf(c, pet.id).label}</Badge></p>

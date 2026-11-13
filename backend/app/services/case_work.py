@@ -50,10 +50,13 @@ def _organisation(db: Session, report: Report, data: ReferralIn) -> Tuple[str, O
         subdivision = db.query(Subdivision).filter(Subdivision.subdivision_id == report.subdivision_id).first()
         if subdivision and subdivision.barangay_id:
             barangay_id = subdivision.barangay_id
-            if not name:
-                barangay = db.query(Barangay).filter(Barangay.barangay_id == barangay_id).first()
-                if barangay:
-                    name = f"Barangay {barangay.barangay_name}"
+            barangay = db.query(Barangay).filter(Barangay.barangay_id == barangay_id).first()
+            if barangay:
+                name = f"Barangay {barangay.barangay_name}"
+            else:
+                raise HTTPException(status_code=422, detail="Configure this subdivision's Barangay before requesting assistance.")
+        else:
+            raise HTTPException(status_code=422, detail="Configure this subdivision's Barangay before requesting assistance.")
     if len(name) < 2:
         raise HTTPException(status_code=422, detail="Name the organisation the case is referred to.")
     return name, barangay_id
@@ -62,6 +65,8 @@ def _organisation(db: Session, report: Report, data: ReferralIn) -> Tuple[str, O
 def create_referral(db: Session, report: Report, actor: User, data: ReferralIn) -> BarangayReferral:
     """Refer the case to an outside organisation. No assessment and no registered animal is needed."""
     L.require_open(report, "refer it")
+    if data.org_type != "barangay":
+        raise HTTPException(status_code=422, detail="New animal assistance is coordinated with the Barangay. Existing external records are kept as history.")
     now = _now()
     name, barangay_id = _organisation(db, report, data)
     duplicate = db.query(BarangayReferral).filter(
@@ -239,7 +244,7 @@ def active_links(db: Session, report_id: int) -> List[CaseLink]:
                                       CaseLink.unlinked_at.is_(None)).order_by(CaseLink.link_id).all())
 
 
-def link_reports(db: Session, report: Report, actor: User, data: LinkIn) -> List[CaseLink]:
+def link_reports(db: Session, report: Report, actor: User, data: LinkIn, *, synchronize_lost_found: bool = True) -> List[CaseLink]:
     """
     Link the report to others about the same thing. Nothing is hidden and nothing is merged: both reports stay whole,
     and each stays in its own status. Both must be in the actor's scope and the same subdivision.
@@ -254,6 +259,22 @@ def link_reports(db: Session, report: Report, actor: User, data: LinkIn) -> List
         verify_subdivision_scope(actor, other.subdivision_id, db=db)
         if other.subdivision_id != report.subdivision_id:
             raise HTTPException(status_code=422, detail="Reports from different subdivisions cannot be linked.")
+        if synchronize_lost_found and data.link_type == "same_animal":
+            from app.services import lost_found_matching as LFM
+            if {LFM.family_of(report), LFM.family_of(other)} == {V.LOST_PET, V.FOUND_ANIMAL}:
+                low, high = sorted((report.report_id, other_id))
+                existing = db.query(CaseLink).filter(CaseLink.report_id == low, CaseLink.related_report_id == high,
+                                                     CaseLink.unlinked_at.is_(None)).first()
+                match = db.query(LFM.LostFoundMatch).filter(
+                    LFM.LostFoundMatch.lost_report_id == (report.report_id if LFM.family_of(report) == V.LOST_PET else other_id),
+                    LFM.LostFoundMatch.found_report_id == (other_id if LFM.family_of(report) == V.LOST_PET else report.report_id)).first()
+                if existing is not None and match is not None and match.status == LFM.CONFIRMED:
+                    LFM.open_thread(db, match, actor)
+                    out.append(existing)
+                    continue
+                match = LFM.link_by_leader(db, actor, report.report_id, other_id)
+                out.append(db.get(CaseLink, match.link_id))
+                continue
         low, high = sorted((report.report_id, other_id))
         existing = db.query(CaseLink).filter(CaseLink.report_id == low, CaseLink.related_report_id == high,
                                              CaseLink.unlinked_at.is_(None)).first()
@@ -270,13 +291,20 @@ def link_reports(db: Session, report: Report, actor: User, data: LinkIn) -> List
     return out
 
 
-def unlink_reports(db: Session, report: Report, actor: User, link_id: int, reason: str) -> CaseLink:
+def unlink_reports(db: Session, report: Report, actor: User, link_id: int, reason: str, *, synchronize_lost_found: bool = True) -> CaseLink:
     """Undo a link. The row is kept, with who ended it and why; both reports are exactly as they were."""
     link = db.query(CaseLink).filter(CaseLink.link_id == link_id).first()
     if link is None or report.report_id not in (link.report_id, link.related_report_id):
         raise HTTPException(status_code=404, detail="Link not found on this case.")
     if link.unlinked_at is not None:
         raise HTTPException(status_code=409, detail="This link was already removed.")
+    if synchronize_lost_found:
+        from app.services import lost_found_matching as LFM
+        match = db.query(LFM.LostFoundMatch).filter(LFM.LostFoundMatch.link_id == link.link_id,
+                                                   LFM.LostFoundMatch.status == LFM.CONFIRMED).first()
+        if match is not None:
+            LFM.unlink(db, match, actor)
+            return link
     link.unlinked_at, link.unlinked_by, link.unlink_reason = _now(), actor.user_id, reason.strip()
     L.audit(db, actor, "CASE_UNLINKED", report, f"{actor.name} removed the link between report #{link.report_id} and #{link.related_report_id}.",
             table="case_links", target_id=link.link_id, old={"link_type": link.link_type}, new={"reason": link.unlink_reason})

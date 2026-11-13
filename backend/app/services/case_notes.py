@@ -80,9 +80,12 @@ def work_queue(db: Session, user: User, subdivision_id: Optional[int] = None) ->
     scope = scope_of(user, subdivision_id, "work queue")
     ids = _open_report_ids(db, scope)
     out: Dict[str, Any] = {"subdivision_id": scope, "generated_at": datetime.now(), "followups": [], "claims": [], "referrals": [], "warnings": [],
-                           "coordinations": []}
+                           "coordinations": [], "possible_matches": []}
     if not ids:
         return out
+    # Lost and found: possible matches a Leader has not decided yet (both reports still open). Residents are told nothing until it is decided.
+    from app.services import lost_found_matching as LFM
+    out["possible_matches"] = LFM.queue_rows(db, scope, ids)
 
     followups = (db.query(CaseFollowUp).filter(CaseFollowUp.report_id.in_(ids), CaseFollowUp.status == "pending")
                  .order_by(CaseFollowUp.due_at.is_(None), CaseFollowUp.due_at, CaseFollowUp.followup_id).limit(QUEUE_LIMIT).all())

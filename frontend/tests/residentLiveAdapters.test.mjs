@@ -188,7 +188,8 @@ test('what the resident says they have becomes the evidence ids the server knows
 test('pets: read from the registry, written back as the server takes them', () => {
   const api = { pet_id: 31, pet_name: 'Mochi', pet_type: 'Dog', breed: 'Shih Tzu', color_markings: 'White and gold', primary_color: 'White', secondary_color: null, gender: 'Female', estimated_age: '3 years', birth_date: null, size_category: 'Small', distinctive_markings: 'gold ear tips, pink collar', health_condition: null, notes: 'Shy', photo_url: 'https://img.test/p.jpg', photo_front_url: null, photo_left_url: null, photo_right_url: null, owner_id: 7, created_at: '2026-02-01T00:00:00+00:00', is_vaccinated: true, vaccine_expiry: null, status: 'Active' };
   const pet = petFromApi(api);
-  assert.deepEqual([pet.id, pet.type, pet.breed, pet.color, pet.ageText, pet.markings, pet.photoUrl], ['31', 'dog', 'Shih Tzu', 'White, White and gold', '3 years', ['gold ear tips', 'pink collar'], 'https://img.test/p.jpg']);
+  assert.deepEqual([pet.id, pet.type, pet.breed, pet.color, pet.ageText, pet.markings, pet.photoUrl], ['31', 'dog', 'Shih Tzu', 'White and gold', '3 years', ['gold ear tips', 'pink collar'], 'https://img.test/p.jpg']);
+  assert.equal(petFromApi({ ...api, color_markings: null }).color, 'White');
   const body = petToApi({ ...pet, name: ' Mochi ', color: 'White and gold' });
   assert.deepEqual([body.pet_name, body.pet_type, body.breed, body.color_markings, body.distinctive_markings], [' Mochi ', 'Dog', 'Shih Tzu', 'White and gold', 'gold ear tips, pink collar']);
   assert.equal(petToApi({ ...pet, breed: '', ageText: '' }).breed, null);
@@ -296,9 +297,25 @@ test('profile and office', () => {
 
 const prefs = (over = {}) => ({ email_reports: true, email_rescues: false, email_pet_matches: false, email_claims: true, email_reminders: true, push_enabled: true, push_reports: true, push_rescues: false, push_pet_matches: true, push_claims: true, push_adoptions: true, push_messages: false, push_show_preview: true, ...over });
 
+test('a lost & found alert is marked as one and opens where the server says (a screen inside the app only)', () => {
+  const n = (over = {}) => notificationFromApi({ notification_id: 11, type: 'case_alert', title: 'Still looking for Mochi', message: 'Please report any sightings.', related_id: 4, is_read: false, created_at: '2026-11-12T07:30:00+00:00', ...over }, lookup);
+  const toSighting = n({ link: '/resident-app/community/alert-12/sighting' });
+  assert.deepEqual([toSighting.kind, toSighting.to, toSighting.title], ['alert', '/community/alert-12/sighting', 'Still looking for Mochi']);
+  assert.equal(n({ link: '/resident-app/community/alert-12' }).to, '/community/alert-12');
+  assert.equal(n({ link: '/resident-app/notifications' }).to, '/notifications');
+  assert.equal(n({ link: null }).to, '/notifications', 'no link: the notifications list');
+  assert.equal(n({ link: 'https://elsewhere.example/x' }).to, '/notifications', 'never a page outside the app');
+  assert.equal(n({ link: '//elsewhere.example/x' }).to, '/notifications');
+});
+
 test('notification switches round-trip through the server flags; community, advisories and SMS are not switches the server has', () => {
   const read = settingsFrom(prefs());
-  assert.deepEqual(read, { notifications: { reportUpdates: true, sightings: true, claims: true, community: true, advisories: true }, channels: { push: true, email: true, sms: false } });
+  assert.deepEqual(read, { notifications: { reportUpdates: true, sightings: true, claims: true, community: true, advisories: true, lostFoundAlerts: true }, channels: { push: true, email: true, sms: false } });
+  // lost & found alerts: their own switch, kept as the resident set it
+  const off = preferencesFrom({ ...read, notifications: { ...read.notifications, lostFoundAlerts: false } });
+  assert.equal(off.push_lost_found_alerts, false);
+  assert.equal(settingsFrom({ ...prefs(), ...off }).notifications.lostFoundAlerts, false);
+  assert.equal(settingsFrom({ ...prefs(), push_lost_found_alerts: undefined }).notifications.lostFoundAlerts, true, 'on unless turned off');
   const written = preferencesFrom({ ...read, notifications: { ...read.notifications, sightings: false } });
   assert.deepEqual(settingsFrom({ ...prefs(), ...written }).notifications.sightings, false);
   assert.deepEqual(settingsFrom({ ...prefs(), ...written }).notifications.reportUpdates, true);

@@ -44,6 +44,8 @@ export interface ResidentDataValue {
   reload(): void;
   /** Reads one report in full (its timeline, photos, messages and notice). */
   loadReport(id: string): Promise<void>;
+  /** Refresh the caller's conversation summaries after reading or sending, without replacing private case updates. */
+  refreshConversations(): Promise<void>;
   reportStatus(id: string): { status: DetailStatus; error?: string };
   /** Reads one notice in full (its sightings). */
   loadNotice(id: string): Promise<void>;

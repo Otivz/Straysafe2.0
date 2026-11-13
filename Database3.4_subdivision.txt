@@ -137,6 +137,15 @@
 --           Added to an existing database by backend/app/db_migrations/case_alignment.py (REPORT_COLUMNS, ALERT_COLUMNS,
 --           SIGHTING_COLUMNS, CASE_TABLES): idempotent, nothing dropped or rewritten.
 -- =============================================================================
+-- =============================================================================
+-- REVISION 2026-11-12 (Lost & found notification alerts)
+--   [NEW]   + TABLE case_alerts and case_alert_sends: notification alerts a Subdivision Leader sends about a lost-pet or
+--           found-animal case (now, at a time, or repeating; every repeat ends), separate from the Community notice
+--           (lost_pet_alerts), and one row per planned send (unique per alert and planned time, so a send happens once).
+--   [NEW]   + user_notification_preferences.push_lost_found_alerts (on by default): the residents' "Lost & found alerts" switch.
+--           For an EXISTING database these come only from backend/migrations/2026-11-12_lost_found_alerts.sql (applied by
+--           hand, once): the backend does not create them at start-up and refuses to start until they exist. 57 -> 59 tables.
+-- =============================================================================
 
 DROP DATABASE IF EXISTS `straysafe_subdivision`;
 CREATE DATABASE `straysafe_subdivision` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -1558,6 +1567,7 @@ CREATE TABLE `user_notification_preferences` (
   `push_claims` tinyint(1) NOT NULL DEFAULT '1',                        -- [NEW]
   `push_adoptions` tinyint(1) NOT NULL DEFAULT '1',                     -- [NEW]
   `push_messages` tinyint(1) NOT NULL DEFAULT '1',                      -- [NEW]
+  `push_lost_found_alerts` tinyint(1) NOT NULL DEFAULT '1',             -- [NEW 2026-11-12] the Leader's lost & found alerts (Resident Settings)
   `push_show_preview` tinyint(1) NOT NULL DEFAULT '1',                  -- [NEW] off = generic lock-screen text
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`preference_id`),
@@ -1826,6 +1836,162 @@ CREATE TABLE `ownership_claims` (
   CONSTRAINT `fk_ownership_claims_claimant_user_id` FOREIGN KEY (`claimant_user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_ownership_claims_claimed_pet_id` FOREIGN KEY (`claimed_pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_ownership_claims_reviewed_by` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Participant-scoped matching and case communication (2026-11-12)
+DROP TABLE IF EXISTS `lost_found_matches`;
+CREATE TABLE `lost_found_matches` (
+	match_id INTEGER NOT NULL AUTO_INCREMENT, 
+	subdivision_id INTEGER NOT NULL, 
+	lost_report_id INTEGER NOT NULL, 
+	found_report_id INTEGER NOT NULL, 
+	score INTEGER NOT NULL, 
+	level VARCHAR(10) NOT NULL, 
+	reasons JSON, 
+	status VARCHAR(12) NOT NULL DEFAULT 'pending', 
+	created_at DATETIME NOT NULL DEFAULT (now()), 
+	decided_by INTEGER, 
+	decided_at DATETIME, 
+	link_id INTEGER, 
+	coordination_id INTEGER, 
+	PRIMARY KEY (match_id), 
+	CONSTRAINT uq_lost_found_pair UNIQUE (lost_report_id, found_report_id), 
+	FOREIGN KEY(subdivision_id) REFERENCES subdivisions (subdivision_id), 
+	FOREIGN KEY(lost_report_id) REFERENCES reports (report_id) ON DELETE CASCADE, 
+	FOREIGN KEY(found_report_id) REFERENCES reports (report_id) ON DELETE CASCADE, 
+	FOREIGN KEY(decided_by) REFERENCES users (user_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX ix_lost_found_matches_found_report_id ON lost_found_matches (found_report_id);
+CREATE INDEX ix_lost_found_matches_lost_report_id ON lost_found_matches (lost_report_id);
+CREATE INDEX ix_lost_found_matches_match_id ON lost_found_matches (match_id);
+CREATE INDEX ix_lost_found_matches_status ON lost_found_matches (status);
+CREATE INDEX ix_lost_found_matches_subdivision_id ON lost_found_matches (subdivision_id);
+
+-- Participant-scoped matching and case communication (2026-11-12)
+DROP TABLE IF EXISTS `case_message_threads`;
+CREATE TABLE `case_message_threads` (
+	thread_id INTEGER NOT NULL AUTO_INCREMENT, 
+	subdivision_id INTEGER NOT NULL, 
+	kind VARCHAR(8) NOT NULL, 
+	report_id INTEGER NOT NULL, 
+	related_report_id INTEGER, 
+	match_id INTEGER, 
+	link_id INTEGER, 
+	status VARCHAR(8) NOT NULL DEFAULT 'open', 
+	closed_at DATETIME, 
+	closed_by INTEGER, 
+	close_reason TEXT, 
+	created_by INTEGER, 
+	created_at DATETIME NOT NULL DEFAULT (now()), 
+	PRIMARY KEY (thread_id), 
+	FOREIGN KEY(subdivision_id) REFERENCES subdivisions (subdivision_id), 
+	FOREIGN KEY(report_id) REFERENCES reports (report_id) ON DELETE CASCADE, 
+	FOREIGN KEY(related_report_id) REFERENCES reports (report_id) ON DELETE CASCADE, 
+	FOREIGN KEY(closed_by) REFERENCES users (user_id) ON DELETE SET NULL, 
+	FOREIGN KEY(created_by) REFERENCES users (user_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX ix_case_message_threads_match_id ON case_message_threads (match_id);
+CREATE INDEX ix_case_message_threads_related_report_id ON case_message_threads (related_report_id);
+CREATE INDEX ix_case_message_threads_report_id ON case_message_threads (report_id);
+CREATE INDEX ix_case_message_threads_status ON case_message_threads (status);
+CREATE INDEX ix_case_message_threads_subdivision_id ON case_message_threads (subdivision_id);
+CREATE INDEX ix_case_message_threads_thread_id ON case_message_threads (thread_id);
+
+-- Participant-scoped matching and case communication (2026-11-12)
+DROP TABLE IF EXISTS `case_message_members`;
+CREATE TABLE `case_message_members` (
+	member_id INTEGER NOT NULL AUTO_INCREMENT, 
+	thread_id INTEGER NOT NULL, 
+	user_id INTEGER NOT NULL, 
+	`role` VARCHAR(10) NOT NULL, 
+	report_id INTEGER, 
+	last_read_message_id INTEGER NOT NULL DEFAULT '0', 
+	joined_at DATETIME NOT NULL DEFAULT (now()), 
+	PRIMARY KEY (member_id), 
+	CONSTRAINT uq_case_message_member UNIQUE (thread_id, user_id), 
+	FOREIGN KEY(thread_id) REFERENCES case_message_threads (thread_id) ON DELETE CASCADE, 
+	FOREIGN KEY(user_id) REFERENCES users (user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX ix_case_message_members_member_id ON case_message_members (member_id);
+CREATE INDEX ix_case_message_members_thread_id ON case_message_members (thread_id);
+CREATE INDEX ix_case_message_members_user_id ON case_message_members (user_id);
+
+-- Participant-scoped matching and case communication (2026-11-12)
+DROP TABLE IF EXISTS `case_messages`;
+CREATE TABLE `case_messages` (
+	message_id INTEGER NOT NULL AUTO_INCREMENT, 
+	thread_id INTEGER NOT NULL, 
+	sender_id INTEGER, 
+	kind VARCHAR(8) NOT NULL DEFAULT 'message', 
+	body TEXT NOT NULL, 
+	client_request_id VARCHAR(64), 
+	created_at DATETIME NOT NULL DEFAULT (now()), 
+	PRIMARY KEY (message_id), 
+	FOREIGN KEY(thread_id) REFERENCES case_message_threads (thread_id) ON DELETE CASCADE, 
+	FOREIGN KEY(sender_id) REFERENCES users (user_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX ix_case_messages_created_at ON case_messages (created_at);
+CREATE INDEX ix_case_messages_message_id ON case_messages (message_id);
+CREATE INDEX ix_case_messages_thread_id ON case_messages (thread_id);
+CREATE UNIQUE INDEX uq_case_message_request ON case_messages (client_request_id);
+
+-- =========================================
+-- TABLE: CASE_ALERTS (Lost & found notification alerts, 2026-11-12)   -- [NEW]
+-- A notification a Subdivision Leader sends about ONE lost-pet or found-animal case: its own title and message, the photo choice,
+-- where a tap goes, who receives it and when (now, at a time, or repeating; every repeat ends). It is NOT the Community notice
+-- (lost_pet_alerts) and never changes it. For an existing database: backend/migrations/2026-11-12_lost_found_alerts.sql.
+-- =========================================
+DROP TABLE IF EXISTS `case_alert_sends`;
+DROP TABLE IF EXISTS `case_alerts`;
+CREATE TABLE `case_alerts` (
+  `alert_id` int NOT NULL AUTO_INCREMENT,
+  `report_id` int NOT NULL,
+  `subdivision_id` int NOT NULL,
+  `title` varchar(80) NOT NULL,
+  `message` varchar(300) NOT NULL,
+  `include_photo` tinyint(1) NOT NULL DEFAULT '1',
+  `destination` varchar(12) NOT NULL DEFAULT 'notice',                   -- notice | sighting | claim | inbox
+  `audience` varchar(10) NOT NULL DEFAULT 'all',                         -- all | helpers
+  `mode` varchar(8) NOT NULL,                                            -- now | later | repeat
+  `repeat_kind` varchar(8) DEFAULT NULL,                                 -- every | times
+  `every_minutes` int DEFAULT NULL,
+  `times_of_day` varchar(120) DEFAULT NULL,                              -- "07:00,12:00,18:00"
+  `start_at` datetime NOT NULL,
+  `end_kind` varchar(10) DEFAULT NULL,                                   -- resolved | date | count
+  `end_at` datetime DEFAULT NULL,                                        -- the end, or the latest end of "until resolved"
+  `max_sends` int DEFAULT NULL,
+  `status` varchar(10) NOT NULL DEFAULT 'scheduled',                     -- scheduled | active | paused | finished | stopped | cancelled
+  `next_send_at` datetime DEFAULT NULL,
+  `sends_done` int NOT NULL DEFAULT '0',
+  `stop_reason` varchar(255) DEFAULT NULL,
+  `client_request_id` varchar(64) DEFAULT NULL,
+  `created_by` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `stopped_at` datetime DEFAULT NULL,
+  `stopped_by` int DEFAULT NULL,
+  PRIMARY KEY (`alert_id`),
+  UNIQUE KEY `uq_case_alert_request` (`client_request_id`),
+  KEY `ix_case_alerts_report` (`report_id`),
+  KEY `ix_case_alerts_due` (`status`, `next_send_at`),
+  CONSTRAINT `fk_case_alerts_report` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_case_alerts_subdivision` FOREIGN KEY (`subdivision_id`) REFERENCES `subdivisions` (`subdivision_id`),
+  CONSTRAINT `fk_case_alerts_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_case_alerts_stopped_by` FOREIGN KEY (`stopped_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- One row per planned send: the unique key (alert, planned time) makes a send happen once.   -- [NEW]
+CREATE TABLE `case_alert_sends` (
+  `send_id` int NOT NULL AUTO_INCREMENT,
+  `alert_id` int NOT NULL,
+  `slot_at` datetime NOT NULL,
+  `status` varchar(10) NOT NULL DEFAULT 'sent',
+  `recipients` int NOT NULL DEFAULT '0',
+  `skipped_before` int NOT NULL DEFAULT '0',                             -- planned sends missed while the server was down (never sent late)
+  `sent_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`send_id`),
+  UNIQUE KEY `uq_case_alert_slot` (`alert_id`, `slot_at`),
+  CONSTRAINT `fk_case_alert_sends_alert` FOREIGN KEY (`alert_id`) REFERENCES `case_alerts` (`alert_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================================================

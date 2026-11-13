@@ -5,12 +5,12 @@ Which notifications are pushed, what the lock screen shows, and where a tap goes
 import re
 from typing import Optional
 
-REPORTS, RESCUES, PET_MATCHES, CLAIMS, ADOPTIONS, MESSAGES, SYSTEM = (
-    "reports", "rescues", "pet_matches", "claims", "adoptions", "messages", "system")
+REPORTS, RESCUES, PET_MATCHES, CLAIMS, ADOPTIONS, MESSAGES, SYSTEM, ALERTS = (
+    "reports", "rescues", "pet_matches", "claims", "adoptions", "messages", "system", "alerts")
 # category -> preference column
 PREF_COLUMN = {
     REPORTS: "push_reports", RESCUES: "push_rescues", PET_MATCHES: "push_pet_matches",
-    CLAIMS: "push_claims", ADOPTIONS: "push_adoptions", MESSAGES: "push_messages",
+    CLAIMS: "push_claims", ADOPTIONS: "push_adoptions", MESSAGES: "push_messages", ALERTS: "push_lost_found_alerts",
 }
 
 _TYPE_CATEGORY = {
@@ -24,13 +24,16 @@ _TYPE_CATEGORY = {
     # Pet matches
     "lost_pet_alert": PET_MATCHES, "lost_pet_sighting": PET_MATCHES, "lost_pet_alert_request": PET_MATCHES,
     "lost_pet_secured": PET_MATCHES, "lost_pet_coordination": PET_MATCHES, "lost_pet_recovered": PET_MATCHES, "lost_pet_leader": PET_MATCHES,
+    "lost_found_review": PET_MATCHES, "lost_found_linked": PET_MATCHES, "lost_found_bridge": PET_MATCHES, "lost_found_unlinked": PET_MATCHES,
     "potential_match": PET_MATCHES, "pet_owner_confirmation": PET_MATCHES, "pet_owner_confirmation_result": PET_MATCHES,
     "pet_match_confirmation": PET_MATCHES, "pet_match_confirmation_result": PET_MATCHES, "leader_identity_verified": PET_MATCHES,
     "wrong_identity": PET_MATCHES, "reunion_photo_requested": PET_MATCHES,
     # Claims
     "claim": CLAIMS,
     # Messages
-    "message": MESSAGES, "match_message": MESSAGES,
+    "message": MESSAGES, "match_message": MESSAGES, "case_message": MESSAGES,
+    # Lost & found alerts the Subdivision Leader sends (services/case_alerts.py)
+    "case_alert": ALERTS,
     # "Send test notification" (only the master switch applies)
     "push_test": SYSTEM,
 }
@@ -96,6 +99,12 @@ def notification_link(role_id: int, ntype: Optional[str], related_id: Optional[i
     if role_id == 1:  # Resident app
         if t in ("pet_owner_confirmation", "pet_match_confirmation"):
             return f"{RESIDENT_APP}/pets"
+        if t == "lost_found_linked":
+            return f"{RESIDENT_APP}/reports"
+        if t == "case_alert":                 # the exact screen needs the database: push_service.payload_for works it out
+            return f"{RESIDENT_APP}/notifications"
+        if t in ("lost_found_bridge", "lost_found_unlinked", "case_message"):      # the conversation: its related id is the thread's
+            return f"{RESIDENT_APP}/conversations/{rid}" if rid else f"{RESIDENT_APP}/home"
         if t in ("lost_pet_alert", "lost_pet_secured", "lost_pet_coordination", "lost_pet_recovered"):
             return f"{RESIDENT_APP}/community/alert-{rid}" if rid else f"{RESIDENT_APP}/community"
         if t == "lost_pet_sighting":

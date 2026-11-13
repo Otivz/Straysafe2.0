@@ -18,14 +18,14 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 from app.limiter import limiter
-from app.routes import (announcements, auth, cases, chat, landmarks, lost_pet_alerts, notifications, ownership_claims, pet_ownership, pets,
-                        reports, users, warnings, analytics, owner_followups)
+from app.routes import (announcements, auth, case_alerts, case_messages, cases, chat, landmarks, lost_found, lost_pet_alerts, notifications, ownership_claims, pet_ownership,
+                        pets, reports, users, warnings, analytics, owner_followups)
 
 PASSWORD = "Test#Pass2026xx"
 
 api = _isolated_db.build_app(auth.router, users.router, reports.router, pets.router, notifications.router, announcements.router, chat.router,
                              warnings.router, owner_followups.router, lost_pet_alerts.router, cases.router, ownership_claims.router,
-                             landmarks.router, analytics.router, pet_ownership.router)
+                             landmarks.router, analytics.router, pet_ownership.router, lost_found.router, case_messages.router, case_alerts.router)
 limiter.enabled = False                      # the test signs in many times a minute
 api.state.limiter = limiter
 
