@@ -49,8 +49,18 @@ def vapid_configured() -> bool:
     return bool(vapid_public_key() and (os.getenv("VAPID_PRIVATE_KEY") or "").strip())
 
 
+# Where the backend finds the Firebase service-account key when FCM_SERVICE_ACCOUNT_FILE is not set at all: a folder in the home
+# directory of the account that runs the backend, outside the repository (docs/05-operations/push/FIREBASE_PUSH_SETUP.md).
+DEFAULT_FCM_KEY = os.path.join(os.path.expanduser("~"), ".straysafe", "firebase-service-account.json")
+
+
 def fcm_service_account_file() -> Optional[str]:
-    return (os.getenv("FCM_SERVICE_ACCOUNT_FILE") or "").strip() or None
+    """The key named by FCM_SERVICE_ACCOUNT_FILE; when the variable is absent, the default file above. An EMPTY value means
+    "no FCM" (the tests set it so, and so may an operator), and never falls back."""
+    value = os.getenv("FCM_SERVICE_ACCOUNT_FILE")
+    if value is None:
+        return DEFAULT_FCM_KEY if os.path.isfile(DEFAULT_FCM_KEY) else None
+    return value.strip() or None
 
 
 def fcm_configured() -> bool:
@@ -155,8 +165,10 @@ def webpush_send(sub: PushSubscription, data: str, ttl: int) -> PushResult:
 
 FCM_SCOPE = "https://www.googleapis.com/auth/firebase.messaging"
 _fcm: dict = {"session": None, "project": None, "path": None}
-DEFAULT_CHANNEL = "straysafe_updates"           # Android notification channels the app creates (frontend/src/resident/native/push.ts)
-ALERT_CHANNEL = "lost_found_alerts"
+# Android notification channels the app creates at sign-in (frontend/src/resident/native/push.ts): both ring and vibrate. They replaced
+# "straysafe_updates" and "lost_found_alerts", which were made without vibration (a channel cannot be changed once it exists on a phone).
+DEFAULT_CHANNEL = "straysafe_notifications"
+ALERT_CHANNEL = "straysafe_alerts"
 
 
 def _fcm_session():
@@ -175,12 +187,19 @@ def fcm_message(token: str, payload: dict, ttl: int) -> dict:
     notification = {"title": payload.get("title") or pc.GENERIC_TITLE, "body": payload.get("body") or ""}
     if payload.get("image"):
         notification["image"] = payload["image"]
+    channel = payload.get("channel") or DEFAULT_CHANNEL
+    # High priority: delivered at once, also to a phone asleep with its screen off, while the app is closed or another app is open.
+    # Shown by Android itself (a "notification" message), with sound and vibration (from the channel on Android 8+, from these
+    # fields on older phones). A lost & found alert is a public notice: it may show in full on a locked screen.
     return {"message": {
         "token": token,
         "notification": notification,
         "data": {"url": str(payload.get("url") or ""), "tag": tag, "notification_id": str(payload.get("notification_id") or "")},
         "android": {"priority": "high", "ttl": f"{int(ttl)}s", "collapse_key": tag,
-                    "notification": {"tag": tag, "channel_id": payload.get("channel") or DEFAULT_CHANNEL, "icon": "ic_stat_straysafe", "color": "#C65A17"}},
+                    "notification": {"tag": tag, "channel_id": channel, "icon": "ic_stat_straysafe", "color": "#C65A17",
+                                     "sound": "default", "default_sound": True, "default_vibrate_timings": True,
+                                     "notification_priority": "PRIORITY_MAX",
+                                     "visibility": "PUBLIC" if channel == ALERT_CHANNEL else "PRIVATE"}},
     }}
 
 

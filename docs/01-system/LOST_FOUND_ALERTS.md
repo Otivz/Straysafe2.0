@@ -45,19 +45,20 @@ The Community notice, its "I saw this pet" form (missing pet) or its claim form 
 - The Operations Watcher loop (`app/tasks/unassigned_checker.py`, every 60 s) calls `case_alerts.run_due`. A send can therefore be up to about a minute after its planned time.
 - **Exactly once:** each planned send is claimed by inserting a `case_alert_sends` row; the unique key (`alert_id`, `slot_at`) refuses a second claim, so two workers, a retry or a restart never send the same occurrence twice. After downtime only the latest missed send goes out; the others are counted (`skipped_before`) and never sent late.
 - **Push outbox:** a committed notification queues one delivery per active device (`push_deliveries`); each delivery is claimed (`queued` → `sending`) before the network call; a claim left by a crash is marked failed after 10 minutes, never sent twice. Channels: Web Push (VAPID keys) and **FCM** for the Android app (`FCM_SERVICE_ACCOUNT_FILE`). Without either, alerts still reach the in-app list.
-- Android channels: `straysafe_updates` (private on a locked screen) and `lost_found_alerts` (public). Category `alerts` maps to the preference `push_lost_found_alerts`.
+- Android: every message is high priority with default sound and vibration, so it rings and vibrates while the app is closed, another app is open or the screen is off. Channels (both high importance, with vibration): `straysafe_notifications` (private on a locked screen) and `straysafe_alerts` (public); they replaced `straysafe_updates` and `lost_found_alerts` (made without vibration), which the app deletes. Category `alerts` maps to the preference `push_lost_found_alerts`. Phones that kill apps in the background (some battery-saver settings) can still hold notifications back until the app is allowed to run in the background.
 
 ## Privacy and limits
 
 - Title and message follow the public-notice rule (`utils/public_text.py`): no phone numbers, email addresses or exact addresses.
 - Nothing is sent about a private (sensitive) report or a closed case; only a case's Leader (or the Administrator) can act.
+- How many residents a notice or an alert reached is shown to the Subdivision Leader only: the owner's view of the notice does not carry the number, and neither the owner's "your notice is live" notification nor the report's history line states it.
 - The photo goes into a phone notification only when chosen and only over https.
 
 ## What residents see
 
 - **Notifications**: an alert has its own bell icon, reads as the Leader wrote it, says "From your Subdivision Leader", and opens its destination.
 - **Settings**: the switch "Lost & found alerts". Notices stay in Community either way.
-- **The owner's screen for a missing pet** (the report page): the pet and since when it is missing, one state "Under monitoring", the sightings once, "Your notice in Community" (how many neighbours were notified), "Alerts from your Subdivision Leader" (how many went out and when the last did, from `leader_alerts`), the report's details folded, the updates, and "My pet is home".
+- **The owner's screen for a missing pet** (the report page): the pet and since when it is missing, one state "Under monitoring", the sightings once, "Your notice in Community", "Alerts from your Subdivision Leader" (how many went out and when the last did, from `leader_alerts`), the report's details folded, the updates, and "My pet is home".
 - Related Resident clean-ups shipped with this work: Home shows the missing pet once at the top and lists only things to act on (a history line is no longer read as "Message from the subdivision"), and drops the "Report a concern" tile (the + in the bottom bar); Community is one list with tabs and one search that filters as you type; the missing-pet notice is compact (one block for the pet, one line for where and when, the map one tap away, the latest sighting); the sighting form names the pet.
 
 ## Data and migration

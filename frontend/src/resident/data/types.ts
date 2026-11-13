@@ -146,8 +146,6 @@ export interface Notice {
   /** The possible-recovery reports on a missing-pet notice (owner only). */
   securedCount?: number;
   coordinations?: Coordination[];
-  /** The owner only: how many residents the notice reached when it was published. */
-  residentsNotified?: number;
   /** The owner only: the lost & found alerts the Subdivision Leader sent to neighbours about this pet (never the notice itself). */
   leaderAlerts?: { sent: number; lastAt: string | null };
   /** Official guidance (safety advisories). */

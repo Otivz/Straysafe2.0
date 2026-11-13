@@ -31,7 +31,7 @@
              none. The app creates its channels at sign-in (src/resident/native/push.ts); the server names one in every message. -->
         <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_stat_straysafe" />
         <meta-data android:name="com.google.firebase.messaging.default_notification_color" android:resource="@color/straysafe_brand" />
-        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="straysafe_updates" />
+        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="straysafe_notifications" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

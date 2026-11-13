@@ -153,7 +153,8 @@ a change that was rolled back.
     on only when `FCM_SERVICE_ACCOUNT_FILE` names an existing file. Each delivery is claimed (`queued` → `sending`) before
     the network call, so two workers never send it twice; a claim left by a crash is marked failed after 10 minutes. A token
     Google no longer accepts (unregistered, invalid, another project) revokes the device. Messages carry the Android
-    channel (`straysafe_updates`, or `lost_found_alerts` for the Leader's alerts, category `alerts` → `push_lost_found_alerts`),
+    channel (`straysafe_notifications`, or `straysafe_alerts` for the Leader's alerts, category `alerts` → `push_lost_found_alerts`;
+    both high importance with vibration, every message high priority with default sound and vibration),
     the tag (one notification per alert) and `data.url`. Tests: `tests/test_push_fcm.py` (a fake Google endpoint).
   - Before each send:
     - recheck that the account is active;

@@ -72,13 +72,22 @@ TOKEN = "fcm-token-" + "x" * 140
 # ============================================================================ 1. on and off
 for key in ("VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY"):      # (an application import may have read a local .env: this test is FCM only)
     os.environ.pop(key, None)
-os.environ.pop("FCM_SERVICE_ACCOUNT_FILE", None)
+os.environ["FCM_SERVICE_ACCOUNT_FILE"] = ""
 check("without the service-account file FCM is off, and the app is told so (503)", not PS.fcm_configured()
       and client.post("/push/subscribe", json={"channel": "fcm", "token": TOKEN}, headers=H(ana)).status_code == 503)
 os.environ["FCM_SERVICE_ACCOUNT_FILE"] = os.path.join(tempfile.mkdtemp(), "missing.json")
 check("a path to a file that does not exist is still off", not PS.fcm_configured())
 os.environ["FCM_SERVICE_ACCOUNT_FILE"] = fake_credentials
 check("with the file, FCM is on (and push as a whole), Web Push stays off", PS.fcm_configured() and PS.push_configured() and not PS.vapid_configured())
+# with no variable at all, the key in the default place (outside the repository) is used; an empty variable never falls back
+_default = PS.DEFAULT_FCM_KEY
+PS.DEFAULT_FCM_KEY = fake_credentials
+os.environ.pop("FCM_SERVICE_ACCOUNT_FILE", None)
+check("with no variable, the key in the default place is found (~/.straysafe/firebase-service-account.json)", PS.fcm_configured() and PS.fcm_service_account_file() == fake_credentials)
+os.environ["FCM_SERVICE_ACCOUNT_FILE"] = ""
+check("...but an empty variable means FCM off, whatever is in the default place (the tests rely on it)", not PS.fcm_configured())
+PS.DEFAULT_FCM_KEY = _default
+os.environ["FCM_SERVICE_ACCOUNT_FILE"] = fake_credentials
 
 # ============================================================================ 2. the Android app registers its token
 r = client.post("/push/subscribe", json={"channel": "fcm", "token": TOKEN}, headers=H(ana))
@@ -131,6 +140,14 @@ check("it is sent through FCM HTTP v1 to that token, with the text and where a t
       and msg["message"]["token"] == TOKEN and msg["message"]["notification"]["title"] == "Still looking for Mochi" and msg["message"]["data"]["url"] == "/resident-app/notifications")
 d1 = db.query(PushDelivery).filter(PushDelivery.notification_id == n1.notification_id).one()
 check("the delivery is marked sent, once", d1.status == "sent" and d1.attempts == 1 and len(fake.calls) == 1)
+android = msg["message"]["android"]
+check("it rings and vibrates even with the app closed and the screen off: high priority, default sound and vibration, top notification priority",
+      android["priority"] == "high" and android["notification"]["default_sound"] is True and android["notification"]["default_vibrate_timings"] is True
+      and android["notification"]["notification_priority"] == "PRIORITY_MAX" and android["notification"]["channel_id"] == "straysafe_alerts")
+other = PS.fcm_message("t", {"title": "Someone saw Mochi", "body": "b", "url": "/x", "tag": "t1"}, 60)["message"]["android"]["notification"]
+check("any other notification uses the updates channel and stays private on a locked screen", other["channel_id"] == "straysafe_notifications" and other["visibility"] == "PRIVATE" and other["default_vibrate_timings"] is True)
+alert_msg = PS.fcm_message("t", {"title": "Still looking for Mochi", "body": "b", "url": "/x", "tag": "alerts-1", "channel": PS.ALERT_CHANNEL}, 60)["message"]["android"]["notification"]
+check("a lost & found alert uses its own channel and may show in full on a locked screen", alert_msg["channel_id"] == "straysafe_alerts" and alert_msg["visibility"] == "PUBLIC")
 check("running again sends nothing more", PS.send_due(db)["sent"] == 0 and len(fake.calls) == 1)
 
 # two workers: a delivery already claimed by another worker is not sent here

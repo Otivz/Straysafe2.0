@@ -7,5 +7,6 @@ override them), so an empty value here is what the application sees.
 import os
 
 for _name in ("GEMINI_API_KEY", "SMTP_USER", "SMTP_PASSWORD", "RESEND_API_KEY", "VAPID_PRIVATE_KEY", "VAPID_PUBLIC_KEY",
-              "CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"):
+              "CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET",
+              "FCM_SERVICE_ACCOUNT_FILE"):           # empty = FCM off, never the default key in the home folder
     os.environ[_name] = ""

@@ -197,7 +197,7 @@ check("the Leader's Activity says it (a staff note)", any("You sent the alert" i
 # the phone: link, photo and channel
 payload = PS.payload_for(db, n, db.get(User, ben.user_id))
 check("on a phone it opens the notice, uses the lost & found channel, and shows the photo", payload["url"] == f"/resident-app/community/alert-{notice.alert_id}"
-      and payload["channel"] == "lost_found_alerts" and payload["image"] == "https://res.cloudinary.com/x/mochi.jpg" and payload["tag"].endswith(str(now_id)), str(payload))
+      and payload["channel"] == "straysafe_alerts" and payload["image"] == "https://res.cloudinary.com/x/mochi.jpg" and payload["tag"].endswith(str(now_id)), str(payload))
 db.add(UserNotificationPreference(user_id=cara.user_id, push_show_preview=False))
 db.commit()
 p2 = PS.payload_for(db, notes_for(cara.user_id, now_id)[0], db.get(User, cara.user_id))
@@ -205,7 +205,7 @@ check("a resident who hides previews gets the generic text and no photo", "image
 msg = PS.fcm_message("tok", payload, 86400)["message"]
 check("the FCM message: the token, title, body, photo, where a tap goes, and a tag so a newer send replaces it",
       msg["token"] == "tok" and msg["notification"]["image"] == payload["image"] and msg["data"]["url"] == payload["url"]
-      and msg["android"]["notification"]["tag"] == payload["tag"] and msg["android"]["collapse_key"] == payload["tag"] and msg["android"]["notification"]["channel_id"] == "lost_found_alerts")
+      and msg["android"]["notification"]["tag"] == payload["tag"] and msg["android"]["collapse_key"] == payload["tag"] and msg["android"]["notification"]["channel_id"] == "straysafe_alerts")
 
 # ============================================================================ 4. scheduled for later
 later = make(lost_id, schedule={"mode": "later", "at": (T0 + timedelta(hours=16)).isoformat()})
@@ -291,7 +291,7 @@ helpers = make(lost_id, audience="helpers")
 check("'residents who reported a sighting' reaches only them", r.status_code == 200
       and sorted(n.user_id for n in db.query(Notification).filter(Notification.type == "case_alert", Notification.related_id == helpers.alert_id).all()) == [dino.user_id])
 for key in ("VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "FCM_SERVICE_ACCOUNT_FILE"):      # (a local .env may have set push up: this check is about it being off)
-    os.environ.pop(key, None)
+    os.environ[key] = ""
 aud = client.get(f"/case-alerts/reports/{lost_id}/audience", headers=H(leader)).json()
 check("the screen can say how many each choice reaches, and how many turned alerts off", aud == {"all": 3, "helpers": 1, "residents": 5, "turned_off": 1, "push_ready": False}, str(aud))
 check("...and that phones cannot be reached while neither Web Push nor Firebase is set up (alerts still reach the in-app list)", aud["push_ready"] is False)

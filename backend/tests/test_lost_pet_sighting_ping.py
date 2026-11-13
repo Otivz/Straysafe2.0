@@ -101,7 +101,9 @@ r = client.post(f"/lost-pet-alerts/reports/{lost.report_id}/request", headers=H(
 a = r.json()
 aid = a.get("alert_id")
 check("request: a missing pet's notice is published at once with the last-seen details (no review step)", r.status_code == 200 and a["status"] == "active"
-      and a["last_seen"]["location"] == "Subdivision entrance" and a["pet"]["name"] == "Bantay" and a["residents_notified"] == 2, r.text[:300])
+      and a["last_seen"]["location"] == "Subdivision entrance" and a["pet"]["name"] == "Bantay" and a["residents_notified"] is None, r.text[:300])
+check("request: how many residents were told is shown to the Leader only (the owner is not given the number)",
+      client.get(f"/lost-pet-alerts/{aid}", headers=H(leader)).json()["residents_notified"] == 2)
 check("request: the Leader is not asked to approve anything", notes(leader.user_id, "lost_pet_alert_request") == 0)
 check("request: no duplicate open alert", client.post(f"/lost-pet-alerts/reports/{lost.report_id}/request", headers=H(owner), json={}).status_code == 409)
 check("a published notice is visible to residents and takes sightings", client.get(f"/lost-pet-alerts/{aid}", headers=H(neighbor)).status_code == 200)

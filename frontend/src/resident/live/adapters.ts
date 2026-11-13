@@ -79,8 +79,8 @@ export function updateFromHistory(h: { history_id: number; remarks: string | nul
   if (/^case reopened/i.test(text)) return { id: `h${h.history_id}`, at, kind: 'status', title: 'Reopened' };
   // Any other line was written by the system (a notice went out, a neighbour reported a sighting). It is never a message from a person:
   // only the case chat carries those (updateFromChat).
-  const notice = /^(?:missing-pet|found-animal) notice published to (\d+) residents?/i.exec(text);
-  if (notice) return { id: `h${h.history_id}`, at, kind: 'info', title: `Your notice went out to ${notice[1]} ${notice[1] === '1' ? 'neighbour' : 'neighbours'}` };
+  // how many residents were told is for the Subdivision Leader only (older lines carry the number: it is not shown)
+  if (/^(?:missing-pet|found-animal) notice published to /i.test(text)) return { id: `h${h.history_id}`, at, kind: 'info', title: 'Your notice went out to your neighbours' };
   return { id: `h${h.history_id}`, at, kind: /sighting|seeing the pet|may have the pet|possible recovery/i.test(text) ? 'sighting' : 'info', title: clip(text, 120) };
 }
 
@@ -214,7 +214,6 @@ export function noticeFromAlert(a: ApiResidentAlert, ctx: Pick<ResidentLookup, '
     ...(a.status === 'closed' && a.close_outcome ? { closeOutcome: a.close_outcome } : {}), ...(a.status === 'closed' && a.close_reason ? { closeReason: a.close_reason } : {}),
     viewerRole: a.viewer_role === 'finder' ? 'finder' : a.is_owner && !found ? 'owner' : 'neighbor',
     ...(a.secured_count ? { securedCount: a.secured_count } : {}),
-    ...(typeof a.residents_notified === 'number' ? { residentsNotified: a.residents_notified } : {}),
     ...(a.leader_alerts ? { leaderAlerts: { sent: a.leader_alerts.sent, lastAt: fromServerOrNull(a.leader_alerts.last_at) } } : {}),
     ...(a.coordinations ? { coordinations: a.coordinations.map(coordinationFromApi).filter((c): c is Coordination => c !== null) } : {}),
   };

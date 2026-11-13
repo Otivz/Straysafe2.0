@@ -29,12 +29,12 @@ Both must come from the **same** Firebase project.
 
 1. Firebase console → Project settings → **Service accounts** → **Generate new private key**. A JSON file downloads.
 2. Move it to a folder outside the repository on the machine that runs the backend (for example `C:\StraySafe\secrets\straysafe-firebase.json`), readable only by the account that runs the backend.
-3. Set the environment variable **`FCM_SERVICE_ACCOUNT_FILE`** to that full path for the backend process (in its environment or in `backend/.env`; agents do not edit `.env` files), then restart the backend.
+3. Either save it as `firebase-service-account.json` in the folder `.straysafe` of the home folder of the account that runs the backend (`%USERPROFILE%\.straysafe\firebase-service-account.json`, found without any setting), or set the environment variable **`FCM_SERVICE_ACCOUNT_FILE`** to its full path (an empty value turns FCM off). The backend reads it when it next sends; no restart is needed.
 4. The backend sends with Google's `google-auth` package, which is already installed; nothing else is added.
 
 ## 4. Check it
 
-1. Install the new APK and sign in as a resident. Android 13 and later asks once for permission to show notifications: allow it.
+1. Install the new APK and sign in as a resident (a resident already signed in only needs to open the app once: it registers again). Android 13 and later asks once for permission to show notifications: allow it.
 2. As the Subdivision Leader, open a missing pet's case, **Send an alert**, "Send now" to all residents. The phone shows it within about a minute; a tap opens the notice. The window's "What happens" no longer says push is not set up.
 3. `GET /push/status` (signed in as that resident) reports `"enabled": true` and one device; `POST /push/test` sends "push is working" to that resident's own phone (once a minute at most).
 
@@ -46,6 +46,7 @@ Both must come from the **same** Firebase project.
 | The in-app row arrives, no phone notification | Notifications are off for the app or its channel ("Lost & found alerts" / "Updates on your reports") in Android settings; or the resident turned "Lost & found alerts" off in StraySafe Settings |
 | A delivery in `push_deliveries` has `last_error` "device gone (…)" | Google no longer accepts that phone's registration: the app was reinstalled or its data cleared (sign in again on the phone and it registers again), or `google-services.json` and the service-account key are from different Firebase projects (replace one so both match) |
 | A delivery stays `queued` and is retried | Google was busy or unreachable; it is tried again on its own |
+| Every send is refused with `Permission 'cloudmessaging.messages.create' denied` (403, `IAM_PERMISSION_DENIED`) | The service account the key belongs to has no role in the project (seen 2026-11-13 with `firebase-adminsdk-fbsvc@straysafe-1947e.iam.gserviceaccount.com`: Firebase made it without permissions). The project's **owner** grants it the role **Firebase Cloud Messaging API Admin** in Google Cloud → IAM → Grant access. A project editor cannot. Nothing needs restarting afterwards |
 
 ## If a key leaks
 

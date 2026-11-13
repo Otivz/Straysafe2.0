@@ -364,7 +364,8 @@ def alert_view(db: Session, alert: LostPetAlert, viewer: User, with_sightings: b
         "latest_sighting": sighting_view(db, latest, viewer, is_priv) if latest else None,
         "accepting_sightings": alert.status == ACTIVE,
         "is_owner": is_owner(db, viewer, alert), "can_manage": is_leader_of(viewer, alert.subdivision_id), "viewer_role": role,
-        "residents_notified": alert.residents_notified if is_priv else None,
+        # how many residents were told is for the Subdivision Leader only, never for the owner or a neighbor
+        "residents_notified": alert.residents_notified if is_leader_of(viewer, alert.subdivision_id) else None,
         # how many notification alerts the Subdivision Leader sent about this case (the owner sees the Leader is reaching neighbours)
         "leader_alerts": _leader_alerts(db, alert.report_id) if is_priv else None,
         # who asked for the notice: the Leader's own notice list tells a resident's request from the Leader's own (not for neighbors)
@@ -402,7 +403,7 @@ def broadcast(db: Session, alert: LostPetAlert, actor: Optional[User], now: date
             f"An animal ({looks or 'animal'}) was found {where} on {fmt_date(alert.last_seen_at)}. If it is yours, open the "
             "notice and send an ownership claim. Please do not approach an animal you do not know.")
         notify(db, owners, "lost_pet_alert", alert.alert_id, "Your found-animal notice is live",
-               f"Residents of the subdivision were told about the animal you reported ({alert.residents_notified} notified).")
+               "Residents of the subdivision were told about the animal you reported.")
     else:
         alert.residents_notified = notify(
             db, [u for u in residents if u not in owners], "lost_pet_alert", alert.alert_id,
@@ -410,11 +411,11 @@ def broadcast(db: Session, alert: LostPetAlert, actor: Optional[User], now: date
             f"{card['name']} ({looks or 'pet'}) was last seen {where} on {fmt_date(alert.last_seen_at)} at "
             f"{fmt_time(alert.last_seen_at)}. If you spot it, open the notice and tap I saw this pet.")
         notify(db, owners, "lost_pet_alert", alert.alert_id, "Your missing-pet notice is live",
-               f"Residents of the subdivision were told about {card['name']} ({alert.residents_notified} notified). "
+               f"Residents of the subdivision were told about {card['name']}. "
                "You'll be notified of every sighting.")
     by = how or (f"by {actor.name}" if actor else "automatically")
-    n = alert.residents_notified or 0
-    history_line(db, alert.report, actor, f"{'Found-animal notice' if found else 'Missing-pet notice'} published to {n} resident{'' if n == 1 else 's'} {by}.")
+    # the report's history is read by the resident too: it says the notice went out, not to how many (that is for the Leader)
+    history_line(db, alert.report, actor, f"{'Found-animal notice' if found else 'Missing-pet notice'} published to the subdivision's residents {by}.")
     log_activity(db=db, action="ACTIVATE_LOST_PET_ALERT", target_table="lost_pet_alerts", target_id=alert.alert_id,
                  description=f"{actor.name if actor else 'The system'} published the {'found-animal notice' if found else 'missing-pet notice'} "
                              f"for Report #{alert.report_id} ({alert.residents_notified} residents notified).",

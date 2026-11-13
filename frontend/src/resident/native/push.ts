@@ -14,11 +14,15 @@ import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { httpPost } from '../../live/http';
 
-// visibility 0 (private): a locked phone shows that something came, not what; the alerts are public notices, so they may show in full
+// Both channels ring, vibrate and pop up (importance 4, high): Android shows them by itself while the app is closed, another app is
+// open or the screen is off. Visibility 0 (private): a locked phone shows that something came, not what; the alerts are public
+// notices, so they may show in full. A channel cannot be changed once it exists on a phone, so these replaced the first two
+// ("straysafe_updates", "lost_found_alerts", made without vibration), which are removed.
 export const CHANNELS = [
-  { id: 'straysafe_updates', name: 'Updates on your reports', description: 'Sightings, messages and changes to your reports and claims', importance: 3 as const, visibility: 0 as const },
-  { id: 'lost_found_alerts', name: 'Lost & found alerts', description: 'Alerts your Subdivision Leader sends about missing and found animals', importance: 4 as const, visibility: 1 as const },
+  { id: 'straysafe_notifications', name: 'Updates on your reports', description: 'Sightings, messages and changes to your reports and claims', importance: 4 as const, visibility: 0 as const, vibration: true, lights: true, lightColor: '#C65A17' },
+  { id: 'straysafe_alerts', name: 'Lost & found alerts', description: 'Alerts your Subdivision Leader sends about missing and found animals', importance: 4 as const, visibility: 1 as const, vibration: true, lights: true, lightColor: '#C65A17' },
 ];
+const RETIRED_CHANNELS = ['straysafe_updates', 'lost_found_alerts'];
 
 export function nativePushAvailable(): boolean {
   try { return Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('PushNotifications'); } catch { return false; }
@@ -52,6 +56,7 @@ export async function startPush(open: (path: string) => void): Promise<() => voi
     }),
   ]);
   try {
+    for (const id of RETIRED_CHANNELS) await PushNotifications.deleteChannel({ id }).catch(() => undefined);
     for (const c of CHANNELS) await PushNotifications.createChannel(c);
     let permission = await PushNotifications.checkPermissions();
     if (permission.receive === 'prompt' || permission.receive === 'prompt-with-rationale') permission = await PushNotifications.requestPermissions();

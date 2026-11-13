@@ -101,7 +101,7 @@ export function LostReport({ report, detail }: { report: Report; detail: { statu
         {notice ? (
           <Row
             to={residentPath(`/community/${notice.id}`)} icon={Megaphone} title="Your notice in Community"
-            meta={notice.status === 'active' ? `${notice.residentsNotified ? `${plural(notice.residentsNotified, 'neighbour')} notified · ` : ''}see it as they do` : noticeEndedLabel(notice)}
+            meta={notice.status === 'active' ? 'Neighbours can see it · see it as they do' : noticeEndedLabel(notice)}
           />
         ) : (
           <div className="rs-row rs-row--static">
