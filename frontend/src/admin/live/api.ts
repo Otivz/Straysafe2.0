@@ -256,7 +256,7 @@ export interface ApiNotificationPrefs {
 }
 
 // ---------------------------------------------------------------------------------------------------------- settings
-export interface ApiPolicy { id: string; title: string; reference: string; summary: string; applies_to: CategoryId[]; observation_days: number | null; status: 'confirmed' | 'pending_confirmation' }
+export interface ApiPolicy { id: string; title: string; reference: string; summary: string; applies_to: CategoryId[]; observation_days: number | null; status: 'confirmed' | 'pending_confirmation'; fine_amount?: number | null; count_window_days?: number | null }
 export interface ApiCaseSettings {
   categories: Record<CategoryId, boolean>;
   policies: ApiPolicy[];

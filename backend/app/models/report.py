@@ -194,6 +194,14 @@ class Report(Base):
     # instead of filing a second one (routes/reports.py; the pet row is locked, so two copies cannot both pass).
     client_request_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
+    # Complaint management (backend/migrations/2026-11-13_complaint_management.sql, docs/01-system/COMPLAINT_MANAGEMENT.md).
+    # When the resident saw it (asked by the report form), and, on an animal complaint only, what the complainant knows about the
+    # owner: a lead for the Subdivision Leader, never a finding, shown only to the reporter and staff.
+    seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    suspected_owner_name: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
+    suspected_owner_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    suspected_owner_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Relationships
     reporter: Mapped[Optional["User"]] = relationship("User", foreign_keys=[user_id], backref="reports")
     assigned_leader: Mapped[Optional["User"]] = relationship("User", foreign_keys=[assigned_leader_id])

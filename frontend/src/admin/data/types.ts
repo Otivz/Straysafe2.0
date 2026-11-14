@@ -612,6 +612,10 @@ export interface Policy {
   /** null = the policy defines no observation period. No universal default is assumed. */
   observationDays: number | null;
   status: 'confirmed' | 'pending_confirmation';
+  /** Complaint management: the fine for a 3rd offense under this rule (null: no fine can be imposed), and how many days an offense keeps
+   *  counting towards the next (null: it never stops counting). Both are the subdivision's decision; neither is assumed. */
+  fineAmount?: number | null;
+  countWindowDays?: number | null;
 }
 
 export type PublicationMode = 'immediate' | 'review';

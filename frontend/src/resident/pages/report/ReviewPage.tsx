@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Hourglass } from 'lucide-react';
+import { Camera, Eye, EyeOff, Hourglass, ShieldCheck } from 'lucide-react';
 import { fmtDateTime, fromLocalInput } from '../../../preview/lib/format';
 import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
 import { MapLegend } from '../../../preview/map/MapLegend';
@@ -117,6 +117,17 @@ function ReviewForm({ draft, live, onSending }: { draft: Draft; /** false once t
       ) : null}
       {error && !unavailable ? <FormError message={error} /> : null}
 
+      {/* Photos stay optional: a reminder when nothing is attached, never a block, and none where safety comes first */}
+      {!lost && draft.media.length === 0 ? (
+        draft.category === 'safety' || draft.category === 'injured'
+          ? <Callout tone="sage" icon={ShieldCheck} title="No photo needed.">Keep your distance. Your report goes to your Subdivision Leader as it is.</Callout>
+          : draft.category === 'found_animal'
+            ? <Callout tone="amber" icon={Camera} title="No photo yet.">The photo is how the owner recognises their pet in the notice. Add one if the animal is still with you or nearby, and only if it is safe.
+                <span className="rs-row-actions rs-mt"><LinkButton size="sm" variant="secondary" to={`${stepPath('details')}?from=review`}>Add a photo</LinkButton></span></Callout>
+            : <Callout icon={Camera} title="No photo or video yet.">{/bark|howl|noise|ingay|tahol/i.test(draft.description) ? 'For barking, a short video taken from your home records the sound and helps your Subdivision Leader check it.' : 'A photo or a short video helps your Subdivision Leader check it and find the owner.'} You can submit without one.
+                <span className="rs-row-actions rs-mt"><LinkButton size="sm" variant="secondary" to={`${stepPath(cat.kind === 'incident' ? 'evidence' : 'details')}?from=review`}>{/bark|howl|noise|ingay|tahol/i.test(draft.description) ? 'Add a video' : 'Add a photo or video'}</LinkButton></span></Callout>
+      ) : null}
+
       <dl className="rs-summary">
         <Item label="Type" to={stepPath('details')}>{cat.label}</Item>
         {lost ? (
@@ -131,6 +142,11 @@ function ReviewForm({ draft, live, onSending }: { draft: Draft; /** false once t
             <Item label="Details" to={stepPath('details')}>{draft.description.trim() || 'Not added'}</Item>
             <Item label="When" to={stepPath('details')}>{fmtDateTime(fromLocalInput(draft.observedAt))}</Item>
             {extra && draft.extra ? <Item label={extra.label} to={stepPath('details')}>{draft.extra}</Item> : null}
+            {draft.category === 'nuisance' && draft.looks?.trim() ? <Item label="Looked like" to={stepPath('details')}>{draft.looks.trim()}</Item> : null}
+            {draft.category === 'nuisance' && (draft.suspectName?.trim() || draft.suspectAddress?.trim() || draft.suspectDetails?.trim()) ? (
+              <Item label="Whose animal" to={stepPath('details')}>{[draft.suspectName, draft.suspectAddress, draft.suspectDetails].map((x) => x?.trim()).filter(Boolean).join(' · ')}
+                <span className="rs-meta" style={{ display: 'block' }}>Only your Subdivision Leader sees this.</span></Item>
+            ) : null}
           </>
         )}
         <Item label="Where" to={stepPath('location')}>{draft.location ? <>{draft.location.label}{draft.location.lat === null ? <span className="rs-meta"> · described in words</span> : draft.location.label === PINNED_LABEL ? null : <span className="rs-meta"> · pinned on the map</span>}</> : 'Not chosen'}</Item>

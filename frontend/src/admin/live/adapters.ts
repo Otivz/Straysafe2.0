@@ -595,10 +595,12 @@ export function notificationFromApi(n: ApiNotification): AdminNotification {
 
 // ------------------------------------------------------------------------------------------------------- settings
 export function policyFromApi(p: ApiCaseSettings['policies'][number]): Policy {
-  return { id: p.id, title: p.title, reference: p.reference, summary: p.summary, appliesTo: p.applies_to, observationDays: p.observation_days, status: p.status };
+  return { id: p.id, title: p.title, reference: p.reference, summary: p.summary, appliesTo: p.applies_to, observationDays: p.observation_days, status: p.status,
+    fineAmount: p.fine_amount ?? null, countWindowDays: p.count_window_days ?? null };
 }
 export function policyToApi(p: Policy): ApiCaseSettings['policies'][number] {
-  return { id: p.id, title: p.title, reference: p.reference, summary: p.summary, applies_to: p.appliesTo, observation_days: p.observationDays, status: p.status };
+  return { id: p.id, title: p.title, reference: p.reference, summary: p.summary, applies_to: p.appliesTo, observation_days: p.observationDays, status: p.status,
+    fine_amount: p.fineAmount ?? null, count_window_days: p.countWindowDays ?? null };
 }
 
 /** The notification flags the backend keeps (per type, per channel) read as the Admin screen's toggles. See notificationFlagsFrom. */

@@ -30,6 +30,8 @@ export default function ResidentsPage() {
   };
   const count = (s: Filter) => state.residents.filter((r) => s === 'all' || r.status === s).length;
 
+  const hasMultipleStatuses = state.residents.some((r) => r.status !== 'active');
+  const showStatusFilter = hasMultipleStatuses || status !== 'all';
   const needle = q.trim().toLowerCase();
   const rows = state.residents
     .filter((r) => status === 'all' || r.status === status)
@@ -43,7 +45,17 @@ export default function ResidentsPage() {
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <SearchInput className="w-full sm:w-[340px]" aria-label="Search residents" placeholder="Search name, unit or email" value={q} onChange={(e) => set({ q: e.target.value })} />
-        <Segmented label="Account status" value={status} onChange={(s) => set({ status: s })} options={FILTERS.map((s) => ({ value: s, label: s === 'all' ? 'All' : RESIDENT_STATUS[s].label, count: count(s) }))} />
+        {showStatusFilter ? (
+          <Segmented
+            label="Account status"
+            value={status}
+            onChange={(s) => set({ status: s })}
+            options={FILTERS.filter((s) => s === 'all' || count(s) > 0 || s === status).map((s) => ({
+              value: s,
+              label: s === 'all' ? 'All' : RESIDENT_STATUS[s].label,
+            }))}
+          />
+        ) : null}
       </div>
 
       <Panel className="overflow-hidden">

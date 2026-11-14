@@ -67,6 +67,13 @@ class ReportCreate(ReportBase):
     last_seen_at: Optional[datetime] = None
     # A Lost Pet report only: the browser's id for this submission. Sending it again (a retry) returns the first report.
     client_request_id: Optional[str] = Field(None, max_length=64)
+    # When the resident saw it (every kind but a Lost Pet report, which has last_seen_at). Never in the future.
+    seen_at: Optional[datetime] = None
+    # An animal complaint only: what the complainant knows about the owner (all optional). A lead for the Subdivision Leader,
+    # never a finding; ignored on every other kind of report (docs/01-system/COMPLAINT_MANAGEMENT.md).
+    suspected_owner_name: Optional[str] = Field(None, max_length=150)
+    suspected_owner_address: Optional[str] = Field(None, max_length=255)
+    suspected_owner_details: Optional[str] = Field(None, max_length=1000)
 
 
 class ReportMediaResponse(BaseModel):
@@ -153,6 +160,13 @@ class ReportResponse(ReportBase):
     case_outcome: Optional[dict] = None
     reporter_name: Optional[str] = None
     reporter_photo: Optional[str] = None
+    # Complaint management: when it was seen, and the complainant's own suggestion of the owner (the reporter and staff only,
+    # redact_response), and whether the Subdivision Leader verified the complaint (the reporter's "Verified" line)
+    seen_at: Optional[datetime] = None
+    suspected_owner_name: Optional[str] = None
+    suspected_owner_address: Optional[str] = None
+    suspected_owner_details: Optional[str] = None
+    complaint_verified: Optional[bool] = None
     facility: Optional[Union[LandmarkResponse, dict, Any]] = None
     media: Optional[list[ReportMediaResponse]] = []
     history: Optional[list[StatusHistoryResponse]] = []

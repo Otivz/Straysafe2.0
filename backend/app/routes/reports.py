@@ -2252,6 +2252,15 @@ def create_report(
         if not case_policy.category_enabled(case_policy.load_settings(db, report_data["subdivision_id"]), chosen_family):
             raise HTTPException(status_code=400, detail=f"Your subdivision does not accept '{case_vocab.CATEGORY_FAMILIES[chosen_family]}' reports.")
         # A complaint about a neighbour's animal is private by default; the reporter can say otherwise
+        # Complaint management (docs/01-system/COMPLAINT_MANAGEMENT.md): when it was seen (never in the future; a Lost Pet report
+        # keeps its own last-seen time), and on an animal complaint only, what the complainant knows about the owner (a lead for the
+        # Leader, never a finding; dropped on every other kind of report)
+        from app.utils import complaint_rules
+        report_data["seen_at"] = None if chosen_family == case_vocab.LOST_PET else complaint_rules.clean_seen_at(report_data.get("seen_at"))
+        for key in complaint_rules.SUSPECT_FIELDS:
+            text = (report_data.get(key) or "").strip()
+            report_data[key] = (text or None) if chosen_family == case_vocab.NUISANCE else None
+
         if report_data.get("is_sensitive") is None:
             report_data["is_sensitive"] = bool(chosen_category and chosen_category.category_name == case_vocab.CATEGORY_FAMILIES[case_vocab.NUISANCE])
 

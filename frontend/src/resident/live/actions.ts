@@ -114,6 +114,15 @@ async function submitReport(ctx: ResidentActionContext): Promise<ResidentActionR
     // A lost report names the resident's own registered pet and says when it was last seen; the server builds what the report says
     // about the animal from the pet record, and refuses a pet that is not theirs or that already has an active lost report
     ...(pet ? { pet_id: numeric(pet.id, 'pet'), last_seen_at: toServer(draft.observedAt) } : { pet_id: null }),
+    // Complaint management: when it was seen; on an animal complaint, what it looked like and what the resident knows about the owner
+    // (a lead for the Subdivision Leader only)
+    ...(lost ? {} : { seen_at: toServer(draft.observedAt) }),
+    ...(draft.category === 'nuisance' ? {
+      animal_color: (draft.looks ?? '').trim() || null,
+      suspected_owner_name: (draft.suspectName ?? '').trim() || null,
+      suspected_owner_address: (draft.suspectAddress ?? '').trim() || null,
+      suspected_owner_details: (draft.suspectDetails ?? '').trim() || null,
+    } : {}),
   });
 
   // The report is filed. Its photos come next, and a problem with them never undoes it. A missing pet's notice is published by the server in

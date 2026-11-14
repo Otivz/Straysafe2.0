@@ -19,6 +19,7 @@ from app.models.case_records import CaseFollowUp, CaseContactLog, CaseLink, Owne
 from app.models.lost_found_match import LostFoundMatch  # noqa: F401  (possible lost/found matches)
 from app.models.case_alert import CaseAlert, CaseAlertSend  # noqa: F401  (lost & found notification alerts; created by a SQL migration, not at start-up)
 from app.models.case_messaging import CaseMessage, CaseMessageMember, CaseMessageThread  # noqa: F401  (Leader-to-resident messages and the lost/found bridge)
+from app.models.complaint import ComplaintFinding, ComplaintOffense, ComplaintRespondent, EnforcementStep, EnforcementStepEvent  # noqa: F401  (complaint management; created by a SQL migration, not at start-up)
 from app.models.chat import ChatThread, ChatMessage
 from app.models.notification import Notification
 from app.models.notification_preference import UserNotificationPreference

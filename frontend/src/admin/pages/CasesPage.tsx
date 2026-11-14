@@ -5,9 +5,9 @@ import { LinkButton, Button } from '../components/Button';
 import { CaseStatusBadge, ClosureOutcome, PriorityMark } from '../components/Badge';
 import { Segmented, Select, SearchInput } from '../components/form';
 import { EmptyState, PageHeader, Panel } from '../components/layout';
-import { ANIMAL_TYPES, CATEGORIES, CATEGORY_IDS, PRIORITIES, PRIORITY_IDS } from '../data/constants';
+import { ANIMAL_TYPES, CATEGORIES, CATEGORY_IDS, PRIORITY_IDS } from '../data/constants';
 import { useAdminData } from '../data/context';
-import { DEFAULT_FILTERS, filterCases, statusCounts, type CaseFilters, type StatusFilter } from '../data/selectors';
+import { DEFAULT_FILTERS, filterCases, type CaseFilters, type StatusFilter } from '../data/selectors';
 import { ago, fmtDate, plural } from '../../preview/lib/format';
 import { usePageTitle } from '../lib/hooks';
 import { useNow } from '../../preview/lib/hooks';
@@ -47,48 +47,65 @@ export default function CasesPage() {
   };
   const setPage = (p: number) => { const next = new URLSearchParams(params); if (p <= 1) next.delete('page'); else next.set('page', String(p)); setParams(next, { replace: true }); };
 
-  const counts = statusCounts(state.cases);
   const results = filterCases(state.cases, filters);
   const pages = Math.max(1, Math.ceil(results.length / PAGE_SIZE));
   const current = Math.min(page, pages);
   const rows = results.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
-  const filtered = filters.q !== '' || filters.status !== 'all' || filters.category !== 'all' || filters.priority !== 'all';
+
+  const currentTab = filters.status === 'closed' ? 'closed' : filters.status === 'all' ? 'all' : 'active';
+  const hasActiveFilters = filters.q !== '' || filters.category !== 'all' || filters.priority !== 'all' || (filters.status !== 'all' && filters.status !== 'open');
   const clear = () => setParams(new URLSearchParams(), { replace: true });
 
   return (
     <div>
       <PageHeader title="Cases" description="Every animal concern reported in the subdivision. Open a case to assess it, coordinate action, monitor and document the outcome." />
 
-      <div className="mb-4 flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <SearchInput className="w-full sm:w-[340px]" placeholder="Search reference, concern, location" aria-label="Search cases" value={filters.q} onChange={(e) => update({ q: e.target.value })} />
-          <Select className="w-auto min-w-[200px] sa-input--sm" aria-label="Category" value={filters.category} onChange={(e) => update({ category: e.target.value as CaseFilters['category'] })}>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <Segmented
+          label="Case status"
+          value={currentTab}
+          onChange={(tab) => {
+            if (tab === 'active') update({ status: 'open' });
+            else if (tab === 'closed') update({ status: 'closed' });
+            else update({ status: 'all' });
+          }}
+          options={[
+            { value: 'active', label: 'Active' },
+            { value: 'closed', label: 'Closed' },
+            { value: 'all', label: 'All' },
+          ]}
+        />
+
+        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+          <SearchInput
+            className="w-full sm:w-[260px]"
+            placeholder="Search cases..."
+            aria-label="Search cases"
+            value={filters.q}
+            onChange={(e) => update({ q: e.target.value })}
+          />
+          <Select
+            className="w-auto min-w-[150px] sa-input--sm"
+            aria-label="Category"
+            value={filters.category}
+            onChange={(e) => update({ category: e.target.value as CaseFilters['category'] })}
+          >
             <option value="all">All categories</option>
             {CATEGORY_IDS.map((id) => <option key={id} value={id}>{CATEGORIES[id].label}</option>)}
           </Select>
-          <Select className="w-auto min-w-[150px] sa-input--sm" aria-label="Priority" value={filters.priority} onChange={(e) => update({ priority: e.target.value as CaseFilters['priority'] })}>
-            <option value="all">All priorities</option>
-            {PRIORITY_IDS.map((id) => <option key={id} value={id}>{PRIORITIES[id].label}</option>)}
+          <Select
+            className="w-auto min-w-[150px] sa-input--sm"
+            aria-label="Sort by"
+            value={filters.sort}
+            onChange={(e) => update({ sort: e.target.value as CaseFilters['sort'] })}
+          >
+            {(Object.keys(SORT_LABEL) as CaseFilters['sort'][]).map((k) => (
+              <option key={k} value={k}>{SORT_LABEL[k]}</option>
+            ))}
           </Select>
-          <Select className="w-auto min-w-[170px] sa-input--sm sm:ml-auto" aria-label="Sort by" value={filters.sort} onChange={(e) => update({ sort: e.target.value as CaseFilters['sort'] })}>
-            {(Object.keys(SORT_LABEL) as CaseFilters['sort'][]).map((k) => <option key={k} value={k}>{SORT_LABEL[k]}</option>)}
-          </Select>
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Segmented
-            label="Status"
-            value={filters.status}
-            onChange={(status) => update({ status })}
-            options={[
-              { value: 'all', label: 'All', count: counts.all },
-              { value: 'open', label: 'Open', count: counts.open },
-              { value: 'reported', label: 'Reported', count: counts.reported },
-              { value: 'under_review', label: 'Under review', count: counts.under_review },
-              { value: 'in_progress', label: 'In progress', count: counts.in_progress },
-              { value: 'closed', label: 'Closed', count: counts.closed },
-            ]}
-          />
-          {filtered ? <Button variant="ghost" size="sm" onClick={clear}>Clear filters</Button> : null}
+          {hasActiveFilters ? (
+            <Button variant="ghost" size="sm" onClick={clear}>Clear</Button>
+          ) : null}
         </div>
       </div>
 

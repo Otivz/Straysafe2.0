@@ -121,6 +121,21 @@ function DetailsForm({ draft }: { draft: Draft }) {
             </Field>
           ) : null}
 
+          {draft.category === 'nuisance' ? (
+            <>
+              <Field label="What did it look like?" optional hint="Colour, collar or markings: anything that helps recognise it. It helps find the owner even if you don’t know who it is.">
+                <Input value={draft.looks ?? ''} maxLength={200} onChange={(e) => patch({ looks: e.target.value })} placeholder="e.g. Small, white, red collar" />
+              </Field>
+              <details className="rs-details" open={draft.suspectName || draft.suspectAddress || draft.suspectDetails ? true : undefined}>
+                <summary>Do you know whose animal it is?<span className="rs-opt"> optional</span></summary>
+                <p className="rs-hint">If you know, it helps your Subdivision Leader look into it. Only they see it. Nobody is penalised because of what you write here: the Leader checks first.</p>
+                <Field label="Name" optional><Input value={draft.suspectName ?? ''} maxLength={150} onChange={(e) => patch({ suspectName: e.target.value })} /></Field>
+                <Field label="House or general address" optional><Input value={draft.suspectAddress ?? ''} maxLength={255} onChange={(e) => patch({ suspectAddress: e.target.value })} /></Field>
+                <Field label="Anything else that helps" optional><Textarea rows={2} value={draft.suspectDetails ?? ''} maxLength={1000} onChange={(e) => patch({ suspectDetails: e.target.value })} /></Field>
+              </details>
+            </>
+          ) : null}
+
           {kind !== 'incident' ? (
             <FieldGroup label="Photo (optional)" hint="A clear photo helps neighbours recognise the animal. Never go near an animal just to take one.">
               <MediaPicker value={draft.media} onChange={(media) => patch({ media })} accept="photo" max={3} />

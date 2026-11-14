@@ -126,9 +126,15 @@ export function reportFromApi(r: ApiResidentReport, ctx: ResidentLookup, extra: 
   return {
     id: ctx.refOf(r.report_id), kind, category: family, status: r.case_status ?? 'reported', title, description, animalType, ...(petName ? { petName } : {}), petId: r.pet_id === null ? null : String(r.pet_id),
     location: { label: r.landmark?.trim() || PINNED_LABEL, lat: hasPin ? (r.latitude as number) : null, lng: hasPin ? (r.longitude as number) : null, manual: !hasPin },
-    observedAt: fromServer(alert?.last_seen.at) || submittedAt, submittedAt, updatedAt: updates[0]?.at || submittedAt,
+    observedAt: fromServer(alert?.last_seen.at) || fromServer(r.seen_at) || submittedAt, submittedAt, updatedAt: updates[0]?.at || submittedAt,
     media: mediaFromApi(r.media ?? []), visibility, noticeId: alert?.status === 'active' ? noticeId(alert.alert_id) : null,
     updates, outcome, ...(splitExtra(r.condition) ? { extra: splitExtra(r.condition) } : {}),
+    ...(family === 'nuisance' ? {
+      ...(r.animal_color?.trim() ? { looks: r.animal_color.trim() } : {}),
+      suspect: r.suspected_owner_name || r.suspected_owner_address || r.suspected_owner_details
+        ? { name: r.suspected_owner_name ?? null, address: r.suspected_owner_address ?? null, details: r.suspected_owner_details ?? null } : null,
+      complaintVerified: r.complaint_verified === true,
+    } : {}),
   };
 }
 

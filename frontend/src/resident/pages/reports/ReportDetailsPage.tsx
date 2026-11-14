@@ -95,6 +95,10 @@ export default function ReportDetailsPage() {
       </section>
       )}
 
+      {report.complaintVerified && report.status !== 'closed' ? (
+        <Callout tone="sage" title="Verified.">Your Subdivision Leader checked your complaint and is acting on it under the subdivision’s rules. What happens with the other household stays between them and the subdivision.</Callout>
+      ) : null}
+
       {report.outcome ? (
         <Callout tone={report.outcome.resolved ? 'sage' : 'info'} title={`${report.outcome.label}.`}>
           {report.outcome.summary}
@@ -119,6 +123,8 @@ export default function ReportDetailsPage() {
           <div><dt>Seen</dt><dd>{fmtDateTime(report.observedAt)}</dd></div>
           <div><dt>Where</dt><dd>{report.location.label}</dd></div>
           {extra && report.extra ? <div><dt>{extra.label}</dt><dd>{report.extra}</dd></div> : null}
+          {report.looks ? <div><dt>Looked like</dt><dd>{report.looks}</dd></div> : null}
+          {report.suspect ? <div><dt>Whose animal (what you told us)</dt><dd>{[report.suspect.name, report.suspect.address, report.suspect.details].filter(Boolean).join(' · ')}<span className="rs-meta" style={{ display: 'block' }}>Shared only with your Subdivision Leader.</span></dd></div> : null}
           <div><dt>What you told us</dt><dd>{report.description}</dd></div>
         </dl>
         {pin ? (

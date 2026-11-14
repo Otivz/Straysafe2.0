@@ -317,7 +317,7 @@ test('settings: categories, policies and publication come from the case settings
   const back = caseSettingsTo({ ...s, subdivision: { ...s.subdivision, officePhone: '  02 8000 0000 ' } }, cs);
   assert.deepEqual(back.followups, cs.followups, 'the follow-up bounds the screen does not edit are kept');
   assert.equal(back.office.phone, '02 8000 0000');
-  assert.deepEqual(back.policies, cs.policies);
+  assert.deepEqual(back.policies, cs.policies.map((x) => ({ ...x, fine_amount: null, count_window_days: null })), 'the complaint fields a policy does not set round-trip as empty');
   assert.deepEqual(back.publication, cs.publication);
 });
 

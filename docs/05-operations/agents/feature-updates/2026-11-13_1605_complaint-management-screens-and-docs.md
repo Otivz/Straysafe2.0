@@ -1,0 +1,25 @@
+# Complaint management: Leader and Resident screens, tests and documentation
+
+- **Date:** 2026-11-13 16:05 (UTC)
+- **AI tool:** Claude Code (Claude Opus 5.5)
+- **Files changed:** `frontend/src/admin/complaints/api.ts`, `frontend/src/admin/complaints/model.ts`, `frontend/src/admin/complaints/letter.ts`, `frontend/src/admin/pages/complaints/ComplaintsPage.tsx`, `frontend/src/admin/pages/complaints/ComplaintPage.tsx`, `frontend/src/admin/pages/complaints/PersonPage.tsx`, `frontend/src/admin/pages/complaints/ComplaintDialogs.tsx`, `frontend/src/admin/pages/case/CaseDetailPage.tsx`, `frontend/src/admin/AdminApp.tsx`, `frontend/src/admin/layout/Sidebar.tsx`, `frontend/src/admin/styles/pages.css`, `frontend/src/admin/dialogs/PolicyDialog.tsx`, `frontend/src/admin/data/types.ts`, `frontend/src/admin/live/api.ts`, `frontend/src/admin/live/adapters.ts`, `frontend/src/resident/data/types.ts`, `frontend/src/resident/live/api.ts`, `frontend/src/resident/live/adapters.ts`, `frontend/src/resident/live/actions.ts`, `frontend/src/resident/pages/report/DetailsPage.tsx`, `frontend/src/resident/pages/report/ReviewPage.tsx`, `frontend/src/resident/pages/reports/ReportDetailsPage.tsx`, `frontend/tests/adminLiveAdapters.test.mjs`, `backend/app/services/complaints.py`, `backend/app/services/case_lifecycle.py`, `backend/tests/test_complaint_management.py`, `backend/tests/e2e_server.py`, `docs/01-system/COMPLAINT_MANAGEMENT.md`, `docs/01-system/overview.md`, `docs/01-system/OWNER_WARNING_RULES.md`, `docs/01-system/DATABASE_SCHEMA.md`, `docs/05-operations/database/DATABASE_FILES_AND_MIGRATIONS.md`, `docs/03-development/implementation-reports/COMPLAINT_MANAGEMENT_HANDOFF_2026-11-13.md`, `docs/README.md`
+- **Authorization:** The developer's "for now you may proceed with the implementation" (2026-11-13) of the reviewed complaint management proposal and mockup, including the decisions made while reviewing it (real-world order, owner leads with "Not this one", corrections, optional photos with a reminder, one free-text "What did it look like?" field without size choices).
+- **Type:** Feature
+
+## Intent
+
+Give the Subdivision Leader the approved Complaints workspace and complaint page on the existing case, and give the complainant the optional owner suggestion, the appearance field, the photo reminder and the "Verified" line, as specified by the approved mockup.
+
+## Key changes
+
+- **Leader:** Complaints in the sidebar (needs across complaints, Open / All / People responsible); animal complaints open a calm one-way page (what was reported, the complainant's suggestion as "Reported / Suspected Owner — Unverified", Needs you, Findings with "Verified Responsible Person — Confirmed by Leader", the person's history under the rule, what the rule asks with each step's trail, the activity that writes itself); dialogs for verifying, finding or correcting the person (owner leads with "It's …" / "Not this one", "Not identified yet"), confirming the offense, same occurrence, letters (preview and print; the complainant is never named), delivery, summons, fine and Barangay meeting; a person's history page; optional fine amount and counting window on rules.
+- **Resident:** on "Animal complaint", an optional "What did it look like?" (stored as the animal's colour) and a folded "Do you know whose animal it is?" (name, house or general address, other details), shown on Review with who sees it; a reminder at the top of "Review and submit" when nothing is attached (a short video for barking, a stronger reminder for a found animal, "No photo needed" for a dangerous or hurt animal), never blocking; the complainant's report shows "Verified" and their own suggestion. Every report now sends when it was seen.
+- **Server details found while testing:** closing a report closes every report linked to it, so a same-occurrence duplicate is closed first and linked after; when the earlier complaint closes, the duplicate's reporter is told the outcome.
+- **Not changed:** the older warning endpoint still accepts animal complaints (for older records and the observation flows); the Leader app no longer offers it on them.
+
+## Validation evidence
+
+- `backend/tests/test_complaint_management.py` 67/67; re-run and passing: `test_case_alerts` 62, `test_case_closure` 12, `test_report_privacy` 8, `test_lost_pet_lifecycle` 146; `test_report_visibility` 80/81 (a retired Barangay account refused, unrelated); `test_case_lifecycle` and `test_case_privacy_scope` failed before this work.
+- Frontend: `npx tsc -b` and eslint clean; `node --test tests/*.test.mjs` 192/192 (from PowerShell).
+- The real Leader screens were photographed on the isolated stack (`frontend/tests/_liveHarness.mjs`, `backend/tests/e2e_server.py`): workspace, a complaint at its 1st offense with the letter issued, a new complaint with both needs, the leads dialog finding the suggested owner, a person's history. Polished afterwards (need details, activity lines, a broken photo, an empty description).
+- The migration was not applied to any database by this change.

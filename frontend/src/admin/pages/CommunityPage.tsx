@@ -35,7 +35,10 @@ export default function CommunityPage() {
   const status = (STATUS_ORDER.includes(params.get('status') as StatusFilter) ? params.get('status') : 'published') as StatusFilter;
   const set = (patch: Record<string, string>) => {
     const next = new URLSearchParams(params);
-    for (const [k, v] of Object.entries(patch)) { if (v === '' || v === 'all' || (k === 'status' && v === 'published')) next.delete(k); else next.set(k, v); }
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === '' || (k === 'status' ? v === 'published' : v === 'all')) next.delete(k);
+      else next.set(k, v);
+    }
     setParams(next, { replace: true });
   };
 
@@ -85,7 +88,7 @@ export default function CommunityPage() {
           {(Object.keys(NOTICE_TYPES) as NoticeType[]).map((t) => <option key={t} value={t}>{NOTICE_TYPES[t].plural}</option>)}
         </Select>
         <span className="sm:ml-auto">
-          <Segmented label="Status" value={status} onChange={(s) => set({ status: s })} options={STATUS_ORDER.map((s) => ({ value: s, label: s === 'all' ? 'All' : NOTICE_STATUS[s].label + (s === 'draft' ? 's' : ''), count: byStatus(s).length }))} />
+          <Segmented label="Status" value={status} onChange={(s) => set({ status: s })} options={STATUS_ORDER.map((s) => ({ value: s, label: s === 'all' ? 'All' : NOTICE_STATUS[s].label + (s === 'draft' ? 's' : '') }))} />
         </span>
       </div>
 

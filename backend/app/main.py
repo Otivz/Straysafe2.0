@@ -36,6 +36,7 @@ from app.routes import ai_jobs as ai_jobs_routes
 from app.routes import manual_matching as manual_matching_routes  # also registers manual_match_decisions for create_all
 from app.routes import lost_found as lost_found_routes
 from app.routes import case_alerts as case_alert_routes
+from app.routes import complaints as complaint_routes
 from app.routes import case_messages as case_message_routes
 from app.routes import pet_match_confirmations as pet_match_confirmation_routes  # owner-first pet matching (owner side)
 from app.routes import leader_identity as leader_identity_routes  # Phase 6 leader identity verification
@@ -1393,6 +1394,9 @@ _case_alignment = run_case_alignment(engine, strict=True)
 # check: the backend does not start until the migration is applied, and says which file to run.
 from app.db_migrations.lost_found_alerts import require as require_lost_found_alert_schema  # noqa: E402
 require_lost_found_alert_schema(engine)
+# Complaint management (2026-11-13): applied by backend/migrations/2026-11-13_complaint_management.sql, never here. Same read-only check.
+from app.db_migrations.complaint_management import require as require_complaint_schema  # noqa: E402
+require_complaint_schema(engine)
 
 async def backfill_ai_suggestions_background():
     """Run in background after startup to backfill missing AI suggestions without blocking HTTP requests."""
@@ -1581,6 +1585,7 @@ app.include_router(barangay_referral_routes.router)
 app.include_router(case_routes.router)
 app.include_router(lost_found_routes.router)
 app.include_router(case_alert_routes.router)
+app.include_router(complaint_routes.router)
 app.include_router(case_message_routes.router)
 app.include_router(ownership_claim_routes.router)
 app.include_router(landmarks.router)

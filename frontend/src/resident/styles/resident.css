@@ -526,7 +526,7 @@
 
 /*
  * Outside the layer on purpose: leaflet.css is not layered, so only an unlayered rule can override it.
- * The zoom buttons are 44px so they are comfortable to tap.
+ * In compact / minimized state, zoom buttons are 28px for a neat, proportional appearance.
  */
-.rs-map.leaflet-container .leaflet-bar a { width: 44px; height: 44px; font-size: 22px; line-height: 44px; }
+.rs-map.leaflet-container .leaflet-bar a { width: 28px; height: 28px; font-size: 16px; line-height: 28px; }
 .rs-map.leaflet-container .leaflet-control-attribution { font-size: 11px; }

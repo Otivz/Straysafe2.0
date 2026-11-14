@@ -338,6 +338,13 @@ def close_case(db: Session, report: Report, actor: User, data: CloseIn, ip: Opti
           ip=ip, user_agent=user_agent)
     _notify_reporter(db, report, actor, f"Report #{report.report_id} closed",
                      f"Your report #{report.report_id} was closed by your Subdivision Admin. Outcome: {label}.")
+    # Complaint management: a resident whose complaint was linked to this one as the same occurrence hears the outcome too
+    for link in db.query(CaseLink).filter(((CaseLink.report_id == report.report_id) | (CaseLink.related_report_id == report.report_id)),
+                                          CaseLink.link_type == "same_incident", CaseLink.unlinked_at.is_(None)).all():
+        other = db.get(Report, link.related_report_id if link.report_id == report.report_id else link.report_id)
+        if other is not None and other.closure_disposition == "duplicate_report" and other.user_id and other.user_id != report.user_id:
+            db.add(Notification(user_id=other.user_id, title=f"Complaint #{other.report_id}: outcome", type="status_update", related_id=other.report_id,
+                                message=f"The complaint about the same occurrence as your complaint #{other.report_id} was closed. Outcome: {label}."))
     return {"disposition": data.disposition, "outcome": group, "label": label, "followups_ended": ended,
             "open_items": left, "post_closure_check_at": scheduled.due_at if scheduled else None}
 

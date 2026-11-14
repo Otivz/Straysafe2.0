@@ -231,6 +231,11 @@ class PolicyIn(BaseModel):
     # None: the policy defines no observation period, and none is assumed
     observation_days: Optional[int] = Field(None, ge=1, le=365)
     status: Literal["confirmed", "pending_confirmation"] = "pending_confirmation"
+    # Complaint management (docs/01-system/COMPLAINT_MANAGEMENT.md). Both are the subdivision's decision and never assumed:
+    # the fine for a 3rd offense under this rule (None: no fine can be imposed under it), and how many days an offense keeps
+    # counting towards the next one (None: it never stops counting).
+    fine_amount: Optional[float] = Field(None, ge=0, le=1_000_000)
+    count_window_days: Optional[int] = Field(None, ge=1, le=3650)
 
 
 class FollowUpSettings(BaseModel):

@@ -99,7 +99,7 @@ export default function DashboardPage() {
                         <p className="sa-rowtitle mt-0.5"><Link to={link(c.id)}>{c.title}</Link></p>
                         {reasons.slice(0, 2).map((r) => { const Icon = REASON_ICON[r.kind] ?? Clock3; return <p key={r.kind} className="sa-reason" data-tone={r.tone}><Icon size={13} className="shrink-0" aria-hidden="true" />{r.label}</p>; })}
                       </div>
-                      <LinkButton size="sm" to={link(c.id)} aria-label={`Open ${c.id}`}>Open<ArrowRight size={14} aria-hidden="true" /></LinkButton>
+                      <LinkButton size="sm" to={link(c.id)} aria-label={`Review ${c.id}`}>Review<ArrowRight size={14} aria-hidden="true" /></LinkButton>
                     </li>
                   );
                 })}

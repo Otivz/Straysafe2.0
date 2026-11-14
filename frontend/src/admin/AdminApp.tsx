@@ -10,6 +10,8 @@ import DashboardPage from './pages/DashboardPage';
 import CasesPage from './pages/CasesPage';
 import NotFoundPage from './pages/NotFoundPage';
 import CaseDetailPage from './pages/case/CaseDetailPage';
+import ComplaintsPage from './pages/complaints/ComplaintsPage';
+import PersonPage from './pages/complaints/PersonPage';
 import CommunityPage from './pages/CommunityPage';
 import NoticeEditorPage from './pages/NoticeEditorPage';
 import PetDetailsPage from './pages/PetDetailsPage';
@@ -52,6 +54,8 @@ export default function AdminApp({ mode }: { mode: AdminMode }) {
                 <Route path="dashboard" element={<DashboardPage />} />
                 <Route path="cases" element={<CasesPage />} />
                 <Route path="cases/:caseId" element={<CaseDetailPage />} />
+                <Route path="complaints" element={<ComplaintsPage />} />
+                <Route path="complaints/people/:respondentId" element={<PersonPage />} />
                 <Route path="community" element={<CommunityPage />} />
                 <Route path="community/new" element={<NoticeEditorPage />} />
                 <Route path="community/:noticeId/edit" element={<NoticeEditorPage />} />

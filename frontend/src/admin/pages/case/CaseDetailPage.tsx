@@ -21,6 +21,7 @@ import { CaseDialogs } from './CaseDialogs';
 import type { CaseDialog } from './dialogState';
 import HistoryTab from './HistoryTab';
 import MonitoredCasePage from './MonitoredCasePage';
+import ComplaintPage from '../complaints/ComplaintPage';
 import OverviewTab from './OverviewTab';
 
 type TabKey = 'overview' | 'assessment' | 'actions' | 'history';
@@ -61,6 +62,8 @@ export default function CaseDetailPage() {
     );
   }
   if (isLostOrFound(c)) return <MonitoredCasePage c={c} detail={detail} />;
+  // An animal complaint has its own calm page: findings, the person's history under the rule, and what the rule asks (pages/complaints)
+  if (c.category === 'nuisance') return detail.status === 'ready' ? <ComplaintPage c={c} /> : <PageSkeleton />;
   const full = detail.status === 'ready';
 
   const requested = params.get('tab') as TabKey | null;

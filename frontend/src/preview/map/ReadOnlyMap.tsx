@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import L from 'leaflet';
 import { Circle, MapContainer, Marker, Polygon, TileLayer, useMap } from 'react-leaflet';
+import { Maximize, Minimize } from 'lucide-react';
 import MapAutoResize from '../../components/MapControls/MapAutoResize';
 import { GENERAL_AREA_RADIUS_M, OSM_TILES, areaOutline } from '../geo';
 import { dotIcon, pinIcon } from './icons';
@@ -29,6 +31,19 @@ function FitView({ south, west, north, east }: { south: number; west: number; no
  */
 export default function ReadOnlyMap({ pin = null, areas = [], numbered = [], height = 180, label, interactive = false }: ReadOnlyMapProps) {
   const [tilesFailed, setTilesFailed] = useState(false);
+  const [maximized, setMaximized] = useState(false);
+
+  useEffect(() => {
+    if (!maximized) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMaximized(false); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [maximized]);
 
   const bounds = useMemo(() => {
     const b = L.latLngBounds(areaOutline());
@@ -46,6 +61,15 @@ export default function ReadOnlyMap({ pin = null, areas = [], numbered = [], hei
   return (
     <div>
       <div className="pv-map" style={{ height }} role="group" aria-label={label} data-precision={exact && general ? 'mixed' : exact ? 'exact' : 'general'} data-plotted={plotted}>
+        <button
+          type="button"
+          className="pv-map-ctrl-btn"
+          onClick={() => setMaximized(true)}
+          aria-label="Maximize map"
+          title="Maximize map"
+        >
+          <Maximize size={15} aria-hidden="true" />
+        </button>
         <MapContainer
           bounds={bounds}
           boundsOptions={{ padding: PADDING, maxZoom: 17 }}
@@ -70,6 +94,48 @@ export default function ReadOnlyMap({ pin = null, areas = [], numbered = [], hei
         </MapContainer>
       </div>
       {tilesFailed ? <p className="pv-note">The map pictures couldn’t load. The outline and the marker still show, and the place is described in words above.</p> : null}
+
+      {maximized && typeof document !== 'undefined' ? createPortal(
+        <div className="pv-map-fullscreen" role="dialog" aria-modal="true" aria-label={`Expanded map: ${label}`}>
+          <div className="pv-map-fullscreen__header">
+            <div className="pv-map-fullscreen__title">
+              <span>{label}</span>
+            </div>
+            <button
+              type="button"
+              className="pv-map-fullscreen__close"
+              onClick={() => setMaximized(false)}
+              aria-label="Close fullscreen map"
+              title="Close fullscreen map (Esc)"
+            >
+              <Minimize size={16} aria-hidden="true" />
+              <span>Close</span>
+            </button>
+          </div>
+          <div className="pv-map-fullscreen__body">
+            <MapContainer
+              bounds={bounds}
+              boundsOptions={{ padding: [30, 30], maxZoom: 18 }}
+              style={{ height: '100%', width: '100%' }}
+              zoomControl={true}
+              dragging={true}
+              touchZoom={true}
+              doubleClickZoom={true}
+              scrollWheelZoom={true}
+            >
+              <MapAutoResize />
+              <FitView south={bounds.getSouth()} west={bounds.getWest()} north={bounds.getNorth()} east={bounds.getEast()} />
+              <TileLayer {...OSM_TILES} />
+              <Polygon positions={areaOutline()} pathOptions={OUTLINE_STYLE} />
+              {areas.map((a) => <Circle key={`fs-area-${a.lat}-${a.lng}`} center={[a.lat, a.lng]} radius={a.radiusM} pathOptions={AREA_STYLE} />)}
+              {numbered.filter((p) => p.general).map((p) => <Circle key={`fs-around-${p.n}`} center={[p.lat, p.lng]} radius={GENERAL_AREA_RADIUS_M} pathOptions={AREA_STYLE} />)}
+              {pin ? <Marker position={[pin.lat, pin.lng]} icon={pinIcon} interactive={false} keyboard={false} /> : null}
+              {numbered.map((p) => <Marker key={`fs-n-${p.n}`} position={[p.lat, p.lng]} icon={dotIcon(p.n, Boolean(p.latest))} interactive={false} keyboard={false} />)}
+            </MapContainer>
+          </div>
+        </div>,
+        document.body
+      ) : null}
     </div>
   );
 }

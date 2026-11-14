@@ -42,7 +42,9 @@ export default function PetsPage() {
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <SearchInput className="w-full sm:w-[340px]" aria-label="Search the registry" placeholder="Search pet, breed or owner" value={q} onChange={(e) => set({ q: e.target.value })} />
-        <Segmented label="Animal type" value={type} onChange={(t) => set({ type: t })} options={[{ value: 'all', label: 'All', count: state.pets.length }, ...typesPresent.map((t) => ({ value: t, label: ANIMAL_TYPES[t], count: state.pets.filter((p) => p.type === t).length }))]} />
+        {typesPresent.length > 1 || type !== 'all' ? (
+          <Segmented label="Animal type" value={type} onChange={(t) => set({ type: t })} options={[{ value: 'all', label: 'All' }, ...typesPresent.map((t) => ({ value: t, label: ANIMAL_TYPES[t] }))]} />
+        ) : null}
       </div>
 
       <Panel className="overflow-hidden">

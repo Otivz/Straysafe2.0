@@ -1,5 +1,7 @@
 # Owner warnings, repeated incidents and leader identity verification
 
+> **Animal complaints now use complaint management** ([COMPLAINT_MANAGEMENT.md](COMPLAINT_MANAGEMENT.md), 2026-11-13): offenses counted per person and per rule, with letters, summons, fine and Barangay meeting. The Leader app no longer offers "Issue warning" on animal complaints; the endpoint below still accepts them for older records and the observation flows.
+
 Phase 6 of the restore plan. These rules apply to official owner warnings, repeat incidents during an owner observation, and the handling leader's identity verification. The server enforces each rule; the screens only show what is allowed.
 
 ## Who may issue a warning

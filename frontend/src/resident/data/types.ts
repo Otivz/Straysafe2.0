@@ -59,6 +59,11 @@ export interface Report {
   updates: ReportUpdate[];
   outcome: { label: string; summary: string; resolved: boolean; at: string } | null;
   extra?: string;
+  /** An animal complaint: what it looked like and the resident's own suggestion of the owner (theirs and the Leader's only), and whether
+   *  the Subdivision Leader verified it. */
+  looks?: string;
+  suspect?: { name: string | null; address: string | null; details: string | null } | null;
+  complaintVerified?: boolean;
 }
 
 export interface Sighting {
@@ -238,6 +243,12 @@ export interface Draft {
   location: GeoPoint | null;
   media: Media[];
   extra: string;
+  /** An animal complaint only (optional): what the animal looked like, in the resident's words, and what they know about the owner.
+   *  A lead for the Subdivision Leader, never an accusation; only the Leader sees it (docs/01-system/COMPLAINT_MANAGEMENT.md). */
+  looks?: string;
+  suspectName?: string;
+  suspectAddress?: string;
+  suspectDetails?: string;
 }
 
 export interface ResidentState {

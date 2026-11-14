@@ -47,6 +47,11 @@ export interface ApiResidentReport {
   pet_id: number | null;
   pet_name: string | null;
   user_id: number | null;
+  seen_at?: string | null;
+  suspected_owner_name?: string | null;
+  suspected_owner_address?: string | null;
+  suspected_owner_details?: string | null;
+  complaint_verified?: boolean | null;
 }
 export interface ApiChatMessage { message_id: number; sender_id: number; sender_name: string | null; sender_role: string | null; message_text: string; media_url: string | null; is_system: boolean; sent_at: string | null }
 

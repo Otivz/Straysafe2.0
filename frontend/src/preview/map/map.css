@@ -49,8 +49,110 @@
 
 /*
  * Outside the layer on purpose: leaflet.css is not layered, so only an unlayered rule can override it.
- * The zoom buttons are 44px so they are comfortable to tap.
+ * In compact / minimized state, zoom buttons are 28px for a neat, proportional appearance.
  */
 .pv-map .leaflet-container { background: var(--sa-sand); font-family: inherit; }
-.pv-map .leaflet-bar a { width: 44px; height: 44px; font-size: 22px; line-height: 44px; }
+.pv-map .leaflet-bar a { width: 28px; height: 28px; font-size: 16px; line-height: 28px; }
 .pv-map .leaflet-control-attribution { font-size: 11px; }
+
+/* Maximize floating control button on maps */
+.pv-map-ctrl-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid var(--sa-line, #d6d3d1);
+  background: var(--sa-card, #ffffff);
+  color: var(--sa-ink, #1c1917);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.pv-map-ctrl-btn:hover {
+  background: var(--sa-hover, #f5f4f0);
+}
+.pv-map-ctrl-btn:active {
+  background: color-mix(in srgb, var(--sa-hover) 80%, black);
+}
+
+/* Fullscreen maximized map overlay */
+.pv-map-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  background: var(--sa-sand, #fbfbf9);
+  animation: pv-map-fade-in 0.18s ease-out;
+}
+.pv-map-fullscreen__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 52px;
+  padding: 0 20px;
+  background: var(--sa-card, #ffffff);
+  border-bottom: 1px solid var(--sa-line, #e7e5e4);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.04);
+  z-index: 10;
+  flex-shrink: 0;
+}
+.pv-map-fullscreen__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sa-ink, #1c1917);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pv-map-fullscreen__close {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--sa-radius, 8px);
+  border: 1px solid var(--sa-line, #e7e5e4);
+  background: var(--sa-card, #ffffff);
+  color: var(--sa-ink, #1c1917);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.pv-map-fullscreen__close:hover {
+  background: var(--sa-hover, #f5f4f0);
+  border-color: var(--sa-line-dark, #d6d3d1);
+}
+.pv-map-fullscreen__body {
+  flex: 1;
+  width: 100%;
+  height: calc(100% - 52px);
+  position: relative;
+}
+.pv-map-fullscreen .leaflet-container {
+  width: 100% !important;
+  height: 100% !important;
+  background: var(--sa-sand);
+}
+.pv-map-fullscreen .leaflet-bar a {
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  line-height: 40px;
+}
+@keyframes pv-map-fade-in {
+  from { opacity: 0; transform: scale(0.995); }
+  to { opacity: 1; transform: scale(1); }
+}

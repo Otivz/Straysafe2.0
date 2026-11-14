@@ -358,9 +358,17 @@ def redact_response(rep_data, viewer: Optional[User], access: str, report: Repor
         rep_data.visibility_reason = report.visibility_reason
         rep_data.visibility_needs_review = visibility_needs_review(report)
         rep_data.public_block_reason = public_block_reason(report)
+        rep_data.complaint_verified = _complaint_verified(report)
         return rep_data
     if access == MATCH_OWNER:
         return _match_card(rep_data)
+    # Complaint management: the complainant's suggestion of the owner is theirs and staff's only, never the pet owner's or anyone
+    # else's (docs/01-system/COMPLAINT_MANAGEMENT.md); the reporter learns that the Subdivision Leader verified it
+    if access == REPORTER:
+        rep_data.complaint_verified = _complaint_verified(report)
+    else:
+        rep_data.suspected_owner_name = rep_data.suspected_owner_address = rep_data.suspected_owner_details = None
+        rep_data.complaint_verified = None
 
     uid = viewer.user_id if viewer is not None else None
     is_reporter = access == REPORTER
@@ -482,6 +490,14 @@ RESIDENT_SAFE_FIELDS = (
     "owner_notification_events",
     "visibility", "visible_to_residents", "viewer_access", "can_view_owner_details",
 )
+
+
+def _complaint_verified(report: Report) -> Optional[bool]:
+    """On an animal complaint: whether the Subdivision Leader verified that it happened (None on any other kind of report)."""
+    from app.utils import case_vocab as V
+    from app.utils.case_state import incident_is_verified
+    from app.utils.warning_rules import report_family
+    return incident_is_verified(report) if report_family(report) == V.NUISANCE else None
 
 
 def _generalize_location(rep_data) -> None:
