@@ -13,11 +13,11 @@ StraySafe 2.0 consists of three core local services:
 2. **AI Background Worker** — Autonomous processor for YOLO authenticity checks, breed detection, and stray matching.
 3. **Vite React Frontend** (`http://localhost:5173`) — Web UI for Subdivision Leader Admin (`/`) and Resident App (`/resident-app`). Vite automatically proxies `/api/*` requests to port 8000.
 
-| Interface / Service                | Localhost URL                                    | Tunnel Target Port  | Tunnel Purpose                        |
-| ---------------------------------- | ------------------------------------------------ | ------------------- | ------------------------------------- |
-| **Subdivision Leader Admin** | `http://localhost:5173/` (Sign-in: `/login`) | **Port 5173** | Remote browser access (Chrome/Safari) |
-| **Resident Web App**         | `http://localhost:5173/resident-app`           | **Port 5173** | Remote browser access (Chrome/Safari) |
-| **Resident Android APK (Server Connectivity)** | `http://localhost:8000/` | **Port 8000** | Put whatever the tunnel gives by default. **Do not add `/resident-app` at the end.** |
+| Interface / Service                                  | Localhost URL                                    | Tunnel Target Port  | Tunnel Purpose                                                                               |
+| ---------------------------------------------------- | ------------------------------------------------ | ------------------- | -------------------------------------------------------------------------------------------- |
+| **Subdivision Leader Admin**                   | `http://localhost:5173/` (Sign-in: `/login`) | **Port 5173** | Remote browser access (Chrome/Safari)                                                        |
+| **Resident Web App**                           | `http://localhost:5173/resident-app`           | **Port 5173** | Remote browser access (Chrome/Safari)                                                        |
+| **Resident Android APK (Server Connectivity)** | `http://localhost:8000/`                       | **Port 8000** | Put whatever the tunnel gives by default. **Do not add `/resident-app` at the end.** |
 
 ---
 
@@ -89,12 +89,14 @@ Use this when you want someone to access the web application on their phone or r
    ```
 3. **Open the URLs directly in the browser:**
    - **Subdivision Leader Admin (Default Base URL):**
+
      ```text
      https://<your-web-tunnel>.trycloudflare.com/
      ```
 
      *(Sign in at `/login` $\rightarrow$ redirects to `/dashboard`)*
    - **Resident Web App:**
+
      ```text
      https://<your-web-tunnel>.trycloudflare.com/resident-app
      ```
@@ -107,23 +109,27 @@ Use this when you want someone to access the web application on their phone or r
 The compiled Android APK already bundles all frontend assets inside the app; it **only needs to communicate with the Backend API**:
 
 1. **Start the Backend Tunnel:**
+
    ```powershell
    cloudflared tunnel --url http://localhost:8000
    ```
 2. **Copy the generated URL:**
    `cloudflared` prints:
+
    ```text
    https://<your-backend-tunnel>.trycloudflare.com
    ```
 
    *Quick check:* Opening this URL in a browser returns `{"message":"Welcome to StraySafe API"}`.
 3. **Connect the Resident Android App on your phone:**
+
    - Open the **StraySafe** debug APK on your phone (connected to Mobile Data 4G/5G or any Wi-Fi).
    - Tap **Connection** in the amber header bar (or go to **Settings $\rightarrow$ Developer $\rightarrow$ Developer connection**).
    - In **Backend API address**, enter whatever default URL the tunnel gives—**do not add `/resident-app` or any route at the end**:
      ```text
      https://<your-backend-tunnel>.trycloudflare.com
      ```
+
      *(Just copy-paste the exact URL output by `cloudflared` without adding `/resident-app`; if accidentally added, it is normalized automatically).*
    - Tap **Test connection** $\rightarrow$ verifies **Reachable**.
    - Tap **Save & connect**.

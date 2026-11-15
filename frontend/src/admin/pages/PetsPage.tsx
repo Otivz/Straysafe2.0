@@ -73,7 +73,7 @@ export default function PetsPage() {
                       <tr key={p.id} onClick={() => navigate(adminPath(`/pets/${p.id}`))}>
                         <td>
                           <div className="flex items-center gap-3">
-                            <PetAvatar type={p.type} />
+                            <PetAvatar type={p.type} photoUrl={p.photoUrls?.[0]} />
                             <div className="min-w-0"><p className="sa-rowtitle"><Link to={adminPath(`/pets/${p.id}`)} onClick={(e) => e.stopPropagation()}>{p.name}</Link></p><p className="sa-meta">{ANIMAL_TYPES[p.type]} · {p.breed}</p></div>
                           </div>
                         </td>

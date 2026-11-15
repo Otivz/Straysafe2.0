@@ -48,7 +48,7 @@ export default function PetDetailsPage() {
     <div>
       <Link className="sa-back" to={adminPath('/pets')}>← Pet Registry</Link>
       <header className="mb-6 flex flex-wrap items-center gap-4">
-        <PetAvatar type={pet.type} size="lg" />
+        <PetAvatar type={pet.type} size="lg" photoUrl={pet.photoUrls?.[0]} />
         <div>
           <h1 className="sa-h1">{pet.name}</h1>
           <p className="sa-text-2 mt-0.5">{ANIMAL_TYPES[pet.type]} · {pet.breed} · registered {fmtDate(pet.registeredAt)}</p>
