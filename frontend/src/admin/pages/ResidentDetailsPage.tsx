@@ -74,7 +74,7 @@ export default function ResidentDetailsPage() {
               <ul className="m-0 flex list-none flex-col gap-3 p-0">
                 {pets.map((p) => (
                   <li key={p.id} className="flex items-center gap-3">
-                    <PetAvatar type={p.type} />
+                    <PetAvatar type={p.type} photoUrl={p.photoUrls?.[0]} />
                     <div className="min-w-0"><p className="sa-rowtitle"><Link to={adminPath(`/pets/${p.id}`)}>{p.name}</Link></p><p className="sa-meta">{ANIMAL_TYPES[p.type]} · {p.breed}</p></div>
                   </li>
                 ))}

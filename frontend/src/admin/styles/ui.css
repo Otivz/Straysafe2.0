@@ -272,6 +272,8 @@
   .sa-tl__body { margin-top: 8px; }
 
   .sa-avatar { display: inline-grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; border: 1px solid var(--sa-line); border-radius: 50%; background: var(--sa-sand); color: var(--sa-ink-2); font-size: 12px; font-weight: 600; }
+  .sa-avatar { overflow: hidden; aspect-ratio: 1 / 1; min-width: 0; min-height: 0; }
+  .sa-avatar > img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
   .sa-avatar--sm { width: 26px; height: 26px; font-size: 11px; }
   .sa-avatar--lg { width: 56px; height: 56px; font-size: 18px; }
   .sa-avatar--brand { background: var(--sa-brand-soft); border-color: var(--sa-brand-tint); color: var(--sa-brand-ink); }

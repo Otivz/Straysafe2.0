@@ -38,6 +38,9 @@ Status values: **Current** (matches the code when last checked), **Reference** (
 
 | Document | Status | Notes |
 |---|---|---|
+| [DFD guide update: remove Barangay / External Authorities entity box](05-operations/agents/feature-updates/2026-11-13_1240_dfd-remove-external-entity-barangay.md) | Current | Restrict DFD External Entities strictly to the 3 system roles (Residents, Subdivision Leaders, System Administrator) and remove Barangay wording from DFD diagrams and flows |
+| [DFD Level 0 & Level 1 Per-User Guide change record](05-operations/agents/feature-updates/2026-11-13_1219_dfd-level-0-and-1-guide.md) | Reference (superseded on external entity by 2026-11-13_1240) | Initial DFD Level 0, Level 1 per user role, 5-Module Level 1, and 59-table Data Store mapping |
+| [System demonstration and showcase guide change record](05-operations/agents/feature-updates/2026-11-13_0935_system-demo-guide.md) | Current | End-to-end live demo script, module walkthrough, 10-minute story mode, and defense Q&A playbook |
 | [Phase 4 status labels and choices](05-operations/agents/feature-updates/2026-11-06_0917_subdivision-only-phase4-statuses.md) | Current | Referral labels, legacy URL compatibility, retired choices hidden, unit and browser checks |
 | [Subdivision-only Phase 4: external Barangay wording](05-operations/agents/feature-updates/2026-11-06_0922_subdivision-only-phase4-wording.md) | Current | External referral wording, accurate case status, date-independent browser assertion, protected history checks |
 | [Subdivision-only Phase 4: three-role landing page](05-operations/agents/feature-updates/2026-11-06_0931_subdivision-only-phase4-landing.md) | Current | Three active role cards, subdivision wording and owner-confirmation regression checks |
@@ -165,6 +168,7 @@ Status values: **Current** (matches the code when last checked), **Reference** (
 | [04-testing/README.md](04-testing/README.md) | Current | Inventory (updated 2026-11-10: the frontend suites of the legacy portals were removed, 8 unit files and the live-interface browser journey remain) plus scoped map, holding, custody, pet/claim and adoption validation; full suite not re-run |
 | [04-testing/evidence/lost-found-leader-page-2026-11-12/](04-testing/evidence/lost-found-leader-page-2026-11-12/README.md) | Current | Before and after screenshots (desktop and phone, calm and busy, a found animal, a resolved report, the help panel, the comparison) of the Leader's page for a missing pet and a found animal, made on a throwaway database with synthetic data; what each one shows and what they leave out (map tiles, real photos) |
 | [02-project/DEFENSE_PLAN.md](02-project/DEFENSE_PLAN.md) | Current | Capstone defense plan: roles, countdown, outline, demo script, risks, panel questions |
+| [02-project/SYSTEM_DEMO_GUIDE.md](02-project/SYSTEM_DEMO_GUIDE.md) | Current | Complete live demo script, module-by-module walkthrough, 10-minute story mode, and defense Q&A playbook |
 | [02-project/MANUSCRIPT_CHAPTER1_CHECK_2026-10-26.md](02-project/MANUSCRIPT_CHAPTER1_CHECK_2026-10-26.md) | Current | Manuscript Chapter 1 (STRAYSAFEEE1.pdf) checked against the system, rated 8.4/10 |
 | [03-development/audits/DISPATCH_AND_PICKUP_AUDIT_2026-11-04.md](03-development/audits/DISPATCH_AND_PICKUP_AUDIT_2026-11-04.md) | Current | Audit of Status 5 (Dispatched) and Status 6 (Picked Up) workflows, live GPS broadcaster, pickup coordinates, and completed 7-item fix checklist |
 | [03-development/audits/HISTORY_REPORT_DETAILS_AUDIT_2026-11-02.md](03-development/audits/HISTORY_REPORT_DETAILS_AUDIT_2026-11-02.md) | Current | Missing details on the Subdivision, Barangay and Admin history report pages; phased fix checklist |
@@ -257,6 +261,7 @@ Status values: **Current** (matches the code when last checked), **Reference** (
 
 | Document | Status | Notes |
 |---|---|---|
+| [dfd.md](../dfd.md) | Current | Complete Data Flow Diagram (DFD) guide with Level 0 (Context Diagram), Level 1 per user role (Residents, Subdivision Leaders, System Administrator), 5-Module Level 1, and 59-table `straysafe_subdivision` Data Store mapping (`D1`–`D11`) |
 | [setup.md](../setup.md) | Needs update | Names `STRAYSAFE_DB_URL` and `Database.txt`; see [operations](05-operations/README.md) |
 | [DEPLOYMENT_GUIDE.md](../DEPLOYMENT_GUIDE.md) | Current (plan) | Phased plan: Aiven, Cloudinary, Render, Vercel; nothing deployed |
 | [tunnel.md](../tunnel.md) | Current | Cloudflare Quick Tunnel (preferred development tunnel): daily start-up commands, the new HTTPS URL on every restart, entering it in the debug APK's Connection Settings, troubleshooting |
