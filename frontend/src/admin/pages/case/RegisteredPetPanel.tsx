@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom';
-import { Lock, PawPrint } from 'lucide-react';
+import { Lock, PawPrint, Maximize2 } from 'lucide-react';
 import { adminPath } from '../../config';
 import { Badge } from '../../components/Badge';
 import { Block, Callout, Kv, Panel } from '../../components/layout';
 import { identityDisplay } from '../../data/constants';
 import type { Case, PetFacts, RegisteredPet } from '../../data/types';
 import { fmtDate, fmtDateTime } from '../../../preview/lib/format';
+import { useMediaViewer, type LightboxMediaItem } from '../../components/MediaLightbox';
 
 const NOT_GIVEN = 'Not given';
 
@@ -72,11 +73,21 @@ function LastSeen({ pet }: { pet: RegisteredPet }) {
 }
 
 function Available({ c, pet }: { c: Case; pet: RegisteredPet }) {
+  const { openMedia } = useMediaViewer();
   const now = pet.current;
   if (!now) return null;
   const registration = pet.registration;
   const owner = pet.owner;
   const identity = identityDisplay(c.identity.status, c.identity.decided);
+
+  const petMediaItems: LightboxMediaItem[] = (now.photos || []).map((url, i) => ({
+    url,
+    kind: 'photo',
+    title: `${now.name} · Photo ${i + 1}`,
+    caption: `${now.species} · ${now.breed}`,
+    source: registration?.byOwner ? 'Declared by pet owner' : 'Registered by office',
+  }));
+
   return (
     <>
       <Panel>
@@ -89,7 +100,27 @@ function Available({ c, pet }: { c: Case; pet: RegisteredPet }) {
             {registration ? <Badge tone={registration.byOwner ? 'neutral' : 'amber'}>{registration.byOwner ? 'Declared by the owner' : 'Entered by the office'}</Badge> : null}
           </div>
           {now.photos.length > 0 ? (
-            <p className="sa-petphotos mt-3">{now.photos.slice(0, 4).map((url, i) => <img key={url} src={url} alt={`Photo ${i + 1} of ${now.name}`} loading="lazy" />)}</p>
+            <p className="sa-petphotos mt-3">
+              {now.photos.slice(0, 4).map((url, i) => (
+                <button
+                  key={url}
+                  type="button"
+                  onClick={() => openMedia(petMediaItems, i)}
+                  className="group relative cursor-zoom-in overflow-hidden rounded-lg border border-[var(--sa-line)] bg-[var(--sa-sand)] focus:outline-none focus:ring-2 focus:ring-[var(--sa-brand-tint)]"
+                  aria-label={`Preview photo ${i + 1} of ${now.name}`}
+                >
+                  <img
+                    src={url}
+                    alt={`Photo ${i + 1} of ${now.name}`}
+                    loading="lazy"
+                    className="w-16 h-16 object-cover transition-transform duration-200 group-hover:scale-110"
+                  />
+                  <span className="absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-colors flex items-center justify-center">
+                    <Maximize2 size={14} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                  </span>
+                </button>
+              ))}
+            </p>
           ) : null}
           <div className="mt-3"><Kv stack rows={[['Sex', now.sex], ['Colour', now.colour], ['Markings', now.markings], ['Age', now.age]]} /></div>
           {registration ? <p className="sa-meta mt-3">Registered {registration.registeredAt ? fmtDate(registration.registeredAt) : 'on an unknown date'} by {registration.byOwner ? 'the owner' : registration.registeredBy}.</p> : null}

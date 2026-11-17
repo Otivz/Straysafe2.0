@@ -14,6 +14,7 @@ import { fmtDateTime, relative } from '../../../preview/lib/format';
 import { useNow } from '../../../preview/lib/hooks';
 import { useUnsavedGuard } from '../../lib/navGuard';
 import { useSubmit } from '../../lib/useSubmit';
+import { useMediaViewer, type LightboxMediaItem } from '../../components/MediaLightbox';
 import type { OpenCaseDialog } from './dialogState';
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -33,6 +34,7 @@ const incidentInit = (a: Assessment): IncidentForm => ({ incident: a.incident, b
 
 function IncidentSection({ c, locked, openDialog }: { c: Case; locked: boolean; openDialog: OpenCaseDialog }) {
   const { dispatch } = useAdminData();
+  const { openMedia } = useMediaViewer();
   const toast = useToast();
   const { pending, error, run } = useSubmit();
   const initial = incidentInit(c.assessment);
@@ -41,6 +43,17 @@ function IncidentSection({ c, locked, openDialog }: { c: Case; locked: boolean; 
   const set = (patch: Partial<IncidentForm>) => setF((p) => ({ ...p, ...patch }));
   const dirty = !same(f, initial);
   useUnsavedGuard(dirty);
+
+  const evidenceMediaItems: LightboxMediaItem[] = c.evidence
+    .filter((e) => Boolean(e.url))
+    .map((e) => ({
+      url: e.url!,
+      kind: e.kind,
+      title: e.label,
+      source: { reporter: 'Submitted by the reporter', admin: 'Added by an administrator', resident: 'Another resident', external: 'External authority' }[e.source],
+      date: fmtDateTime(e.capturedAt),
+      caption: e.note,
+    }));
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -66,12 +79,27 @@ function IncidentSection({ c, locked, openDialog }: { c: Case; locked: boolean; 
           <Block title="Evidence review" description={c.evidence.length ? 'Mark what you have looked at, then say whether it is enough to act on.' : 'Evidence is optional. A report can be assessed from its description alone.'}>
             {c.evidence.length > 0 ? (
               <ul className="m-0 mb-4 flex list-none flex-col gap-2 p-0">
-                {c.evidence.map((ev) => (
-                  <li key={ev.id} className="flex items-center justify-between gap-3">
-                    <Checkbox label={<>{ev.label} <span className="sa-text-3">· {fmtDateTime(ev.capturedAt).split(' · ')[0]}</span></>} checked={f.reviewed.includes(ev.id)} onChange={(e) => set({ reviewed: e.target.checked ? [...f.reviewed, ev.id] : f.reviewed.filter((x) => x !== ev.id) })} />
-                    <Button size="sm" variant="ghost" icon={Eye} type="button" onClick={() => openDialog({ kind: 'evidence', evidenceId: ev.id })}>View</Button>
-                  </li>
-                ))}
+                {c.evidence.map((ev) => {
+                  const mediaIdx = evidenceMediaItems.findIndex((m) => m.url === ev.url);
+                  return (
+                    <li key={ev.id} className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {ev.url && ev.kind === 'photo' ? (
+                          <button
+                            type="button"
+                            onClick={() => openMedia(evidenceMediaItems, mediaIdx)}
+                            className="cursor-zoom-in group relative h-8 w-8 shrink-0 overflow-hidden rounded border border-[var(--sa-line)] bg-[var(--sa-sand)] focus:outline-none focus:ring-1 focus:ring-[var(--sa-brand-tint)]"
+                            title={`Preview ${ev.label} full screen`}
+                          >
+                            <img src={ev.url} alt="" className="h-full w-full object-cover transition-transform group-hover:scale-110" />
+                          </button>
+                        ) : null}
+                        <Checkbox label={<>{ev.label} <span className="sa-text-3">· {fmtDateTime(ev.capturedAt).split(' · ')[0]}</span></>} checked={f.reviewed.includes(ev.id)} onChange={(e) => set({ reviewed: e.target.checked ? [...f.reviewed, ev.id] : f.reviewed.filter((x) => x !== ev.id) })} />
+                      </div>
+                      <Button size="sm" variant="ghost" icon={Eye} type="button" onClick={() => openDialog({ kind: 'evidence', evidenceId: ev.id })}>View</Button>
+                    </li>
+                  );
+                })}
               </ul>
             ) : null}
             <FieldGroup label="Is the evidence sufficient?">

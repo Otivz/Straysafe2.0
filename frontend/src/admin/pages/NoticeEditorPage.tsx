@@ -223,8 +223,8 @@ function NoticeEditor({ existing, from }: { existing?: Notice; from?: Case }) {
           ) : null}
         </form>
 
-        <aside className="sa-editor__aside" aria-label="Preview and privacy check">
-          <div>
+        <aside className="sa-editor__aside min-w-0 max-w-full" aria-label="Preview and privacy check">
+          <div className="min-w-0 max-w-full">
             <p className="sa-label mb-2">Publication preview</p>
             <NoticePreview type={f.type} title={f.title} description={f.description} location={f.location} media={f.media} subdivision={state.settings.subdivision.name} postedBy={existing?.source === 'resident' ? 'the owner, shared by the administration' : undefined} />
           </div>

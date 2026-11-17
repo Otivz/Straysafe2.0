@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { Maximize2 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
 import { Field, FieldGroup, OptionGroup, Textarea } from '../components/form';
@@ -11,6 +12,7 @@ import { allowedStatusMoves } from '../data/selectors';
 import type { Case, CaseStatus, Priority } from '../data/types';
 import { fmtDateTime } from '../../preview/lib/format';
 import { useSubmit } from '../lib/useSubmit';
+import { useMediaViewer, type LightboxMediaItem } from '../components/MediaLightbox';
 
 export interface CaseDialogProps { c: Case; onClose: () => void }
 
@@ -110,16 +112,65 @@ export function NoteDialog({ c, onClose }: CaseDialogProps) {
 
 /** Evidence viewer: the stored file, or a note when the item has no file to show. */
 export function EvidenceDialog({ c, evidenceId, onClose }: CaseDialogProps & { evidenceId: string }) {
+  const { openMedia } = useMediaViewer();
   const item = c.evidence.find((e) => e.id === evidenceId);
   if (!item) return null;
   const Icon = EVIDENCE_ICON[item.kind];
   const reviewed = c.assessment.evidenceReviewed.includes(item.id);
+
+  const mediaItems: LightboxMediaItem[] = c.evidence
+    .filter((e) => Boolean(e.url))
+    .map((e) => ({
+      url: e.url!,
+      kind: e.kind,
+      title: e.label,
+      source: { reporter: 'Submitted by the reporter', admin: 'Added by an administrator', resident: 'Another resident', external: 'External authority' }[e.source],
+      date: fmtDateTime(e.capturedAt),
+      caption: e.note,
+    }));
+  const currentIdx = Math.max(0, mediaItems.findIndex((m) => m.url === item.url));
+
   return (
     <Dialog title={item.label} description={`${item.kind === 'cctv' ? 'CCTV' : item.kind[0].toUpperCase() + item.kind.slice(1)} · added ${fmtDateTime(item.capturedAt)}`} onClose={onClose} footer={<Button onClick={onClose}>Close</Button>}>
-      {item.url && item.kind === 'photo' ? <img src={item.url} alt={item.label} className="w-full rounded-lg" style={{ maxHeight: '60vh', objectFit: 'contain', background: 'var(--sa-sand)' }} />
-        : item.url && item.kind === 'video' ? <video src={item.url} controls className="w-full rounded-lg" style={{ maxHeight: '60vh' }} />
-          : item.url ? <p className="sa-small"><a href={item.url} target="_blank" rel="noopener noreferrer" className="font-semibold">Open the file</a></p>
-            : <div className="sa-tile__art rounded-lg" style={{ aspectRatio: '16 / 10' }}><span className="flex flex-col items-center gap-2"><Icon size={32} aria-hidden="true" /><span className="sa-small">No preview available</span></span></div>}
+      {item.url && item.kind === 'photo' ? (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => openMedia(mediaItems, currentIdx)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openMedia(mediaItems, currentIdx); } }}
+          className="group relative cursor-zoom-in rounded-lg overflow-hidden focus:outline-none focus:ring-2 focus:ring-[var(--sa-brand-tint)] mb-3"
+          aria-label={`Preview full screen: ${item.label}`}
+        >
+          <img
+            src={item.url}
+            alt={item.label}
+            className="w-full rounded-lg transition-transform duration-200 group-hover:scale-[1.02]"
+            style={{ maxHeight: '60vh', objectFit: 'contain', background: 'var(--sa-sand)' }}
+          />
+          <span className="absolute bottom-2 right-2 rounded-full bg-black/75 px-2.5 py-1 text-xs text-white opacity-85 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 shadow-md">
+            <Maximize2 size={13} /> Click to maximize
+          </span>
+        </div>
+      ) : item.url && item.kind === 'video' ? (
+        <div className="relative mb-3">
+          <video src={item.url} controls className="w-full rounded-lg shadow-sm" style={{ maxHeight: '60vh' }} />
+          <div className="mt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={() => openMedia(mediaItems, currentIdx)}
+              className="text-xs text-[var(--sa-brand-ink)] font-semibold flex items-center gap-1 hover:underline cursor-zoom-in"
+            >
+              <Maximize2 size={13} /> Full-screen playback
+            </button>
+          </div>
+        </div>
+      ) : item.url ? (
+        <p className="sa-small mb-3"><a href={item.url} target="_blank" rel="noopener noreferrer" className="font-semibold">Open the file</a></p>
+      ) : (
+        <div className="sa-tile__art rounded-lg mb-3" style={{ aspectRatio: '16 / 10' }}>
+          <span className="flex flex-col items-center gap-2"><Icon size={32} aria-hidden="true" /><span className="sa-small">No preview available</span></span>
+        </div>
+      )}
       <Kv rows={[
         ['Source', { reporter: 'Submitted by the reporter', admin: 'Added by an administrator', resident: 'Another resident', external: 'External authority' }[item.source]],
         ['Review', reviewed ? 'Marked as reviewed in the assessment' : 'Not yet reviewed'],

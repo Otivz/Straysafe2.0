@@ -12,6 +12,7 @@ import { caseById, matchesOf, partnerOf, sameReport } from '../../../data/select
 import type { Case, LostPetSighting, PossibleMatch, Referral } from '../../../data/types';
 import AssessmentTab from '../AssessmentTab';
 import type { OpenCaseDialog } from '../dialogState';
+import { useMediaViewer, type LightboxMediaItem } from '../../../components/MediaLightbox';
 
 const reviewBadge = (s: LostPetSighting) => (s.review === 'verified' ? <Badge tone="sage">Checked</Badge> : s.review === 'dismissed' ? <Badge>Not a match</Badge> : null);
 
@@ -20,25 +21,56 @@ const reviewBadge = (s: LostPetSighting) => (s.review === 'verified' ? <Badge to
  * A possible recovery (someone says they may have the pet) that has not been answered is a task and is in "Needs you", not here.
  */
 export function Sightings({ c, now, openDialog }: { c: Case; now: Date; openDialog: OpenCaseDialog }) {
+  const { openMedia } = useMediaViewer();
   const closed = c.status === 'closed';
   const list = (c.lostPet?.sightings ?? []).filter((s) => !isLinkRecord(s) && !(s.kind === 'secured' && s.review === 'unverified' && !closed));
   if (list.length === 0) return null;
+
+  const sightingMedia: LightboxMediaItem[] = list
+    .filter((s) => Boolean(s.photoUrl))
+    .map((s) => ({
+      url: s.photoUrl!,
+      kind: 'photo',
+      title: `Sighting: ${s.place}`,
+      date: fmtDateTime(s.seenAt),
+      source: `Reported by ${s.reportedBy}`,
+      caption: s.description || undefined,
+    }));
+
   return (
     <section className="sa-mc-sec" aria-labelledby="mc-sightings">
       <div className="sa-mc-sec__head"><h2 id="mc-sightings" className="sa-mc-sec__title">Sightings <span className="sa-text-3">{list.length}</span></h2></div>
       <ul className="sa-mc-list">
-        {list.map((s) => (
-          <li key={s.id} className="sa-mc-row">
-            <div className="min-w-0">
-              <p className="flex flex-wrap items-center gap-2"><span className="sa-semibold">{s.kind === 'secured' ? 'Possible recovery' : 'Seen'}</span><span className="sa-meta">{fmtDateTime(s.seenAt)}{ago(s.seenAt, now) ? ` · ${ago(s.seenAt, now)}` : ''}</span>{reviewBadge(s)}</p>
-              <p className="sa-small mt-1 flex items-start gap-1.5"><MapPin size={14} className="mt-[3px] shrink-0" aria-hidden="true" />{s.place}</p>
-              {s.description ? <p className="mt-1.5">{s.description}</p> : null}
-              {s.kind === 'secured' && s.careNote ? <p className="sa-small mt-1.5"><span className="sa-semibold">Where it is being kept (private):</span> {s.careNote}</p> : null}
-              <p className="sa-meta mt-1.5">Reported by {s.reportedBy}{s.photoUrl ? <> · <a href={s.photoUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold"><Camera size={13} aria-hidden="true" />photo</a></> : null}</p>
-            </div>
-            {!closed && s.review === 'unverified' ? <Button size="sm" variant="ghost" onClick={() => openDialog({ kind: 'reviewSighting', sightingId: s.id })}>Mark as checked</Button> : null}
-          </li>
-        ))}
+        {list.map((s) => {
+          const mediaIdx = sightingMedia.findIndex((m) => m.url === s.photoUrl);
+          return (
+            <li key={s.id} className="sa-mc-row">
+              <div className="min-w-0">
+                <p className="flex flex-wrap items-center gap-2"><span className="sa-semibold">{s.kind === 'secured' ? 'Possible recovery' : 'Seen'}</span><span className="sa-meta">{fmtDateTime(s.seenAt)}{ago(s.seenAt, now) ? ` · ${ago(s.seenAt, now)}` : ''}</span>{reviewBadge(s)}</p>
+                <p className="sa-small mt-1 flex items-start gap-1.5"><MapPin size={14} className="mt-[3px] shrink-0" aria-hidden="true" />{s.place}</p>
+                {s.description ? <p className="mt-1.5">{s.description}</p> : null}
+                {s.kind === 'secured' && s.careNote ? <p className="sa-small mt-1.5"><span className="sa-semibold">Where it is being kept (private):</span> {s.careNote}</p> : null}
+                <p className="sa-meta mt-1.5">
+                  Reported by {s.reportedBy}
+                  {s.photoUrl ? (
+                    <>
+                      {' · '}
+                      <button
+                        type="button"
+                        onClick={() => openMedia(sightingMedia, Math.max(0, mediaIdx))}
+                        className="inline-flex items-center gap-1 font-semibold text-[var(--sa-brand-ink)] hover:underline cursor-zoom-in"
+                        aria-label={`Preview sighting photo at ${s.place}`}
+                      >
+                        <Camera size={13} aria-hidden="true" />photo
+                      </button>
+                    </>
+                  ) : null}
+                </p>
+              </div>
+              {!closed && s.review === 'unverified' ? <Button size="sm" variant="ghost" onClick={() => openDialog({ kind: 'reviewSighting', sightingId: s.id })}>Mark as checked</Button> : null}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

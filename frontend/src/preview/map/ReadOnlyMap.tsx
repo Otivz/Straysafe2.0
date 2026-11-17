@@ -134,7 +134,7 @@ export default function ReadOnlyMap({ pin = null, areas = [], numbered = [], hei
             </MapContainer>
           </div>
         </div>,
-        document.body
+        document.querySelector('dialog[open]') || document.body
       ) : null}
     </div>
   );

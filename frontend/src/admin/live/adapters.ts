@@ -226,7 +226,18 @@ export function caseFromSummary(s: ApiCaseSummary, lookup: Lookup): Case {
     sensitive: s.is_sensitive,
     reporter: reporterOf(s.reporter.user_id, s.reporter.name, lookup),
     assignedTo: s.assigned_leader_name?.trim() || 'Unassigned',
-    evidence: [],
+    evidence: (() => {
+      const urls = s.photo_urls && s.photo_urls.length > 0 ? s.photo_urls : (s.thumbnail_url ? [s.thumbnail_url] : []);
+      if (!urls.length) return [];
+      return urls.map((url, i) => ({
+        id: urls.length === 1 ? `thumb-${s.report_id}` : `thumb-${s.report_id}-${i + 1}`,
+        kind: 'photo' as const,
+        label: `Photo ${i + 1}`,
+        capturedAt: reportedAt,
+        source: 'reporter' as const,
+        url,
+      }));
+    })(),
     assessment: {
       incident: s.assessment.incident, incidentBasis: '', evidenceSufficiency: s.assessment.evidence_sufficiency, evidenceReviewed: [],
       urgency: s.assessment.urgency, urgencyNote: '', notes: '', savedAt: fromServerOrNull(s.assessment.saved_at), savedBy: null,
@@ -246,7 +257,7 @@ export function summaryFromDetail(d: ApiCaseDetail): ApiCaseSummary {
     is_sensitive: d.is_sensitive, category: d.category, animal: d.animal, location: d.location, reporter: d.reporter, assigned_leader_id: d.assigned_leader_id, assigned_leader_name: d.assigned_leader_name,
     assessment: { incident: d.assessment.incident, evidence_sufficiency: d.assessment.evidence_sufficiency, urgency: d.assessment.urgency, saved_at: d.assessment.saved_at },
     identity_status: d.identity.status, identity_decided: d.identity.decided, ownership_status: d.ownership.status, ownership_owner_id: d.ownership.owner_user_id, pet_id: d.identity.pet_id, closure: d.closure, reopened_count: d.reopened_count,
-    merged_into_report_id: null, photo_count: 0, thumbnail_url: null,
+    merged_into_report_id: null, photo_count: 0, thumbnail_url: null, photo_urls: [],
   };
 }
 

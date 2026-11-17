@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Banknote, Bell, CalendarDays, Camera, CircleCheck, ClipboardCheck, Copy, FileText, Landmark, Link2, Lock, MapPin, Megaphone, Printer, RotateCcw,
+  Banknote, Bell, CalendarDays, Camera, ChevronLeft, ChevronRight, CircleCheck, ClipboardCheck, Copy, FileText, Landmark, Link2, Lock, Map, MapPin, Maximize2, Megaphone, Printer, RotateCcw,
   ShieldCheck, UserCheck, XCircle, type LucideIcon,
 } from 'lucide-react';
 import { adminPath } from '../../config';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
+import { Dialog } from '../../components/Dialog';
 import { Callout, ErrorState, PageSkeleton } from '../../components/layout';
 import { Timeline } from '../../components/Timeline';
 import { ANIMAL_TYPES, DISPOSITIONS } from '../../data/constants';
@@ -16,6 +17,10 @@ import { useNow } from '../../../preview/lib/hooks';
 import { errorMessage } from '../../../preview/lib/errors';
 import { reportIdOf } from '../../../live/refs';
 import { complaintsApi, type ApiComplaint, type ApiStep } from '../../complaints/api';
+import { useMediaViewer } from '../../components/MediaLightbox';
+import { isValidLatLng } from '../../../preview/geo';
+import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
+import { MapLegend } from '../../../preview/map/MapLegend';
 import {
   SUSPECT_RP, STAGE_TEXT, VERIFIED_RP, activityOf, evidenceLabel, fmt, fmtDay, lc, needInputOf, needsOf, ord, peso, stepBadge, stepNext, stepTrail,
   type ComplaintDialogState, type Need, type NeedIcon,
@@ -35,6 +40,7 @@ const ICON: Record<NeedIcon | 'megaphone' | 'link' | 'x', LucideIcon> = {
  */
 export default function ComplaintPage({ c }: { c: Case }) {
   const { state } = useAdminData();
+  const { openMedia } = useMediaViewer();
   const now = useNow();
   const id = reportIdOf(c.id) ?? 0;
   const [d, setD] = useState<ApiComplaint | null>(null);
@@ -43,6 +49,8 @@ export default function ComplaintPage({ c }: { c: Case }) {
   const [leadCount, setLeadCount] = useState<number | undefined>(undefined);
   const [dialog, setDialog] = useState<ComplaintDialogState | null>(null);
   const [caseDialog, setCaseDialog] = useState<CaseDialog | null>(null);
+  const [photoIdx, setPhotoIdx] = useState(0);
+  const [showMap, setShowMap] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -69,7 +77,12 @@ export default function ComplaintPage({ c }: { c: Case }) {
     else if (n.kind === 'resp') setDialog({ kind: 'resp' });
     else setDialog({ kind: n.kind } as ComplaintDialogState);
   };
-  const photo = c.evidence.find((e) => e.kind === 'photo' && e.url);
+  const evidencePhotos = (c.evidence ?? [])
+    .filter((e) => (e.kind === 'photo' || e.url) && !e.url?.endsWith('.mp4') && !e.url?.endsWith('.webm'))
+    .map((e) => e.url!);
+  const photos = Array.from(new Set(evidencePhotos));
+  const currentPhoto = photos.length > 0 ? photos[((photoIdx % photos.length) + photos.length) % photos.length] : null;
+  const pin = isValidLatLng(c.location.lat, c.location.lng) ? { lat: c.location.lat as number, lng: c.location.lng as number } : null;
   const chip = d.same_as ? <span className="sa-mc__chip" data-tone="muted">Same occurrence</span>
     : closed ? <span className="sa-mc__chip" data-tone="muted">Closed</span>
       : d.offense?.counted && d.offense.number ? <span className="sa-mc__chip">{ord(d.offense.number)} offense</span>
@@ -101,7 +114,68 @@ export default function ComplaintPage({ c }: { c: Case }) {
       </header>
 
       <section className="sa-mc-hero" aria-label="What was reported">
-        <div className="sa-mc-hero__photo"><div className="sa-mc-photo">{photo?.url ? <img src={photo.url} alt="Photo from the complainant" onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }} /> : <span className="sa-cm-nophoto"><Camera size={22} aria-hidden="true" />No photos</span>}</div></div>
+        <div className="sa-mc-hero__photo">
+          <div className="sa-mc-photo relative overflow-hidden group">
+            {currentPhoto ? (
+              <>
+                <button
+                  type="button"
+                  className="w-full h-full cursor-zoom-in group relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-[var(--sa-brand-tint)]"
+                  onClick={() => openMedia(photos.map((u, i) => ({ url: u, kind: 'photo', title: `${c.title} · Photo ${i + 1}`, source: 'Complainant photo', caption: c.animal.description || undefined })), ((photoIdx % photos.length) + photos.length) % photos.length)}
+                  aria-label="Preview complainant photo"
+                >
+                  <img
+                    src={currentPhoto}
+                    alt="Photo from the complainant"
+                    className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                    onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
+                  />
+                  <span className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-end justify-end p-2 pointer-events-none">
+                    <span className="rounded-full bg-black/60 p-1.5 text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-md">
+                      <Maximize2 size={14} />
+                    </span>
+                  </span>
+                </button>
+
+                {photos.length >= 2 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPhotoIdx((i) => i - 1);
+                      }}
+                      className="absolute left-1.5 top-1/2 -translate-y-1/2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/65 hover:bg-black/90 text-white shadow transition-all focus:outline-none"
+                      title="Previous photo"
+                      aria-label="Previous photo"
+                    >
+                      <ChevronLeft size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPhotoIdx((i) => i + 1);
+                      }}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/65 hover:bg-black/90 text-white shadow transition-all focus:outline-none"
+                      title="Next photo"
+                      aria-label="Next photo"
+                    >
+                      <ChevronRight size={15} />
+                    </button>
+                    <span
+                      className="absolute bottom-2 left-2 rounded bg-black/75 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none shadow-sm pointer-events-none"
+                    >
+                      {(((photoIdx % photos.length) + photos.length) % photos.length) + 1} of {photos.length}
+                    </span>
+                  </>
+                )}
+              </>
+            ) : (
+              <span className="sa-cm-nophoto"><Camera size={22} aria-hidden="true" />No photos</span>
+            )}
+          </div>
+        </div>
         <div className="sa-mc-hero__head">
           <h1 className="sa-mc-hero__name" style={{ fontSize: 26, lineHeight: '32px' }}>{c.title}</h1>
           <p className="sa-mc-hero__about">{ANIMAL_TYPES[c.animal.type]}</p>
@@ -109,7 +183,22 @@ export default function ComplaintPage({ c }: { c: Case }) {
         </div>
         <div className="sa-mc-hero__story">
           <p className="sa-mc-kicker">Seen</p>
-          <p className="sa-mc-story__when"><strong>{fmt(d.seen_at ?? d.incident_at)}</strong><span className="sa-mc-story__where"><MapPin size={14} aria-hidden="true" />{c.location.area}</span></p>
+          <div className="sa-mc-story__when flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <strong>{fmt(d.seen_at ?? d.incident_at)}</strong>
+            <span className="sa-mc-story__where flex items-center gap-1">
+              <MapPin size={14} aria-hidden="true" />
+              {c.location.area || 'Location not named'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowMap(true)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border border-[var(--sa-line)] bg-[var(--sa-surface)] hover:bg-[var(--sa-sand)] text-[var(--sa-ink-2)] hover:text-[var(--sa-ink)] transition-colors cursor-pointer shadow-xs focus:outline-none focus:ring-2 focus:ring-[var(--sa-brand-tint)]"
+              title="Open location pinpoint map"
+            >
+              <Map size={13} aria-hidden="true" />
+              {pin ? 'View map pin' : 'View area map'}
+            </button>
+          </div>
           <blockquote className="sa-mc-quote">“{c.description}”</blockquote>
         </div>
         <aside className="sa-mc-hero__people" aria-label="People">
@@ -175,6 +264,39 @@ export default function ComplaintPage({ c }: { c: Case }) {
 
       <ComplaintDialogs c={c} d={d} dialog={dialog} refOf={refOf} onClose={() => setDialog(null)} onSaved={setD} />
       <CaseDialogs c={c} dialog={caseDialog} onClose={() => setCaseDialog(null)} />
+
+      {showMap && (
+        <Dialog
+          title={pin ? `Incident Location: ${c.location.area || 'Subdivision'}` : 'Subdivision Area Map'}
+          description={
+            pin
+              ? `GPS pinpoint recorded for complaint ${c.id}. Visible to authorized subdivision staff only.`
+              : `No exact GPS pin was dropped by the reporter for complaint ${c.id}. Showing general subdivision boundary.`
+          }
+          size="lg"
+          onClose={() => setShowMap(false)}
+          footer={
+            <div className="flex items-center justify-end w-full">
+              <Button variant="primary" onClick={() => setShowMap(false)}>Close</Button>
+            </div>
+          }
+        >
+          <div className="flex flex-col gap-3">
+            <LocationMapPreview
+              pin={pin}
+              height={380}
+              label={`Map of reported location for case ${c.id}`}
+              interactive={true}
+            />
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--sa-ink-2)] pt-1">
+              <MapLegend items={pin ? [{ kind: 'pin', label: 'Incident location' }, { kind: 'outline', label: 'Subdivision boundary' }] : [{ kind: 'outline', label: 'Subdivision boundary' }]} />
+              <span className="text-[11px] text-[var(--sa-ink-3)]">
+                {pin ? `${pin.lat.toFixed(5)}, ${pin.lng.toFixed(5)}` : 'Center of subdivision'}
+              </span>
+            </div>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }

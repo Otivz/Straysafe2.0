@@ -1,22 +1,177 @@
+import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowRight, FolderOpen, SearchX } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, Clock, FolderOpen, MapPin, PawPrint, SearchX } from 'lucide-react';
 import { adminPath } from '../config';
 import { LinkButton, Button } from '../components/Button';
 import { CaseStatusBadge, ClosureOutcome, PriorityMark } from '../components/Badge';
 import { Segmented, Select, SearchInput } from '../components/form';
 import { EmptyState, PageHeader, Panel } from '../components/layout';
+import { ANIMAL_ICON } from '../components/icons';
 import { ANIMAL_TYPES, CATEGORIES, CATEGORY_IDS, PRIORITY_IDS } from '../data/constants';
 import { useAdminData } from '../data/context';
+import type { Case } from '../data/types';
 import { DEFAULT_FILTERS, filterCases, type CaseFilters, type StatusFilter } from '../data/selectors';
 import { ago, fmtDate, plural } from '../../preview/lib/format';
 import { usePageTitle } from '../lib/hooks';
 import { useNow } from '../../preview/lib/hooks';
+import { cx } from '../../preview/lib/cx';
+import { useMediaViewer } from '../components/MediaLightbox';
 
 const PAGE_SIZE = 12;
 const STATUS_VALUES: StatusFilter[] = ['all', 'open', 'reported', 'under_review', 'in_progress', 'closed'];
 const SORT_LABEL: Record<CaseFilters['sort'], string> = { newest: 'Newest first', oldest: 'Oldest first', updated: 'Recently updated', priority: 'Highest priority' };
 
-/** A05 — Cases list: the central workspace for incident management. */
+/** A single case card displaying animal media, status, location, and key incident metadata. */
+function CaseCard({ c, now, onNavigate }: { c: Case; now: Date; onNavigate: (id: string) => void }) {
+  const { openMedia } = useMediaViewer();
+  const [imgFailed, setImgFailed] = useState(false);
+  const [photoIndex, setPhotoIndex] = useState(0);
+
+  const petPhotos = c.registeredPet?.current?.photos ?? [];
+  const availablePhotos = c.evidence
+    .filter((e) => (e.kind === 'photo' || e.url) && !e.url?.endsWith('.mp4') && !e.url?.endsWith('.webm'))
+    .map((e) => e.url!)
+    .concat(petPhotos);
+  const photos = Array.from(new Set(availablePhotos));
+  const hasPhotos = photos.length > 0 && !imgFailed;
+  const currentPhoto = hasPhotos ? photos[((photoIndex % photos.length) + photos.length) % photos.length] : null;
+
+  const AnimalIcon = ANIMAL_ICON[c.animal.type] ?? PawPrint;
+  const isUrgent = c.status !== 'closed' && c.priority === 'urgent';
+  const isHigh = c.status !== 'closed' && c.priority === 'high';
+
+  return (
+    <article
+      tabIndex={0}
+      role="button"
+      aria-label={`Case ${c.id}: ${c.title}`}
+      onClick={() => onNavigate(c.id)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(c.id); } }}
+      className={cx(
+        'group relative flex flex-col justify-between rounded-xl border border-[var(--sa-line)] bg-[var(--sa-surface)] p-4 sm:p-4.5 transition-all duration-150',
+        'hover:border-[var(--sa-brand-tint)] hover:shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--sa-brand-tint)]',
+        isUrgent && 'border-l-4 border-l-[var(--sa-red)]',
+        isHigh && 'border-l-4 border-l-[var(--sa-amber)]'
+      )}
+    >
+      <div>
+        {/* Card Header: Reference ID + Category and Status / Priority */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <span className="sa-ref text-xs font-semibold">{c.id}</span>
+            <p className="sa-meta mt-0.5 text-xs truncate">
+              {CATEGORIES[c.category].label} · {ANIMAL_TYPES[c.animal.type]}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+            <PriorityMark priority={c.priority} />
+            <CaseStatusBadge c={c} />
+            <ClosureOutcome c={c} />
+          </div>
+        </div>
+
+        {/* Card Body: Thumbnail / Icon with Previous & Next controls + Title and Description */}
+        <div className="flex gap-3.5 my-3">
+          {currentPhoto ? (
+            <div className="relative w-18 h-18 sm:w-20 sm:h-20 rounded-lg overflow-hidden shrink-0 border border-[var(--sa-line)] bg-[var(--sa-sand)] group/img">
+              <img
+                src={currentPhoto}
+                alt=""
+                className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-200 cursor-zoom-in"
+                loading="lazy"
+                onError={() => setImgFailed(true)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openMedia(
+                    photos.map((url, i) => ({ url, title: `${c.title} · Photo ${i + 1}` })),
+                    ((photoIndex % photos.length) + photos.length) % photos.length
+                  );
+                }}
+              />
+
+              {photos.length >= 2 && (
+                <>
+                  {/* Previous < button */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPhotoIndex((i) => i - 1);
+                    }}
+                    className="absolute left-1 top-1/2 -translate-y-1/2 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-black/65 hover:bg-black/90 text-white shadow transition-all focus:outline-none"
+                    title="Previous image"
+                    aria-label="Previous image"
+                  >
+                    <ChevronLeft size={13} />
+                  </button>
+
+                  {/* Next > button */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPhotoIndex((i) => i + 1);
+                    }}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-black/65 hover:bg-black/90 text-white shadow transition-all focus:outline-none"
+                    title="Next image"
+                    aria-label="Next image"
+                  >
+                    <ChevronRight size={13} />
+                  </button>
+
+                  {/* Counter: e.g. 1/3 */}
+                  <span
+                    className="absolute bottom-1 right-1 rounded bg-black/75 px-1 py-0.5 text-[9px] font-semibold text-white leading-none shadow-sm"
+                    title={`${photos.length} photos`}
+                  >
+                    {(((photoIndex % photos.length) + photos.length) % photos.length) + 1}/{photos.length}
+                  </span>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-lg shrink-0 flex items-center justify-center bg-[var(--sa-sand)] border border-[var(--sa-line)] text-[var(--sa-ink-3)] group-hover:text-[var(--sa-brand-ink)] group-hover:bg-[var(--sa-brand-soft)] transition-colors" aria-hidden="true">
+              <AnimalIcon size={24} strokeWidth={1.7} />
+            </div>
+          )}
+
+          <div className="min-w-0 flex-1">
+            <h2 className="sa-rowtitle text-[15px] font-semibold leading-snug line-clamp-2 group-hover:text-[var(--sa-brand-ink)] transition-colors">
+              <Link to={adminPath(`/cases/${c.id}`)} onClick={(e) => e.stopPropagation()}>
+                {c.title}
+              </Link>
+            </h2>
+            <p className="sa-small sa-text-2 line-clamp-2 mt-1 text-xs leading-relaxed">
+              {c.description || (c.animal.description ? c.animal.description : 'No description provided.')}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Card Footer: Location & Date + View Action */}
+      <div className="pt-3 mt-auto border-t border-[var(--sa-line-soft)] flex items-center justify-between gap-2 text-xs">
+        <div className="min-w-0 flex flex-col gap-1 text-[var(--sa-ink-2)]">
+          <span className="flex items-center gap-1.5 truncate" title={c.location.area}>
+            <MapPin size={13} className="shrink-0 text-[var(--sa-ink-3)]" aria-hidden="true" />
+            <span className="truncate">{c.location.area || 'Location not named'}</span>
+          </span>
+          <span className="flex items-center gap-1.5 text-[var(--sa-ink-3)]">
+            <Clock size={13} className="shrink-0" aria-hidden="true" />
+            <span>{fmtDate(c.reportedAt)}{ago(c.reportedAt, now) ? ` · ${ago(c.reportedAt, now)}` : ''}</span>
+          </span>
+        </div>
+
+        <div className="shrink-0">
+          <LinkButton size="sm" to={adminPath(`/cases/${c.id}`)} aria-label={`View ${c.id}`} onClick={(e) => e.stopPropagation()}>
+            View <ArrowRight size={13} aria-hidden="true" />
+          </LinkButton>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/** A05 — Cases list: the central workspace for incident management in a modern card-grid style. */
 export default function CasesPage() {
   usePageTitle('Cases');
   const { state } = useAdminData();
@@ -116,37 +271,12 @@ export default function CasesPage() {
           <EmptyState icon={SearchX} title="No cases match these filters" action={<Button onClick={clear}>Clear filters</Button>}>Try a different search, or remove a filter to see more cases.</EmptyState>
         ) : (
           <>
-            <div className="sa-tablewrap">
-              <table className="sa-table sa-table--rows">
-                <caption className="sa-sr-only">Cases, {plural(results.length, 'result')}</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Reference</th>
-                    <th scope="col">Concern</th>
-                    <th scope="col" className="hidden xl:table-cell">Location</th>
-                    <th scope="col">Reported</th>
-                    <th scope="col">Priority</th>
-                    <th scope="col">Status</th>
-                    <th scope="col"><span className="sa-sr-only">Action</span></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((c) => (
-                    <tr key={c.id} data-flag={c.status !== 'closed' && (c.priority === 'urgent' || c.priority === 'high') ? c.priority : undefined} onClick={() => navigate(adminPath(`/cases/${c.id}`))}>
-                      <td className="whitespace-nowrap"><span className="sa-ref">{c.id}</span></td>
-                      <td className="min-w-[260px] max-w-[420px]">
-                        <p className="sa-rowtitle sa-clamp-2"><Link to={adminPath(`/cases/${c.id}`)} onClick={(e) => e.stopPropagation()}>{c.title}</Link></p>
-                        <p className="sa-meta mt-0.5">{CATEGORIES[c.category].label} · {ANIMAL_TYPES[c.animal.type]}</p>
-                      </td>
-                      <td className="hidden max-w-[220px] xl:table-cell"><span className="sa-small sa-text-2 sa-clamp-2">{c.location.area}</span></td>
-                      <td className="whitespace-nowrap"><p className="sa-small">{fmtDate(c.reportedAt)}</p>{ago(c.reportedAt, now) ? <p className="sa-meta">{ago(c.reportedAt, now)}</p> : null}</td>
-                      <td><PriorityMark priority={c.priority} /></td>
-                      <td><div className="flex flex-col items-start gap-1"><CaseStatusBadge c={c} /><ClosureOutcome c={c} /></div></td>
-                      <td className="sa-right"><LinkButton size="sm" to={adminPath(`/cases/${c.id}`)} aria-label={`View ${c.id}`} onClick={(e) => e.stopPropagation()}>View<ArrowRight size={14} aria-hidden="true" /></LinkButton></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="p-4 sm:p-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" role="list" aria-label="Cases grid">
+                {rows.map((c) => (
+                  <CaseCard key={c.id} c={c} now={now} onNavigate={(id) => navigate(adminPath(`/cases/${id}`))} />
+                ))}
+              </div>
             </div>
             <div className="sa-pager">
               <span>Showing {(current - 1) * PAGE_SIZE + 1}–{Math.min(current * PAGE_SIZE, results.length)} of {plural(results.length, 'case')}</span>

@@ -163,9 +163,9 @@
   .sa-progress > span { display: block; height: 100%; border-radius: 6px; background: var(--sa-brand); }
 
   /* ----------------------------------------------------------------------------------- editor and settings */
-  .sa-editor { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 28px; align-items: start; }
-  .sa-editor__aside { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 16px; }
-  .sa-noticecard { padding: 18px 20px; }
+  .sa-editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 380px); gap: 28px; align-items: start; }
+  .sa-editor__aside { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 16px; min-width: 0; max-width: 100%; }
+  .sa-noticecard { padding: 18px 20px; min-width: 0; max-width: 100%; overflow: hidden; }
   .sa-settings { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 32px; align-items: start; }
   .sa-subnav { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 2px; }
   .sa-subnav button { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--sa-ink-2); font-size: 14px; font-weight: 500; text-align: left; }
