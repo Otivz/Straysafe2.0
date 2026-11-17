@@ -90,10 +90,12 @@ def _rows(db: Session, reports: List[Report]) -> List[Dict[str, Any]]:
         names = {u.user_id: u.name for u in db.query(User).filter(User.user_id.in_(user_ids)).all()} if user_ids else {}
         for rid, url, kind in (db.query(ReportMedia.report_id, ReportMedia.file_url, ReportMedia.media_type)
                                .filter(ReportMedia.report_id.in_(ids)).order_by(ReportMedia.media_id).all()):
-            entry = photos.setdefault(rid, {"count": 0, "thumbnail": None})
+            entry = photos.setdefault(rid, {"count": 0, "thumbnail": None, "photos": []})
             entry["count"] += 1
-            if entry["thumbnail"] is None and kind == "Image":
-                entry["thumbnail"] = url            # the first photo is the list thumbnail
+            if kind == "Image" and url:
+                entry["photos"].append(url)
+                if entry["thumbnail"] is None:
+                    entry["thumbnail"] = url            # the first photo is the list thumbnail
 
     decided = identity_decision.decided_ids(db, reports)
     rows = []
@@ -125,5 +127,6 @@ def _rows(db: Session, reports: List[Report]) -> List[Dict[str, Any]]:
             "closure": case_state.closure_of(r), "reopened_count": r.reopened_count or 0,
             "merged_into_report_id": r.duplicate_of_report_id,
             "photo_count": media["count"], "thumbnail_url": media["thumbnail"],
+            "photo_urls": media.get("photos", []),
         })
     return rows

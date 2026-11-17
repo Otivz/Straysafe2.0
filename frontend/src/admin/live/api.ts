@@ -52,6 +52,7 @@ export interface ApiCaseSummary {
   merged_into_report_id: number | null;
   photo_count: number;
   thumbnail_url: string | null;
+  photo_urls?: string[];
 }
 
 export interface ApiSummaryPage { total: number; limit: number; offset: number; has_more: boolean; items: ApiCaseSummary[] }

@@ -5,12 +5,32 @@ import { levelLabel, matchSentence } from '../data/selectors';
 import type { MatchLevel, MatchSide, PossibleMatch } from '../data/types';
 import { Badge } from './Badge';
 import { Button } from './Button';
+import { useMediaViewer } from './MediaLightbox';
 
 /** The animal's own photo, or its kind on a neutral square when the report has none. */
 export function MatchPhoto({ side, size = 'sm' }: { side: MatchSide; size?: 'sm' | 'lg' }) {
+  const { openMedia } = useMediaViewer();
   const Icon = side.species === 'Dog' ? Dog : side.species === 'Cat' ? Cat : PawPrint;
   return (
-    <span className={cx('sa-mphoto', `sa-mphoto--${size}`)} {...(side.photoUrl ? {} : { 'aria-hidden': true })}>
+    <span
+      className={cx('sa-mphoto', `sa-mphoto--${size}`, side.photoUrl && 'cursor-zoom-in transition-transform duration-200 hover:scale-105')}
+      {...(side.photoUrl ? {
+        role: 'button',
+        tabIndex: 0,
+        onClick: (e) => {
+          e.stopPropagation();
+          openMedia([{ url: side.photoUrl!, kind: 'photo', title: side.title, caption: `${side.species} · ${side.breed || ''}` }]);
+        },
+        onKeyDown: (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            openMedia([{ url: side.photoUrl!, kind: 'photo', title: side.title, caption: `${side.species} · ${side.breed || ''}` }]);
+          }
+        },
+        'aria-label': `Preview photo of ${side.title}`,
+      } : { 'aria-hidden': true })}
+    >
       {side.photoUrl ? <img src={side.photoUrl} alt={`Photo of ${side.title}`} loading="lazy" /> : <Icon size={size === 'sm' ? 22 : 48} strokeWidth={1.6} aria-hidden="true" />}
     </span>
   );

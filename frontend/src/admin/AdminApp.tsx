@@ -4,6 +4,7 @@ import './styles/pages.css';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, RequireAuth } from './auth/AuthProvider';
 import { ToastProvider } from './components/ToastProvider';
+import { MediaViewerProvider } from './components/MediaLightbox';
 import AdminLayout from './layout/AdminLayout';
 import { AdminModeContext, useAdminMode, type AdminMode } from './mode';
 import DashboardPage from './pages/DashboardPage';
@@ -44,7 +45,8 @@ export default function AdminApp({ mode }: { mode: AdminMode }) {
     <AdminModeContext.Provider value={mode}>
       <AuthProvider>
         <ToastProvider>
-          <Routes>
+          <MediaViewerProvider>
+            <Routes>
             <Route path="login" element={<LoginPage />} />
             <Route path="forgot-password" element={<ForgotPasswordPage />} />
             <Route path="reset-password" element={<ResetPasswordPage />} />
@@ -70,6 +72,7 @@ export default function AdminApp({ mode }: { mode: AdminMode }) {
               </Route>
             </Route>
           </Routes>
+          </MediaViewerProvider>
         </ToastProvider>
       </AuthProvider>
     </AdminModeContext.Provider>

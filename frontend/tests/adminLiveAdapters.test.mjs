@@ -88,7 +88,8 @@ test('a list row becomes a case with the reference, status, priority, pin and la
   assert.equal(c.timeline[0].kind, 'status');
   assert.equal(c.timeline[0].actor, 'Leader One');
   assert.equal(c.updatedAt, '2026-11-02T05:30:00.000Z');
-  assert.deepEqual([c.followUps, c.warnings, c.referrals, c.claims, c.notes, c.evidence], [[], [], [], [], [], []]);
+  assert.deepEqual([c.followUps, c.warnings, c.referrals, c.claims, c.notes], [[], [], [], [], []]);
+  assert.deepEqual(c.evidence, [{ id: 'thumb-158', kind: 'photo', label: 'Photo 1', capturedAt: '2026-11-01T01:00:00.000Z', source: 'reporter', url: 'https://img.test/a.jpg' }]);
   assert.equal(c.closure, null);
 });
 

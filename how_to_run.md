@@ -126,6 +126,7 @@ The compiled Android APK already bundles all frontend assets inside the app; it 
    - Open the **StraySafe** debug APK on your phone (connected to Mobile Data 4G/5G or any Wi-Fi).
    - Tap **Connection** in the amber header bar (or go to **Settings $\rightarrow$ Developer $\rightarrow$ Developer connection**).
    - In **Backend API address**, enter whatever default URL the tunnel gives—**do not add `/resident-app` or any route at the end**:
+
      ```text
      https://<your-backend-tunnel>.trycloudflare.com
      ```

@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Lock, Megaphone, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Lock, Megaphone, Plus } from 'lucide-react';
 import { isValidLatLng } from '../../../preview/geo';
 import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
 import { MapLegend } from '../../../preview/map/MapLegend';
@@ -8,6 +8,7 @@ import { adminPath } from '../../config';
 import { Badge, IdentityBadge, OutcomeBadge, OwnershipBadge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { EvidenceTile } from '../../components/Evidence';
+import { useMediaViewer, type LightboxMediaItem } from '../../components/MediaLightbox';
 import { Block, Callout, Kv, Panel } from '../../components/layout';
 import { ANIMAL_TYPES, DISPOSITIONS, NOTICE_STATUS, VERIFICATION } from '../../data/constants';
 import { useAdminData } from '../../data/context';
@@ -20,6 +21,8 @@ import RelatedReportsBlock from './RelatedReportsBlock';
 
 export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date; openDialog: OpenCaseDialog }) {
   const { state } = useAdminData();
+  const { openMedia } = useMediaViewer();
+  const [evidenceIdx, setEvidenceIdx] = useState(0);
   const navigate = useNavigate();
   const notice = state.notices.find((n) => n.caseId === c.id && n.status !== 'archived');
   const publishable = !c.sensitive && (c.category === 'lost_pet' || c.category === 'found_animal' || c.category === 'safety');
@@ -27,6 +30,17 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
   const closed = c.status === 'closed';
   // Administrators are authorized to see the exact spot. A case with no pin shows only its words.
   const pin = isValidLatLng(c.location.lat, c.location.lng) ? { lat: c.location.lat as number, lng: c.location.lng as number } : null;
+
+  const evidenceMediaItems: LightboxMediaItem[] = c.evidence
+    .filter((e) => Boolean(e.url))
+    .map((e) => ({
+      url: e.url!,
+      kind: e.kind,
+      title: e.label,
+      source: { reporter: 'Submitted by the reporter', admin: 'Added by an administrator', resident: 'Another resident', external: 'External authority' }[e.source],
+      date: fmtDateTime(e.capturedAt),
+      caption: e.note,
+    }));
 
   return (
     <div className="sa-case">
@@ -52,7 +66,83 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
           {c.evidence.length === 0 ? (
             <p className="sa-small sa-text-2">{c.noPhotoReason ?? 'No photos or videos were submitted. A photo is never required, especially when it is not safe to take one.'}</p>
           ) : (
-            <div className="sa-evgrid">{c.evidence.map((e) => <EvidenceTile key={e.id} item={e} reviewed={c.assessment.evidenceReviewed.includes(e.id)} onOpen={() => openDialog({ kind: 'evidence', evidenceId: e.id })} />)}</div>
+            <div>
+              {/* When 2 or more uploaded media items exist, provide an interactive < image > carousel */}
+              {evidenceMediaItems.length >= 2 && (
+                <div className="relative mb-4 flex items-center justify-center rounded-xl border border-[var(--sa-line)] bg-stone-950 overflow-hidden shadow-sm h-64 sm:h-72">
+                  {evidenceMediaItems[((evidenceIdx % evidenceMediaItems.length) + evidenceMediaItems.length) % evidenceMediaItems.length]?.kind === 'video' ? (
+                    <video
+                      key={evidenceMediaItems[((evidenceIdx % evidenceMediaItems.length) + evidenceMediaItems.length) % evidenceMediaItems.length].url}
+                      src={evidenceMediaItems[((evidenceIdx % evidenceMediaItems.length) + evidenceMediaItems.length) % evidenceMediaItems.length].url}
+                      controls
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  ) : (
+                    <img
+                      key={evidenceMediaItems[((evidenceIdx % evidenceMediaItems.length) + evidenceMediaItems.length) % evidenceMediaItems.length].url}
+                      src={evidenceMediaItems[((evidenceIdx % evidenceMediaItems.length) + evidenceMediaItems.length) % evidenceMediaItems.length].url}
+                      alt={evidenceMediaItems[((evidenceIdx % evidenceMediaItems.length) + evidenceMediaItems.length) % evidenceMediaItems.length].title || 'Uploaded media'}
+                      className="max-h-full max-w-full object-contain cursor-zoom-in transition-transform duration-200 hover:scale-[1.01]"
+                      onClick={() => openMedia(evidenceMediaItems, ((evidenceIdx % evidenceMediaItems.length) + evidenceMediaItems.length) % evidenceMediaItems.length)}
+                    />
+                  )}
+
+                  {/* < Previous button */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEvidenceIdx((i) => i - 1);
+                    }}
+                    aria-label="Previous uploaded media"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 hover:bg-black/90 text-white border border-white/20 shadow-md transition-all focus:outline-none"
+                    title="Previous media (<)"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+
+                  {/* > Next button */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEvidenceIdx((i) => i + 1);
+                    }}
+                    aria-label="Next uploaded media"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 hover:bg-black/90 text-white border border-white/20 shadow-md transition-all focus:outline-none"
+                    title="Next media (>)"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+
+                  {/* Caption & Counter */}
+                  <div className="absolute bottom-2 inset-x-3 z-10 flex items-center justify-between text-xs text-white/90 bg-black/65 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-white/10">
+                    <span className="font-medium truncate">{evidenceMediaItems[((evidenceIdx % evidenceMediaItems.length) + evidenceMediaItems.length) % evidenceMediaItems.length]?.title}</span>
+                    <span className="font-semibold shrink-0 ml-2">{(((evidenceIdx % evidenceMediaItems.length) + evidenceMediaItems.length) % evidenceMediaItems.length) + 1} of {evidenceMediaItems.length}</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="sa-evgrid">
+                {c.evidence.map((e) => {
+                  const mediaIdx = evidenceMediaItems.findIndex((m) => m.url === e.url);
+                  return (
+                    <EvidenceTile
+                      key={e.id}
+                      item={e}
+                      reviewed={c.assessment.evidenceReviewed.includes(e.id)}
+                      onOpen={() => {
+                        if (e.url && mediaIdx !== -1) {
+                          openMedia(evidenceMediaItems, mediaIdx);
+                        } else {
+                          openDialog({ kind: 'evidence', evidenceId: e.id });
+                        }
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
           )}
         </Block>
 

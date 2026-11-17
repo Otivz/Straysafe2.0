@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Mail, MapPin, MessageSquare, Phone } from 'lucide-react';
+import { Mail, MapPin, Maximize2, MessageSquare, Phone } from 'lucide-react';
 import { isValidLatLng } from '../../../../preview/geo';
 import { LocationMapPreview } from '../../../../preview/map/LocationMapPreview';
 import { MapLegend } from '../../../../preview/map/MapLegend';
@@ -12,21 +12,69 @@ import { ANIMAL_ICON } from '../../../components/icons';
 import { isLinkRecord, type Hero, type Person } from '../../../data/monitored';
 import type { Case } from '../../../data/types';
 import type { OpenCaseDialog } from '../dialogState';
+import { useMediaViewer, type LightboxMediaItem } from '../../../components/MediaLightbox';
 
 /** The animal's photo, or its kind on a neutral square when there is none (or the picture cannot be loaded). */
 function Photo({ hero }: { hero: Hero }) {
+  const { openMedia } = useMediaViewer();
   const [broken, setBroken] = useState<Set<string>>(() => new Set());
   const photos = hero.photos.filter((u) => !broken.has(u));
   const Icon = ANIMAL_ICON[hero.animal];
   const [main, ...rest] = photos;
+
+  const mediaItems: LightboxMediaItem[] = photos.map((u, i) => ({
+    url: u,
+    kind: 'photo',
+    title: `${hero.name} · Photo ${i + 1}`,
+    caption: `${hero.animal} · Reported in ${hero.where}`,
+  }));
+
   return (
     <div className="sa-mc-hero__photo">
-      <div className="sa-mc-photo">
-        {main ? <img src={main} alt={`Photo of ${hero.name}`} onError={() => setBroken((b) => new Set(b).add(main))} /> : <Icon size={56} strokeWidth={1.4} aria-hidden="true" />}
+      <div className="sa-mc-photo relative overflow-hidden">
+        {main ? (
+          <button
+            type="button"
+            className="w-full h-full cursor-zoom-in group relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-[var(--sa-brand-tint)]"
+            onClick={() => openMedia(mediaItems, 0)}
+            aria-label={`Preview photo of ${hero.name}`}
+          >
+            <img
+              src={main}
+              alt={`Photo of ${hero.name}`}
+              className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+              onError={() => setBroken((b) => new Set(b).add(main))}
+            />
+            <span className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-end justify-end p-2">
+              <span className="rounded-full bg-black/60 p-1.5 text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-md">
+                <Maximize2 size={14} />
+              </span>
+            </span>
+          </button>
+        ) : (
+          <Icon size={56} strokeWidth={1.4} aria-hidden="true" />
+        )}
       </div>
       {rest.length > 0 ? (
         <p className="sa-mc-thumbs">
-          {rest.slice(0, 4).map((u, i) => <a key={u} href={u} target="_blank" rel="noreferrer" aria-label={`Open photo ${i + 2} of ${hero.name}`}><img src={u} alt="" loading="lazy" onError={() => setBroken((b) => new Set(b).add(u))} /></a>)}
+          {rest.slice(0, 4).map((u, i) => (
+            <button
+              key={u}
+              type="button"
+              className="cursor-zoom-in group relative overflow-hidden rounded-lg border border-[var(--sa-line)] bg-[var(--sa-sand)] focus:outline-none focus:ring-2 focus:ring-[var(--sa-brand-tint)]"
+              onClick={() => openMedia(mediaItems, i + 1)}
+              aria-label={`Preview photo ${i + 2} of ${hero.name}`}
+            >
+              <img
+                src={u}
+                alt=""
+                loading="lazy"
+                className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-110"
+                onError={() => setBroken((b) => new Set(b).add(u))}
+              />
+              <span className="absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-colors" />
+            </button>
+          ))}
         </p>
       ) : null}
     </div>

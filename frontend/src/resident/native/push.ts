@@ -10,9 +10,21 @@
  *
  * The channel ids are the ones the server names in each message (backend/app/services/push_service.py).
  */
-import { Capacitor } from '@capacitor/core';
-import { PushNotifications } from '@capacitor/push-notifications';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { httpPost } from '../../live/http';
+
+interface PushNotificationsPlugin {
+  addListener(eventName: 'registration', listenerFunc: (token: { value: string }) => void): Promise<{ remove: () => void }>;
+  addListener(eventName: 'registrationError', listenerFunc: (error: { error: string }) => void): Promise<{ remove: () => void }>;
+  addListener(eventName: 'pushNotificationActionPerformed', listenerFunc: (action: any) => void): Promise<{ remove: () => void }>;
+  createChannel(channel: any): Promise<void>;
+  deleteChannel(channel: { id: string }): Promise<void>;
+  checkPermissions(): Promise<{ receive: string }>;
+  requestPermissions(): Promise<{ receive: string }>;
+  register(): Promise<void>;
+}
+
+const PushNotifications = registerPlugin<PushNotificationsPlugin>('PushNotifications');
 
 // Both channels ring, vibrate and pop up (importance 4, high): Android shows them by itself while the app is closed, another app is
 // open or the screen is off. Visibility 0 (private): a locked phone shows that something came, not what; the alerts are public
