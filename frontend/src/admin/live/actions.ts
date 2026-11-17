@@ -125,8 +125,13 @@ export async function runAction(a: AdminAction, ctx: ActionContext): Promise<Act
       const owner = c?.ownership.ownerResidentId ? numeric(c.ownership.ownerResidentId, 'owner') : fail('A warning needs a confirmed owner. Complete the ownership review first.');
       const violation = violationFor(c?.category ?? 'other');
       // The tier (Notice, 1st / 2nd Warning, Final Notice) follows this pet's and incident's history, which only the server holds.
-      const tier = await adminApi.warningSuggestion({ violation_type: violation, report_id: rid, owner_id: owner, policy_id: a.policyId });
-      await adminApi.issueWarning({ user_id: owner, report_id: rid, warning_level: tier.suggested_tier, violation_type: violation, description: a.details, fine_amount: 0, policy_id: a.policyId });
+      const tier = a.warningLevel ? { suggested_tier: a.warningLevel } : await adminApi.warningSuggestion({ violation_type: violation, report_id: rid, owner_id: owner, policy_id: a.policyId });
+      await adminApi.issueWarning({
+        user_id: owner, report_id: rid, warning_level: tier.suggested_tier, violation_type: violation, description: a.details, fine_amount: 0, policy_id: a.policyId,
+        ...(a.templateId !== undefined ? { template_id: a.templateId } : {}),
+        ...(a.requiredAction ? { required_action: a.requiredAction } : {}),
+        ...(a.fieldOverrides ? { field_overrides: a.fieldOverrides } : {}),
+      });
       return done({ cases: [a.id] });
     }
     case 'case/recordCompliance':

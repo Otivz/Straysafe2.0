@@ -62,13 +62,22 @@ def get_my_notifications(
 
 
 def _with_links(db: Session, rows: List[Notification]) -> List[NotificationResponse]:
-    """A lost & found alert says where a tap goes (the notice, its sighting or claim form, or the alert itself); nothing else changes."""
+    """A lost & found alert or warning letter says where a tap goes; nothing else changes."""
     from app.services import case_alerts
+    from app.models.warning_letter import GeneratedWarningLetter
+    nids = [n.notification_id for n in rows if (n.type or "").lower() in ("warning", "warning_letter")]
+    letters_by_nid = {
+        l.notification_id: l.letter_id
+        for l in db.query(GeneratedWarningLetter).filter(GeneratedWarningLetter.notification_id.in_(nids)).all()
+    } if nids else {}
     out = []
     for n in rows:
         item = NotificationResponse.model_validate(n)
         if n.type == case_alerts.NOTIF_TYPE:
             item.link = case_alerts.link_for(db, n.related_id)
+        elif (n.type or "").lower() in ("warning", "warning_letter"):
+            lid = letters_by_nid.get(n.notification_id)
+            item.link = f"/resident-app/warnings/{lid}" if lid else "/resident-app/warnings"
         out.append(item)
     return out
 

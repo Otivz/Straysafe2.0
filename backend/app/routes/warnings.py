@@ -11,16 +11,19 @@ from app.models.user import User
 from app.models.pet import Pet
 from app.models.report import Report, StatusHistory
 from app.models.notification import Notification
+from app.models.warning_letter import GeneratedWarningLetter
 from app.schemas.warning import WarningCreate, WarningResponse
 from app.utils.auth import get_current_user, verify_subdivision_scope
 from app.utils.audit import log_activity
 from app.utils.case_groups import require_case_pet
 from app.utils.warning_rules import (check_tier_for_incident, require_can_issue, require_warning_eligible,
-                                     observation_days_for, visible_warnings, suggest_tier, followup_incidents)
+                                     observation_days_for, visible_warnings, suggest_tier, followup_incidents,
+                                     INSTRUCTIONS)
 from app.utils import case_state
 from app.utils import case_vocab as V
 from app.utils.notification_dispatcher import dispatch_notification
 from app.services import email_templates
+from app.services import warning_letters as WL
 
 router = APIRouter(
     prefix="/warnings",
@@ -45,6 +48,13 @@ def enrich_warning_dict(warning: OwnerWarning, db: Session) -> dict:
     report_photo = None
     if report and hasattr(report, "media") and report.media and len(report.media) > 0:
         report_photo = report.media[0].file_url
+
+    letter = (
+        db.query(GeneratedWarningLetter)
+        .filter(GeneratedWarningLetter.warning_id == warning.warning_id)
+        .order_by(GeneratedWarningLetter.letter_id.desc())
+        .first()
+    )
 
     return {
         "warning_id": warning.warning_id,
@@ -76,7 +86,15 @@ def enrich_warning_dict(warning: OwnerWarning, db: Session) -> dict:
         "issuer_role": issuer_role_name,
         "report_landmark": report.landmark if report else None,
         "report_animal_type": report.animal_type if report else None,
-        "report_photo": report_photo
+        "report_photo": report_photo,
+        "letter_id": letter.letter_id if letter else None,
+        "warning_reference": letter.warning_reference if letter else None,
+        "template_id": letter.template_id if letter else None,
+        "template_name": letter.template_name if letter else None,
+        "template_version_number": letter.template_version_number if letter else None,
+        "notification_status": letter.notification_status if letter else None,
+        "notification_error": letter.notification_error if letter else None,
+        "viewed_at": letter.viewed_at if letter else None,
     }
 
 
@@ -260,44 +278,57 @@ def issue_warning(
         # A warning is case work: the case moves to In progress (never backward, never out of Closed)
         case_state.advance_status(rep, V.IN_PROGRESS)
 
-    # Send in-app notification & official citation email to pet owner
-    pet_info = f" for pet '{pet.display_name}'" if pet else ""
-    notif_msg = f"Official Notice: You have received a {warning_in.warning_level}{pet_info} regarding '{warning_in.violation_type}'. Please review and acknowledge."
-    
-    subj, txt_b, html_b = email_templates.render_owner_warning_email(
-        user_name=owner.name,
-        pet_name=pet.display_name if pet else None,
+    # Generate immutable warning letter snapshot from template, then dispatch notification with tracking
+    policy_ref_str = f"{policy.reference} — {policy.title}" if policy.reference else policy.title
+    req_action = (warning_in.required_action or "").strip() or INSTRUCTIONS.get(warning_in.violation_type, INSTRUCTIONS["Other"])
+    letter = WL.create_generated_letter(
+        db=db,
+        subdivision_id=rep.subdivision_id if rep else current_user.subdivision_id,
+        report=rep,
+        owner=owner,
+        recipient_name=owner.name,
+        recipient_address=owner.address,
+        pet=pet,
+        issuer=current_user,
         warning_level=warning_in.warning_level,
+        policy_id=policy.id,
+        policy_reference=policy_ref_str,
+        violation_description=warning_in.description,
+        required_action=req_action,
+        template_id=warning_in.template_id,
+        warning=new_warning,
+        observation_days=observation_days,
+        overrides=warning_in.field_overrides,
+        strict_required=warning_in.template_id is not None,
+    )
+    WL.deliver_warning_notification(
+        db=db,
+        letter=letter,
+        owner=owner,
+        pet=pet,
         violation_type=warning_in.violation_type,
         description=warning_in.description,
-    )
-    dispatch_notification(
-        db=db,
-        user_id=warning_in.user_id,
-        related_id=warning_in.report_id,
-        title=f"⚠️ {warning_in.warning_level} Citation Issued",
-        message=notif_msg,
-        notification_type="Warning",
-        email_data={
-            "recipient_email": owner.email,
-            "subject": subj,
-            "text_body": txt_b,
-            "html_body": html_b,
-            "category": "warning",
-            "template_key": "owner_warning_issued",
-            "idempotency_key": f"warning_{new_warning.warning_id}",
-            "related_entity_type": "warning",
-            "related_entity_id": new_warning.warning_id,
-        }
+        dispatcher_fn=dispatch_notification,
     )
 
-    # Log audit entry
+    # Log audit entries
+    log_activity(
+        db=db,
+        action="WARNING_LETTER_GENERATED",
+        target_table="generated_warning_letters",
+        target_id=letter.letter_id,
+        description=f"Generated warning letter {letter.warning_reference} ({letter.template_name} v{letter.template_version_number}) for {owner.name}.",
+        user_id=current_user.user_id,
+        log_type="enforcement",
+        request=req,
+        commit=False,
+    )
     log_activity(
         db=db,
         action="ISSUE_WARNING",
         target_table="owner_warnings",
         target_id=new_warning.warning_id,
-        description=f"Issued {warning_in.warning_level} to {owner.name} ({warning_in.violation_type})",
+        description=f"Issued {warning_in.warning_level} ({letter.warning_reference}) to {owner.name} ({warning_in.violation_type})",
         user_id=current_user.user_id,
         log_type="enforcement",
         request=req

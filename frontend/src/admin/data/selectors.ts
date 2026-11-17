@@ -267,6 +267,10 @@ export function relatedCandidates(cases: Case[], base: Case, limit = 5): { case:
   const out: { case: Case; reasons: string[]; score: number }[] = [];
   for (const c of cases) {
     if (c.id === base.id || base.relatedCaseIds.includes(c.id)) continue;
+    // Reports about different animal types (e.g. Dog vs. Cat) are never related candidates
+    if (c.animal.type && base.animal.type && c.animal.type !== base.animal.type && c.animal.type !== 'other' && base.animal.type !== 'other') {
+      continue;
+    }
     const k = areaKey(c);
     const reasons: string[] = [];
     let score = 0;

@@ -7,7 +7,7 @@ case's status history, which the reporter can read) gets only neutral lines: "Co
 subdivision's rules". Letters, the summons, the fine and the meeting are recorded for staff only (audit log and the step events).
 """
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, cast
 
 from fastapi import HTTPException
 from sqlalchemy import func
@@ -43,7 +43,7 @@ def complaint_for(db: Session, report_id: int, user: User, write: bool = False) 
 
 
 def _nuisance_category_ids(db: Session) -> List[int]:
-    return [c.category_id for c in db.query(ReportCategory).all() if V.category_family(c.category_name) == V.NUISANCE]
+    return [cast(int, c.category_id) for c in db.query(ReportCategory).all() if V.category_family(cast(Optional[str], c.category_name)) == V.NUISANCE]
 
 
 def _scope_subdivision(user: User, subdivision_id: Optional[int]) -> Optional[int]:
@@ -77,7 +77,7 @@ def _respondents(db: Session, ids) -> Dict[int, Dict[str, Any]]:
         return {}
     rows = db.query(ComplaintRespondent).filter(ComplaintRespondent.respondent_id.in_(ids)).all()
     users = {u.user_id: u for u in db.query(User).filter(User.user_id.in_({r.user_id for r in rows if r.user_id})).all()} if rows else {}
-    return {r.respondent_id: R.respondent_view(r, users.get(r.user_id)) for r in rows}
+    return {r.respondent_id: R.respondent_view(r, users.get(r.user_id) if r.user_id is not None else None) for r in rows}
 
 
 def _policy(db: Session, subdivision_id: int, policy_id: Optional[str]) -> Optional[PolicyIn]:
@@ -148,8 +148,8 @@ def _steps_view(db: Session, offense_id: int, with_events: bool = True) -> List[
 
 def _offense_view(o: ComplaintOffense, names: Dict[int, str]) -> Dict[str, Any]:
     return {"offense_id": o.offense_id, "report_id": o.report_id, "respondent_id": o.respondent_id, "policy_id": o.policy_id,
-            "policy_title": o.policy_title, "policy_reference": o.policy_reference, "counted": bool(o.counted), "number": o.offense_number,
-            "incident_at": o.incident_at, "note": o.note, "confirmed_at": o.confirmed_at, "confirmed_by": names.get(o.confirmed_by),
+            "policy_title": o.policy_title, "policy_reference": o.policy_reference, "counted": o.counted, "number": o.offense_number,
+            "incident_at": o.incident_at, "note": o.note, "confirmed_at": o.confirmed_at, "confirmed_by": names.get(o.confirmed_by) if o.confirmed_by is not None else None,
             "voided_at": o.voided_at, "voided_by": names.get(o.voided_by) if o.voided_by else None, "void_reason": o.void_reason}
 
 
@@ -237,14 +237,16 @@ def detail(db: Session, report: Report) -> Dict[str, Any]:
     subdivision = db.get(Subdivision, report.subdivision_id)
     return {
         "report_id": report.report_id,
+        "animal_breed": report.animal_breed,
+        "animal_colors": report.animal_colors or [],
         "seen_at": report.seen_at, "incident_at": R.incident_at(report),
         "suspect": _suspect(report),
         "incident": {"status": case_state.incident_of(report), "basis": report.incident_basis, "at": report.assessed_at,
                      "by": names.get(report.assessed_by) if report.assessed_by else None},
         "rule": rule, "no_rule": bool(f and f.no_rule),
         "respondent": ({**respondents.get(f.respondent_id, {}), "evidence": f.respondent_evidence or [], "note": f.respondent_note,
-                        "at": f.respondent_at, "by": names.get(f.respondent_by)} if f and f.respondent_id else None),
-        "check": ({"note": f.check_note, "at": f.check_at, "by": names.get(f.check_by)} if f and f.check_note else None),
+                        "at": f.respondent_at, "by": names.get(f.respondent_by) if f.respondent_by is not None else None} if f and f.respondent_id else None),
+        "check": ({"note": f.check_note, "at": f.check_at, "by": names.get(f.check_by) if f.check_by is not None else None} if f and f.check_note else None),
         "ruled_out": (f.ruled_out or []) if f else [],
         "offense": _offense_view(active, names) if active else None,
         "steps": _steps_view(db, active.offense_id) if active is not None and active.counted else [],
@@ -255,9 +257,17 @@ def detail(db: Session, report: Report) -> Dict[str, Any]:
         "history": (history_for(db, f.respondent_id, f.policy_id, report) if f and f.respondent_id and f.policy_id else None),
         "maybe_same": ({"report_id": candidate.report_id, "created_at": candidate.created_at, "seen_at": candidate.seen_at,
                         "incident_at": R.incident_at(candidate), "landmark": candidate.landmark, "description": candidate.description,
-                        "reporter": candidate.reporter.name if candidate.reporter else None} if candidate else None),
+                        "reporter": candidate.reporter.name if candidate.reporter else None,
+                        "animal_type": candidate.animal_type,
+                        "animal_breed": candidate.animal_breed,
+                        "animal_color": candidate.animal_color,
+                        "animal_colors": candidate.animal_colors or [],
+                        "latitude": candidate.latitude,
+                        "longitude": candidate.longitude,
+                        "media": [{"id": m.media_id, "url": m.file_url, "type": (m.media_type or "").lower()} for m in (candidate.media or [])]} if candidate else None),
+        "media": [{"id": m.media_id, "url": m.file_url, "type": (m.media_type or "").lower()} for m in (report.media or [])],
         **_same_occurrence(db, report),
-        "separate_from": ({"report_id": f.separate_from_report_id, "at": f.separate_at, "by": names.get(f.separate_by)}
+        "separate_from": ({"report_id": f.separate_from_report_id, "at": f.separate_at, "by": names.get(f.separate_by) if f.separate_by is not None else None}
                           if f and f.separate_from_report_id else None),
         "subdivision_name": subdivision.subdivision_name if subdivision else None,
     }
@@ -297,7 +307,7 @@ def workspace(db: Session, user: User, subdivision_id: Optional[int]) -> Dict[st
             "rule": ({"policy_id": f.policy_id, "title": f.policy_title} if f and f.policy_id else None), "no_rule": bool(f and f.no_rule),
             "respondent": respondents.get(f.respondent_id) if f and f.respondent_id else None,
             "suspect": _suspect(rep), "checking": bool(f and f.check_note and not f.respondent_id),
-            "offense": ({"counted": bool(o.counted), "number": o.offense_number, "confirmed_at": o.confirmed_at} if o else None),
+            "offense": ({"counted": o.counted, "number": o.offense_number, "confirmed_at": o.confirmed_at} if o else None),
             "suggestion": suggestion,
             "steps": [{"step_id": s.step_id, "kind": s.kind, "state": s.state, "due_at": s.due_at}
                       for s in sorted(steps.get(o.offense_id, []) if o else [], key=lambda s: order.get(s.kind, 99))],
@@ -388,30 +398,47 @@ def leads(db: Session, report: Report, skip_respondent_id: Optional[int] = None)
 
     registry = []
     text = " ".join(filter(None, [report.animal_color, report.description, report.suspected_owner_details]))
-    colours, size = set(R.colours_in(text)), R.size_in(text)
+    colours = R.report_colors(report) | set(R.colours_in(text))
+    size = R.size_in(text)
+    rep_breed = R.breed_of_report(report)
     kind = (report.animal_type or "").strip().lower()
-    if colours and kind in ("dog", "cat"):
+    if (colours or rep_breed) and kind in ("dog", "cat"):
         owners = {u.user_id: u for u in residents}
         for pet in db.query(Pet).filter(Pet.owner_id.in_(list(owners) or [-1])).all():
-            owner = owners.get(pet.owner_id)
-            if owner is None or (pet.status or "").lower() == "deceased" or (pet.pet_type or "").lower() != kind:
+            owner = owners.get(pet.owner_id) if pet.owner_id is not None else None
+            if owner is None or (pet.status or "").lower() in ("deceased", "merged") or (pet.pet_type or "").lower() != kind:
                 continue
             if f"pet:{pet.pet_id}" in ruled or excluded(owner.user_id, None):
                 continue
-            pet_colours = set(R.colours_in(" ".join(filter(None, [pet.color_markings, pet.primary_color]))))
-            shared = sorted(colours & pet_colours)
-            if not shared:
+            if not R.breeds_compatible(rep_breed, pet.breed):
                 continue
-            why = [pet.pet_type.lower(), *shared]
+            p_colours = R.pet_colors(pet)
+            shared = sorted(colours & p_colours)
+            breed_matched = bool(
+                rep_breed and pet.breed
+                and rep_breed.strip().lower() not in ("unknown", "n/a", "not sure", "other")
+                and pet.breed.strip().lower() not in ("unknown", "n/a", "not sure", "other")
+                and R.breeds_compatible(rep_breed, pet.breed)
+            )
+            if not shared and (not breed_matched or (colours and p_colours)):
+                continue
+            why = [pet.pet_type.lower()]
+            if breed_matched and pet.breed:
+                why.append(pet.breed.strip())
+            why.extend(shared)
             if size and pet.size_category and pet.size_category.lower() == size.lower():
                 why.append(size.lower())
             same_street = bool(street and R.street_of(owner.address) == street)
-            if same_street:
+            if street and same_street:
                 why.append(f"owner lives on {street.title()} St.")
+            colour_display = (
+                ", ".join(pet.colors) if isinstance(getattr(pet, "colors", None), list) and pet.colors
+                else (pet.color_markings or pet.primary_color)
+            )
             registry.append({"key": f"pet:{pet.pet_id}", "pet_id": pet.pet_id, "pet_name": pet.pet_name, "pet_type": pet.pet_type,
-                             "breed": pet.breed, "colour": pet.color_markings or pet.primary_color, "size": pet.size_category,
-                             "photo_url": pet.photo_url, "owner_user_id": owner.user_id, "owner_name": owner.name,
-                             "owner_address": owner.address or "", "why": why, "_rank": (same_street, len(why))})
+                             "breed": pet.breed, "colour": colour_display, "size": pet.size_category,
+                             "photo_url": pet.photo_url or pet.photo_front_url, "owner_user_id": owner.user_id, "owner_name": owner.name,
+                             "owner_address": owner.address or "", "why": why, "_rank": (breed_matched, same_street, len(shared), len(why))})
         registry.sort(key=lambda x: x["_rank"], reverse=True)
         for x in registry:
             x.pop("_rank", None)
@@ -704,6 +731,8 @@ def step_action(db: Session, report: Report, actor: User, step_id: int, data: St
             wrong("This letter was already issued for delivery. Print it again from the step if you need a copy.")
         letter_date = need(data.letter_date, "Choose the date on the letter.")
         info: Dict[str, Any] = {"letter_date": letter_date.isoformat()}
+        summons_at = None
+        place = None
         if kind == R.LETTER_2:
             summons_at = need(data.summons_at, "Choose the date and time of the summons.").replace(tzinfo=None)
             place = (data.place or "").strip() or "Subdivision office"
@@ -714,6 +743,59 @@ def step_action(db: Session, report: Report, actor: User, step_id: int, data: St
                 summons.details = {**(summons.details or {}), "place": place}
                 _event(db, summons, actor, "scheduled", now, {"at": summons_at.isoformat(), "place": place})
         details.update(letter_date=letter_date.isoformat(), prepared_at=now.isoformat(timespec="seconds"))
+        if data.template_id is not None:
+            details["template_id"] = data.template_id
+        if data.required_action:
+            details["required_action"] = data.required_action
+        if data.field_overrides:
+            details["field_overrides"] = data.field_overrides
+        if data.attachment_url:
+            details["attachment_url"] = data.attachment_url
+            details["attachment_name"] = data.attachment_name or "Warning letter attachment"
+        # Generate/store an immutable warning letter snapshot from the subdivision's dynamic template
+        from app.services import warning_letters as WL
+        resp_row = db.get(ComplaintRespondent, off.respondent_id)
+        resp_user = db.get(User, resp_row.user_id) if (resp_row and resp_row.user_id) else None
+        pet_obj = db.get(Pet, report.pet_id) if report.pet_id else None
+        pol = _policy(db, report.subdivision_id, off.policy_id)
+        pol_ref = f"{off.policy_reference} — {off.policy_title}" if off.policy_reference else off.policy_title
+        req_act = (data.required_action or "").strip() or (pol.summary if pol and pol.summary else "Comply with subdivision rules and prevent recurrence.")
+        wlevel = "2nd Warning" if kind == R.LETTER_2 else "1st Warning"
+        existing_letter = db.query(WL.GeneratedWarningLetter).filter(
+            WL.GeneratedWarningLetter.complaint_step_id == step.step_id
+        ).first()
+        if existing_letter is None:
+            gen = WL.create_generated_letter(
+                db=db,
+                subdivision_id=report.subdivision_id,
+                report=report,
+                owner=resp_user,
+                recipient_name=resp_row.name if resp_row else (resp_user.name if resp_user else "Resident"),
+                recipient_address=resp_row.address if resp_row else (resp_user.address if resp_user else None),
+                pet=pet_obj,
+                issuer=actor,
+                warning_level=wlevel,
+                policy_id=off.policy_id,
+                policy_reference=pol_ref,
+                violation_description=report.description or f"Verified violation of {off.policy_title}.",
+                required_action=req_act,
+                template_id=data.template_id,
+                complaint_step_id=step.step_id,
+                summons_at=summons_at,
+                summons_place=place,
+                overrides=data.field_overrides,
+                strict_required=data.template_id is not None,
+                attachment_url=data.attachment_url,
+                attachment_name=data.attachment_name,
+            )
+            details["letter_id"] = gen.letter_id
+            details["warning_reference"] = gen.warning_reference
+        elif data.attachment_url:
+            existing_letter.placeholders_json = {
+                **(existing_letter.placeholders_json or {}),
+                "attachment_url": data.attachment_url,
+                "attachment_name": data.attachment_name or "Warning letter attachment",
+            }
         step.state = "prepared"
         _event(db, step, actor, "prepared", now, info, rid)
     elif a == "issue" and letter:
@@ -721,6 +803,52 @@ def step_action(db: Session, report: Report, actor: User, step_id: int, data: St
             wrong("Prepare the letter first." if step.state == "to_prepare" else "This letter was already issued.")
         via = need(data.via, "Say who delivers it.")
         details.update(issued_at=now.isoformat(timespec="seconds"), issued_via=via)
+        # Notify the responsible resident automatically if they have a StraySafe account
+        from app.services import warning_letters as WL
+        gen = db.query(WL.GeneratedWarningLetter).filter(
+            WL.GeneratedWarningLetter.complaint_step_id == step.step_id
+        ).first()
+        if gen is None:
+            resp_row = db.get(ComplaintRespondent, off.respondent_id)
+            resp_user = db.get(User, resp_row.user_id) if (resp_row and resp_row.user_id) else None
+            pet_obj = db.get(Pet, report.pet_id) if report.pet_id else None
+            pol = _policy(db, report.subdivision_id, off.policy_id)
+            pol_ref = f"{off.policy_reference} — {off.policy_title}" if off.policy_reference else off.policy_title
+            req_act = details.get("required_action") or (pol.summary if pol and pol.summary else "Comply with subdivision rules and prevent recurrence.")
+            summons = next((s for s in R.step_rows(db, off.offense_id) if s.kind == R.SUMMONS), None) if kind == R.LETTER_2 else None
+            gen = WL.create_generated_letter(
+                db=db,
+                subdivision_id=report.subdivision_id,
+                report=report,
+                owner=resp_user,
+                recipient_name=resp_row.name if resp_row else (resp_user.name if resp_user else "Resident"),
+                recipient_address=resp_row.address if resp_row else (resp_user.address if resp_user else None),
+                pet=pet_obj,
+                issuer=actor,
+                warning_level="2nd Warning" if kind == R.LETTER_2 else "1st Warning",
+                policy_id=off.policy_id,
+                policy_reference=pol_ref,
+                violation_description=report.description or f"Verified violation of {off.policy_title}.",
+                required_action=req_act,
+                template_id=data.template_id or details.get("template_id"),
+                complaint_step_id=step.step_id,
+                summons_at=summons.due_at if summons else None,
+                summons_place=(summons.details or {}).get("place") if summons else None,
+                overrides=data.field_overrides or details.get("field_overrides"),
+            )
+            details["letter_id"] = gen.letter_id
+            details["warning_reference"] = gen.warning_reference
+        if gen.recipient_user_id and gen.notification_status == "pending":
+            resp_user = db.get(User, gen.recipient_user_id)
+            pet_obj = db.get(Pet, gen.pet_id) if gen.pet_id else None
+            WL.deliver_warning_notification(
+                db=db,
+                letter=gen,
+                owner=resp_user,
+                pet=pet_obj,
+                violation_type=off.policy_title,
+                description=report.description or off.policy_title,
+            )
         step.state = "issued"
         _event(db, step, actor, "issued", now, {"via": via}, rid)
     elif a == "deliver" and letter:
@@ -815,7 +943,7 @@ def step_action(db: Session, report: Report, actor: User, step_id: int, data: St
         if len(outcome) < 5:
             raise HTTPException(status_code=422, detail="Write the outcome.")
         attendance = (data.attendance.model_dump() if data.attendance else {"complainant": False, "respondent": False, "leader": False}) if data.held else None
-        details.update(held=bool(data.held), outcome=outcome, attendance=attendance)
+        details.update(held=data.held, outcome=outcome, attendance=attendance)
         step.state = "held" if data.held else "not_held"
         _event(db, step, actor, step.state, now, {"outcome": outcome, "attendance": attendance, "at": _iso(step.due_at)}, rid)
     else:

@@ -92,10 +92,10 @@ def _rows(db: Session, reports: List[Report]) -> List[Dict[str, Any]]:
                                .filter(ReportMedia.report_id.in_(ids)).order_by(ReportMedia.media_id).all()):
             entry = photos.setdefault(rid, {"count": 0, "thumbnail": None, "photos": []})
             entry["count"] += 1
-            if kind == "Image" and url:
+            if url:
                 entry["photos"].append(url)
                 if entry["thumbnail"] is None:
-                    entry["thumbnail"] = url            # the first photo is the list thumbnail
+                    entry["thumbnail"] = url            # the first photo or video is the list thumbnail
 
     decided = identity_decision.decided_ids(db, reports)
     rows = []
@@ -107,18 +107,18 @@ def _rows(db: Session, reports: List[Report]) -> List[Dict[str, Any]]:
         rows.append({
             "report_id": r.report_id, "reported_at": r.created_at, "updated_at": (last.created_at if last else None) or r.created_at,
             "last_event": ({"history_id": last.history_id, "at": last.created_at, "text": _clip(last.remarks, 240),
-                            "by_name": names.get(last.updated_by)} if last and last.remarks else None),
+                            "by_name": names.get(last.updated_by) if last.updated_by is not None else None} if last and last.remarks else None),
             "subdivision_id": r.subdivision_id,
             "case_status": status, "status_label": V.STATUS_LABELS[status], "legacy_status_id": r.current_status_id,
-            "priority": case_state.priority_of(r), "is_sensitive": bool(r.is_sensitive),
+            "priority": case_state.priority_of(r), "is_sensitive": r.is_sensitive,
             "category": {"category_id": r.category_id, "name": r.category.category_name if r.category else None, "family": family,
                          "label": V.CATEGORY_FAMILIES[family]},
-            "animal": {"type": r.animal_type, "breed": r.animal_breed, "color": r.animal_color, "size": r.estimated_size,
+            "animal": {"type": r.animal_type, "breed": r.animal_breed, "color": r.animal_color, "colors": r.animal_colors or [], "size": r.estimated_size,
                        "count": r.animal_count, "description": _clip(r.description), "condition": _clip(r.condition)},
             "location": {"landmark": r.landmark, "latitude": float(r.latitude) if r.latitude is not None else None,
                          "longitude": float(r.longitude) if r.longitude is not None else None},
-            "reporter": {"user_id": r.user_id, "name": names.get(r.user_id)},
-            "assigned_leader_id": r.assigned_leader_id, "assigned_leader_name": names.get(r.assigned_leader_id),
+            "reporter": {"user_id": r.user_id, "name": names.get(r.user_id) if r.user_id is not None else None},
+            "assigned_leader_id": r.assigned_leader_id, "assigned_leader_name": names.get(r.assigned_leader_id) if r.assigned_leader_id is not None else None,
             "assessment": {"incident": case_state.incident_of(r), "evidence_sufficiency": case_state.sufficiency_of(r),
                            "urgency": case_state.urgency_of(r), "saved_at": r.assessed_at},
             "identity_status": case_state.identity_of(r), "identity_decided": r.report_id in decided,

@@ -180,6 +180,22 @@
   dialog.sa-dialog::backdrop { background: rgb(41 37 36 / 0.45); }
   dialog.sa-dialog--sm { width: min(440px, calc(100vw - 32px)); }
   dialog.sa-dialog--lg { width: min(760px, calc(100vw - 32px)); }
+
+  /* ----------------------------------------------------------------------------- media lightbox (top layer) */
+  dialog.sa-media-lightbox {
+    position: fixed; inset: 0; margin: 0; padding: 0;
+    width: 100vw; max-width: 100vw; height: 100vh; max-height: 100vh;
+    border: 0; border-radius: 0; background: rgba(0, 0, 0, 0.96);
+    color: #fff; outline: none; overflow: hidden; z-index: 2147483647;
+  }
+  dialog.sa-media-lightbox[open] {
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  dialog.sa-media-lightbox::backdrop {
+    background: rgba(0, 0, 0, 0.88);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
   .sa-dialog__head { padding: 22px 24px 4px; }
   .sa-dialog__title { font-size: 17px; line-height: 24px; font-weight: 650; letter-spacing: -0.01em; }
   .sa-dialog__desc { margin-top: 4px; color: var(--sa-ink-2); font-size: 14px; }

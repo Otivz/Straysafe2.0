@@ -134,6 +134,14 @@ export interface Warning {
   outcomeNote?: string;
   concludedAt?: string;
   observations: ComplianceObservation[];
+  letterId?: number | null;
+  warningReference?: string | null;
+  warningLevel?: string | null;
+  templateName?: string | null;
+  templateVersionNumber?: number | null;
+  notificationStatus?: string | null;
+  notificationError?: string | null;
+  viewedAt?: string | null;
 }
 
 /** `to_contact`: the assistance is written down but nobody has been contacted yet. Saving a referral is never proof that the organisation was reached. */

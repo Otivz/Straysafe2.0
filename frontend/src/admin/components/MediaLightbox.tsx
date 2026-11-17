@@ -42,6 +42,7 @@ export function MediaLightbox({
   initialIndex?: number;
   onClose: () => void;
 }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [index, setIndex] = useState(Math.max(0, Math.min(initialIndex, items.length - 1)));
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -53,6 +54,27 @@ export function MediaLightbox({
   const current = items[index];
   const isVideo = current?.kind === 'video' || (current?.url && /\.(mp4|webm|mov|ogg)$/i.test(current.url));
   const hasMultiple = items.length > 1;
+
+  // Elevate to browser's top layer via showModal() so it renders above native <dialog> elements
+  useEffect(() => {
+    const el = dialogRef.current;
+    if (el && !el.open && typeof el.showModal === 'function') {
+      try {
+        el.showModal();
+      } catch {
+        // Fallback if already open or not supported
+      }
+    }
+    return () => {
+      if (el && el.open && typeof el.close === 'function') {
+        try {
+          el.close();
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, []);
 
   // Reset zoom & pan when switching media
   useEffect(() => {
@@ -175,11 +197,16 @@ export function MediaLightbox({
   if (!current) return null;
 
   return (
-    <div
+    <dialog
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label="Media preview"
-      className="fixed inset-0 z-[9999] flex flex-col justify-between bg-black/95 text-white select-none backdrop-blur-md transition-opacity duration-200"
+      className="sa-media-lightbox fixed inset-0 m-0 p-0 max-w-none max-h-none w-screen h-screen border-0 bg-black/95 text-white select-none backdrop-blur-md transition-opacity duration-200 outline-none z-[99999]"
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
@@ -358,7 +385,7 @@ export function MediaLightbox({
           <span>Esc to close</span>
         </div>
       </footer>
-    </div>
+    </dialog>
   );
 }
 

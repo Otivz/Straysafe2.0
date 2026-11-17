@@ -274,6 +274,13 @@ def payload_for(db: Session, notif: Notification, user) -> dict:
         image = case_alerts.image_for(db, notif.related_id) if show else None
         if image:
             out["image"] = image
+    elif (notif.type or "").lower() in ("warning", "warning_letter") and user.role_id == 1:
+        from app.models.warning_letter import GeneratedWarningLetter
+        letter = db.query(GeneratedWarningLetter).filter(
+            GeneratedWarningLetter.notification_id == notif.notification_id
+        ).first()
+        if letter is not None:
+            out["url"] = f"/resident-app/warnings/{letter.letter_id}"
     return out
 
 

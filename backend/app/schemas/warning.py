@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, Literal
+from typing import Dict, Optional, Literal
 from datetime import datetime
 
 class WarningCreate(BaseModel):
@@ -14,6 +14,10 @@ class WarningCreate(BaseModel):
     # The confirmed subdivision policy the warning is issued under. May be left out when exactly one confirmed
     # policy applies to the concern; required when several do.
     policy_id: Optional[str] = None
+    # Dynamic warning letter template fields (optional for backwards compatibility)
+    template_id: Optional[int] = None
+    required_action: Optional[str] = None
+    field_overrides: Optional[Dict[str, str]] = None
 
 class WarningResponse(BaseModel):
     warning_id: int
@@ -49,6 +53,16 @@ class WarningResponse(BaseModel):
     report_landmark: Optional[str] = None
     report_animal_type: Optional[str] = None
     report_photo: Optional[str] = None
+
+    # Dynamic warning letter & notification tracking fields
+    letter_id: Optional[int] = None
+    warning_reference: Optional[str] = None
+    template_id: Optional[int] = None
+    template_name: Optional[str] = None
+    template_version_number: Optional[int] = None
+    notification_status: Optional[str] = None
+    notification_error: Optional[str] = None
+    viewed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

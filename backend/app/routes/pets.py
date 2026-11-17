@@ -1,7 +1,7 @@
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status, UploadFile, File, Form
-from sqlalchemy.orm import Session, joinedload, aliased
+from sqlalchemy.orm import Session, joinedload, selectinload, aliased
 from typing import List, cast, Any, Optional
 from sqlalchemy import or_, and_
 from app.database import get_db
@@ -19,6 +19,7 @@ from app.utils.auth import get_current_user, get_current_staff_or_admin, verify_
 from app.utils import pet_duplicates
 from app.utils import lost_pet_rules
 from app.utils.case_review import require_review_permission
+from app.utils.color_tags import apply_pet_color_payload
 
 router = APIRouter(
     prefix="/pets",
@@ -450,6 +451,154 @@ def answer_merge_request(request_id: int, body: _MergeAnswerBody, req: Request, 
     return {"ok": True, "merged": body.accept, "moved": moved}
 
 
+@router.get("/{pet_id}/confirmed-incidents")
+def get_pet_confirmed_incidents(
+    pet_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Sanitized confirmed-incident history for the registered owner of a pet.
+
+    Only returns incidents where:
+    - the caller is the pet's registered owner,
+    - the report is not a lost-pet report and not merged/split-child,
+    - a Subdivision Leader verified the incident,
+    - the pet's identity was explicitly confirmed by staff/leader (never raw reporter links),
+    - and the incident occurred after the caller became the pet's owner.
+
+    Reporter identity, contact details, and internal staff notes are strictly omitted.
+    """
+    from app.models.leader_identity import LeaderIdentityVerification
+    from app.models.report_match import ReportMatch
+    from app.models.warning_letter import GeneratedWarningLetter
+    from app.services.warning_letters import case_ref_for
+    from app.utils import case_state, case_vocab as V, identity_decision
+    from app.utils.case_groups import pet_link_trusted
+    from app.utils.pet_ownership import became_owner_after
+
+    pet = db.get(Pet, pet_id)
+    if not pet:
+        raise HTTPException(status_code=404, detail="Pet not found")
+    if not pet.owner_id or pet.owner_id != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the pet's registered owner can view its confirmed incident history.",
+        )
+
+    candidates = (
+        db.query(Report)
+        .options(joinedload(Report.category), selectinload(Report.disputes))
+        .filter(
+            Report.pet_id == pet_id,
+            Report.duplicate_of_report_id.is_(None),
+            Report.split_from_report_id.is_(None),
+        )
+        .order_by(Report.created_at.desc())
+        .all()
+    )
+
+    non_lost = [r for r in candidates if not V.is_lost_pet_report(r)]
+    if not non_lost:
+        return {"items": []}
+
+    decided_report_ids = identity_decision.decided_ids(db, non_lost)
+    non_lost_ids = [r.report_id for r in non_lost]
+
+    leader_verified_ids = {
+        rid
+        for (rid,) in db.query(LeaderIdentityVerification.report_id)
+        .filter(
+            LeaderIdentityVerification.report_id.in_(non_lost_ids),
+            LeaderIdentityVerification.pet_id == pet_id,
+        )
+        .all()
+    }
+    owner_confirmed_match_ids = {
+        rid
+        for (rid,) in db.query(ReportMatch.source_report_id)
+        .filter(
+            ReportMatch.source_report_id.in_(non_lost_ids),
+            ReportMatch.matched_pet_id == pet_id,
+            ReportMatch.status == "CONFIRMED_MATCH",
+            ReportMatch.owner_confirmation_status == "OWNER_CONFIRMED",
+        )
+        .all()
+    }
+
+    kept: list[Report] = []
+    for rep in non_lost:
+        if not case_state.incident_is_verified(rep):
+            continue
+        if not pet_link_trusted(rep):
+            continue
+        leader_decided = (
+            rep.report_id in decided_report_ids
+            and case_state.identity_of(rep) == "identified"
+        )
+        match_confirmed = (
+            rep.report_id in leader_verified_ids
+            or rep.report_id in owner_confirmed_match_ids
+        )
+        if not (leader_decided or match_confirmed):
+            continue
+        when = rep.seen_at or rep.created_at
+        if became_owner_after(db, pet.pet_id, current_user.user_id, when):
+            continue
+        kept.append(rep)
+
+    kept_ids = [r.report_id for r in kept]
+    warned_report_ids = (
+        {
+            rid
+            for (rid,) in db.query(GeneratedWarningLetter.report_id)
+            .filter(
+                GeneratedWarningLetter.report_id.in_(kept_ids),
+                GeneratedWarningLetter.recipient_user_id == current_user.user_id,
+            )
+            .all()
+            if rid is not None
+        }
+        if kept_ids
+        else set()
+    )
+
+    items = []
+    for rep in kept:
+        cat_name = rep.category.category_name if rep.category else None
+        fam = V.category_family(cat_name)
+        status_key = case_state.case_status_of(rep)
+        when = rep.seen_at or rep.created_at
+        findings = []
+        if rep.verified_actual_bite:
+            findings.append("bite incident")
+        elif rep.verified_attempted_bite:
+            findings.append("attempted bite")
+        if rep.verified_chasing:
+            findings.append("chasing")
+        if rep.verified_aggressive:
+            findings.append("aggressive behavior")
+        if rep.verified_injury:
+            findings.append("injury")
+        summary = (
+            f"Confirmed findings: {', '.join(findings)}."
+            if findings
+            else V.CATEGORY_DESCRIPTIONS.get(fam, "Verified subdivision incident involving this pet.")
+        )
+        items.append({
+            "report_id": rep.report_id,
+            "reference_code": case_ref_for(rep),
+            "category": V.CATEGORY_FAMILIES.get(fam, cat_name or "Animal Concern"),
+            "incident_date": when.isoformat() if when else None,
+            "status": status_key,
+            "status_label": V.STATUS_LABELS.get(status_key, "Under review"),
+            "summary": summary,
+            "has_warning_letter": rep.report_id in warned_report_ids,
+        })
+
+    return {"items": items}
+
+
 @router.get("/{pet_id}/merge-candidates")
 def get_merge_candidates(pet_id: int, q: Optional[str] = None, db: Session = Depends(get_db),
                          current_user: User = Depends(get_current_staff_or_admin)):
@@ -738,6 +887,7 @@ def create_pet(
     current_user: User = Depends(get_current_user)
 ):
     pet_dict = pet.model_dump()
+    apply_pet_color_payload(pet_dict)
     pet_dict["pet_type"] = _normalize_species(pet_dict.get("pet_type"))
     # What the registering person says about bites / chasing is a declaration. The verified history starts empty and
     # is counted only from verified incident reports (refresh_pet_behavior).
@@ -1012,7 +1162,8 @@ def update_pet(
     for key in ("declared_bite_history", "declared_chase_behavior"):
         if key in update_data and update_data[key] is None:
             update_data.pop(key)
-    if update_data.get("color_markings"):
+    apply_pet_color_payload(update_data)
+    if update_data.get("color_markings") or update_data.get("colors"):
         if "secondary_color" not in pet_update.model_fields_set:
             db_pet.secondary_color = None
         if "tertiary_color" not in pet_update.model_fields_set:

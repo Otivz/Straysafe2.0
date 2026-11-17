@@ -17,7 +17,8 @@ Leads and "same occurrence?" are suggestions only: a name, an address or a look-
 import math
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from difflib import SequenceMatcher
+from typing import Any, Dict, Iterable, List, Literal, Optional, Sequence, Set, Tuple, overload
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -189,17 +190,125 @@ def same_place(a: Report, b: Report) -> bool:
 
 
 # -------------------------------------------------------------------------------------------- same occurrence?
+def valid_animal_type(value: Optional[str]) -> Optional[str]:
+    """A valid, known animal type (normalized label), or None when missing, empty, or Unknown."""
+    if not value:
+        return None
+    val = value.strip()
+    if val.lower() in ("", "unknown", "none", "n/a"):
+        return None
+    norm = V.normalize_animal_type(val)
+    if norm and norm.lower() != "unknown":
+        return norm
+    return val.capitalize()
+
+
+def breeds_compatible(a: Optional[str], b: Optional[str]) -> bool:
+    """True when either breed is unspecified, or both refer to the same breed (with minor spelling tolerance)."""
+    ba = (a or "").strip().lower()
+    bb = (b or "").strip().lower()
+    unknown = {"", "unknown", "n/a", "not sure", "other"}
+    if ba in unknown or bb in unknown:
+        return True
+    if ba == bb or ba in bb or bb in ba:
+        return True
+    return SequenceMatcher(None, ba, bb).ratio() >= 0.84
+
+
+_KNOWN_BREEDS: Tuple[str, ...] = (
+    "german shepherd", "german sheperd", "golden retriever", "shih tzu", "chow chow",
+    "british shorthair", "maine coon", "aspin", "puspin", "labrador", "poodle",
+    "husky", "siberian husky", "pug", "chihuahua", "beagle", "pomeranian",
+    "dachshund", "bulldog", "french bulldog", "corgi", "rottweiler", "doberman",
+    "maltese", "spitz", "jack russell", "terrier", "persian", "siamese",
+    "ragdoll", "bengal", "american bully", "pitbull", "belgian malinois",
+)
+
+
+def breed_of_report(report: Report) -> Optional[str]:
+    """Explicit `animal_breed` if given, else a known breed mentioned in `animal_color` / `description`."""
+    explicit = (getattr(report, "animal_breed", None) or "").strip()
+    if explicit:
+        return explicit
+    text = " ".join(filter(None, [getattr(report, "animal_color", None), getattr(report, "description", None)])).lower()
+    if not text:
+        return None
+    for b in _KNOWN_BREEDS:
+        if re.search(rf"\b{re.escape(b)}\b", text):
+            return b
+    return None
+
+
+def pet_colors(pet: Any) -> Set[str]:
+    """Normalized colour tags for a Pet from its `colors` JSON array and text colour fields."""
+    tags: Set[str] = set()
+    raw = getattr(pet, "colors", None)
+    if isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, str) and item.strip():
+                tags.add("grey" if item.strip().lower() == "gray" else item.strip().lower())
+    text = " ".join(
+        filter(
+            None,
+            [
+                getattr(pet, "color_markings", None),
+                getattr(pet, "primary_color", None),
+                getattr(pet, "secondary_color", None),
+                getattr(pet, "tertiary_color", None),
+            ],
+        )
+    )
+    for w in colours_in(text):
+        tags.add("grey" if w == "gray" else w)
+    return tags
+
+
+def report_colors(report: Report) -> Set[str]:
+    """Normalized colour tags for a report from its `animal_colors` array or `animal_color` text."""
+    raw = getattr(report, "animal_colors", None)
+    tags: Set[str] = set()
+    if isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, str) and item.strip():
+                tags.add("grey" if item.strip().lower() == "gray" else item.strip().lower())
+    if not tags:
+        for w in colours_in(getattr(report, "animal_color", None)):
+            tags.add("grey" if w == "gray" else w)
+    return tags
+
+
+def colors_compatible(a: Report, b: Report) -> bool:
+    """True when either report has no colour tags, or both share at least one colour."""
+    ca, cb = report_colors(a), report_colors(b)
+    if not ca or not cb:
+        return True
+    return bool(ca & cb)
+
+
 def same_occurrence_candidate(report: Report, others: Sequence[Report], linked_ids: Iterable[int],
                               separate_from: Optional[int]) -> Optional[Report]:
     """
     An earlier animal complaint that may describe the same occurrence as this one: seen within SAME_OCCURRENCE_HOURS and at the same
-    place, not already linked to it and not already judged a separate incident. Only the later complaint asks; the Leader decides.
+    place, with the same animal type (and non-conflicting breed/colours), not already linked to it and not already judged a separate
+    incident. Only the later complaint asks; the Leader decides.
     """
+    rep_type = valid_animal_type(report.animal_type)
+    if not rep_type:
+        return None
+
     linked = set(linked_ids)
     when = incident_at(report)
     best: Optional[Tuple[float, Report]] = None
     for other in others:
         if other.report_id == report.report_id or other.report_id in linked or other.report_id == separate_from:
+            continue
+        # Animal type comparison: must have a valid animal type and match before evaluating other criteria
+        other_type = valid_animal_type(other.animal_type)
+        if not other_type or other_type != rep_type:
+            continue
+        if not breeds_compatible(getattr(report, "animal_breed", None), getattr(other, "animal_breed", None)):
+            continue
+        if not colors_compatible(report, other):
             continue
         if (other.created_at or when) > (report.created_at or when):
             continue                      # the later complaint asks about the earlier one, never the other way
@@ -219,7 +328,16 @@ def respondent_view(r: ComplaintRespondent, user: Any = None) -> Dict[str, Any]:
     return {"respondent_id": r.respondent_id, "user_id": r.user_id, "name": name, "address": address, "has_account": r.user_id is not None}
 
 
+@overload
+def finding_of(db: Session, report: Report, create: Literal[True]) -> ComplaintFinding: ...
+
+
+@overload
+def finding_of(db: Session, report: Report, create: bool = False) -> Optional[ComplaintFinding]: ...
+
+
 def finding_of(db: Session, report: Report, create: bool = False) -> Optional[ComplaintFinding]:
+    """Return the finding row for a report, creating it when ``create=True``."""
     row = db.get(ComplaintFinding, report.report_id)
     if row is None and create:
         row = ComplaintFinding(report_id=report.report_id, subdivision_id=report.subdivision_id, no_rule=False)

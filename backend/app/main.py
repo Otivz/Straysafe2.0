@@ -49,6 +49,7 @@ from app.models.revoked_token import RevokedToken  # noqa: F401 — ensures tabl
 from app.models.report_dispute import ReportDispute  # noqa: F401
 from app.models.chat import ChatThread, ChatMessage  # noqa: F401
 from app.models.warning import OwnerWarning  # noqa: F401
+from app.models.warning_letter import WarningLetterTemplate, WarningLetterTemplateVersion, GeneratedWarningLetter  # noqa: F401
 from app.models.report_match import ReportMatch  # noqa: F401
 from app.models.landmark import Landmark  # noqa: F401
 from app.models.coverage import CoverageSetting  # noqa: F401
@@ -1384,6 +1385,25 @@ def ensure_report_visibility_review():
 
 ensure_report_visibility_review()
 
+
+def ensure_animal_color_array_columns():
+    """Add structured JSON array columns (`pets.colors`, `reports.animal_colors`) if missing."""
+    try:
+        with engine.begin() as conn:
+            for table_name, col_name in [("pets", "colors"), ("reports", "animal_colors")]:
+                exists = conn.execute(text(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                    "WHERE TABLE_SCHEMA = DATABASE() "
+                    f"AND TABLE_NAME = '{table_name}' AND COLUMN_NAME = '{col_name}'"
+                )).scalar()
+                if not exists:
+                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} JSON NULL"))
+    except Exception as e:
+        logger.warning(f"ensure_animal_color_array_columns: {e}")
+
+
+ensure_animal_color_array_columns()
+
 # Case workflow alignment (Subdivision Admin): new columns, tables, the six categories and the backfill. Idempotent, never
 # drops or rewrites existing data (app/db_migrations/case_alignment.py). strict=True: if the schema still cannot support the
 # case workflow code afterwards, this raises CaseAlignmentError and the application does NOT start, instead of running
@@ -1574,6 +1594,9 @@ app.include_router(chat.router)
 app.include_router(report_returns.router)
 app.include_router(pet_ownership.router)
 app.include_router(warnings.router)
+from app.routes import warning_letters as warning_letter_routes  # noqa: E402
+app.include_router(warning_letter_routes.templates_router)
+app.include_router(warning_letter_routes.letters_router)
 app.include_router(owner_followups.router)
 app.include_router(matches.router)
 app.include_router(manual_matching_routes.router)

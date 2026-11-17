@@ -89,3 +89,20 @@ export async function httpGetPage<T>(url: string, params?: Query, options: CallO
 export async function httpUpload<T>(url: string, form: FormData, options: CallOptions = {}): Promise<T> {
   return call<T>('post', url, form, undefined, { timeoutMs: 120_000, ...options });
 }
+
+/** Download a binary file (PDF/DOCX) through the authenticated API client. */
+export async function httpDownloadBlob(url: string, filename: string, params?: Query): Promise<void> {
+  try {
+    const res = await api.request<Blob>({ method: 'get', url, params, responseType: 'blob', timeout: 60_000 });
+    const blobUrl = URL.createObjectURL(res.data);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
+  } catch (err) {
+    throw toApiError(err);
+  }
+}

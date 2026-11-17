@@ -14,6 +14,7 @@ import {
   Landmark,
   LayoutGrid,
   Megaphone,
+  Play,
   Scale,
   Settings,
   ShieldCheck,
@@ -65,12 +66,14 @@ function ComplaintCard({
   const [photoIndex, setPhotoIndex] = useState(0);
   const [imgFailed, setImgFailed] = useState(false);
 
-  const availablePhotos = (c?.evidence ?? [])
-    .filter((e) => (e.kind === 'photo' || e.url) && !e.url?.endsWith('.mp4') && !e.url?.endsWith('.webm'))
-    .map((e) => e.url!);
-  const photos = Array.from(new Set(availablePhotos));
-  const hasPhotos = photos.length > 0 && !imgFailed;
-  const currentPhoto = hasPhotos ? photos[((photoIndex % photos.length) + photos.length) % photos.length] : null;
+  const availableMedia = (c?.evidence ?? [])
+    .filter((e): e is typeof e & { url: string } => Boolean(e.url))
+    .map((e) => {
+      const isVid = e.kind === 'video' || e.url.endsWith('.mp4') || e.url.endsWith('.webm') || e.url.includes('/video/upload/');
+      return { url: e.url, kind: isVid ? ('video' as const) : ('photo' as const) };
+    });
+  const mediaList = availableMedia.filter((m, i, arr) => arr.findIndex((x) => x.url === m.url) === i);
+  const currentMedia = mediaList.length > 0 && !imgFailed ? mediaList[((photoIndex % mediaList.length) + mediaList.length) % mediaList.length] : null;
 
   const need = needsOf(inputOf(item), now, () => refId)[0];
   const wait = item.steps.map((s) => ({ s, b: stepBadge(s.kind, s.state) })).find((y) => y.b.wait);
@@ -128,24 +131,47 @@ function ComplaintCard({
 
         {/* Body: Thumbnail & Details */}
         <div className="flex gap-3.5 my-3">
-          {currentPhoto ? (
+          {currentMedia ? (
             <div className="relative w-20 h-20 sm:w-22 sm:h-22 rounded-lg overflow-hidden shrink-0 border border-[var(--sa-line)] bg-[var(--sa-sand)] group/img">
-              <img
-                src={currentPhoto}
-                alt=""
-                className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-200 cursor-zoom-in"
-                loading="lazy"
-                onError={() => setImgFailed(true)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openMedia(
-                    photos.map((url, i) => ({ url, title: `${c?.title ?? 'Complaint'} · Photo ${i + 1}` })),
-                    ((photoIndex % photos.length) + photos.length) % photos.length
-                  );
-                }}
-              />
+              {currentMedia.kind === 'video' ? (
+                <div
+                  className="w-full h-full relative flex items-center justify-center bg-black cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openMedia(
+                      mediaList.map((m, i) => ({ url: m.url, kind: m.kind, title: `${c?.title ?? 'Complaint'} · ${m.kind === 'video' ? 'Video' : 'Photo'} ${i + 1}` })),
+                      ((photoIndex % mediaList.length) + mediaList.length) % mediaList.length
+                    );
+                  }}
+                  title="Play video"
+                >
+                  <video
+                    src={currentMedia.url}
+                    preload="metadata"
+                    className="w-full h-full object-cover opacity-80 group-hover/img:opacity-100 transition-opacity"
+                  />
+                  <span className="absolute flex h-7 w-7 items-center justify-center rounded-full bg-black/65 text-white pointer-events-none">
+                    <Play size={13} fill="currentColor" className="translate-x-0.5" />
+                  </span>
+                </div>
+              ) : (
+                <img
+                  src={currentMedia.url}
+                  alt=""
+                  className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-200 cursor-zoom-in"
+                  loading="lazy"
+                  onError={() => setImgFailed(true)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openMedia(
+                      mediaList.map((m, i) => ({ url: m.url, kind: m.kind, title: `${c?.title ?? 'Complaint'} · Photo ${i + 1}` })),
+                      ((photoIndex % mediaList.length) + mediaList.length) % mediaList.length
+                    );
+                  }}
+                />
+              )}
 
-              {photos.length >= 2 && (
+              {mediaList.length >= 2 && (
                 <>
                   <button
                     type="button"
@@ -173,9 +199,9 @@ function ComplaintCard({
                   </button>
                   <span
                     className="absolute bottom-1 right-1 rounded bg-black/75 px-1 py-0.5 text-[9px] font-semibold text-white leading-none shadow-sm"
-                    title={`${photos.length} photos`}
+                    title={`${mediaList.length} media`}
                   >
-                    {(((photoIndex % photos.length) + photos.length) % photos.length) + 1}/{photos.length}
+                    {(((photoIndex % mediaList.length) + mediaList.length) % mediaList.length) + 1}/{mediaList.length}
                   </span>
                 </>
               )}

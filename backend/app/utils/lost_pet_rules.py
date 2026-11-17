@@ -166,15 +166,17 @@ def _clean(value: Any) -> Optional[str]:
 
 def pet_facts(pet: Pet) -> Dict[str, Any]:
     """The facts of a pet record that identify it, as plain JSON. The snapshot freezes this; the Leader screen compares it."""
+    from app.utils.color_tags import parse_pet_colors
+    colors = parse_pet_colors(pet)
     user_color = _clean(pet.color_markings)
     fallback_colors = [c for c in (_clean(pet.primary_color), _clean(pet.secondary_color), _clean(pet.tertiary_color)) if c]
-    color_str = user_color or (", ".join(dict.fromkeys(fallback_colors)) if fallback_colors else None)
+    color_str = user_color or (", ".join(dict.fromkeys(colors or fallback_colors)) if (colors or fallback_colors) else None)
     age = _clean(pet.estimated_age) or (f"Born {pet.birth_date.isoformat()}" if pet.birth_date else None)
     owner = pet.owner
     return {
         "pet_id": pet.pet_id, "reference_code": pet.reference_code, "name": pet.pet_name,
         "species": pet.pet_type, "breed": _clean(pet.breed), "sex": pet.gender or "Unknown",
-        "color": color_str, "markings": _clean(pet.distinctive_markings), "age": age,
+        "color": color_str, "colors": colors, "markings": _clean(pet.distinctive_markings), "age": age,
         "photos": [u for u in (pet.photo_url, pet.photo_front_url, pet.photo_left_url, pet.photo_right_url) if u],
         "registered_at": pet.created_at.isoformat() if pet.created_at else None,
         "registered_by_user_id": pet.registered_by_user_id, "registered_by_name": pet.registered_by_name,
@@ -187,7 +189,8 @@ def report_columns_from_pet(pet: Pet) -> Dict[str, Any]:
     """What the report itself says about the animal: taken from the pet record, whatever the browser sent."""
     facts = pet_facts(pet)
     return {"pet_id": pet.pet_id, "animal_type": pet.pet_type if pet.pet_type in ("Dog", "Cat") else "Unknown",
-            "animal_breed": facts["breed"], "animal_color": (facts["color"] or "")[:255] or None, "estimated_size": None,
+            "animal_breed": facts["breed"], "animal_color": (facts["color"] or "")[:255] or None,
+            "animal_colors": facts.get("colors") or None, "estimated_size": None,
             "animal_count": 1, "is_possible_owned": False, "custody_status": "Sighting"}
 
 

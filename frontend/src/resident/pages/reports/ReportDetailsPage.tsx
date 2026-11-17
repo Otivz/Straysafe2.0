@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Eye, EyeOff, Footprints, Hourglass, MessageSquare, PlusCircle } from 'lucide-react';
+import { Eye, EyeOff, Footprints, Hourglass, MessageSquare, PlusCircle, ShieldAlert } from 'lucide-react';
 import { reportIdOf } from '../../../live/refs';
 import { fmtDateTime } from '../../../preview/lib/format';
 import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
@@ -15,6 +15,7 @@ import { noticeById, reportById } from '../../data/selectors';
 import type { CaseStatus } from '../../data/types';
 import { useNow } from '../../lib/hooks';
 import { pointOf } from '../../lib/location';
+import { residentApi, type ApiGeneratedWarningLetter } from '../../live/api';
 import { LostReport } from './LostReport';
 
 const ORDER: CaseStatus[] = ['reported', 'under_review', 'in_progress', 'closed'];
@@ -28,10 +29,18 @@ export default function ReportDetailsPage() {
   const now = useNow();
   const { reportId } = useParams();
   const report = reportById(state, reportId);
+  const [caseLetters, setCaseLetters] = useState<ApiGeneratedWarningLetter[]>([]);
   // The list holds each report as the server's timeline gives it; the case chat and the latest changes are read when it is opened.
   const load = useRef(loadReport);
   useEffect(() => { load.current = loadReport; });
   useEffect(() => { if (reportId) void load.current(reportId); }, [reportId]);
+  useEffect(() => {
+    const rid = report ? reportIdOf(report.id) : null;
+    if (!state.profile?.id || !rid) return;
+    let live = true;
+    residentApi.caseWarningLetters(rid).then((res) => { if (live) setCaseLetters(res.items); }, () => undefined);
+    return () => { live = false; };
+  }, [state.profile?.id, report]);
   const detail = reportStatus(reportId ?? '');
   if (!report) {
     if (detail.status === 'idle' || detail.status === 'loading') return <Screen title="Report" back="/reports"><ListSkeleton rows={3} /></Screen>;
@@ -120,6 +129,10 @@ export default function ReportDetailsPage() {
       <Section title="Details">
         <dl className="rs-kv">
           <div><dt>Animal</dt><dd>{ANIMAL_TYPES[report.animalType]}{report.petName ? ` · ${report.petName}` : ''}</dd></div>
+          {report.breed ? <div><dt>Breed</dt><dd>{report.breed}</dd></div> : null}
+          {report.colors && report.colors.length > 0 ? (
+            <div><dt>Colour or coat</dt><dd><ul className="rs-tags">{report.colors.map((c) => <li key={c}>{c}</li>)}</ul></dd></div>
+          ) : null}
           <div><dt>Seen</dt><dd>{fmtDateTime(report.observedAt)}</dd></div>
           <div><dt>Where</dt><dd>{report.location.label}</dd></div>
           {extra && report.extra ? <div><dt>{extra.label}</dt><dd>{report.extra}</dd></div> : null}
@@ -141,6 +154,23 @@ export default function ReportDetailsPage() {
         <Section title="Conversations">
           <div className="rs-list">
             {conversations.map((c) => <Row key={c.id} to={residentPath(`/conversations/${c.id}`)} icon={MessageSquare} title={c.title} meta={c.status === 'closed' ? c.endedReason ?? 'Conversation ended' : c.unread > 0 ? `${c.unread} unread` : c.subtitle} />)}
+          </div>
+        </Section>
+      ) : null}
+
+      {caseLetters.length > 0 ? (
+        <Section title="Warning letters">
+          <div className="rs-list">
+            {caseLetters.map((w) => (
+              <Row
+                key={w.letter_id}
+                to={residentPath(`/warnings/${w.letter_id}`)}
+                icon={ShieldAlert}
+                title={`${w.warning_level} · ${w.warning_reference}`}
+                meta={`Issued ${w.issued_at ? fmtDateTime(w.issued_at) : ''} · Tap to view & download`}
+                trailing={!w.viewed_at ? <span className="rs-pill rs-pill--brand">New</span> : undefined}
+              />
+            ))}
           </div>
         </Section>
       ) : null}

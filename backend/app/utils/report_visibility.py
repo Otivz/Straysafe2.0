@@ -242,7 +242,7 @@ def scrub(text: Optional[str], names: Iterable[str], replacement: str = "a resid
 _OWNER_PRIVATE = ("owner_phone", "owner_email", "owner_address")
 # Kept for an owner who only has an AI-suggested match: enough to recognise the animal, nothing about people
 _MATCH_CARD_FIELDS = (
-    "report_id", "created_at", "category_id", "animal_type", "animal_breed", "animal_color", "estimated_size",
+    "report_id", "created_at", "category_id", "animal_type", "animal_breed", "animal_color", "animal_colors", "estimated_size",
     "animal_count", "landmark", "ai_animal_type", "ai_dominant_color", "ai_coat_pattern", "ai_estimated_size",
     "ai_possible_breed", "status_id", "current_status_id", "subdivision_id", "subdivision_name", "barangay_name",
     "custody_status",
@@ -470,7 +470,7 @@ def redact_response(rep_data, viewer: Optional[User], access: str, report: Repor
 # Nothing about the reporter, the owner, the people handling it, the internal assessment, referrals, warnings,
 # observations, follow-ups, claims or AI findings about risk. Photos and comments are filtered above.
 RESIDENT_SAFE_FIELDS = (
-    "report_id", "created_at", "category_id", "animal_type", "animal_breed", "animal_color", "estimated_size", "animal_count",
+    "report_id", "created_at", "category_id", "animal_type", "animal_breed", "animal_color", "animal_colors", "estimated_size", "animal_count",
     "description", "condition", "custody_status", "landmark", "latitude", "longitude",
     # Where it was first seen (the pin is already rounded to the area by _generalize_location), whether the reporter
     # thinks it is owned, and how many animal records a group report was split into: none of these identify anyone

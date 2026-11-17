@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Banknote, Bell, CalendarDays, Camera, ChevronLeft, ChevronRight, CircleCheck, ClipboardCheck, Copy, FileText, Landmark, Link2, Lock, Map, MapPin, Maximize2, Megaphone, Printer, RotateCcw,
+  Banknote, Bell, CalendarDays, Camera, ChevronLeft, ChevronRight, CircleCheck, ClipboardCheck, Copy, FileText, Landmark, Link2, Lock, Map, MapPin, Maximize2, Megaphone, Play, Printer, RotateCcw,
   ShieldCheck, UserCheck, XCircle, type LucideIcon,
 } from 'lucide-react';
 import { adminPath } from '../../config';
@@ -17,7 +17,7 @@ import { useNow } from '../../../preview/lib/hooks';
 import { errorMessage } from '../../../preview/lib/errors';
 import { reportIdOf } from '../../../live/refs';
 import { complaintsApi, type ApiComplaint, type ApiStep } from '../../complaints/api';
-import { useMediaViewer } from '../../components/MediaLightbox';
+import { useMediaViewer, type LightboxMediaItem } from '../../components/MediaLightbox';
 import { isValidLatLng } from '../../../preview/geo';
 import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
 import { MapLegend } from '../../../preview/map/MapLegend';
@@ -77,11 +77,45 @@ export default function ComplaintPage({ c }: { c: Case }) {
     else if (n.kind === 'resp') setDialog({ kind: 'resp' });
     else setDialog({ kind: n.kind } as ComplaintDialogState);
   };
-  const evidencePhotos = (c.evidence ?? [])
-    .filter((e) => (e.kind === 'photo' || e.url) && !e.url?.endsWith('.mp4') && !e.url?.endsWith('.webm'))
-    .map((e) => e.url!);
-  const photos = Array.from(new Set(evidencePhotos));
-  const currentPhoto = photos.length > 0 ? photos[((photoIdx % photos.length) + photos.length) % photos.length] : null;
+  const mediaItems: LightboxMediaItem[] = (() => {
+    const list: LightboxMediaItem[] = [];
+    const seenUrls = new Set<string>();
+
+    if (d?.media && d.media.length > 0) {
+      for (const m of d.media) {
+        if (m.url && !seenUrls.has(m.url)) {
+          seenUrls.add(m.url);
+          const isVid = m.type === 'video' || m.url.endsWith('.mp4') || m.url.endsWith('.webm') || m.url.includes('/video/upload/');
+          list.push({
+            url: m.url,
+            kind: isVid ? 'video' : 'photo',
+            title: `${c.title} · ${isVid ? 'Video' : 'Photo'} ${list.length + 1}`,
+            source: 'Complainant evidence',
+            caption: c.animal.description || undefined,
+          });
+        }
+      }
+    }
+
+    for (const e of c.evidence ?? []) {
+      if (e.url && !seenUrls.has(e.url)) {
+        seenUrls.add(e.url);
+        const isVid = e.kind === 'video' || e.url.endsWith('.mp4') || e.url.endsWith('.webm') || e.url.includes('/video/upload/');
+        list.push({
+          url: e.url,
+          kind: isVid ? 'video' : 'photo',
+          title: `${c.title} · ${isVid ? 'Video' : 'Photo'} ${list.length + 1}`,
+          source: 'Complainant evidence',
+          caption: c.animal.description || undefined,
+        });
+      }
+    }
+    return list;
+  })();
+
+  const currentMedia = mediaItems.length > 0
+    ? mediaItems[((photoIdx % mediaItems.length) + mediaItems.length) % mediaItems.length]
+    : null;
   const pin = isValidLatLng(c.location.lat, c.location.lng) ? { lat: c.location.lat as number, lng: c.location.lng as number } : null;
   const chip = d.same_as ? <span className="sa-mc__chip" data-tone="muted">Same occurrence</span>
     : closed ? <span className="sa-mc__chip" data-tone="muted">Closed</span>
@@ -116,28 +150,48 @@ export default function ComplaintPage({ c }: { c: Case }) {
       <section className="sa-mc-hero" aria-label="What was reported">
         <div className="sa-mc-hero__photo">
           <div className="sa-mc-photo relative overflow-hidden group">
-            {currentPhoto ? (
+            {currentMedia ? (
               <>
-                <button
-                  type="button"
-                  className="w-full h-full cursor-zoom-in group relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-[var(--sa-brand-tint)]"
-                  onClick={() => openMedia(photos.map((u, i) => ({ url: u, kind: 'photo', title: `${c.title} · Photo ${i + 1}`, source: 'Complainant photo', caption: c.animal.description || undefined })), ((photoIdx % photos.length) + photos.length) % photos.length)}
-                  aria-label="Preview complainant photo"
-                >
-                  <img
-                    src={currentPhoto}
-                    alt="Photo from the complainant"
-                    className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-                    onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
-                  />
-                  <span className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-end justify-end p-2 pointer-events-none">
-                    <span className="rounded-full bg-black/60 p-1.5 text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-md">
-                      <Maximize2 size={14} />
+                {currentMedia.kind === 'video' ? (
+                  <div
+                    className="w-full h-full relative flex items-center justify-center bg-black cursor-pointer group/vid overflow-hidden"
+                    onClick={() => openMedia(mediaItems, ((photoIdx % mediaItems.length) + mediaItems.length) % mediaItems.length)}
+                    title="Click to play video"
+                  >
+                    <video
+                      src={currentMedia.url}
+                      preload="metadata"
+                      className="w-full h-full object-cover opacity-85 group-hover/vid:opacity-95 transition-opacity"
+                    />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-white pointer-events-none">
+                      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/65 backdrop-blur-xs shadow-lg group-hover/vid:scale-110 transition-transform">
+                        <Play size={20} fill="currentColor" className="translate-x-0.5" />
+                      </span>
+                      <span className="text-[11px] font-semibold drop-shadow tracking-wide">Play Video</span>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="w-full h-full cursor-zoom-in group relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-[var(--sa-brand-tint)]"
+                    onClick={() => openMedia(mediaItems, ((photoIdx % mediaItems.length) + mediaItems.length) % mediaItems.length)}
+                    aria-label="Preview complainant photo"
+                  >
+                    <img
+                      src={currentMedia.url}
+                      alt="Photo from the complainant"
+                      className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                      onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
+                    />
+                    <span className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-end justify-end p-2 pointer-events-none">
+                      <span className="rounded-full bg-black/60 p-1.5 text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-md">
+                        <Maximize2 size={14} />
+                      </span>
                     </span>
-                  </span>
-                </button>
+                  </button>
+                )}
 
-                {photos.length >= 2 && (
+                {mediaItems.length >= 2 && (
                   <>
                     <button
                       type="button"
@@ -146,8 +200,8 @@ export default function ComplaintPage({ c }: { c: Case }) {
                         setPhotoIdx((i) => i - 1);
                       }}
                       className="absolute left-1.5 top-1/2 -translate-y-1/2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/65 hover:bg-black/90 text-white shadow transition-all focus:outline-none"
-                      title="Previous photo"
-                      aria-label="Previous photo"
+                      title="Previous media"
+                      aria-label="Previous media"
                     >
                       <ChevronLeft size={15} />
                     </button>
@@ -158,27 +212,27 @@ export default function ComplaintPage({ c }: { c: Case }) {
                         setPhotoIdx((i) => i + 1);
                       }}
                       className="absolute right-1.5 top-1/2 -translate-y-1/2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/65 hover:bg-black/90 text-white shadow transition-all focus:outline-none"
-                      title="Next photo"
-                      aria-label="Next photo"
+                      title="Next media"
+                      aria-label="Next media"
                     >
                       <ChevronRight size={15} />
                     </button>
                     <span
                       className="absolute bottom-2 left-2 rounded bg-black/75 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none shadow-sm pointer-events-none"
                     >
-                      {(((photoIdx % photos.length) + photos.length) % photos.length) + 1} of {photos.length}
+                      {(((photoIdx % mediaItems.length) + mediaItems.length) % mediaItems.length) + 1} of {mediaItems.length}
                     </span>
                   </>
                 )}
               </>
             ) : (
-              <span className="sa-cm-nophoto"><Camera size={22} aria-hidden="true" />No photos</span>
+              <span className="sa-cm-nophoto"><Camera size={22} aria-hidden="true" />No media</span>
             )}
           </div>
         </div>
         <div className="sa-mc-hero__head">
           <h1 className="sa-mc-hero__name" style={{ fontSize: 26, lineHeight: '32px' }}>{c.title}</h1>
-          <p className="sa-mc-hero__about">{ANIMAL_TYPES[c.animal.type]}</p>
+          <p className="sa-mc-hero__about">{ANIMAL_TYPES[c.animal.type]}{d.animal_breed ? ` · ${d.animal_breed}` : ''}</p>
           {c.animal.description && !c.animal.description.startsWith('No description') ? <p className="sa-mc-hero__looks">Looked like: {c.animal.description}</p> : null}
         </div>
         <div className="sa-mc-hero__story">
@@ -436,7 +490,11 @@ function Enforcement({ d, closed, now, onOpen }: { d: ApiComplaint; closed: bool
                 </div>
                 <div className="sa-cm-step__acts">
                   {nx && !closed ? <Button size="sm" onClick={() => onOpen({ kind: 'step', stepId: s.step_id, action: nx.action })}>{nx.label}</Button> : null}
-                  {(s.kind === 'letter_1' || s.kind === 'letter_2') && s.state !== 'to_prepare' ? <Button size="sm" variant="ghost" icon={Printer} onClick={() => onOpen({ kind: 'print', stepId: s.step_id })}>Print again</Button> : null}
+                  {(s.kind === 'letter_1' || s.kind === 'letter_2') && s.state !== 'to_prepare' ? (
+                    <Button size="sm" variant="ghost" icon={Printer} onClick={() => onOpen({ kind: 'print', stepId: s.step_id })}>
+                      {typeof (s.details as Record<string, unknown> | undefined)?.letter_id === 'number' ? 'View / Download' : 'Print again'}
+                    </Button>
+                  ) : null}
                 </div>
               </li>
             );

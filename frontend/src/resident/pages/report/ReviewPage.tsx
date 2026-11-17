@@ -139,6 +139,12 @@ function ReviewForm({ draft, live, onSending }: { draft: Draft; /** false once t
         ) : (
           <>
             <Item label="Animal" to={stepPath('details')}>{animal || 'Not chosen'}</Item>
+            {draft.breed?.trim() ? <Item label="Breed" to={stepPath('details')}>{draft.breed.trim()}</Item> : null}
+            {draft.colors && draft.colors.length > 0 ? (
+              <Item label="Colour or coat" to={stepPath('details')}>
+                <ul className="rs-tags">{draft.colors.map((c) => <li key={c}>{c}</li>)}</ul>
+              </Item>
+            ) : null}
             <Item label="Details" to={stepPath('details')}>{draft.description.trim() || 'Not added'}</Item>
             <Item label="When" to={stepPath('details')}>{fmtDateTime(fromLocalInput(draft.observedAt))}</Item>
             {extra && draft.extra ? <Item label={extra.label} to={stepPath('details')}>{draft.extra}</Item> : null}

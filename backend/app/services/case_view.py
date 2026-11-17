@@ -55,7 +55,8 @@ def contact_view(c: CaseContactLog, names: Dict[int, str]) -> Dict[str, Any]:
             "contact_at": c.contact_at, "logged_by": c.logged_by, "logged_by_name": names.get(c.logged_by)}
 
 
-def warning_view(w: OwnerWarning, observations: Optional[List[Dict[str, Any]]] = None, names: Optional[Dict[int, str]] = None) -> Dict[str, Any]:
+def warning_view(w: OwnerWarning, observations: Optional[List[Dict[str, Any]]] = None, names: Optional[Dict[int, str]] = None,
+                 letter: Optional[Any] = None) -> Dict[str, Any]:
     observations = observations or []
     ended = next((o for o in observations if o["concluded"]), None)
     return {"warning_id": w.warning_id, "warning_level": w.warning_level, "violation_type": w.violation_type, "status": w.status,
@@ -64,7 +65,14 @@ def warning_view(w: OwnerWarning, observations: Optional[List[Dict[str, Any]]] =
             "policy_id": w.policy_id, "policy_title": w.policy_title, "policy_reference": w.policy_reference,
             "observation_days": w.observation_days, "follow_up_at": w.follow_up_at, "fine_amount": float(w.fine_amount or 0),
             "created_at": w.created_at, "observations": observations,
-            "concluded": ended["concluded"] if ended else None, "concluded_at": ended["recorded_at"] if ended else None}
+            "concluded": ended["concluded"] if ended else None, "concluded_at": ended["recorded_at"] if ended else None,
+            "letter_id": letter.letter_id if letter else None,
+            "warning_reference": letter.warning_reference if letter else None,
+            "template_name": letter.template_name if letter else None,
+            "template_version_number": letter.template_version_number if letter else None,
+            "notification_status": letter.notification_status if letter else None,
+            "notification_error": letter.notification_error if letter else None,
+            "viewed_at": letter.viewed_at.isoformat() if (letter and letter.viewed_at) else None}
 
 
 def warning_eligibility(db: Session, report: Report) -> Dict[str, Any]:
@@ -171,13 +179,19 @@ def case_detail(db: Session, report: Report, viewer: User) -> Dict[str, Any]:
                         *[f.created_by for f in followups], *[c.logged_by for c in contacts],
                         *[w.user_id for w in warnings], *[w.issued_by for w in warnings]])
     observations = case_compliance.observations_of(db, [w.warning_id for w in warnings])
+    from app.models.warning_letter import GeneratedWarningLetter
+    wids = [w.warning_id for w in warnings]
+    letters_by_wid = {
+        l.warning_id: l
+        for l in db.query(GeneratedWarningLetter).filter(GeneratedWarningLetter.warning_id.in_(wids)).all()
+    } if wids else {}
     return {
         "report_id": rid,
         "case_status": status, "status_label": V.STATUS_LABELS[status], "legacy_status_id": report.current_status_id,
         "priority": case_state.priority_of(report), "is_sensitive": bool(report.is_sensitive),
         "category": {"category_id": report.category_id, "name": category.category_name if category else None, "family": family,
                      "label": V.CATEGORY_FAMILIES[family]},
-        "animal": {"type": report.animal_type, "breed": report.animal_breed, "color": report.animal_color, "size": report.estimated_size,
+        "animal": {"type": report.animal_type, "breed": report.animal_breed, "color": report.animal_color, "colors": report.animal_colors or [], "size": report.estimated_size,
                    "count": report.animal_count, "description": report.description, "condition": report.condition},
         "location": {"landmark": report.landmark, "latitude": float(report.latitude) if report.latitude is not None else None,
                      "longitude": float(report.longitude) if report.longitude is not None else None},
@@ -201,7 +215,7 @@ def case_detail(db: Session, report: Report, viewer: User) -> Dict[str, Any]:
         "referrals": [referral_view(r, names) for r in referrals],
         "followups": [followup_view(f, names) for f in followups],
         "contacts": [contact_view(c, names) for c in contacts],
-        "warnings": [warning_view(w, observations.get(w.warning_id), names) for w in warnings],
+        "warnings": [warning_view(w, observations.get(w.warning_id), names, letters_by_wid.get(w.warning_id)) for w in warnings],
         "claims": [case_claims.claim_view(db, c, True) for c in claims],
         "links": [{"link_id": l.link_id, "report_id": l.related_report_id if l.report_id == rid else l.report_id,
                    "link_type": l.link_type, "note": l.note, "linked_at": l.linked_at} for l in links],

@@ -2187,6 +2187,8 @@ def create_report(
             )
 
         report_data = report_in.model_dump()
+        from app.utils.color_tags import apply_report_color_payload
+        apply_report_color_payload(report_data)
         last_seen_at = report_data.pop("last_seen_at", None)     # not a report column: it goes into the Lost Pet snapshot
         client_request_id = report_data.pop("client_request_id", None)     # a Lost Pet submission's retry key (kept on a Lost Pet report only)
 
@@ -3430,7 +3432,7 @@ def require_barangay_approval(report: Report, user: User, new_status_id: Optiona
 
 # Fields a reporter may correct on their own report while it is still awaiting verification.
 RESIDENT_EDITABLE_REPORT_FIELDS = {
-    "category_id", "animal_type", "animal_breed", "animal_color", "estimated_size", "description",
+    "category_id", "animal_type", "animal_breed", "animal_color", "animal_colors", "estimated_size", "description",
     "latitude", "longitude", "animal_count", "landmark", "priority_level",
     "is_possible_owned", "custody_status",
 }
@@ -3499,6 +3501,9 @@ def update_report(
         if normalized_animal is None:
             raise HTTPException(status_code=400, detail=f"Invalid animal type '{update_data['animal_type']}'. Choose one of: Dog, Cat, Bird, Small mammal, Reptile, Livestock, Wildlife, Other.")
         update_data["animal_type"] = normalized_animal
+
+    from app.utils.color_tags import apply_report_color_payload
+    apply_report_color_payload(update_data)
 
     for key, value in update_data.items():
         if hasattr(db_report, key):
@@ -3750,8 +3755,8 @@ async def upload_report_media(
             resolved_media_type = media_type or detected_type
             resolved_url = file_url
         elif file:
-            file_bytes, unique_filename, resolved_media_type, _ = await read_and_validate_upload(file)
-            resolved_url = await run_in_threadpool(upload_to_cloudinary, file_bytes, filename=unique_filename)
+            file_bytes, unique_filename, resolved_media_type, resource_type = await read_and_validate_upload(file)
+            resolved_url = await run_in_threadpool(upload_to_cloudinary, file_bytes, resource_type=resource_type, filename=unique_filename)
             if not resolved_url:
                 raise HTTPException(status_code=500, detail="Cloudinary returned an empty URL")
 

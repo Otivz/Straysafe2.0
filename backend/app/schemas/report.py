@@ -13,6 +13,7 @@ class ReportBase(BaseModel):
     animal_type: Optional[str] = 'Unknown'
     animal_breed: Optional[str] = None
     animal_color: Optional[str] = None
+    animal_colors: Optional[List[str]] = None
     estimated_size: Optional[str] = None
     description: Optional[str] = None
     condition: Optional[str] = None
@@ -459,6 +460,7 @@ class ReportUpdate(BaseModel):
     animal_type: Optional[str] = None
     animal_breed: Optional[str] = None
     animal_color: Optional[str] = None
+    animal_colors: Optional[List[str]] = None
     estimated_size: Optional[str] = None
     description: Optional[str] = None
     latitude: Optional[float] = None

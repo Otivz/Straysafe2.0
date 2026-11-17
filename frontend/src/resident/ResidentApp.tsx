@@ -17,6 +17,8 @@ import NotificationsPage from './pages/account/NotificationsPage';
 import PrivacyPage from './pages/account/PrivacyPage';
 import ProfilePage from './pages/account/ProfilePage';
 import SettingsPage from './pages/account/SettingsPage';
+import WarningsPage from './pages/account/WarningsPage';
+import WarningLetterPage from './pages/account/WarningLetterPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
@@ -115,6 +117,8 @@ export default function ResidentApp({ mode }: { mode: ResidentMode }) {
                 <Route path="pets/:petId/edit" element={<EditPetPage />} />
 
                 <Route path="notifications" element={<NotificationsPage />} />
+                <Route path="warnings" element={<WarningsPage />} />
+                <Route path="warnings/:letterId" element={<WarningLetterPage />} />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="profile/edit" element={<EditProfilePage />} />
                 <Route path="settings" element={<SettingsPage />} />

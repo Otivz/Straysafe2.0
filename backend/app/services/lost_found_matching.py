@@ -20,7 +20,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple, cast
 
 from fastapi import HTTPException, Request
 from sqlalchemy import case
@@ -148,7 +148,7 @@ def facts_of(db: Session, report: Report) -> Facts:
     kind = (report.animal_type or "").strip().lower()
     species = "dog" if kind == "dog" else "cat" if kind == "cat" else None if kind in ("", "unknown") else "other"
     f = Facts(species=species, breed=(report.animal_breed or snap_pet.get("breed") or None),
-              colors=_colors(report.animal_color, snap_pet.get("color")),
+              colors=_colors(report.animal_color, *(report.animal_colors or []), snap_pet.get("color"), *(snap_pet.get("colors") or [])),
               size=(report.estimated_size or "").lower() if (report.estimated_size or "").lower() in _SIZE_ORDER else None,
               features=_features(report.description, report.condition, report.animal_color, snap_pet.get("markings"), snap_pet.get("color")),
               collar=_collar(report.description, report.condition, snap_pet.get("markings")),
@@ -290,7 +290,7 @@ def compare(lost: Facts, found: Facts) -> Dict[str, Any]:
 
 # ------------------------------------------------------------------------------------------------ suggestions
 def _category_ids(db: Session, family: str) -> List[int]:
-    return [c.category_id for c in db.query(ReportCategory).all() if V.category_family(c.category_name) == family]
+    return [cast(int, c.category_id) for c in db.query(ReportCategory).all() if V.category_family(cast(Optional[str], c.category_name)) == family]
 
 
 def _linked_found_ids(db: Session, subdivision_id: int) -> Set[int]:

@@ -1,4 +1,9 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
+import { Eye } from 'lucide-react';
+import { WarningLetterDocument } from '../../components/WarningLetterDocument';
+import { adminPath } from '../config';
+import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
 import { Checkbox, Field, FieldGroup, Input, OptionGroup, Select, Textarea } from '../components/form';
 import { Callout, FormError, Kv } from '../components/layout';
@@ -7,6 +12,9 @@ import { COMPLIANCE_RESULTS, CONTACT_METHODS, CONTACT_OUTCOMES, FOLLOWUP_KINDS, 
 import { useAdminData } from '../data/context';
 import { residentById } from '../data/selectors';
 import type { ComplianceResult, ContactMethod, FollowUpKind, OwnerContact, WarningDelivery } from '../data/types';
+import { adminApi, type ApiTemplatePreviewResult, type ApiWarningTemplate } from '../live/api';
+import { reportIdOf } from '../../live/refs';
+import { errorMessage } from '../../preview/lib/errors';
 import { fmtDateTime, fromLocalInput, isValidLocalInput, toLocalInput } from '../../preview/lib/format';
 import { useSubmit } from '../lib/useSubmit';
 import { FormFooter, type CaseDialogProps } from './BasicDialogs';
@@ -125,10 +133,10 @@ const DAY = 86_400_000;
  * Issue an applicable warning (A09). It needs a confirmed owner, a confirmed policy and details that support it.
  * The observation period comes from the policy. No universal period is assumed and no fine is ever assessed.
  */
+const WARNING_LEVELS = ['Notice', '1st Warning', '2nd Warning', 'Final Notice / Escalation'] as const;
+
 export function WarningDialog({ c, onClose }: CaseDialogProps) {
   const { state, dispatch, capabilities } = useAdminData();
-  // On the real backend a warning is delivered in the app and by email when it is issued, starts then, and its observation period
-  // is the confirmed policy's: none of that is chosen here, so those fields are not offered.
   const terms = capabilities.warningTerms;
   const toast = useToast();
   const { pending, error, run } = useSubmit();
@@ -136,7 +144,11 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
   const policies = state.settings.policies.filter((p) => p.appliesTo.includes(c.category));
 
   const [policyId, setPolicyId] = useState(policies.find((p) => p.status === 'confirmed')?.id ?? '');
+  const [warningLevel, setWarningLevel] = useState<string>('1st Warning');
+  const [templates, setTemplates] = useState<ApiWarningTemplate[]>([]);
+  const [templateId, setTemplateId] = useState<string>('');
   const [details, setDetails] = useState('');
+  const [requiredAction, setRequiredAction] = useState('Keep your pet secured and supervised in accordance with subdivision rules.');
   const [delivery, setDelivery] = useState<WarningDelivery>('written');
   const [established, setEstablished] = useState(false);
   const [days, setDays] = useState('');
@@ -145,61 +157,229 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
   const [followOverride, setFollowOverride] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Step 2: letter preview & missing field completion
+  const [step, setStep] = useState<'form' | 'preview'>('form');
+  const [previewing, setPreviewing] = useState(false);
+  const [preview, setPreview] = useState<ApiTemplatePreviewResult | null>(null);
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+
   const policy = policies.find((p) => p.id === policyId);
   const observationDays = policy ? (policy.observationDays ?? (terms && !noPeriod ? Number(days) || null : null)) : null;
   const endLocal = observationDays && isValidLocalInput(start) ? toLocalInput(new Date(new Date(start).getTime() + observationDays * DAY)) : '';
   const followLocal = followOverride || endLocal;
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    let live = true;
+    adminApi.warningTemplates('active').then((res) => {
+      if (!live) return;
+      setTemplates(res.items);
+      const def = res.items.find((t) => t.is_default && t.warning_level === warningLevel)
+        || res.items.find((t) => t.is_default && !t.warning_level)
+        || res.items[0];
+      if (def) setTemplateId(String(def.template_id));
+    }).catch(() => undefined);
+    const rid = reportIdOf(c.id);
+    if (rid && owner) {
+      const viol = c.category === 'nuisance' || c.category === 'safety' ? 'Nuisance / Aggressive Behavior' : 'Other';
+      adminApi.warningSuggestion({ violation_type: viol, report_id: rid, owner_id: Number(owner.id), policy_id: policyId || (policies[0]?.id ?? '') })
+        .then((s) => {
+          if (!live) return;
+          if (s.suggested_tier) setWarningLevel(s.suggested_tier);
+          if (s.instructions) setRequiredAction(s.instructions);
+        })
+        .catch(() => undefined);
+    }
+    return () => { live = false; };
+  }, [c.id, c.category]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const validateForm = () => {
     const next: Record<string, string> = {};
     if (!policy || policy.status !== 'confirmed') next.policy = 'Choose a confirmed policy that applies.';
-    if (details.trim().length < 20) next.details = 'Describe the violation and what the owner is asked to do (at least 20 characters).';
+    if (details.trim().length < 20) next.details = 'Describe the violation (at least 20 characters).';
+    if (requiredAction.trim().length < 5) next.requiredAction = 'Specify the required corrective action.';
     if (!established) next.established = 'Confirm that the violation is sufficiently established.';
     if (terms && policy && policy.observationDays === null && !noPeriod && !(Number(days) >= 1 && Number(days) <= 60)) next.days = 'Enter a period from 1 to 60 days, or tick “No observation period”.';
     if (terms && !isValidLocalInput(start)) next.start = 'Choose when the warning starts.';
     setErrors(next);
-    if (Object.keys(next).length || !policy) return;
+    return Object.keys(next).length === 0 && !!policy;
+  };
+
+  const loadPreview = async (nextOverrides: Record<string, string> = overrides) => {
+    if (!validateForm() || !policy) return;
+    setPreviewing(true);
+    try {
+      const rid = reportIdOf(c.id);
+      const res = await adminApi.previewWarningTemplate({
+        ...(templateId ? { template_id: Number(templateId) } : {}),
+        ...(rid ? { report_id: rid } : {}),
+        ...(owner ? { user_id: Number(owner.id) } : {}),
+        warning_level: warningLevel,
+        violation_description: details.trim(),
+        required_action: requiredAction.trim(),
+        policy_id: policy.id,
+        policy_reference: `${policy.reference} — ${policy.title}`,
+        field_overrides: nextOverrides,
+      });
+      setPreview(res);
+      setStep('preview');
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (step === 'form') {
+      await loadPreview();
+      return;
+    }
+    if (!validateForm() || !policy) return;
     const ok = await run(() => dispatch({
-      type: 'case/issueWarning', id: c.id, policyId: policy.id, details: details.trim(), delivery, observationDays,
-      observationStart: observationDays ? fromLocalInput(start) : null, followUpAt: followLocal && isValidLocalInput(followLocal) ? fromLocalInput(followLocal) : null,
+      type: 'case/issueWarning',
+      id: c.id,
+      policyId: policy.id,
+      details: details.trim(),
+      delivery,
+      observationDays,
+      observationStart: observationDays ? fromLocalInput(start) : null,
+      followUpAt: followLocal && isValidLocalInput(followLocal) ? fromLocalInput(followLocal) : null,
+      warningLevel,
+      templateId: templateId ? Number(templateId) : undefined,
+      requiredAction: requiredAction.trim(),
+      fieldOverrides: overrides,
     }));
-    if (ok) { toast.success(`Warning recorded under ${policy.reference}`); onClose(); }
+    if (ok) { toast.success(`Warning letter issued and resident notified under ${policy.reference}`); onClose(); }
   };
 
   return (
-    <Dialog size="lg" title="Issue a warning" description="Record a warning to the confirmed owner under an applicable subdivision policy." onClose={onClose} dirty={details !== '' || established} onSubmit={submit} footer={({ requestClose }) => <FormFooter pending={pending} label="Issue warning" requestClose={requestClose} />}>
-      {c.priority === 'urgent' ? <Callout tone="red" title="This is an urgent case.">Coordinate safety first. A routine warning and observation period must not delay that response.</Callout> : null}
-      <Kv rows={[['Confirmed owner', owner ? <span><strong>{owner.name}</strong> · {owner.unit}</span> : 'Not recorded'], ['Concern', c.title]]} />
-      <Field label="Applicable policy" required error={errors.policy}>
-        <Select value={policyId} onChange={(e) => setPolicyId(e.target.value)}>
-          {policies.map((p) => <option key={p.id} value={p.id} disabled={p.status !== 'confirmed'}>{p.reference} — {p.title}{p.status !== 'confirmed' ? ' (awaiting confirmation)' : ''}</option>)}
-        </Select>
-      </Field>
-      {policy ? <p className="sa-small sa-text-2">{policy.summary}</p> : null}
-      <Field label="Warning details" required error={errors.details} hint="State what was observed and what the owner is asked to do. Stick to the facts."><Textarea autoFocus value={details} onChange={(e) => setDetails(e.target.value)} rows={4} /></Field>
-      {terms ? (
-        <div className="sa-grid2">
-          <Field label="How it is delivered"><Select value={delivery} onChange={(e) => setDelivery(e.target.value as WarningDelivery)}>{(Object.keys(WARNING_DELIVERY) as WarningDelivery[]).map((d) => <option key={d} value={d}>{WARNING_DELIVERY[d]}</option>)}</Select></Field>
-          <Field label="Warning starts" required error={errors.start}><Input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} /></Field>
-        </div>
-      ) : <p className="sa-small sa-text-2">The owner receives this notice in the StraySafe app and by email as soon as you issue it, and the observation period starts then.</p>}
-
-      <FieldGroup label="Observation period" hint={policy?.observationDays != null ? `Set by ${policy.reference}.` : terms ? 'This policy does not define one, so none is assumed. Set one only if your procedure calls for it.' : 'This policy does not define one, so none is assumed.'} error={errors.days}>
-        {policy?.observationDays != null ? (
-          <p className="sa-semibold">{policy.observationDays} {policy.observationDays === 1 ? 'day' : 'days'}{endLocal && terms ? <span className="sa-text-2" style={{ fontWeight: 400 }}> · ends {fmtDateTime(fromLocalInput(endLocal))}</span> : null}</p>
-        ) : terms ? (
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2"><Input type="number" min={1} max={60} className="!w-24" aria-label="Days" disabled={noPeriod} value={days} onChange={(e) => setDays(e.target.value)} /><span className="sa-small">days</span></div>
-            <Checkbox label="No observation period" checked={noPeriod} onChange={(e) => setNoPeriod(e.target.checked)} />
+    <Dialog
+      size="lg"
+      title={step === 'preview' ? 'Preview & confirm warning letter' : 'Issue a warning'}
+      description={step === 'preview' ? 'Review the populated warning letter before issuing it to the resident.' : 'Select the warning level, policy, and letter template.'}
+      onClose={onClose}
+      dirty={details !== '' || established}
+      onSubmit={submit}
+      footer={({ requestClose }) => (
+        step === 'preview' ? (
+          <div className="flex w-full items-center justify-between gap-2">
+            <Button type="button" onClick={() => setStep('form')} disabled={pending}>← Back to edit</Button>
+            <div className="flex gap-2">
+              <Button type="button" onClick={requestClose} disabled={pending}>Cancel</Button>
+              <Button type="submit" variant="primary" loading={pending} disabled={!!preview && !preview.can_issue}>
+                Confirm & issue warning
+              </Button>
+            </div>
           </div>
-        ) : <p className="sa-semibold">None</p>}
-      </FieldGroup>
-      {terms && observationDays ? <Field label="Follow-up check" hint="Defaults to the end of the observation period."><Input type="datetime-local" value={followLocal} onChange={(e) => setFollowOverride(e.target.value)} /></Field> : null}
+        ) : (
+          <div className="flex w-full items-center justify-end gap-2">
+            <Button type="button" onClick={requestClose} disabled={previewing}>Cancel</Button>
+            <Button type="submit" variant="primary" icon={Eye} loading={previewing}>Preview letter →</Button>
+          </div>
+        )
+      )}
+    >
+      {c.priority === 'urgent' ? <Callout tone="red" title="This is an urgent case.">Coordinate safety first. A routine warning and observation period must not delay that response.</Callout> : null}
 
-      <Checkbox label="The violation is sufficiently established and the owner has been appropriately identified." checked={established} onChange={(e) => setEstablished(e.target.checked)} />
-      {errors.established ? <p className="sa-error" role="alert">{errors.established}</p> : null}
-      <Callout>StraySafe does not assess, calculate or collect fines. Penalties are outside this system; record any referral under External coordination.</Callout>
+      {step === 'form' ? (
+        <>
+          <Kv rows={[['Confirmed owner', owner ? <span><strong>{owner.name}</strong> · {owner.unit}</span> : 'Not recorded'], ['Concern', c.title]]} />
+          <div className="sa-grid2">
+            <Field label="Warning level" required>
+              <Select value={warningLevel} onChange={(e) => setWarningLevel(e.target.value)}>
+                {WARNING_LEVELS.map((lvl) => <option key={lvl} value={lvl}>{lvl}</option>)}
+              </Select>
+            </Field>
+            <Field label="Warning letter template" hint={<Link to={adminPath('/warning-templates')} onClick={onClose}>Manage templates</Link>}>
+              <Select value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
+                {templates.length === 0 ? <option value="">Default subdivision template</option> : null}
+                {templates.map((t) => (
+                  <option key={t.template_id} value={String(t.template_id)}>
+                    {t.name} (v{t.current_version_number}){t.is_default ? ' · Default' : ''}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          <Field label="Applicable policy" required error={errors.policy}>
+            <Select value={policyId} onChange={(e) => setPolicyId(e.target.value)}>
+              {policies.map((p) => <option key={p.id} value={p.id} disabled={p.status !== 'confirmed'}>{p.reference} — {p.title}{p.status !== 'confirmed' ? ' (awaiting confirmation)' : ''}</option>)}
+            </Select>
+          </Field>
+          {policy ? <p className="sa-small sa-text-2">{policy.summary}</p> : null}
+          <Field label="Violation description" required error={errors.details} hint="Factual description of what occurred (populates {{violation_description}})."><Textarea autoFocus value={details} onChange={(e) => setDetails(e.target.value)} rows={3} /></Field>
+          <Field label="Required corrective action" required error={errors.requiredAction} hint="What the resident must do (populates {{required_action}})."><Textarea value={requiredAction} onChange={(e) => setRequiredAction(e.target.value)} rows={2} /></Field>
+          {terms ? (
+            <div className="sa-grid2">
+              <Field label="How it is delivered"><Select value={delivery} onChange={(e) => setDelivery(e.target.value as WarningDelivery)}>{(Object.keys(WARNING_DELIVERY) as WarningDelivery[]).map((d) => <option key={d} value={d}>{WARNING_DELIVERY[d]}</option>)}</Select></Field>
+              <Field label="Warning starts" required error={errors.start}><Input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} /></Field>
+            </div>
+          ) : <p className="sa-small sa-text-2">Issuing generates an immutable warning letter, sends an in-app + push + email notification to the resident, and starts any policy observation period.</p>}
+
+          <FieldGroup label="Observation period" hint={policy?.observationDays != null ? `Set by ${policy.reference}.` : 'This policy does not define one, so none is assumed.'} error={errors.days}>
+            {policy?.observationDays != null ? (
+              <p className="sa-semibold">{policy.observationDays} {policy.observationDays === 1 ? 'day' : 'days'}{endLocal && terms ? <span className="sa-text-2" style={{ fontWeight: 400 }}> · ends {fmtDateTime(fromLocalInput(endLocal))}</span> : null}</p>
+            ) : terms ? (
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2"><Input type="number" min={1} max={60} className="!w-24" aria-label="Days" disabled={noPeriod} value={days} onChange={(e) => setDays(e.target.value)} /><span className="sa-small">days</span></div>
+                <Checkbox label="No observation period" checked={noPeriod} onChange={(e) => setNoPeriod(e.target.checked)} />
+              </div>
+            ) : <p className="sa-semibold">None</p>}
+          </FieldGroup>
+          {terms && observationDays ? <Field label="Follow-up check" hint="Defaults to the end of the observation period."><Input type="datetime-local" value={followLocal} onChange={(e) => setFollowOverride(e.target.value)} /></Field> : null}
+
+          <Checkbox label="The violation is sufficiently established and the owner has been appropriately identified." checked={established} onChange={(e) => setEstablished(e.target.checked)} />
+          {errors.established ? <p className="sa-error" role="alert">{errors.established}</p> : null}
+        </>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {preview && preview.missing_fields.length > 0 ? (
+            <Callout tone="amber" title="Missing information for template placeholders">
+              <p className="sa-small mb-2">Fill in any missing fields below and click <strong>Refresh preview</strong> before issuing:</p>
+              <div className="flex flex-col gap-2">
+                {preview.missing_fields.map((m) => (
+                  <div key={m.key} className="flex flex-wrap items-center gap-2">
+                    <label className="sa-small font-medium w-40">{m.label}{m.required ? ' *' : ''}</label>
+                    <Input
+                      className="flex-1"
+                      value={overrides[m.key] ?? ''}
+                      onChange={(e) => setOverrides((prev) => ({ ...prev, [m.key]: e.target.value }))}
+                      placeholder={`Enter ${m.label.toLowerCase()}`}
+                    />
+                  </div>
+                ))}
+                <div>
+                  <Button type="button" size="sm" loading={previewing} onClick={() => void loadPreview(overrides)}>Refresh preview</Button>
+                </div>
+              </div>
+            </Callout>
+          ) : null}
+          {preview ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-[var(--sa-ink-3)]">
+                <strong>Template:</strong> {preview.template?.name ?? 'Default'} (v{preview.template?.version_number ?? 1})
+              </p>
+              <WarningLetterDocument
+                subdivisionName={preview.placeholders?.subdivision_name}
+                subdivisionAddress={preview.placeholders?.subdivision_address}
+                subdivisionPhone={preview.placeholders?.subdivision_phone}
+                subdivisionEmail={preview.placeholders?.subdivision_email}
+                warningLevel={preview.placeholders?.warning_level || warningLevel}
+                warningReference={preview.placeholders?.warning_reference || 'WARN-PREVIEW'}
+                caseReference={preview.placeholders?.case_reference || c.id}
+                issueDate={preview.placeholders?.issue_date || '—'}
+                recipientName={preview.placeholders?.resident_name || owner?.name || ''}
+                recipientAddress={preview.placeholders?.resident_address || owner?.unit}
+                subject={preview.subject}
+                body={preview.body}
+                issuerName={preview.placeholders?.issuer_name || preview.placeholders?.issued_by || 'Subdivision Leader'}
+                issuerRole={preview.placeholders?.issuer_role}
+              />
+            </div>
+          ) : null}
+        </div>
+      )}
       {error ? <FormError message={error} /> : null}
     </Dialog>
   );

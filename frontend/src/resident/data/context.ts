@@ -34,7 +34,7 @@ export interface ResidentDataValue {
   /** Parts that could not be read. */
   issues: LoadIssue[];
   /** Records a change. Rejects with an AdminApiError when the request fails; nothing is shown as saved until the server says so. */
-  dispatch(action: ResidentAction): Promise<ActionOutcome | void>;
+  dispatch(action: ResidentAction): Promise<ActionOutcome | undefined>;
   /**
    * Applies a change that only concerns this device: a report being written. Immediate and never fails, so typing is not
    * delayed. (A notification marked as read is also applied here at once; the connected app tells the server as well.)

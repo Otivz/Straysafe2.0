@@ -76,7 +76,7 @@ def classify_extension(filename: str) -> Tuple[str, str]:
         return 'Document', 'raw'
     raise HTTPException(
         status_code=400,
-        detail=f"Unsupported file type '{ext or 'unknown'}'. Allowed: JPG, PNG, WEBP, MP4."
+        detail=f"Unsupported file type '{ext or 'unknown'}'. Allowed: JPG, PNG, WEBP, MP4, PDF, DOC, DOCX."
     )
 
 

@@ -31,7 +31,7 @@ export interface ApiRule {
   fine_amount: number | null; count_window_days: number | null;
 }
 export interface ApiComplaint {
-  report_id: number; seen_at: string | null; incident_at: string;
+  report_id: number; animal_breed?: string | null; animal_colors?: string[] | null; seen_at: string | null; incident_at: string;
   suspect: ApiSuspect | null;
   incident: { status: string; basis: string | null; at: string | null; by: string | null };
   rule: ApiRule | null; no_rule: boolean;
@@ -44,7 +44,23 @@ export interface ApiComplaint {
   suggestion: number | null;
   stage_steps: { kind: StepKind; label: string }[];
   history: ApiHistory | null;
-  maybe_same: { report_id: number; created_at: string; seen_at: string | null; incident_at: string; landmark: string | null; description: string | null; reporter: string | null } | null;
+  media?: { id: number; url: string; type: string }[];
+  maybe_same: {
+    report_id: number;
+    created_at: string;
+    seen_at: string | null;
+    incident_at: string;
+    landmark: string | null;
+    description: string | null;
+    reporter: string | null;
+    animal_type?: string | null;
+    animal_breed?: string | null;
+    animal_color?: string | null;
+    animal_colors?: string[] | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    media?: { id: number; url: string; type: string }[];
+  } | null;
   same_as: { report_id: number; linked_at: string; note: string | null } | null;
   also_reported: { report_id: number; linked_at: string }[];
   separate_from: { report_id: number; at: string | null; by: string | null } | null;

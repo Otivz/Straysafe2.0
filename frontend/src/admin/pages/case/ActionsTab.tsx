@@ -1,6 +1,8 @@
-import { AlertTriangle, CalendarClock, CalendarPlus, Check, ClipboardCheck, Handshake, Landmark, MessageSquare, NotebookPen, ShieldCheck, X } from 'lucide-react';
+import { useState } from 'react';
+import { AlertTriangle, CalendarClock, CalendarPlus, Check, ClipboardCheck, Download, Eye, Handshake, Landmark, MessageSquare, NotebookPen, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
+import { Dialog } from '../../components/Dialog';
 import { Block, Callout, Kv, Panel } from '../../components/layout';
 import { Timeline, type TimelineItem } from '../../components/Timeline';
 import { useToast } from '../../components/toast';
@@ -8,6 +10,7 @@ import { CATEGORIES, COMPLIANCE_RESULTS, CONTACT_METHODS, CONTACT_OUTCOMES, FOLL
 import { useAdminData } from '../../data/context';
 import { pendingFollowUpsOf, warningEligibility } from '../../data/selectors';
 import type { Case, Referral, Warning } from '../../data/types';
+import { adminApi, type ApiGeneratedWarningLetter } from '../../live/api';
 import { dueInfo, fmtDateTime, remaining } from '../../../preview/lib/format';
 import { errorMessage } from '../../../preview/lib/errors';
 import type { OpenCaseDialog } from './dialogState';
@@ -15,20 +18,98 @@ import type { OpenCaseDialog } from './dialogState';
 type Props = { c: Case; now: Date; openDialog: OpenCaseDialog };
 
 function WarningCard({ w, c, now, openDialog }: { w: Warning; c: Case; now: Date; openDialog: OpenCaseDialog }) {
+  const toast = useToast();
+  const [letterModal, setLetterModal] = useState<ApiGeneratedWarningLetter | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notifStatus, setNotifStatus] = useState<string | null>(w.notificationStatus ?? null);
+  const [notifErr, setNotifErr] = useState<string | null>(w.notificationError ?? null);
+
   const start = w.observationStart ? new Date(w.observationStart).getTime() : null;
   const end = w.observationEnd ? new Date(w.observationEnd).getTime() : null;
   const pct = start && end ? Math.min(100, Math.max(0, ((now.getTime() - start) / (end - start)) * 100)) : null;
   const outcome = w.outcome === 'compliant' ? <Badge tone="sage">Compliant</Badge> : w.outcome === 'non_compliant' ? <Badge tone="red">Not compliant</Badge> : <Badge>Concluded</Badge>;
+  const ref = w.warningReference || `WARN-${w.id}`;
+
+  const viewLetter = async () => {
+    if (!w.letterId) return;
+    setBusy(true);
+    try {
+      const data = await adminApi.warningLetterDetail(w.letterId);
+      setLetterModal(data);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const download = async (format: 'pdf' | 'docx') => {
+    if (!w.letterId) return;
+    try {
+      await adminApi.downloadWarningLetter(w.letterId, ref, format);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  };
+
+  const retryNotif = async () => {
+    if (!w.letterId) return;
+    setBusy(true);
+    try {
+      const updated = await adminApi.retryWarningNotification(w.letterId);
+      setNotifStatus(updated.notification_status);
+      setNotifErr(updated.notification_error);
+      if (updated.notification_status === 'sent') toast.success('Notification resent to resident');
+      else toast.error(updated.notification_error || 'Notification retry failed');
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="sa-record">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="flex flex-wrap items-center gap-2"><span className="sa-semibold">{w.policyRef}</span><span className="sa-text-2">{w.policyTitle}</span></p>
-          <p className="sa-meta mt-0.5">Issued {fmtDateTime(w.issuedAt)} · {WARNING_DELIVERY[w.delivery].toLowerCase()} · to {w.ownerName}</p>
+          <p className="flex flex-wrap items-center gap-2">
+            {w.warningReference ? <span className="sa-ref">{w.warningReference}</span> : null}
+            {w.warningLevel ? <Badge tone="amber">{w.warningLevel}</Badge> : null}
+            <span className="sa-semibold">{w.policyRef}</span>
+            <span className="sa-text-2">{w.policyTitle}</span>
+          </p>
+          <p className="sa-meta mt-0.5">
+            Issued {fmtDateTime(w.issuedAt)} · {WARNING_DELIVERY[w.delivery].toLowerCase()} · to {w.ownerName}
+            {w.templateName ? ` · Template: ${w.templateName} (v${w.templateVersionNumber ?? 1})` : ''}
+          </p>
         </div>
-        {w.status === 'active' ? <Badge tone="brand" dot>Active</Badge> : w.status === 'concluded' ? outcome : <Badge>Withdrawn</Badge>}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {notifStatus ? (
+            <Badge tone={notifStatus === 'sent' || notifStatus === 'delivered' ? 'sage' : notifStatus === 'failed' ? 'red' : 'neutral'}>
+              {notifStatus === 'sent' || notifStatus === 'delivered' ? 'Notified' : notifStatus === 'failed' ? 'Notification failed' : notifStatus}
+            </Badge>
+          ) : null}
+          {w.viewedAt ? <Badge tone="sage">Viewed {fmtDateTime(w.viewedAt).split(' · ')[0]}</Badge> : (w.letterId ? <Badge tone="neutral">Unread by resident</Badge> : null)}
+          {w.status === 'active' ? <Badge tone="brand" dot>Active</Badge> : w.status === 'concluded' ? outcome : <Badge>Withdrawn</Badge>}
+        </div>
       </div>
+      {notifStatus === 'failed' && notifErr ? (
+        <Callout tone="amber" className="mt-2" title="Notification delivery failed">
+          {notifErr} — Warning record is preserved.
+        </Callout>
+      ) : null}
       <p className="mt-3">{w.details}</p>
+
+      {w.letterId ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button size="sm" icon={Eye} loading={busy} onClick={() => void viewLetter()}>View letter</Button>
+          <Button size="sm" variant="ghost" icon={Download} onClick={() => void download('pdf')}>Download PDF</Button>
+          <Button size="sm" variant="ghost" icon={Download} onClick={() => void download('docx')}>Download DOCX</Button>
+          {notifStatus === 'failed' ? (
+            <Button size="sm" icon={RefreshCw} loading={busy} onClick={() => void retryNotif()}>Retry notification</Button>
+          ) : null}
+        </div>
+      ) : null}
 
       {w.observationEnd ? (
         <div className="mt-4">
@@ -55,6 +136,29 @@ function WarningCard({ w, c, now, openDialog }: { w: Warning; c: Case; now: Date
 
       {w.status === 'concluded' && w.outcomeNote ? <p className="sa-small sa-text-2 mt-3"><span className="sa-semibold">Outcome:</span> {w.outcomeNote}</p> : null}
       {w.status === 'active' && c.status !== 'closed' ? <div className="mt-4 flex flex-wrap items-center gap-3"><Button size="sm" icon={ClipboardCheck} onClick={() => openDialog({ kind: 'compliance' })}>Record compliance observation</Button><span className="sa-meta">No fine is assessed by the subdivision.</span></div> : null}
+
+      {letterModal ? (
+        <Dialog
+          size="lg"
+          title={`${letterModal.warning_reference} · ${letterModal.warning_level}`}
+          description={`Template: ${letterModal.template_name} (v${letterModal.template_version_number}) · Issued ${letterModal.issued_at ? fmtDateTime(letterModal.issued_at) : ''}`}
+          onClose={() => setLetterModal(null)}
+          footer={(
+            <div className="flex w-full flex-wrap items-center justify-between gap-2">
+              <div className="flex gap-2">
+                <Button size="sm" icon={Download} onClick={() => void download('pdf')}>Download PDF</Button>
+                <Button size="sm" icon={Download} onClick={() => void download('docx')}>Download DOCX</Button>
+              </div>
+              <Button variant="primary" onClick={() => setLetterModal(null)}>Close</Button>
+            </div>
+          )}
+        >
+          <div className="sa-cm-letter">
+            <p><strong>{letterModal.rendered_subject}</strong></p>
+            <div className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{letterModal.rendered_body}</div>
+          </div>
+        </Dialog>
+      ) : null}
     </div>
   );
 }
