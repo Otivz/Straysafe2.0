@@ -36,6 +36,8 @@ export interface ReportUpdate {
   kind: 'received' | 'status' | 'message' | 'you' | 'sighting' | 'outcome' | 'info';
   title: string;
   body?: string;
+  /** A photo or video attached to this update (the case chat's media), shown under the text. */
+  mediaUrl?: string;
 }
 
 export interface Report {
