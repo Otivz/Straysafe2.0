@@ -17,7 +17,7 @@ export type AdminAction =
   | { type: 'case/completeFollowUp'; id: string; followUpId: string; note?: string }
   | { type: 'case/cancelFollowUp'; id: string; followUpId: string }
   | { type: 'case/recordOwnerContact'; id: string; at: string; method: ContactMethod; withWhom: string; summary: string; outcome: OwnerContact['outcome']; nextStepAt: string | null }
-  | { type: 'case/issueWarning'; id: string; policyId: string; details: string; delivery: WarningDelivery; observationDays: number | null; observationStart: string | null; followUpAt: string | null }
+  | { type: 'case/issueWarning'; id: string; policyId: string; details: string; delivery: WarningDelivery; observationDays: number | null; observationStart: string | null; followUpAt: string | null; warningLevel?: string; templateId?: number; requiredAction?: string; fieldOverrides?: Record<string, string> }
   | { type: 'case/recordCompliance'; id: string; warningId: string; observedAt: string; result: ComplianceResult; notes: string; conclude: 'compliant' | 'non_compliant' | null }
   /** `contacted: false` writes the assistance down without claiming anyone was reached (status "Not contacted yet"): saving a referral is never proof of contact. */
   | { type: 'case/createReferral'; id: string; orgId: string; orgName: string; reason: string; referredAt: string; contactPerson: string; contactChannel: string; notes: string; contacted?: boolean }

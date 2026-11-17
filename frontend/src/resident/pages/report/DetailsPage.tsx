@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { isValidLocalInput, toLocalInput } from '../../../preview/lib/format';
 import { ANIMAL_ICON } from '../../components/icons';
+import { ColorTagInput } from '../../components/ColorTagInput';
 import { ChoiceChips, Field, FieldGroup, Input, Select, Textarea } from '../../components/form';
 import { MediaPicker } from '../../components/MediaPicker';
 import { ConfirmSheet } from '../../components/Sheet';
@@ -29,7 +30,7 @@ const COPY: Record<'incident' | 'found', { screen: string; label: string; hint: 
   },
   found: {
     screen: 'About the animal', label: 'Describe the animal and where you found it', when: 'When did you find it?',
-    hint: 'Colour, size, markings, collar or tag, and its condition. Leave out anything only the owner would know, and phone numbers or addresses.',
+    hint: 'Size, markings, collar or tag, and its condition. Leave out anything only the owner would know, and phone numbers or addresses.',
     placeholder: 'A friendly brown dog with a red collar, found near the clubhouse gate.',
   },
 };
@@ -104,6 +105,14 @@ function DetailsForm({ draft }: { draft: Draft }) {
             />
           </FieldGroup>
 
+          <FieldGroup label="Colour or coat" hint="Optional. Type a colour and press Enter (e.g. White, Tan, Black) or choose a suggestion.">
+            <ColorTagInput value={draft.colors ?? []} onChange={(colors) => patch({ colors })} />
+          </FieldGroup>
+
+          <Field label="Breed" optional>
+            <Input value={draft.breed ?? ''} onChange={(e) => patch({ breed: e.target.value })} maxLength={60} placeholder="e.g. Aspin, Shih Tzu, Puspin" />
+          </Field>
+
           <Field label={copy.label} required error={errors.description} hint={<>{copy.hint} <span className="rs-count">{draft.description.length}/{MAX}</span></>}>
             <Textarea value={draft.description} onChange={(e) => { patch({ description: e.target.value }); clear('description'); }} maxLength={MAX} rows={5} placeholder={copy.placeholder} />
           </Field>
@@ -123,8 +132,8 @@ function DetailsForm({ draft }: { draft: Draft }) {
 
           {draft.category === 'nuisance' ? (
             <>
-              <Field label="What did it look like?" optional hint="Colour, collar or markings: anything that helps recognise it. It helps find the owner even if you don’t know who it is.">
-                <Input value={draft.looks ?? ''} maxLength={200} onChange={(e) => patch({ looks: e.target.value })} placeholder="e.g. Small, white, red collar" />
+              <Field label="Size, collar or markings" optional hint="Size, collar, tags or distinguishing marks that help recognise it—even if you don’t know the owner.">
+                <Input value={draft.looks ?? ''} maxLength={200} onChange={(e) => patch({ looks: e.target.value })} placeholder="e.g. Small, red collar, notched ear" />
               </Field>
               <details className="rs-details" open={draft.suspectName || draft.suspectAddress || draft.suspectDetails ? true : undefined}>
                 <summary>Do you know whose animal it is?<span className="rs-opt"> optional</span></summary>

@@ -12,6 +12,7 @@ from app.models.report_match import ReportMatch
 from app.models.manual_match import ManualMatchDecision  # noqa: F401
 from app.models.pet_match_confirmation import PetMatchConfirmationRequest  # noqa: F401
 from app.models.warning import OwnerWarning
+from app.models.warning_letter import WarningLetterTemplate, WarningLetterTemplateVersion, GeneratedWarningLetter  # noqa: F401
 from app.models.owner_followup import OwnerFollowUp, FollowUpContactLog, OwnerObservationUpdate, OwnerObservationUpdatePhoto, FollowUpRepeatedIncident  # noqa: F401
 from app.models.leader_identity import LeaderIdentityVerification  # noqa: F401
 from app.models.barangay_referral import BarangayReferral, BarangayReferralUpdate  # noqa: F401  (external referral log)

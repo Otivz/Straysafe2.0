@@ -29,6 +29,11 @@ export const reportablePets = (s: ResidentState): Pet[] => s.pets.filter((p) => 
 /** The pet's lost report that is still open: the one to open instead of filing another. */
 export const activeLostReport = (s: ResidentState, petId: string): Report | undefined =>
   s.reports.find((r) => r.kind === 'lost' && r.petId === petId && r.status !== 'closed');
+/** All lost-pet reports filed by this resident for a specific pet, newest first. */
+export const petLostReports = (s: ResidentState, petId: string): Report[] =>
+  s.reports
+    .filter((r) => r.kind === 'lost' && r.petId === petId)
+    .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
 /** Every pet that can be reported missing, each with its open lost report when it already has one (such a pet cannot be reported again). */
 export const lostPetChoices = (s: ResidentState): { pet: Pet; active?: Report }[] =>
   reportablePets(s).map((pet) => ({ pet, active: activeLostReport(s, pet.id) }));

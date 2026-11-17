@@ -177,7 +177,7 @@ function PoliciesSection() {
   return (
     <>
       <Panel>
-        <Block title="Policy references" description="The rules your subdivision actually has. Warnings are issued under a confirmed policy, and the observation period comes from the policy itself." action={<Button size="sm" icon={Plus} onClick={() => setEditing('new')}>Add policy</Button>}>
+        <Block title="Policy references" description="The rules your subdivision actually has. Warnings are issued under a confirmed policy, and the observation period comes from the policy itself." action={<div className="flex flex-wrap gap-2"><LinkButton size="sm" to={adminPath('/warning-templates')}>Warning letter templates</LinkButton><Button size="sm" icon={Plus} onClick={() => setEditing('new')}>Add policy</Button></div>}>
           {settings.policies.length === 0 ? <p className="sa-small sa-text-2">No policies yet. Without a confirmed policy, no warning can be issued.</p> : (
             <ul className="m-0 flex list-none flex-col gap-3 p-0">
               {settings.policies.map((p) => (

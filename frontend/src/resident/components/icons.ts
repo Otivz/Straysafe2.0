@@ -19,7 +19,7 @@ export const ANIMAL_ICON: Record<AnimalType, LucideIcon> = {
 export const NOTICE_ICON: Record<NoticeType, LucideIcon> = { lost_pet: Search, found_animal: PawPrint, safety_advisory: ShieldAlert };
 
 export const NOTIFICATION_ICON: Record<Notification['kind'], LucideIcon> = {
-  report_update: FileText, sighting: Eye, claim_update: CircleCheck, community_notice: Megaphone, safety_advisory: ShieldAlert, alert: BellRing,
+  report_update: FileText, sighting: Eye, claim_update: CircleCheck, community_notice: Megaphone, safety_advisory: ShieldAlert, alert: BellRing, warning: ShieldAlert,
 };
 
 export const UPDATE_ICON: Record<ReportUpdate['kind'], LucideIcon> = {

@@ -7,6 +7,7 @@
  * functions only reshape that; they add nothing the server did not send.
  */
 import { fromServer, fromServerOrNull } from '../../live/dates.ts';
+import { parseColorTags } from '../data/colors.ts';
 import type {
   AnimalType, CaseConversation, CategoryId, Claim, ClaimStatus, Coordination, Media, Notice, Notification, Office, OwnershipRequest, Pet, PetSex, Profile, Report, ReportUpdate, Settings, Sighting,
 } from '../data/types.ts';
@@ -123,8 +124,10 @@ export function reportFromApi(r: ApiResidentReport, ctx: ResidentLookup, extra: 
   const outcome = r.case_outcome && r.case_outcome.label
     ? { label: r.case_outcome.label, summary: OUTCOME_SUMMARY[r.case_outcome.outcome ?? 'unresolved'], resolved: r.case_outcome.outcome === 'resolved', at: fromServer(r.case_outcome.closed_at) || submittedAt }
     : null;
+  const colors = parseColorTags(r.animal_colors, r.animal_color);
+  const breed = r.animal_breed?.trim() || undefined;
   return {
-    id: ctx.refOf(r.report_id), kind, category: family, status: r.case_status ?? 'reported', title, description, animalType, ...(petName ? { petName } : {}), petId: r.pet_id === null ? null : String(r.pet_id),
+    id: ctx.refOf(r.report_id), kind, category: family, status: r.case_status ?? 'reported', title, description, animalType, ...(breed ? { breed } : {}), ...(colors.length > 0 ? { colors } : {}), ...(petName ? { petName } : {}), petId: r.pet_id === null ? null : String(r.pet_id),
     location: { label: r.landmark?.trim() || PINNED_LABEL, lat: hasPin ? (r.latitude as number) : null, lng: hasPin ? (r.longitude as number) : null, manual: !hasPin },
     observedAt: fromServer(alert?.last_seen.at) || fromServer(r.seen_at) || submittedAt, submittedAt, updatedAt: updates[0]?.at || submittedAt,
     media: mediaFromApi(r.media ?? []), visibility, noticeId: alert?.status === 'active' ? noticeId(alert.alert_id) : null,
@@ -276,10 +279,12 @@ const SEX_TO: Record<PetSex, string> = { male: 'Male', female: 'Female', unknown
 export function petFromApi(p: ApiPet): Pet {
   const userColor = (p.color_markings ?? '').trim();
   const fallback = [p.primary_color, p.secondary_color].map((c) => (c ?? '').trim()).filter(Boolean);
-  const colorStr = userColor || [...new Set(fallback)].join(', ');
+  const rawSummary = userColor || [...new Set(fallback)].join(', ');
+  const tags = parseColorTags(p.colors, rawSummary);
+  const colorStr = rawSummary || tags.join(', ');
   const photo = p.photo_url ?? p.photo_front_url ?? null;
   return {
-    id: String(p.pet_id), name: p.pet_name, type: animalTypeOf(p.pet_type), breed: p.breed?.trim() ?? '', color: colorStr,
+    id: String(p.pet_id), name: p.pet_name, type: animalTypeOf(p.pet_type), breed: p.breed?.trim() ?? '', color: colorStr, colors: tags,
     ageText: p.estimated_age?.trim() ?? (p.birth_date ? `Born ${p.birth_date}` : ''), markings: (p.distinctive_markings ?? '').split(/[,;]\s*/).map((m) => m.trim()).filter(Boolean),
     description: (p.notes ?? '').trim(), ...(photo ? { photoUrl: photo, photoName: 'Photo' } : {}), registeredAt: fromServer(p.created_at),
     sex: SEX_FROM[(p.gender ?? '').toLowerCase()] ?? 'unknown', ...(p.status ? { status: p.status } : {}),
@@ -288,8 +293,10 @@ export function petFromApi(p: ApiPet): Pet {
 
 /** A pet the resident saved, as the body the server takes. */
 export function petToApi(p: Pet): Record<string, unknown> {
+  const colors = parseColorTags(p.colors, p.color);
+  const colorText = (colors.length > 0 ? colors.join(', ') : p.color) || null;
   return {
-    pet_name: p.name, pet_type: ANIMAL_LABEL[p.type], breed: p.breed || null, color_markings: p.color || null, primary_color: null,
+    pet_name: p.name, pet_type: ANIMAL_LABEL[p.type], breed: p.breed || null, colors: colors.length > 0 ? colors : null, color_markings: colorText, primary_color: null,
     secondary_color: null, tertiary_color: null,
     estimated_age: p.ageText || null, distinctive_markings: p.markings.join(', ') || null, notes: p.description || null, gender: SEX_TO[p.sex],
   };
@@ -317,6 +324,10 @@ export function notificationFromApi(n: ApiNotification, ctx: Pick<ResidentLookup
     kind = 'alert';
     const link = (n.link ?? '').trim().replace(/^\/resident-app(?=\/)/, '');
     to = /^\/[a-z]/i.test(link) ? link : '/notifications';                // only a path inside this app
+  } else if (type === 'warning' || type === 'warning_letter') {
+    kind = 'warning';
+    const link = (n.link ?? '').trim().replace(/^\/resident-app(?=\/)/, '');
+    to = /^\/warnings(\/\d+)?$/i.test(link) ? link : '/warnings';
   } else if (type === 'case_message' || type === 'lost_found_bridge' || type === 'lost_found_unlinked') {
     to = id === null ? '/home' : `/conversations/${id}`;
   } else if (type.includes('pet_owner_confirmation')) {

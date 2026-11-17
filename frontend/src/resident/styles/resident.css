@@ -303,6 +303,52 @@
   .rs-chip input:focus-visible + span { outline: 2px solid var(--sa-brand); outline-offset: 2px; }
   .rs-chip--btn:hover { background: var(--sa-sand); color: var(--sa-ink); }
 
+  /* Dynamic Colour or Coat tag input */
+  .rs-color-input { position: relative; }
+  .rs-tagbox {
+    display: flex; flex-direction: column; gap: 8px; padding: 10px 12px;
+    border: 1px solid var(--sa-line-control); border-radius: 12px; background: var(--sa-surface);
+    cursor: text; transition: border-color 0.12s, box-shadow 0.12s;
+  }
+  .rs-tagbox.is-focused { border-color: var(--sa-brand); box-shadow: var(--sa-ring); }
+  .rs-tagbox[aria-invalid='true'] { border-color: var(--sa-red); }
+  .rs-tagbox__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .rs-color-chip {
+    display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 3px 6px 3px 12px;
+    border: 1px solid var(--sa-brand); border-radius: 999px; background: var(--sa-brand-soft);
+    color: var(--sa-brand-ink); font-size: 14px; font-weight: 600; line-height: 1.2;
+  }
+  .rs-color-chip__remove {
+    display: inline-grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0;
+    border-radius: 999px; background: transparent; color: var(--sa-brand-ink); cursor: pointer;
+  }
+  .rs-color-chip__remove:hover { background: rgb(198 90 23 / 0.14); }
+  .rs-tagbox__entry { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .rs-tagbox__input {
+    flex: 1; min-width: 0; min-height: 30px; padding: 2px; border: 0; background: transparent;
+    color: var(--sa-ink); font: inherit; font-size: 16px; outline: none;
+  }
+  .rs-tagbox__input::placeholder { color: var(--sa-ink-3); opacity: 0.9; }
+  .rs-tagbox__add {
+    display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; min-height: 32px; padding: 0 11px;
+    border: 1px solid var(--sa-line-control); border-radius: 999px; background: var(--sa-sand);
+    color: var(--sa-ink); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer;
+  }
+  .rs-tagbox__add:hover { border-color: var(--sa-brand); color: var(--sa-brand-ink); background: var(--sa-brand-soft); }
+  .rs-tagbox__menu {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; padding: 10px;
+    border: 1px solid var(--sa-line); border-radius: 12px; background: var(--sa-surface);
+    box-shadow: 0 6px 18px rgb(0 0 0 / 0.08);
+  }
+  .rs-tagbox__option {
+    display: inline-flex; align-items: center; min-height: 34px; padding: 0 12px;
+    border: 1px solid var(--sa-line-control); border-radius: 999px; background: var(--sa-surface);
+    color: var(--sa-ink-2); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
+  }
+  .rs-tagbox__option:hover, .rs-tagbox__option.is-active {
+    background: var(--sa-brand-soft); border-color: var(--sa-brand); color: var(--sa-brand-ink);
+  }
+
   .rs-options { display: grid; gap: 10px; }
   .rs-option {
     position: relative; display: flex; align-items: flex-start; gap: 12px; min-height: 60px; padding: 14px; border: 1px solid var(--sa-line); border-radius: var(--rs-radius);

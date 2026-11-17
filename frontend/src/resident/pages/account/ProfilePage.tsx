@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, CircleHelp, Dog, LifeBuoy, LockKeyhole, LogOut, Settings, UserPen } from 'lucide-react';
+import { Bell, CircleHelp, Dog, LifeBuoy, LockKeyhole, LogOut, Settings, ShieldAlert, UserPen } from 'lucide-react';
 import { fmtDate } from '../../../preview/lib/format';
 import { LogoutSheet } from '../../components/LogoutSheet';
 import { PrimaryScreen } from '../../components/Screen';
@@ -33,6 +33,7 @@ export default function ProfilePage() {
         <Row to={to('/profile/edit')} icon={UserPen} title="Edit profile" meta="Name, contact details and address" />
         <Row to={to('/pets')} icon={Dog} title="My pets" meta={state.pets.length === 0 ? 'None registered yet' : `${state.pets.length} registered`} />
         <Row to={to('/notifications')} icon={Bell} title="Notifications" meta={unread > 0 ? `${unread} unread` : 'All caught up'} />
+        <Row to={to('/warnings')} icon={ShieldAlert} title="Warnings & notices" meta="Official warning letters and history" />
         <Row to={to('/settings')} icon={Settings} title="Settings" meta="Notification choices, password, privacy" />
       </div>
       <div className="rs-list">

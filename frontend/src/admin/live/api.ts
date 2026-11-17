@@ -5,7 +5,7 @@
  *
  * Type-only imports, so the pure adapters (adapters.ts) that share these types can run under `node --test`.
  */
-import { httpDelete, httpGet, httpPatch, httpPost, httpPut, httpUpload } from '../../live/http';
+import { httpDelete, httpDownloadBlob, httpGet, httpPatch, httpPost, httpPut, httpUpload } from '../../live/http';
 import type {
   CategoryId, ClaimStatus, ComplianceResult, ContactMethod, DispositionId, EvidenceSufficiency, FollowUpKind, IdentityStatus,
   IncidentVerification, OutcomeGroup, OwnershipStatus, Priority, ReferralStatus, UrgencyLevel,
@@ -72,6 +72,8 @@ export interface ApiWarning {
   issued_by: number | null; issued_by_name: string | null; policy_id: string | null; policy_title: string | null; policy_reference: string | null;
   observation_days: number | null; follow_up_at: string | null; fine_amount: number; created_at: string | null;
   observations: ApiObservation[]; concluded: 'compliant' | 'non_compliant' | null; concluded_at: string | null;
+  letter_id?: number | null; warning_reference?: string | null; template_name?: string | null; template_version_number?: number | null;
+  notification_status?: string | null; notification_error?: string | null; viewed_at?: string | null;
 }
 export interface ApiClaim { claim_id: number; report_id: number; status: ClaimStatus | 'withdrawn'; statement: string; evidence: string[]; submitted_at: string | null; reviewed_at: string | null; review_note: string | null; claimant_user_id: number | null; claimant_name: string | null; claimed_pet_id: number | null; evidence_urls: string[]; reviewed_by: number | null }
 export interface ApiLink { link_id: number; report_id: number; link_type: string; note: string | null; linked_at: string | null }
@@ -224,7 +226,7 @@ export interface ApiUser {
   created_at: string; last_login: string | null; position_name: string | null; subdivision_name: string | null; subdivision_id: number | null; role_name?: string | null;
 }
 export interface ApiPet {
-  pet_id: number; pet_name: string; pet_type: string; breed: string | null; color_markings: string | null; primary_color: string | null; secondary_color: string | null;
+  pet_id: number; pet_name: string; pet_type: string; breed: string | null; color_markings: string | null; colors?: string[] | null; primary_color: string | null; secondary_color: string | null;
   gender: string | null; estimated_age: string | null; birth_date: string | null; size_category: string | null; distinctive_markings: string | null;
   health_condition: string | null; notes: string | null; photo_url: string | null; photo_front_url: string | null; photo_left_url: string | null; photo_right_url: string | null;
   owner_id: number | null; created_at: string; is_vaccinated: boolean | null; vaccine_expiry: string | null; status: string | null;
@@ -280,6 +282,42 @@ export interface ApiAnalytics {
   };
 }
 
+// ------------------------------------------------------------------------------------------------ warning templates & letters
+export interface ApiPlaceholderDef { key: string; label: string; required: boolean; example: string; description: string }
+export interface ApiWarningTemplateVersion {
+  version_id: number; template_id: number; version_number: number; subject_template: string; body_template: string;
+  html_template: string | null; source_filename: string | null; has_docx: boolean; placeholders_used: string[];
+  change_note: string | null; created_by: number | null; created_by_name: string | null; created_at: string | null;
+}
+export interface ApiWarningTemplate {
+  template_id: number; subdivision_id: number | null; name: string; description: string | null;
+  warning_level: string | null; source_type: 'editor' | 'docx_import'; status: 'active' | 'archived'; is_default: boolean;
+  current_version_id: number | null; current_version_number: number; version_count: number;
+  current_version: ApiWarningTemplateVersion | null; created_by_name: string | null; updated_by_name: string | null;
+  created_at: string | null; updated_at: string | null; versions?: ApiWarningTemplateVersion[];
+}
+export interface ApiTemplatePreviewResult {
+  subject: string; body: string; html: string; placeholders: Record<string, string>;
+  missing_fields: { key: string; label: string; required: boolean; message: string }[];
+  can_issue: boolean; template?: { template_id: number; name: string; version_number: number };
+}
+export interface ApiGeneratedWarningLetter {
+  letter_id: number; warning_reference: string; subdivision_id: number | null; warning_id: number | null;
+  subdivision_name?: string | null; subdivision_address?: string | null; subdivision_phone?: string | null; subdivision_email?: string | null;
+  complaint_step_id: number | null; report_id: number | null; case_reference: string;
+  recipient_user_id: number | null; recipient_name: string; recipient_address: string | null;
+  pet_id: number | null; pet_name: string | null; pet_type: string | null;
+  warning_level: string; policy_id: string | null; policy_reference: string | null;
+  template_id: number | null; template_name: string; template_version_id: number | null; template_version_number: number;
+  rendered_subject: string; rendered_body: string; rendered_html: string; placeholders: Record<string, string>;
+  issued_by: number | null; issued_by_name: string; issuer_name?: string | null; issuer_role?: string | null; issued_at: string | null;
+  warning_status: string | null; acknowledged_at: string | null;
+  notification_id: number | null; notification_status: string; notification_error: string | null;
+  notification_created_at: string | null; notification_sent_at: string | null;
+  is_read: boolean; viewed_at: string | null; retry_count: number; last_retry_at: string | null;
+  attachment_url?: string | null; attachment_name?: string | null;
+}
+
 // ------------------------------------------------------------------------------------------------------------ calls
 const PAGE = 200;
 const MAX_CASES = 2000;       // a safety stop, not a business rule: the list is read in pages of 200 until the server says there is no more
@@ -318,8 +356,29 @@ export const adminApi = {
   unlink: (id: number, linkId: number, reason: string) => httpPost(`/cases/${id}/links/${linkId}/unlink`, { reason }),
   reviewClaim: (id: number, claimId: number, decision: string, note: string) => httpPost(`/cases/${id}/claims/${claimId}/review`, { decision, note: note || null }),
   recordCompliance: (id: number, warningId: number, body: Record<string, unknown>) => httpPost(`/cases/${id}/warnings/${warningId}/observations`, body),
-  warningSuggestion: (params: { violation_type: string; report_id: number; owner_id: number; policy_id: string }) => httpGet<{ suggested_tier: string }>('/warnings/suggestion', params),
+  warningSuggestion: (params: { violation_type: string; report_id: number; owner_id: number; policy_id: string }) => httpGet<{ suggested_tier: string; instructions?: string }>('/warnings/suggestion', params),
   issueWarning: (body: Record<string, unknown>) => httpPost('/warnings/', body),
+
+  warningTemplatePlaceholders: () => httpGet<{ placeholders: ApiPlaceholderDef[] }>('/warning-templates/placeholders'),
+  warningTemplates: (status: 'all' | 'active' | 'archived' = 'all') => httpGet<{ items: ApiWarningTemplate[] }>('/warning-templates', { status }),
+  warningTemplateDetail: (id: number) => httpGet<ApiWarningTemplate>(`/warning-templates/${id}`),
+  createWarningTemplate: (body: Record<string, unknown>) => httpPost<ApiWarningTemplate>('/warning-templates', body),
+  updateWarningTemplate: (id: number, body: Record<string, unknown>) => httpPut<ApiWarningTemplate>(`/warning-templates/${id}`, body),
+  importWarningTemplateDocx: (form: FormData) => httpUpload<ApiWarningTemplate>('/warning-templates/import-docx', form),
+  setDefaultWarningTemplate: (id: number) => httpPost<ApiWarningTemplate>(`/warning-templates/${id}/set-default`),
+  setWarningTemplateStatus: (id: number, status: 'active' | 'archived') => httpPost<ApiWarningTemplate>(`/warning-templates/${id}/status`, { status }),
+  previewWarningTemplate: (body: Record<string, unknown>) => httpPost<ApiTemplatePreviewResult>('/warning-templates/preview', body),
+
+  caseWarningLetters: (reportId: number) => httpGet<{ items: ApiGeneratedWarningLetter[] }>(`/warning-letters/case/${reportId}`),
+  warningLetterDetail: (letterId: number) => httpGet<ApiGeneratedWarningLetter>(`/warning-letters/${letterId}`),
+  retryWarningNotification: (letterId: number) => httpPost<ApiGeneratedWarningLetter>(`/warning-letters/${letterId}/retry-notification`),
+  downloadWarningLetter: (letterId: number, ref: string, format: 'pdf' | 'docx') => httpDownloadBlob(`/warning-letters/${letterId}/download`, `${ref}.${format}`, { format }),
+  uploadComplaintAttachment: (reportId: number, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('is_evidence', 'true');
+    return httpUpload<ApiMedia>(`/reports/${reportId}/media`, form);
+  },
 
   users: () => httpGet<ApiUser[]>('/users/'),
   user: (id: number) => httpGet<ApiUser>(`/users/${id}`),

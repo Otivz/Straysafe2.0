@@ -3,10 +3,22 @@
  * is one the backend already serves (reports, lost-pet-alerts, announcements, ownership-claims, pets, users, notifications,
  * chat, landmarks, cases/categories). Types only describe what the screens read.
  */
-import { httpGet, httpGetPage, httpPost, httpPut, httpPatch, httpUpload } from '../../live/http';
-import type { ApiAnnouncement, ApiNotification, ApiNotificationPrefs, ApiPet, ApiUser } from '../../admin/live/api';
+import { httpDownloadBlob, httpGet, httpGetPage, httpPost, httpPut, httpPatch, httpUpload } from '../../live/http';
+import type { ApiAnnouncement, ApiGeneratedWarningLetter, ApiNotification, ApiNotificationPrefs, ApiPet, ApiUser } from '../../admin/live/api';
 
-export type { ApiAnnouncement, ApiNotification, ApiNotificationPrefs, ApiPet, ApiUser };
+export type { ApiAnnouncement, ApiGeneratedWarningLetter, ApiNotification, ApiNotificationPrefs, ApiPet, ApiUser };
+
+/** Sanitized incident record confirmed for a resident's own pet (`GET /pets/{id}/confirmed-incidents`). */
+export interface ApiPetConfirmedIncident {
+  report_id: number;
+  reference_code: string;
+  category: string;
+  incident_date: string | null;
+  status: 'reported' | 'under_review' | 'in_progress' | 'closed';
+  status_label: string;
+  summary: string;
+  has_warning_letter: boolean;
+}
 
 /** A pet the office linked to this account, waiting for the resident's answer (GET /pet-ownership/mine). */
 export interface ApiOwnershipRequest {
@@ -37,6 +49,7 @@ export interface ApiResidentReport {
   animal_type: string | null;
   animal_breed: string | null;
   animal_color: string | null;
+  animal_colors?: string[] | null;
   description: string | null;
   condition: string | null;
   latitude: number | null;
@@ -192,6 +205,7 @@ export const residentApi = {
   claimInfo: (claimId: number, text: string) => httpPost(`/ownership-claims/${claimId}/info`, { text }),
 
   pets: () => httpGet<ApiPet[]>('/pets/'),
+  petConfirmedIncidents: (id: number) => httpGet<{ items: ApiPetConfirmedIncident[] }>(`/pets/${id}/confirmed-incidents`),
   createPet: (body: Record<string, unknown>) => httpPost<ApiPet>('/pets/', body),
   updatePet: (id: number, body: Record<string, unknown>) => httpPut<ApiPet>(`/pets/${id}`, body),
   uploadPetPhoto: (id: number, file: File) => { const form = new FormData(); form.append('file', file); return httpUpload<{ photo_url: string }>(`/pets/${id}/photo`, form); },
@@ -203,4 +217,10 @@ export const residentApi = {
   markAllRead: (userId: number) => httpPost(`/notifications/mark-all-read/${userId}`),
   preferences: () => httpGet<ApiNotificationPrefs>('/notifications/preferences'),
   savePreferences: (body: Partial<ApiNotificationPrefs>) => httpPut<ApiNotificationPrefs>('/notifications/preferences', body),
+
+  myWarningLetters: () => httpGet<{ items: ApiGeneratedWarningLetter[] }>('/warning-letters/mine'),
+  caseWarningLetters: (reportId: number) => httpGet<{ items: ApiGeneratedWarningLetter[] }>(`/warning-letters/case/${reportId}`),
+  warningLetter: (letterId: number) => httpGet<ApiGeneratedWarningLetter>(`/warning-letters/${letterId}`),
+  downloadWarningLetter: (letterId: number, ref: string, format: 'pdf' | 'docx') => httpDownloadBlob(`/warning-letters/${letterId}/download`, `${ref}.${format}`, { format }),
+  acknowledgeWarning: (warningId: number) => httpPatch(`/warnings/${warningId}/acknowledge`, { confirmed: true }),
 };

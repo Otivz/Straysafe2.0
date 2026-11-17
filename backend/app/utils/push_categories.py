@@ -18,7 +18,7 @@ _TYPE_CATEGORY = {
     "status_update": REPORTS, "status_change": REPORTS, "report_status": REPORTS, "report_visibility": REPORTS,
     "comment": REPORTS, "report_claimed": REPORTS, "report_takeover": REPORTS, "report_transfer_request": REPORTS,
     "report_transfer_accepted": REPORTS, "report_transfer_rejected": REPORTS, "unassigned_report_alert": REPORTS,
-    "enforcement": REPORTS,
+    "enforcement": REPORTS, "warning": REPORTS, "warning_letter": REPORTS,
     # Case activity (preference column push_rescues)
     "alert": RESCUES,
     # Pet matches
@@ -99,6 +99,8 @@ def notification_link(role_id: int, ntype: Optional[str], related_id: Optional[i
     if role_id == 1:  # Resident app
         if t in ("pet_owner_confirmation", "pet_match_confirmation"):
             return f"{RESIDENT_APP}/pets"
+        if t in ("warning", "warning_letter"):
+            return f"{RESIDENT_APP}/warnings"
         if t == "lost_found_linked":
             return f"{RESIDENT_APP}/reports"
         if t == "case_alert":                 # the exact screen needs the database: push_service.payload_for works it out

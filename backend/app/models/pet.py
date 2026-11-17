@@ -1,8 +1,8 @@
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, JSON, Numeric, String, Text, func
 from sqlalchemy import event
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,6 +22,7 @@ class Pet(Base):
     pet_type: Mapped[str] = mapped_column(Enum("Dog", "Cat", name="pet_type"), nullable=False)
     breed: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     color_markings: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    colors: Mapped[Optional[List[str]]] = mapped_column(JSON, nullable=True)
     gender: Mapped[Optional[str]] = mapped_column(
         Enum("Male", "Female", "Unknown", name="pet_gender"), default="Unknown"
     )

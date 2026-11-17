@@ -50,6 +50,7 @@ class Report(Base):
     animal_type: Mapped[Optional[str]] = mapped_column(Enum(*ANIMAL_TYPE_LABELS), nullable=True, default='Unknown')
     animal_breed: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     animal_color: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    animal_colors: Mapped[Optional[List[str]]] = mapped_column(JSON, nullable=True)
     estimated_size: Mapped[Optional[str]] = mapped_column(Enum('Small', 'Medium', 'Large'), nullable=True)
 
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

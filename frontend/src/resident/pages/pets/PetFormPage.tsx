@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ANIMAL_ICON } from '../../components/icons';
+import { ColorTagInput } from '../../components/ColorTagInput';
 import { ChoiceChips, Field, FieldGroup, Input, Textarea } from '../../components/form';
 import { MediaPicker } from '../../components/MediaPicker';
 import { Screen } from '../../components/Screen';
@@ -8,6 +9,7 @@ import { DiscardSheet } from '../../components/Sheet';
 import { useToast } from '../../components/toast';
 import { Button, Callout, FormError, LinkButton, NotFoundState } from '../../components/ui';
 import { residentPath } from '../../config';
+import { parseColorTags } from '../../data/colors';
 import { ANIMAL_TYPES, PET_TYPE_IDS, SEX_LABEL } from '../../data/constants';
 import { useResidentData } from '../../data/context';
 import { petById } from '../../data/selectors';
@@ -16,13 +18,13 @@ import { stepPath, useStartReport } from '../../lib/flow';
 import { useFormFocus, useLeaveGuard, useSubmit } from '../../lib/hooks';
 import { ApiDetailError, errorCodeOf } from '../../../live/http';
 
-interface Values { name: string; type: AnimalType | ''; sex: PetSex; breed: string; color: string; ageText: string; markings: string; description: string }
+interface Values { name: string; type: AnimalType | ''; sex: PetSex; breed: string; colors: string[]; ageText: string; markings: string; description: string }
 type Errors = Partial<Record<'name' | 'type' | 'color', string>>;
 /** A record the subdivision office already holds that looks like the pet being registered (the server stops and asks). */
 type HeldRecord = { id: string; name: string; kind: string };
 
 const valuesOf = (p?: Pet): Values => ({
-  name: p?.name ?? '', type: p?.type ?? '', sex: p?.sex ?? 'unknown', breed: p?.breed ?? '', color: p?.color ?? '', ageText: p?.ageText ?? '', markings: p?.markings.join(', ') ?? '', description: p?.description ?? '',
+  name: p?.name ?? '', type: p?.type ?? '', sex: p?.sex ?? 'unknown', breed: p?.breed ?? '', colors: parseColorTags(p?.colors, p?.color), ageText: p?.ageText ?? '', markings: p?.markings.join(', ') ?? '', description: p?.description ?? '',
 });
 const photoOf = (p?: Pet): Media[] => (p?.photoUrl ? [{ id: `photo-${p.id}`, name: p.photoName ?? 'Photo', kind: 'photo', size: 0, url: p.photoUrl }] : []);
 
@@ -54,7 +56,7 @@ function PetForm({ pet }: { pet?: Pet }) {
   const save = async (confirmNew: boolean) => {
     const saved: Pet = {
       id: pet?.id ?? `pet-${Date.now().toString(36)}`,
-      name: v.name.trim(), type: v.type as AnimalType, sex: v.sex, breed: v.breed.trim(), color: v.color.trim(), ageText: v.ageText.trim(),
+      name: v.name.trim(), type: v.type as AnimalType, sex: v.sex, breed: v.breed.trim(), color: v.colors.join(', '), colors: v.colors, ageText: v.ageText.trim(),
       markings: v.markings.split(/[,\n]/).map((m) => m.trim()).filter(Boolean).slice(0, 8), description: v.description.trim(),
       photoUrl: media[0]?.url, photoName: media[0]?.name, registeredAt: pet?.registeredAt ?? '', ...(pet?.status ? { status: pet.status } : {}),
     };
@@ -82,7 +84,7 @@ function PetForm({ pet }: { pet?: Pet }) {
     const found: Errors = {};
     if (v.name.trim().length < 1) found.name = 'Enter your pet’s name.';
     if (!v.type) found.type = 'Choose whether it is a dog or a cat.';
-    if (v.color.trim().length < 2) found.color = 'Describe the colour or coat, for example “white and gold”.';
+    if (v.colors.length === 0) found.color = 'Add at least one colour, for example “White” or “Brown”.';
     setErrors(found);
     if (Object.keys(found).length > 0) { invalid(); return; }
     if (pet && !dirty) { navigate(residentPath(`/pets/${pet.id}`), { replace: true }); return; }
@@ -121,14 +123,14 @@ function PetForm({ pet }: { pet?: Pet }) {
             <ChoiceChips label="Dog or cat" value={v.type} onChange={(t) => set('type', t)} options={PET_TYPE_IDS.map((id) => ({ value: id, label: ANIMAL_TYPES[id], icon: ANIMAL_ICON[id] }))} />
           </FieldGroup>
           <FieldGroup label="Sex (optional)">
-            <ChoiceChips label="Sex" value={v.sex} onChange={(s) => set('sex', s)} options={(Object.keys(SEX_LABEL) as PetSex[]).map((id) => ({ value: id, label: SEX_LABEL[id] }))} />
+            <ChoiceChips label="Sex" value={v.sex} onChange={(s) => set('sex', s)} options={(['male', 'female'] as const).map((id) => ({ value: id, label: SEX_LABEL[id] }))} />
           </FieldGroup>
           <Field label="Breed" optional>
             <Input value={v.breed} onChange={(e) => set('breed', e.target.value)} maxLength={60} placeholder="Shih Tzu" />
           </Field>
-          <Field label="Colour or coat" required error={errors.color}>
-            <Input value={v.color} onChange={(e) => set('color', e.target.value)} maxLength={60} placeholder="White and gold" />
-          </Field>
+          <FieldGroup label="Colour or coat" required error={errors.color} hint="Type a colour and press Enter or pick a suggestion to add separate tags.">
+            <ColorTagInput value={v.colors} onChange={(colors) => { set('colors', colors); setErrors((p) => ({ ...p, color: undefined })); }} invalid={Boolean(errors.color)} />
+          </FieldGroup>
           <Field label="Age" optional>
             <Input value={v.ageText} onChange={(e) => set('ageText', e.target.value)} maxLength={30} placeholder="3 years" />
           </Field>

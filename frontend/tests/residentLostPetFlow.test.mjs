@@ -134,3 +134,14 @@ test('only the owner\'s confirmation says a missing pet is home; every other end
   assert.equal(selectors.noticeEndedLabel({ type: 'found_animal', status: 'closed' }), 'Closed');
   assert.equal(selectors.noticeEndedLabel({ type: 'found_animal', status: 'closed', closeOutcome: 'reunited' }), 'Recovered');
 });
+
+test('petLostReports returns all active and closed lost-pet reports for a pet newest first', () => {
+  const reports = [
+    { id: 'SS-2026-0001', kind: 'lost', petId: '12', status: 'closed', submittedAt: '2026-10-01T08:00:00Z' },
+    { id: 'SS-2026-0002', kind: 'incident', petId: '12', status: 'closed', submittedAt: '2026-10-05T08:00:00Z' },
+    { id: 'SS-2026-0003', kind: 'lost', petId: '99', status: 'in_progress', submittedAt: '2026-11-10T08:00:00Z' },
+    { id: 'SS-2026-0004', kind: 'lost', petId: '12', status: 'in_progress', submittedAt: '2026-11-12T08:00:00Z' },
+  ];
+  const got = selectors.petLostReports({ pets: [pet], reports }, '12');
+  assert.deepEqual(got.map((r) => r.id), ['SS-2026-0004', 'SS-2026-0001']);
+});

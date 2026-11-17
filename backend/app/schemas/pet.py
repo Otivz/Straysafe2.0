@@ -10,6 +10,7 @@ class PetBase(BaseModel):
     pet_type: str
     breed: Optional[str] = None
     color_markings: Optional[str] = None
+    colors: Optional[List[str]] = None
     gender: Optional[str] = "Unknown"
     birth_date: Optional[date] = None
     estimated_age: Optional[str] = None
@@ -80,6 +81,7 @@ class PetUpdate(BaseModel):
     pet_type: Optional[str] = None
     breed: Optional[str] = None
     color_markings: Optional[str] = None
+    colors: Optional[List[str]] = None
     gender: Optional[str] = None
     birth_date: Optional[date] = None
     estimated_age: Optional[str] = None

@@ -229,14 +229,17 @@ export function caseFromSummary(s: ApiCaseSummary, lookup: Lookup): Case {
     evidence: (() => {
       const urls = s.photo_urls && s.photo_urls.length > 0 ? s.photo_urls : (s.thumbnail_url ? [s.thumbnail_url] : []);
       if (!urls.length) return [];
-      return urls.map((url, i) => ({
-        id: urls.length === 1 ? `thumb-${s.report_id}` : `thumb-${s.report_id}-${i + 1}`,
-        kind: 'photo' as const,
-        label: `Photo ${i + 1}`,
-        capturedAt: reportedAt,
-        source: 'reporter' as const,
-        url,
-      }));
+      return urls.map((url, i) => {
+        const isVideo = url.endsWith('.mp4') || url.endsWith('.webm') || url.includes('/video/upload/');
+        return {
+          id: urls.length === 1 ? `thumb-${s.report_id}` : `thumb-${s.report_id}-${i + 1}`,
+          kind: isVideo ? ('video' as const) : ('photo' as const),
+          label: `${isVideo ? 'Video' : 'Photo'} ${i + 1}`,
+          capturedAt: reportedAt,
+          source: 'reporter' as const,
+          url,
+        };
+      });
     })(),
     assessment: {
       incident: s.assessment.incident, incidentBasis: '', evidenceSufficiency: s.assessment.evidence_sufficiency, evidenceReviewed: [],
@@ -331,6 +334,14 @@ export function warningFromApi(w: ApiCaseDetail['warnings'][number], caseClosure
     ...(concluded ? { outcome: w.concluded as 'compliant' | 'non_compliant', outcomeNote: observations[0]?.notes ?? '', concludedAt: fromServer(w.concluded_at) }
       : endedByClosure ? { outcome: 'other' as const, outcomeNote: 'Case closed.', concludedAt: caseClosure.closedAt } : {}),
     observations,
+    letterId: w.letter_id ?? null,
+    warningReference: w.warning_reference ?? null,
+    warningLevel: w.warning_level ?? null,
+    templateName: w.template_name ?? null,
+    templateVersionNumber: w.template_version_number ?? null,
+    notificationStatus: w.notification_status ?? null,
+    notificationError: w.notification_error ?? null,
+    viewedAt: fromServerOrNull(w.viewed_at ?? null),
   };
 }
 
@@ -522,7 +533,8 @@ export function petFromApi(p: ApiPet, now: Date): Pet {
   const vaccination: Pet['vaccination'] = !p.is_vaccinated ? 'unknown' : expiry && !Number.isNaN(expiry.getTime()) && expiry.getTime() < now.getTime() ? 'overdue' : 'up_to_date';
   const userColor = (p.color_markings ?? '').trim();
   const fallback = [p.primary_color, p.secondary_color].map((c) => (c ?? '').trim()).filter(Boolean);
-  const colorStr = userColor || [...new Set(fallback)].join(', ') || 'Not recorded';
+  const tagColors = Array.isArray(p.colors) && p.colors.length > 0 ? p.colors.map((c) => c.trim()).filter(Boolean) : [];
+  const colorStr = userColor || tagColors.join(', ') || [...new Set(fallback)].join(', ') || 'Not recorded';
   return {
     id: String(p.pet_id), name: p.pet_name, type: animalTypeOf(p.pet_type), breed: p.breed?.trim() || 'Not recorded', color: colorStr,
     sex: SEX[(p.gender ?? '').toLowerCase()] ?? 'unknown', ageText: p.estimated_age?.trim() || (p.birth_date ? `Born ${p.birth_date}` : 'Not recorded'),

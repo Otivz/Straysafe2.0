@@ -20,7 +20,7 @@ import type { ResidentSession } from '../auth/gateway';
 import { ResidentDataContext, type ActionOutcome, type DetailStatus, type LoadIssue, type LoadStatus, type ResidentCapabilities } from '../data/context';
 import { reducer, type ResidentAction } from '../data/reducer';
 import type { CategoryId, Claim, Notice, Report, ResidentState, Settings } from '../data/types';
-import { runAction, type ResidentActionContext } from './actions';
+import { runAction, type ResidentActionContext, type ResidentActionResult } from './actions';
 import * as ad from './adapters';
 import { residentApi, type ApiResidentAlert, type ApiResidentCategories, type ApiResidentClaim, type CommunityQuery } from './api';
 
@@ -348,9 +348,9 @@ function Loaded({ session, children }: { session: ResidentSession; children: Rea
   }, [loadReport, lookup, patch, refreshConversations, refreshNotices, refreshPets, sessionEnded]);
 
   // ------------------------------------------------------------------------------------------------------- actions
-  const dispatch = useCallback(async (action: ResidentAction): Promise<ActionOutcome | void> => {
+  const dispatch = useCallback(async (action: ResidentAction): Promise<ActionOutcome | undefined> => {
     const ctx: ResidentActionContext = { userId, state: () => stateRef.current, categoryIdOf: (family) => categoryIds.current.get(family) ?? null, categoriesRead };
-    let result;
+    let result: ResidentActionResult;
     try {
       result = await runAction(action, ctx);
     } catch (err) {

@@ -46,6 +46,8 @@ export interface Report {
   title: string;
   description: string;
   animalType: AnimalType;
+  breed?: string;
+  colors?: string[];
   petName?: string;
   petId?: string | null;
   location: GeoPoint;
@@ -176,6 +178,7 @@ export interface Pet {
   type: AnimalType;
   breed: string;
   color: string;
+  colors?: string[];
   ageText: string;
   markings: string[];
   description: string;
@@ -192,8 +195,8 @@ export interface OwnershipRequest { id: string; petId: string; petName: string; 
 
 export interface Notification {
   id: string;
-  /** `alert`: a lost & found alert the Subdivision Leader sent (a tap opens its notice, the notice's form, or the notifications). */
-  kind: 'report_update' | 'sighting' | 'claim_update' | 'community_notice' | 'safety_advisory' | 'alert';
+  /** `alert`: a lost & found alert the Subdivision Leader sent; `warning`: an official warning letter issued to this resident. */
+  kind: 'report_update' | 'sighting' | 'claim_update' | 'community_notice' | 'safety_advisory' | 'alert' | 'warning';
   title: string;
   body: string;
   at: string;
@@ -235,6 +238,8 @@ export interface Draft {
   kind: ReportKind;
   category: CategoryId;
   animalType: AnimalType | '';
+  breed?: string;
+  colors?: string[];
   petId: string | null;
   petName: string;
   description: string;

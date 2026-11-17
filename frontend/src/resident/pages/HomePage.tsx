@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bell, ClipboardList, Dog, MessageSquare, PawPrint, Pencil, Search, UserCheck, type LucideIcon } from 'lucide-react';
+import { Bell, ClipboardList, Dog, MessageSquare, PawPrint, Pencil, Search, ShieldAlert, UserCheck, type LucideIcon } from 'lucide-react';
 import { greeting, relative } from '../../preview/lib/format';
 import { MissingPetCard, NoticeCard } from '../components/Cards';
 import { PrimaryScreen } from '../components/Screen';
@@ -10,6 +10,7 @@ import { CATEGORIES } from '../data/constants';
 import { useResidentData } from '../data/context';
 import { accepts } from '../data/entries';
 import { conversationAttention, feed, latestAdvisory, noticeById, recentUpdates, reportablePets, unreadCount } from '../data/selectors';
+import { residentApi, type ApiGeneratedWarningLetter } from '../live/api';
 import { registerForLostPath, useStartReport } from '../lib/flow';
 import { useNow } from '../lib/hooks';
 import { useSubdivisionName } from '../lib/useOffice';
@@ -22,7 +23,14 @@ interface Attention { id: string; icon: LucideIcon; title: string; meta: string;
  */
 export default function HomePage() {
   const { state, refreshConversations } = useResidentData();
+  const [warningLetters, setWarningLetters] = useState<ApiGeneratedWarningLetter[]>([]);
   useEffect(() => { void refreshConversations(); }, [refreshConversations]);
+  useEffect(() => {
+    if (!state.profile?.id) return;
+    let live = true;
+    residentApi.myWarningLetters().then((res) => { if (live) setWarningLetters(res.items); }, () => undefined);
+    return () => { live = false; };
+  }, [state.profile?.id]);
   const subdivision = useSubdivisionName();
   const start = useStartReport();
   const navigate = useNavigate();
@@ -45,6 +53,16 @@ export default function HomePage() {
   // only a real message from a person (the case chat): the lines the system records (a notice went out, a sighting came in) are not messages
   for (const r of state.reports) {
     if (r.status !== 'closed' && r.updates[0]?.kind === 'message') attention.push({ id: r.id, icon: MessageSquare, title: 'Message from the subdivision', meta: `${r.id} · ${r.title}`, to: `/reports/${r.id}` });
+  }
+  const activeWarnings = warningLetters.filter((w) => !w.viewed_at || w.warning_status === 'Pending');
+  for (const w of activeWarnings) {
+    attention.unshift({
+      id: `warn-${w.letter_id}`,
+      icon: ShieldAlert,
+      title: `${w.warning_level} (${w.warning_reference})`,
+      meta: `${w.case_reference} · View & download letter`,
+      to: `/warnings/${w.letter_id}`,
+    });
   }
 
   // the resident's own missing pets are shown once, at the top; "still missing" is a state, not a task

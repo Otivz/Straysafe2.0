@@ -12,6 +12,7 @@ import { fromLocalInput } from '../../preview/lib/format';
 import { toServer } from '../../live/dates';
 import { reportIdOf } from '../../live/refs';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
+import { normalizeColorList } from '../data/colors';
 import type { ResidentAction } from '../data/reducer';
 import type { CategoryId, Draft, Media, Notice, ResidentState } from '../data/types';
 import { ANIMAL_LABEL, PINNED_LABEL, evidenceIdsFrom, joinAddress, joinExtra, noticeRef, petToApi, preferencesFrom } from './adapters';
@@ -106,6 +107,12 @@ async function submitReport(ctx: ResidentActionContext): Promise<ResidentActionR
   const category = entry?.category_id ?? ctx.categoryIdOf(draft.category) ?? fail('This kind of report is not available in your subdivision.', 422);
   const label = loc.label === PINNED_LABEL ? null : loc.label;
   const extraLabel = EXTRA_LABEL[draft.category];
+  const colorTags = normalizeColorList(draft.colors ?? []);
+  const breed = (draft.breed ?? '').trim();
+  const colorSet = new Set(colorTags.map((c) => c.toLowerCase()));
+  // Avoid duplicating plain colour words already captured in the Colour or coat tags field
+  const looksExtra = (draft.looks ?? '').split(',').map((s) => s.trim()).filter((s) => s && !colorSet.has(s.toLowerCase())).join(', ');
+  const nuisanceColorText = [colorTags.join(', '), looksExtra].filter(Boolean).join(' · ') || null;
 
   const created = await residentApi.createReport({
     category_id: category, animal_type: ANIMAL_LABEL[animal], description: descriptionOf(draft), condition: extraLabel && draft.extra ? joinExtra(extraLabel, draft.extra) : null,
@@ -113,12 +120,17 @@ async function submitReport(ctx: ResidentActionContext): Promise<ResidentActionR
     client_request_id: retryKeyOf(draft),
     // A lost report names the resident's own registered pet and says when it was last seen; the server builds what the report says
     // about the animal from the pet record, and refuses a pet that is not theirs or that already has an active lost report
-    ...(pet ? { pet_id: numeric(pet.id, 'pet'), last_seen_at: toServer(draft.observedAt) } : { pet_id: null }),
+    ...(pet ? { pet_id: numeric(pet.id, 'pet'), last_seen_at: toServer(draft.observedAt) } : {
+      pet_id: null,
+      ...(breed ? { animal_breed: breed } : {}),
+      ...(colorTags.length > 0 ? { animal_colors: colorTags, animal_color: colorTags.join(', ') } : {}),
+    }),
     // Complaint management: when it was seen; on an animal complaint, what it looked like and what the resident knows about the owner
     // (a lead for the Subdivision Leader only)
     ...(lost ? {} : { seen_at: toServer(draft.observedAt) }),
     ...(draft.category === 'nuisance' ? {
-      animal_color: (draft.looks ?? '').trim() || null,
+      ...(colorTags.length > 0 ? { animal_colors: colorTags } : {}),
+      animal_color: nuisanceColorText,
       suspected_owner_name: (draft.suspectName ?? '').trim() || null,
       suspected_owner_address: (draft.suspectAddress ?? '').trim() || null,
       suspected_owner_details: (draft.suspectDetails ?? '').trim() || null,

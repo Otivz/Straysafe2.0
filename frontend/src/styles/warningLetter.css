@@ -1,0 +1,259 @@
+/* Formal A4 Official Warning Letter Document & Proportional Mobile Preview */
+
+.ss-a4-viewport {
+  width: 100%;
+  background: #f3f1ed;
+  border: 1px solid #e5e0d8;
+  border-radius: 12px;
+  padding: 16px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.ss-a4-scale-box {
+  position: relative;
+  margin: 0 auto;
+}
+
+.ss-a4-paper {
+  width: 794px;
+  min-height: 1123px;
+  background: #ffffff;
+  color: #1e293b;
+  border: 1px solid #dfd9ce;
+  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.08);
+  padding: 76px 80px; /* ~20-21mm A4 margins */
+  box-sizing: border-box;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+  transform-origin: top left;
+  display: flex;
+  flex-direction: column;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+/* 1. Letterhead */
+.ss-a4-letterhead {
+  text-align: center;
+  padding-bottom: 18px;
+  border-bottom: 1.5px solid #cbd5e1;
+  margin-bottom: 24px;
+}
+
+.ss-a4-letterhead__org {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #0f172a;
+}
+
+.ss-a4-letterhead__office {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.ss-a4-letterhead__contact {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+/* 2. Warning Document Header */
+.ss-a4-docheader {
+  text-align: center;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 24px;
+}
+
+.ss-a4-docheader__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #0f172a;
+}
+
+.ss-a4-docheader__level {
+  margin: 6px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #b45309;
+}
+
+.ss-a4-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin-top: 16px;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  text-align: left;
+  font-size: 13px;
+}
+
+.ss-a4-meta__item {
+  min-width: 0;
+}
+
+.ss-a4-meta__label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.ss-a4-meta__value {
+  display: block;
+  margin-top: 2px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+/* 3. Recipient Information */
+.ss-a4-recipient {
+  margin-bottom: 24px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.ss-a4-recipient__row {
+  margin: 0 0 8px;
+}
+
+.ss-a4-recipient__row:last-child {
+  margin-bottom: 0;
+}
+
+.ss-a4-recipient__label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.ss-a4-recipient__name {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.ss-a4-recipient__address {
+  display: block;
+  color: #334155;
+  overflow-wrap: break-word;
+}
+
+/* 4. Letter Body */
+.ss-a4-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ss-a4-subject {
+  margin: 0 0 4px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: #0f172a;
+}
+
+.ss-a4-para {
+  margin: 0;
+  color: #1e293b;
+  white-space: pre-line;
+  overflow-wrap: break-word;
+}
+
+.ss-a4-section {
+  margin: 2px 0;
+}
+
+.ss-a4-section__heading {
+  margin: 0 0 4px;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* 5. Signature / Issuing Authority */
+.ss-a4-signature {
+  margin-top: 38px;
+  padding-top: 12px;
+  page-break-inside: avoid;
+}
+
+.ss-a4-signature__label {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.ss-a4-signature__space {
+  height: 44px;
+  width: 240px;
+  border-bottom: 1px solid #94a3b8;
+  margin-bottom: 8px;
+}
+
+.ss-a4-signature__name {
+  margin: 0;
+  font-size: 15.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.ss-a4-signature__role {
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: #334155;
+}
+
+@media (min-width: 860px) {
+  .rs-frame:has(.ss-a4-viewport) {
+    max-width: 880px;
+  }
+}
+
+@media (max-width: 640px) {
+  .ss-a4-viewport {
+    padding: 8px;
+    border-radius: 10px;
+  }
+}
+
+@media print {
+  .ss-a4-viewport {
+    background: transparent !important;
+    border: 0 !important;
+    padding: 0 !important;
+  }
+  .ss-a4-scale-box {
+    width: auto !important;
+    height: auto !important;
+  }
+  .ss-a4-paper {
+    width: 100% !important;
+    min-height: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+    padding: 0 !important;
+  }
+}

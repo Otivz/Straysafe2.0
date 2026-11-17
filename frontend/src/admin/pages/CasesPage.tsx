@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowRight, ChevronLeft, ChevronRight, Clock, FolderOpen, MapPin, PawPrint, SearchX } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, Clock, FolderOpen, MapPin, PawPrint, Play, SearchX } from 'lucide-react';
 import { adminPath } from '../config';
 import { LinkButton, Button } from '../components/Button';
 import { CaseStatusBadge, ClosureOutcome, PriorityMark } from '../components/Badge';
@@ -27,14 +27,16 @@ function CaseCard({ c, now, onNavigate }: { c: Case; now: Date; onNavigate: (id:
   const [imgFailed, setImgFailed] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
 
-  const petPhotos = c.registeredPet?.current?.photos ?? [];
-  const availablePhotos = c.evidence
-    .filter((e) => (e.kind === 'photo' || e.url) && !e.url?.endsWith('.mp4') && !e.url?.endsWith('.webm'))
-    .map((e) => e.url!)
-    .concat(petPhotos);
-  const photos = Array.from(new Set(availablePhotos));
-  const hasPhotos = photos.length > 0 && !imgFailed;
-  const currentPhoto = hasPhotos ? photos[((photoIndex % photos.length) + photos.length) % photos.length] : null;
+  const petPhotos = (c.registeredPet?.current?.photos ?? []).map((u) => ({ url: u, kind: 'photo' as const }));
+  const evidenceMedia = c.evidence
+    .filter((e): e is typeof e & { url: string } => Boolean(e.url))
+    .map((e) => {
+      const isVid = e.kind === 'video' || e.url.endsWith('.mp4') || e.url.endsWith('.webm') || e.url.includes('/video/upload/');
+      return { url: e.url, kind: isVid ? ('video' as const) : ('photo' as const) };
+    });
+  const allMedia = [...evidenceMedia, ...petPhotos];
+  const mediaList = allMedia.filter((m, i, arr) => arr.findIndex((x) => x.url === m.url) === i);
+  const currentMedia = mediaList.length > 0 && !imgFailed ? mediaList[((photoIndex % mediaList.length) + mediaList.length) % mediaList.length] : null;
 
   const AnimalIcon = ANIMAL_ICON[c.animal.type] ?? PawPrint;
   const isUrgent = c.status !== 'closed' && c.priority === 'urgent';
@@ -72,24 +74,47 @@ function CaseCard({ c, now, onNavigate }: { c: Case; now: Date; onNavigate: (id:
 
         {/* Card Body: Thumbnail / Icon with Previous & Next controls + Title and Description */}
         <div className="flex gap-3.5 my-3">
-          {currentPhoto ? (
+          {currentMedia ? (
             <div className="relative w-18 h-18 sm:w-20 sm:h-20 rounded-lg overflow-hidden shrink-0 border border-[var(--sa-line)] bg-[var(--sa-sand)] group/img">
-              <img
-                src={currentPhoto}
-                alt=""
-                className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-200 cursor-zoom-in"
-                loading="lazy"
-                onError={() => setImgFailed(true)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openMedia(
-                    photos.map((url, i) => ({ url, title: `${c.title} · Photo ${i + 1}` })),
-                    ((photoIndex % photos.length) + photos.length) % photos.length
-                  );
-                }}
-              />
+              {currentMedia.kind === 'video' ? (
+                <div
+                  className="w-full h-full relative flex items-center justify-center bg-black cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openMedia(
+                      mediaList.map((m, i) => ({ url: m.url, kind: m.kind, title: `${c.title} · ${m.kind === 'video' ? 'Video' : 'Photo'} ${i + 1}` })),
+                      ((photoIndex % mediaList.length) + mediaList.length) % mediaList.length
+                    );
+                  }}
+                  title="Play video"
+                >
+                  <video
+                    src={currentMedia.url}
+                    preload="metadata"
+                    className="w-full h-full object-cover opacity-80 group-hover/img:opacity-100 transition-opacity"
+                  />
+                  <span className="absolute flex h-6 w-6 items-center justify-center rounded-full bg-black/65 text-white pointer-events-none">
+                    <Play size={12} fill="currentColor" className="translate-x-0.5" />
+                  </span>
+                </div>
+              ) : (
+                <img
+                  src={currentMedia.url}
+                  alt=""
+                  className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-200 cursor-zoom-in"
+                  loading="lazy"
+                  onError={() => setImgFailed(true)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openMedia(
+                      mediaList.map((m, i) => ({ url: m.url, kind: m.kind, title: `${c.title} · Photo ${i + 1}` })),
+                      ((photoIndex % mediaList.length) + mediaList.length) % mediaList.length
+                    );
+                  }}
+                />
+              )}
 
-              {photos.length >= 2 && (
+              {mediaList.length >= 2 && (
                 <>
                   {/* Previous < button */}
                   <button
@@ -122,9 +147,9 @@ function CaseCard({ c, now, onNavigate }: { c: Case; now: Date; onNavigate: (id:
                   {/* Counter: e.g. 1/3 */}
                   <span
                     className="absolute bottom-1 right-1 rounded bg-black/75 px-1 py-0.5 text-[9px] font-semibold text-white leading-none shadow-sm"
-                    title={`${photos.length} photos`}
+                    title={`${mediaList.length} media`}
                   >
-                    {(((photoIndex % photos.length) + photos.length) % photos.length) + 1}/{photos.length}
+                    {(((photoIndex % mediaList.length) + mediaList.length) % mediaList.length) + 1}/{mediaList.length}
                   </span>
                 </>
               )}

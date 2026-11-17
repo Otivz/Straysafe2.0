@@ -1,6 +1,6 @@
 """What the Subdivision Leader sends to record complaint findings, offenses and enforcement steps (routes/complaints.py)."""
 from datetime import date, datetime
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -99,6 +99,11 @@ class StepActionIn(BaseModel):
     attendance: Optional[Attendance] = None
     outcome: Optional[str] = Field(None, max_length=2000)
     client_request_id: Optional[str] = Field(None, max_length=64)
+    template_id: Optional[int] = None
+    required_action: Optional[str] = Field(None, max_length=2000)
+    field_overrides: Optional[Dict[str, str]] = None
+    attachment_url: Optional[str] = Field(None, max_length=1000)
+    attachment_name: Optional[str] = Field(None, max_length=255)
 
     @field_validator("place", "via", "received_by", "note", "told", "contact", "outcome")
     @classmethod

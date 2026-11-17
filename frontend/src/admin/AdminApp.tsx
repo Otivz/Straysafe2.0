@@ -22,6 +22,7 @@ import ReportsPage from './pages/ReportsPage';
 import ResidentDetailsPage from './pages/ResidentDetailsPage';
 import ResidentsPage from './pages/ResidentsPage';
 import SettingsPage from './pages/SettingsPage';
+import WarningTemplatesPage from './pages/WarningTemplatesPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import LoginPage from './pages/auth/LoginPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
@@ -66,6 +67,7 @@ export default function AdminApp({ mode }: { mode: AdminMode }) {
                 <Route path="residents" element={<ResidentsPage />} />
                 <Route path="residents/:residentId" element={<ResidentDetailsPage />} />
                 <Route path="reports" element={<ReportsPage />} />
+                <Route path="warning-templates" element={<WarningTemplatesPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="*" element={<NotFoundPage />} />

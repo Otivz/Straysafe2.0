@@ -273,7 +273,9 @@ def link_reports(db: Session, report: Report, actor: User, data: LinkIn, *, sync
                     out.append(existing)
                     continue
                 match = LFM.link_by_leader(db, actor, report.report_id, other_id)
-                out.append(db.get(CaseLink, match.link_id))
+                link = db.get(CaseLink, match.link_id)
+                if link is not None:
+                    out.append(link)
                 continue
         low, high = sorted((report.report_id, other_id))
         existing = db.query(CaseLink).filter(CaseLink.report_id == low, CaseLink.related_report_id == high,

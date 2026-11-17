@@ -206,6 +206,36 @@ test('a pet carries its sex and the record status the server holds, and is saved
   assert.deepEqual([petToApi({ ...pet, sex: 'male' }).gender, petToApi({ ...pet, sex: 'unknown' }).gender, petToApi({ ...pet, type: 'cat' }).pet_type], ['Male', 'Unknown', 'Cat']);
 });
 
+test('colour tags normalize, deduplicate case-insensitively, round-trip as arrays, and filter suggestions', async () => {
+  const { addColorTags, removeColorTag, parseColorTags, filterColorSuggestions, ANIMAL_COLOR_SUGGESTIONS } = await import('../src/resident/data/colors.ts');
+  assert.ok(ANIMAL_COLOR_SUGGESTIONS.includes('White') && ANIMAL_COLOR_SUGGESTIONS.includes('Mixed'));
+  let tags = addColorTags([], '  White  ');
+  tags = addColorTags(tags, 'Tan');
+  tags = addColorTags(tags, 'white');
+  tags = addColorTags(tags, 'Black, Cream,  tan ');
+  assert.deepEqual(tags, ['White', 'Tan', 'Black', 'Cream']);
+  tags = removeColorTag(tags, 1);
+  assert.deepEqual(tags, ['White', 'Black', 'Cream']);
+  assert.deepEqual(parseColorTags(null, 'White, Tan, white'), ['White', 'Tan']);
+  assert.deepEqual(filterColorSuggestions(['White'], ''), [], 'nothing typed yet: no suggestions shown');
+  assert.deepEqual(filterColorSuggestions(['White'], '   '), []);
+  const suggestions = filterColorSuggestions(['White', 'black'], 'b');
+  assert.deepEqual(suggestions.slice(0, 2), ['Brown', 'Beige']);
+  assert.ok(filterColorSuggestions([], 'ch').includes('Chocolate'));
+
+  const savedBody = petToApi({ id: '31', name: 'Mochi', type: 'dog', sex: 'female', breed: 'Aspin', color: 'White, Tan', colors: ['White', 'Tan'], ageText: '', markings: [], description: '', registeredAt: '' });
+  assert.deepEqual(savedBody.colors, ['White', 'Tan']);
+  assert.equal(savedBody.color_markings, 'White, Tan');
+  const readPet = petFromApi({
+    pet_id: 31, pet_name: 'Mochi', pet_type: 'Dog', breed: 'Aspin', color_markings: 'White, Tan', colors: ['White', 'Tan'], primary_color: null, secondary_color: null,
+    gender: 'Female', estimated_age: null, birth_date: null, size_category: 'Medium', distinctive_markings: null, health_condition: null, notes: null,
+    photo_url: null, photo_front_url: null, photo_left_url: null, photo_right_url: null, owner_id: 7, created_at: '2026-10-01T00:00:00+00:00', is_vaccinated: false, vaccine_expiry: null, status: 'Active',
+  });
+  assert.deepEqual(readPet.colors, ['White', 'Tan']);
+  const readReport = reportFromApi(report({ animal_colors: ['White', 'Black'], animal_color: 'White, Black' }), lookup, { me: 7 });
+  assert.deepEqual(readReport.colors, ['White', 'Black']);
+});
+
 test('a pet the office linked to this account is a question to answer, with who asked', () => {
   const req = ownershipRequestFromApi({ confirmation_id: 5, pet_id: 31, pet_name: 'Brownie', pet_type: 'Dog', breed: 'Aspin', photo_url: 'https://img.test/b.jpg', proposed_by_name: 'Leader Lee', created_at: '2026-11-10T09:00:00+00:00' });
   assert.deepEqual([req.id, req.petId, req.petName, req.petType, req.photoUrl, req.proposedBy], ['5', '31', 'Brownie', 'dog', 'https://img.test/b.jpg', 'Leader Lee']);
@@ -306,6 +336,23 @@ test('a lost & found alert is marked as one and opens where the server says (a s
   assert.equal(n({ link: null }).to, '/notifications', 'no link: the notifications list');
   assert.equal(n({ link: 'https://elsewhere.example/x' }).to, '/notifications', 'never a page outside the app');
   assert.equal(n({ link: '//elsewhere.example/x' }).to, '/notifications');
+});
+
+test('a warning notification maps to the warning kind and links directly to the warning letter', () => {
+  const n = (over = {}) => notificationFromApi({
+    notification_id: 21,
+    type: 'warning',
+    title: '1st Warning Issued (WARN-2026-0001)',
+    message: 'Case SS-2026-0042 — Please keep Bantay leashed.',
+    related_id: 42,
+    is_read: false,
+    created_at: '2026-11-17T08:00:00+00:00',
+    ...over,
+  }, lookup);
+  const direct = n({ link: '/resident-app/warnings/18' });
+  assert.deepEqual([direct.kind, direct.to, direct.read], ['warning', '/warnings/18', false]);
+  assert.equal(n({ type: 'warning_letter', link: null }).kind, 'warning');
+  assert.equal(n({ type: 'warning_letter', link: null }).to, '/warnings');
 });
 
 test('notification switches round-trip through the server flags; community, advisories and SMS are not switches the server has', () => {

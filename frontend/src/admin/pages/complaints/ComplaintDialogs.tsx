@@ -1,14 +1,17 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { FolderOpen, PawPrint, UserRound } from 'lucide-react';
+import { Camera, Download, FileText, FolderOpen, Image as ImageIcon, Images, Maximize2, PawPrint, Play, Upload, UserRound, X } from 'lucide-react';
+import { WarningLetterDocument } from '../../../components/WarningLetterDocument';
 import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
 import { Checkbox, Field, FieldGroup, Input, OptionGroup, Select, Textarea } from '../../components/form';
 import { Callout, FormError } from '../../components/layout';
+import { useMediaViewer, type LightboxMediaItem } from '../../components/MediaLightbox';
 import { useToast } from '../../components/toast';
 import { useAdminData } from '../../data/context';
 import type { Case } from '../../data/types';
 import { FormFooter } from '../../dialogs/BasicDialogs';
 import { useSubmit } from '../../lib/useSubmit';
+import { adminApi, type ApiGeneratedWarningLetter, type ApiTemplatePreviewResult } from '../../live/api';
 import { reportIdOf } from '../../../live/refs';
 import { toLocalInput } from '../../../preview/lib/format';
 import { complaintsApi, type ApiComplaint, type ApiLeads, type ApiPersonRow, type EvidenceId, type ResponsibleIn, type StepAction } from '../../complaints/api';
@@ -101,9 +104,11 @@ function VerifyDialog(p: Props) {
 type Who = 'record' | 'new' | 'none' | '';
 function ResponsibleDialog(p: Props & { correcting: boolean }) {
   const { state } = useAdminData();
+  const { openMedia } = useMediaViewer();
   const cur = p.correcting ? p.d.respondent : null;
   const [leads, setLeads] = useState<ApiLeads | null>(null);
   const [households, setHouseholds] = useState<ApiPersonRow[]>([]);
+  const [brokenPics, setBrokenPics] = useState<Record<string, boolean>>({});
   const [who, setWho] = useState<Who>('');
   const [person, setPerson] = useState('');
   const [query, setQuery] = useState('');
@@ -163,11 +168,11 @@ function ResponsibleDialog(p: Props & { correcting: boolean }) {
     void save(() => complaintsApi.responsible(rid(p.c), body));
   };
 
-  const leadRow = (key: string, value: string, label: string, firstName: string, text: ReactNode, why: string[], icon: ReactNode) => {
+  const leadRow = (key: string, value: string, label: string, firstName: string, text: ReactNode, why: string[], pic: ReactNode) => {
     const isRuled = !!ruled[key];
     return (
       <div key={key} className="sa-cm-lead" data-picked={picked === key && !isRuled ? '' : undefined} data-ruled={isRuled ? '' : undefined}>
-        <span className="sa-cm-lead__pic" aria-hidden="true">{icon}</span>
+        {pic}
         <div className="min-w-0"><p className="sa-small">{text}</p><span className="sa-cm-lead__why">{why.map((w) => <span key={w}>{w}</span>)}</span></div>
         <div className="sa-cm-lead__acts">
           {!isRuled ? <Button size="sm" onClick={() => pick(key, value)}>It’s {firstName}</Button> : null}
@@ -201,11 +206,27 @@ function ResponsibleDialog(p: Props & { correcting: boolean }) {
       <FieldGroup label={`Leads to check${nLeads ? ` (${nLeads})` : ''}`} hint="StraySafe looked these up for you. They are leads only: a name, an address or a look-alike is never proof on its own. Not every animal is registered.">
         <div className="sa-cm-leads">
           {!leads ? <p className="sa-small sa-text-3">Looking in your records…</p> : null}
-          {leads?.suggestion.length ? <div><p className="sa-cm-leads__kind">From the complainant’s suggestion</p>{leads.suggestion.map((x) => leadRow(x.key, personValue(x.user_id, x.respondent_id), x.name, first(x.name), <><b>{x.name}</b> · {x.address}</>, x.why, <UserRound size={18} />))}</div> : null}
-          {leads?.registry.length ? <div><p className="sa-cm-leads__kind">Registered pets that fit the description</p>{leads.registry.map((x) => leadRow(x.key, `u:${x.owner_user_id}`, `${x.pet_name}, ${x.owner_name}’s ${(x.breed ?? x.pet_type).toLowerCase()}`, first(x.owner_name),
-            <><b>{x.pet_name}</b> · {[x.breed, x.colour?.toLowerCase(), x.size?.toLowerCase()].filter(Boolean).join(', ')} · owner {x.owner_name}, {x.owner_address}</>, x.why, <PawPrint size={18} />))}</div> : null}
+          {leads?.suggestion.length ? <div><p className="sa-cm-leads__kind">From the complainant’s suggestion</p>{leads.suggestion.map((x) => leadRow(x.key, personValue(x.user_id, x.respondent_id), x.name, first(x.name), <><b>{x.name}</b> · {x.address}</>, x.why, <span className="sa-cm-lead__pic" aria-hidden="true"><UserRound size={18} /></span>))}</div> : null}
+          {leads?.registry.length ? <div><p className="sa-cm-leads__kind">Registered pets that fit the description</p>{leads.registry.map((x) => {
+            const photoUrl = !brokenPics[x.key] ? (x.photo_url || state.pets.find((pet) => pet.id === String(x.pet_id))?.photoUrls?.[0] || null) : null;
+            const pic = photoUrl ? (
+              <button
+                type="button"
+                className="sa-cm-lead__pic sa-cm-lead__pic--btn"
+                aria-label={`View photo of ${x.pet_name}`}
+                title={`View photo of ${x.pet_name}`}
+                onClick={() => openMedia([{ url: photoUrl, kind: 'photo', title: x.pet_name, source: `Registered pet · owner ${x.owner_name}` }], 0)}
+              >
+                <img src={photoUrl} alt={x.pet_name} loading="lazy" onError={() => setBrokenPics((prev) => ({ ...prev, [x.key]: true }))} />
+              </button>
+            ) : (
+              <span className="sa-cm-lead__pic" aria-hidden="true"><PawPrint size={18} /></span>
+            );
+            return leadRow(x.key, `u:${x.owner_user_id}`, `${x.pet_name}, ${x.owner_name}’s ${(x.breed ?? x.pet_type).toLowerCase()}`, first(x.owner_name),
+              <><b>{x.pet_name}</b> · {[x.breed, x.colour?.toLowerCase(), x.size?.toLowerCase()].filter(Boolean).join(', ')} · owner {x.owner_name}, {x.owner_address}</>, x.why, pic);
+          })}</div> : null}
           {leads?.earlier.length ? <div><p className="sa-cm-leads__kind">Earlier complaints at this place</p>{leads.earlier.map((x) => leadRow(x.key, personValue(x.user_id, x.respondent_id), x.name, first(x.name),
-            <><b>{x.name}</b> was confirmed responsible in {x.report_ids.map(p.refOf).join(', ')}</>, x.why, <FolderOpen size={18} />))}</div> : null}
+            <><b>{x.name}</b> was confirmed responsible in {x.report_ids.map(p.refOf).join(', ')}</>, x.why, <span className="sa-cm-lead__pic" aria-hidden="true"><FolderOpen size={18} /></span>))}</div> : null}
           {leads && leads.ruled_out.length ? <p className="sa-small sa-text-3">Already ruled out: {leads.ruled_out.map((r) => r.label).join(', ')}</p> : null}
           {leads ? <p className="sa-small sa-text-2">{nLeads ? 'Check each lead where it happens. If none fits:' : 'No leads in your records.'} watch at the time it usually happens, ask the guardhouse or look at CCTV, ask the neighbours, or see where the animal goes home.</p> : null}
         </div>
@@ -310,24 +331,174 @@ function OffenseDialog(p: Props) {
 // ------------------------------------------------------------------------------------------- same occurrence?
 function SameOccurrenceDialog(p: Props) {
   const o = p.d.maybe_same;
+  const { openMedia } = useMediaViewer();
   const [decision, setDecision] = useState<'same' | 'separate' | ''>('');
   const [note, setNote] = useState('');
   const [err, setErr] = useState('');
   const { pending, error, save } = useSave(p, decision === 'same' ? 'Linked as the same occurrence' : 'Kept as a separate incident');
   if (!o) return null;
+
+  // Media from earlier complaint candidate
+  const oMedia: LightboxMediaItem[] = (o.media ?? []).map((m, i) => ({
+    url: m.url,
+    kind: m.type === 'video' ? 'video' : 'photo',
+    title: `${p.refOf(o.report_id)} · ${m.type === 'video' ? 'Video' : 'Photo'} ${i + 1}`,
+    source: o.reporter ? `Reported by ${o.reporter}` : 'Earlier complaint',
+    caption: o.description || undefined,
+  }));
+
+  // Media from current complaint
+  const cMedia: LightboxMediaItem[] = (p.d.media && p.d.media.length > 0)
+    ? p.d.media.map((m, i) => ({
+        url: m.url,
+        kind: m.type === 'video' ? 'video' : 'photo',
+        title: `${p.c.id} · ${m.type === 'video' ? 'Video' : 'Photo'} ${i + 1}`,
+        source: p.c.reporter.name ? `Reported by ${p.c.reporter.name}` : 'Current complaint',
+        caption: p.c.description || undefined,
+      }))
+    : (p.c.evidence ?? []).filter((e): e is typeof e & { url: string } => Boolean(e.url)).map((e, i) => ({
+        url: e.url,
+        kind: e.kind,
+        title: `${p.c.id} · ${e.kind === 'video' ? 'Video' : 'Photo'} ${i + 1}`,
+        source: p.c.reporter.name ? `Reported by ${p.c.reporter.name}` : 'Current complaint',
+        caption: p.c.description || undefined,
+      }));
+
+  const allCompareMedia = [...oMedia, ...cMedia];
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!decision) { setErr('Choose your decision.'); return; }
     void save(() => complaintsApi.sameOccurrence(rid(p.c), { other_report_id: o.report_id, decision, note: note.trim() || undefined }));
   };
+
   return (
     <Dialog size="lg" title={`Same occurrence as ${p.refOf(o.report_id)}?`} description="Two neighbours can report the same thing. It should count once." onClose={p.onClose} onSubmit={submit} dirty={!!decision}
       footer={({ requestClose }) => <FormFooter pending={pending} label="Save" requestClose={requestClose} />}>
       {error ? <FormError message={error} /> : null}
+
+      {allCompareMedia.length > 0 ? (
+        <div className="sa-cm-compare__bar">
+          <span className="sa-small sa-text-2 font-medium">Compare reports & evidence photos</span>
+          <Button
+            type="button"
+            variant="ghost"
+            icon={Images}
+            onClick={() => openMedia(allCompareMedia, 0)}
+          >
+            Compare all photos ({allCompareMedia.length})
+          </Button>
+        </div>
+      ) : null}
+
       <div className="sa-cm-compare">
-        <div><span className="sa-ref">{p.refOf(o.report_id)}</span><span className="sa-small sa-text-2">Seen {fmt(o.incident_at)} · filed {fmt(o.created_at)}</span>{o.landmark ? <span className="sa-small sa-text-2">{o.landmark}</span> : null}<span className="sa-small">“{o.description}”</span>{o.reporter ? <span className="sa-small sa-text-3">From {o.reporter}</span> : null}</div>
-        <div><span className="sa-ref">{p.c.id}</span><span className="sa-small sa-text-2">Seen {fmt(p.d.incident_at)}</span><span className="sa-small sa-text-2">{p.c.location.area}</span><span className="sa-small">“{p.c.description}”</span><span className="sa-small sa-text-3">From {p.c.reporter.name}</span></div>
+        <div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="sa-ref">{p.refOf(o.report_id)}</span>
+              {o.animal_type ? <span className="sa-mc__chip text-xs">{o.animal_type.charAt(0).toUpperCase() + o.animal_type.slice(1)}</span> : null}
+              {o.animal_breed ? <span className="sa-mc__chip text-xs">{o.animal_breed}</span> : null}
+              {(o.animal_colors ?? []).map((col) => <span key={col} className="sa-mc__chip text-xs">{col}</span>)}
+            </div>
+            <span className="sa-small sa-text-3 font-medium">Earlier complaint</span>
+          </div>
+          <span className="sa-small sa-text-2">Seen {fmt(o.incident_at)} · filed {fmt(o.created_at)}</span>
+          {o.landmark ? <span className="sa-small sa-text-2 font-medium">{o.landmark}</span> : null}
+          <div className="sa-cm-compare__quote">“{o.description}”</div>
+          {o.reporter ? <span className="sa-small sa-text-3">From {o.reporter}</span> : null}
+
+          <div className="sa-cm-compare__media">
+            <div className="sa-cm-compare__media-header">
+              <span className="flex items-center gap-1.5"><Camera size={13} aria-hidden="true" />Evidence media ({oMedia.length})</span>
+            </div>
+            {oMedia.length > 0 ? (
+              <div className="sa-cm-compare__thumbs">
+                {oMedia.map((m, i) => (
+                  <button
+                    key={m.url + i}
+                    type="button"
+                    className="sa-cm-thumb-btn"
+                    onClick={() => openMedia(allCompareMedia, i)}
+                    title={`View ${m.title}`}
+                    aria-label={`View ${m.title}`}
+                  >
+                    {m.kind === 'video' ? (
+                      <div className="sa-cm-thumb-video">
+                        <Play size={16} fill="currentColor" />
+                        <span>Video</span>
+                      </div>
+                    ) : (
+                      <img src={m.url} alt={m.title || 'Evidence photo'} className="sa-cm-thumb-img" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                    )}
+                    <span className="sa-cm-thumb-zoom">
+                      <Maximize2 size={12} />
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="sa-cm-compare__no-media">
+                <ImageIcon size={13} aria-hidden="true" />
+                <span>No photos or videos attached</span>
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="sa-ref">{p.c.id}</span>
+              {p.c.animal?.type ? <span className="sa-mc__chip text-xs">{p.c.animal.type.charAt(0).toUpperCase() + p.c.animal.type.slice(1)}</span> : null}
+              {p.d.animal_breed ? <span className="sa-mc__chip text-xs">{p.d.animal_breed}</span> : null}
+              {(p.d.animal_colors ?? []).map((col) => <span key={col} className="sa-mc__chip text-xs">{col}</span>)}
+            </div>
+            <span className="sa-small sa-text-3 font-medium">This complaint</span>
+          </div>
+          <span className="sa-small sa-text-2">Seen {fmt(p.d.incident_at)}</span>
+          <span className="sa-small sa-text-2 font-medium">{p.c.location.area}</span>
+          <div className="sa-cm-compare__quote">“{p.c.description}”</div>
+          <span className="sa-small sa-text-3">From {p.c.reporter.name}</span>
+
+          <div className="sa-cm-compare__media">
+            <div className="sa-cm-compare__media-header">
+              <span className="flex items-center gap-1.5"><Camera size={13} aria-hidden="true" />Evidence media ({cMedia.length})</span>
+            </div>
+            {cMedia.length > 0 ? (
+              <div className="sa-cm-compare__thumbs">
+                {cMedia.map((m, i) => (
+                  <button
+                    key={m.url + i}
+                    type="button"
+                    className="sa-cm-thumb-btn"
+                    onClick={() => openMedia(allCompareMedia, oMedia.length + i)}
+                    title={`View ${m.title}`}
+                    aria-label={`View ${m.title}`}
+                  >
+                    {m.kind === 'video' ? (
+                      <div className="sa-cm-thumb-video">
+                        <Play size={16} fill="currentColor" />
+                        <span>Video</span>
+                      </div>
+                    ) : (
+                      <img src={m.url} alt={m.title || 'Evidence photo'} className="sa-cm-thumb-img" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                    )}
+                    <span className="sa-cm-thumb-zoom">
+                      <Maximize2 size={12} />
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="sa-cm-compare__no-media">
+                <ImageIcon size={13} aria-hidden="true" />
+                <span>No photos or videos attached</span>
+              </p>
+            )}
+          </div>
+        </div>
       </div>
+
       <FieldGroup label="Your decision" required error={err}>
         <OptionGroup name="cm-same" label="Your decision" value={decision} onChange={setDecision} options={[
           { value: 'same', label: `The same occurrence: link it to ${p.refOf(o.report_id)}`, description: `Kept and shown with ${p.refOf(o.report_id)}, and counted once. Both complainants hear the outcome.` },
@@ -364,13 +535,77 @@ function LetterView({ letter }: { letter: Letter }) {
 function PrintDialog(p: Props & { stepId: number }) {
   const step = p.d.steps.find((s) => s.step_id === p.stepId);
   const kind = step?.kind === 'letter_2' ? 'letter_2' : 'letter_1';
-  const det = (step?.details ?? {}) as Record<string, string>;
+  const det = (step?.details ?? {}) as Record<string, unknown>;
   const summons = p.d.steps.find((s) => s.kind === 'summons');
-  const letter = useLetter(p, kind, det.letter_date ?? today(), summons?.due_at, (summons?.details as Record<string, string> | undefined)?.place);
+  const letter = useLetter(p, kind, String(det.letter_date ?? today()), summons?.due_at, (summons?.details as Record<string, string> | undefined)?.place);
+  const storedId = typeof det.letter_id === 'number' ? det.letter_id : null;
+  const [stored, setStored] = useState<ApiGeneratedWarningLetter | null>(null);
+  const toast = useToast();
+
+  useEffect(() => {
+    if (!storedId) return;
+    let live = true;
+    adminApi.warningLetterDetail(storedId).then((res) => { if (live) setStored(res); }, () => undefined);
+    return () => { live = false; };
+  }, [storedId]);
+
+  const dl = (format: 'pdf' | 'docx') => {
+    if (!storedId) return;
+    void adminApi.downloadWarningLetter(storedId, stored?.warning_reference || `WARN-${storedId}`, format).catch((e) => toast.error(String(e)));
+  };
+
+  const storedAttachmentUrl = stored?.attachment_url || (typeof det.attachment_url === 'string' ? det.attachment_url : null);
+  const storedAttachmentName = stored?.attachment_name || (typeof det.attachment_name === 'string' ? det.attachment_name : 'Attached file');
+
   return (
-    <Dialog size="lg" title={STEP_TITLE[kind]} description="As it prints" onClose={p.onClose}
-      footer={<><Button onClick={p.onClose}>Close</Button><Button variant="primary" onClick={() => { if (letter) printLetter(letter); }}>Print</Button></>}>
-      {letter ? <LetterView letter={letter} /> : null}
+    <Dialog size="lg" title={stored ? `${stored.warning_reference} · ${STEP_TITLE[kind]}` : STEP_TITLE[kind]}
+      description={stored ? `Template: ${stored.template_name} (v${stored.template_version_number})` : 'As it prints'}
+      onClose={p.onClose}
+      footer={
+        <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-2">
+            {storedId ? (
+              <>
+                <Button size="sm" icon={Download} onClick={() => dl('pdf')}>Download PDF</Button>
+                <Button size="sm" icon={Download} onClick={() => dl('docx')}>Download DOCX</Button>
+              </>
+            ) : null}
+            {storedAttachmentUrl ? (
+              <a
+                href={storedAttachmentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="sa-btn sa-btn--sm sa-btn--ghost inline-flex items-center gap-1.5"
+              >
+                <FileText size={14} aria-hidden="true" />
+                {storedAttachmentName}
+              </a>
+            ) : null}
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={p.onClose}>Close</Button>
+            <Button variant="primary" onClick={() => { if (letter) printLetter(letter); }}>Print</Button>
+          </div>
+        </div>
+      }>
+      {stored ? (
+        <WarningLetterDocument
+          subdivisionName={stored.subdivision_name || stored.placeholders?.subdivision_name}
+          subdivisionAddress={stored.subdivision_address || stored.placeholders?.subdivision_address}
+          subdivisionPhone={stored.subdivision_phone || stored.placeholders?.subdivision_phone}
+          subdivisionEmail={stored.subdivision_email || stored.placeholders?.subdivision_email}
+          warningLevel={stored.warning_level}
+          warningReference={stored.warning_reference}
+          caseReference={stored.case_reference}
+          issueDate={stored.placeholders?.issue_date || (stored.issued_at ? fmt(stored.issued_at) : '')}
+          recipientName={stored.recipient_name}
+          recipientAddress={stored.recipient_address}
+          subject={stored.rendered_subject}
+          body={stored.rendered_body}
+          issuerName={stored.issuer_name || stored.placeholders?.issuer_name || stored.issued_by_name}
+          issuerRole={stored.issuer_role || stored.placeholders?.issuer_role}
+        />
+      ) : letter ? <LetterView letter={letter} /> : null}
       <p className="sa-hint">The letter never names the complainant.</p>
     </Dialog>
   );
@@ -381,17 +616,82 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
   const { state } = useAdminData();
   const step = p.d.steps.find((s) => s.step_id === p.stepId);
   const now = useState(() => toLocalInput(new Date()))[0];
-  const [f, setF] = useState<Record<string, string | boolean>>({ letter_date: now.slice(0, 10), place: p.action === 'arrange' ? 'Barangay hall' : 'Subdivision office', at: '',
-    occurred_at: now, via: 'You, by hand', proof: 'signed', reason: 'nobody_home', told: 'In writing, delivered like the letters', imposed_on: now.slice(0, 10),
-    paid_on: now.slice(0, 10), received_by: p.action === 'pay' ? state.admin.name : '', a_c: false, a_r: false, a_l: false, agreed: false });
+  const [f, setF] = useState<Record<string, string | boolean>>({
+    letter_date: now.slice(0, 10),
+    place: p.action === 'arrange' ? 'Barangay hall' : 'Subdivision office',
+    at: '',
+    occurred_at: now,
+    via: 'You, by hand',
+    proof: 'signed',
+    reason: 'nobody_home',
+    told: 'In writing, delivered like the letters',
+    imposed_on: now.slice(0, 10),
+    paid_on: now.slice(0, 10),
+    received_by: p.action === 'pay' ? state.admin.name : '',
+    required_action: p.d.rule?.summary || 'Comply with subdivision rules and prevent recurrence.',
+    a_c: false,
+    a_r: false,
+    a_l: false,
+    agreed: false,
+  });
   const [err, setErr] = useState('');
   const set = (k: string, v: string | boolean) => setF((x) => ({ ...x, [k]: v }));
   const s = (k: string) => String(f[k] ?? '');
   const kind = step?.kind ?? 'letter_1';
   const letterKind = kind === 'letter_2' ? 'letter_2' : 'letter_1';
   const letter = useLetter(p, letterKind, s('letter_date') || today(), s('summons_at') || null, s('place'));
-  const label = { prepare: 'Save and print', issue: 'Mark as issued', deliver: 'Save', attendance: 'Save', reschedule: 'Save', impose: 'Impose', pay: 'Save', arrange: 'Save', meeting: 'Save' }[p.action];
+  const existingStepDet = (step?.details ?? {}) as Record<string, unknown>;
+  const existingAttachmentUrl = typeof existingStepDet.attachment_url === 'string' ? existingStepDet.attachment_url : null;
+  const existingAttachmentName = typeof existingStepDet.attachment_name === 'string' ? existingStepDet.attachment_name : 'Attached warning letter';
+  const [letterSource, setLetterSource] = useState<'generated' | 'import'>(() => (existingAttachmentUrl ? 'import' : 'generated'));
+  const label = {
+    prepare: letterSource === 'import' ? 'Save warning letter' : 'Save and print',
+    issue: 'Mark as issued', deliver: 'Save', attendance: 'Save', reschedule: 'Save', impose: 'Impose', pay: 'Save', arrange: 'Save', meeting: 'Save',
+  }[p.action];
   const { pending, error, save } = useSave(p, 'Saved');
+
+  const [templateId, setTemplateId] = useState<string>('');
+  const [tplPreview, setTplPreview] = useState<ApiTemplatePreviewResult | null>(null);
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    if (p.action !== 'prepare') return;
+    let live = true;
+    const wlevel = letterKind === 'letter_2' ? '2nd Warning' : '1st Warning';
+    adminApi.warningTemplates('active').then((res) => {
+      if (!live) return;
+      const def = res.items.find((t) => t.is_default && t.warning_level === wlevel)
+        || res.items.find((t) => t.is_default && !t.warning_level)
+        || res.items.find((t) => t.warning_level === wlevel)
+        || res.items[0];
+      if (def) setTemplateId(String(def.template_id));
+    }).catch(() => undefined);
+    return () => { live = false; };
+  }, [p.action, letterKind]);
+
+  useEffect(() => {
+    if (p.action !== 'prepare' || !p.d.respondent || !p.d.rule) return;
+    let live = true;
+    const wlevel = letterKind === 'letter_2' ? '2nd Warning' : '1st Warning';
+    adminApi.previewWarningTemplate({
+      ...(templateId ? { template_id: Number(templateId) } : {}),
+      report_id: rid(p.c),
+      ...(p.d.respondent.user_id ? { user_id: p.d.respondent.user_id } : {}),
+      recipient_name: p.d.respondent.name,
+      recipient_address: p.d.respondent.address,
+      warning_level: wlevel,
+      violation_description: p.c.description || p.d.rule.title || '',
+      required_action: s('required_action'),
+      policy_id: p.d.rule.policy_id,
+      policy_reference: p.d.rule.reference ? `${p.d.rule.reference} — ${p.d.rule.title ?? ''}` : (p.d.rule.title ?? ''),
+      ...(s('letter_date') ? { issue_date: `${s('letter_date')}T09:00:00` } : {}),
+      ...(letterKind === 'letter_2' && s('summons_at') ? { summons_at: localToServer(s('summons_at')), summons_place: s('place') } : {}),
+      field_overrides: overrides,
+    }).then((res) => { if (live) setTplPreview(res); }, () => undefined);
+    return () => { live = false; };
+  }, [p.action, p.c, p.d.respondent, p.d.rule, templateId, letterKind, f.letter_date, f.summons_at, f.place, f.required_action, overrides]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!step) return null;
   const title = STEP_TITLE[step.kind];
   const fineAmount = p.d.rule?.fine_amount ?? null;
@@ -405,7 +705,20 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
         case 'prepare':
           need('letter_date', 'Choose the date on the letter.');
           if (step.kind === 'letter_2') need('summons_at', 'Choose the date and time of the summons.');
-          body = { action: 'prepare', letter_date: s('letter_date'), ...(step.kind === 'letter_2' ? { summons_at: localToServer(s('summons_at')), place: s('place') } : {}) };
+          if (letterSource === 'import' && !attachedFile && !existingAttachmentUrl) {
+            throw new Error('Choose a PDF, Word document, or image file to import.');
+          }
+          body = {
+            action: 'prepare',
+            letter_date: s('letter_date'),
+            ...(step.kind === 'letter_2' ? { summons_at: localToServer(s('summons_at')), place: s('place') } : {}),
+            ...(templateId ? { template_id: Number(templateId) } : {}),
+            ...(s('required_action').trim() ? { required_action: s('required_action').trim() } : {}),
+            ...(Object.keys(overrides).length ? { field_overrides: overrides } : {}),
+            ...(letterSource === 'import' && !attachedFile && existingAttachmentUrl
+              ? { attachment_url: existingAttachmentUrl, attachment_name: existingAttachmentName }
+              : {}),
+          };
           break;
         case 'issue':
           if (s('via') === 'other') need('via_other', 'Say who delivers it.');
@@ -449,7 +762,14 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
     } catch (x) { setErr((x as Error).message); return; }
     setErr('');
     body.client_request_id = newRequestId();
-    void save(() => complaintsApi.step(rid(p.c), step.step_id, body), p.action === 'prepare' && letter ? () => printLetter(letter) : undefined);
+    void save(async () => {
+      if (p.action === 'prepare' && letterSource === 'import' && attachedFile) {
+        const uploaded = await adminApi.uploadComplaintAttachment(rid(p.c), attachedFile);
+        body.attachment_url = uploaded.file_url;
+        body.attachment_name = attachedFile.name;
+      }
+      return complaintsApi.step(rid(p.c), step.step_id, body);
+    }, p.action === 'prepare' && letterSource === 'generated' && letter ? () => printLetter(letter) : undefined);
   };
 
   const heading: Record<StepAction, string> = { prepare: `Prepare the ${title.toLowerCase()}`, issue: 'Issue the letter for delivery', deliver: 'Record the delivery', attendance: 'Record the summons attendance',
@@ -461,14 +781,110 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
       {err ? <FormError message={err} /> : null}
       {p.action === 'prepare' ? (
         <>
-          <div className="sa-grid2">
-            <Field label="Letter date" required><Input type="date" value={s('letter_date')} onChange={(e) => set('letter_date', e.target.value)} /></Field>
-            {step.kind === 'letter_2' ? <Field label="Summons: date and time" required hint="You choose it; no waiting period is assumed."><Input type="datetime-local" value={s('summons_at')} onChange={(e) => set('summons_at', e.target.value)} /></Field> : null}
-          </div>
-          {step.kind === 'letter_2' ? <Field label="Summons: place" required><Input value={s('place')} onChange={(e) => set('place', e.target.value)} /></Field> : null}
-          {letter ? <LetterView letter={letter} /> : null}
+          <Field label="Letter date" required><Input type="date" value={s('letter_date')} onChange={(e) => set('letter_date', e.target.value)} /></Field>
+          {step.kind === 'letter_2' ? (
+            <div className="sa-grid2">
+              <Field label="Summons: date and time" required hint="You choose it; no waiting period is assumed."><Input type="datetime-local" value={s('summons_at')} onChange={(e) => set('summons_at', e.target.value)} /></Field>
+              <Field label="Summons: place" required><Input value={s('place')} onChange={(e) => set('place', e.target.value)} /></Field>
+            </div>
+          ) : null}
+          <FieldGroup label="Which letter would you like to use?" required>
+            <OptionGroup
+              name="cm-letter-source"
+              label="Warning letter source"
+              value={letterSource}
+              onChange={(v) => setLetterSource(v)}
+              cols={2}
+              options={[
+                { value: 'generated', label: 'Use StraySafe standard letter', description: 'Automatically filled from the subdivision’s fixed letter.' },
+                { value: 'import', label: 'Import your own file', description: 'Upload a PDF, Word document (.doc, .docx), or image.' },
+              ]}
+            />
+          </FieldGroup>
+          {letterSource === 'import' ? (
+            <FieldGroup
+              label="Import warning letter file"
+              required
+              hint="Upload a PDF, Word document (.doc, .docx), or image (JPG, PNG, WEBP) up to 10 MB."
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="sa-btn sa-btn--sm cursor-pointer inline-flex items-center gap-1.5">
+                  <Upload size={14} aria-hidden="true" />
+                  {attachedFile ? 'Replace file' : existingAttachmentUrl ? 'Replace uploaded file' : 'Choose file (PDF, DOCX, image)'}
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
+                    className="sr-only"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      if (file) setAttachedFile(file);
+                      e.currentTarget.value = '';
+                    }}
+                  />
+                </label>
+                {attachedFile ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--sa-line)] bg-[var(--sa-surface-soft)] px-2.5 py-1 text-xs">
+                    <FileText size={13} aria-hidden="true" />
+                    <span className="font-medium">{attachedFile.name}</span>
+                    <span className="sa-text-3">({Math.max(1, Math.round(attachedFile.size / 1024))} KB)</span>
+                    <button
+                      type="button"
+                      aria-label="Remove selected file"
+                      className="ml-1 text-[var(--sa-ink-3)] hover:text-[var(--sa-ink-1)]"
+                      onClick={() => setAttachedFile(null)}
+                    >
+                      <X size={13} />
+                    </button>
+                  </span>
+                ) : existingAttachmentUrl ? (
+                  <a
+                    href={existingAttachmentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs underline text-[var(--sa-brand)]"
+                  >
+                    <FileText size={13} aria-hidden="true" />
+                    {existingAttachmentName}
+                  </a>
+                ) : null}
+              </div>
+            </FieldGroup>
+          ) : (
+            <>
+              {tplPreview && tplPreview.missing_fields.length > 0 ? (
+                <Callout tone="amber" title="Complete missing template fields">
+                  <div className="flex flex-col gap-2 mt-1">
+                    {tplPreview.missing_fields.map((m) => (
+                      <div key={m.key} className="flex flex-wrap items-center gap-2">
+                        <label className="sa-small font-medium w-36">{m.label}</label>
+                        <Input className="flex-1" value={overrides[m.key] ?? ''} onChange={(e) => setOverrides((x) => ({ ...x, [m.key]: e.target.value }))} placeholder={`Enter ${m.label.toLowerCase()}`} />
+                      </div>
+                    ))}
+                  </div>
+                </Callout>
+              ) : null}
+              {tplPreview ? (
+                <WarningLetterDocument
+                  subdivisionName={tplPreview.placeholders?.subdivision_name}
+                  subdivisionAddress={tplPreview.placeholders?.subdivision_address}
+                  subdivisionPhone={tplPreview.placeholders?.subdivision_phone}
+                  subdivisionEmail={tplPreview.placeholders?.subdivision_email}
+                  warningLevel={tplPreview.placeholders?.warning_level || (letterKind === 'letter_2' ? '2nd Warning' : '1st Warning')}
+                  warningReference={tplPreview.placeholders?.warning_reference || 'WARN-PREVIEW'}
+                  caseReference={tplPreview.placeholders?.case_reference || p.c.id}
+                  issueDate={tplPreview.placeholders?.issue_date || s('letter_date')}
+                  recipientName={tplPreview.placeholders?.resident_name || p.d.respondent?.name || ''}
+                  recipientAddress={tplPreview.placeholders?.resident_address || p.d.respondent?.address}
+                  subject={tplPreview.subject}
+                  body={tplPreview.body}
+                  issuerName={tplPreview.placeholders?.issuer_name || tplPreview.placeholders?.issued_by || state.admin.name}
+                  issuerRole={tplPreview.placeholders?.issuer_role}
+                />
+              ) : (letter ? <LetterView letter={letter} /> : null)}
+            </>
+          )}
           <p className="sa-hint">The letter never names the complainant.</p>
-          <Callout tone="amber">Printing the letter does not mean it was delivered. You record the delivery after it happens.</Callout>
+          <Callout tone="amber">Printing the letter does not mean it was delivered. You record the delivery after it happens. Marking as issued will also notify the resident automatically if they have a StraySafe account.</Callout>
         </>
       ) : null}
       {p.action === 'issue' ? (

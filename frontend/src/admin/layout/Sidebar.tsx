@@ -1,6 +1,6 @@
 import { useContext } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { Bell, Building2, ChartColumn, ChevronsUpDown, FolderOpen, LayoutDashboard, LogOut, Megaphone, MessageSquareWarning, PawPrint, Settings, UserRound, Users, type LucideIcon } from 'lucide-react';
+import { Bell, Building2, ChartColumn, ChevronsUpDown, FileText, FolderOpen, LayoutDashboard, LogOut, Megaphone, MessageSquareWarning, PawPrint, Settings, UserRound, Users, type LucideIcon } from 'lucide-react';
 import { adminPath } from '../config';
 import { NavGuardContext } from '../lib/navGuard';
 import { IconButton } from '../components/Button';
@@ -15,6 +15,7 @@ const NAV: { to: string; label: string; icon: LucideIcon; badge?: 'newReports' }
   { to: '/pets', label: 'Pet Registry', icon: PawPrint },
   { to: '/residents', label: 'Residents', icon: Users },
   { to: '/reports', label: 'Analytics', icon: ChartColumn },
+  { to: '/warning-templates', label: 'Warning Templates', icon: FileText },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
