@@ -48,6 +48,12 @@ export interface ResidentActionResult {
 const done = (r: Partial<ResidentActionResult> = {}): ResidentActionResult => ({ reportNumbers: [], ...r });
 const fail = (message: string, status = 409): never => { throw new AdminApiError('server', message, status); };
 
+/** Uploads one picked file straight to Cloudinary; a refusal (bad type, too large, upload failed) is shown in its own words. */
+async function uploadFile(file: File, folder: string): Promise<string> {
+  try { return (await uploadDirectToCloudinary(file, folder)).url; }
+  catch (err) { return fail(err instanceof Error && err.message ? `Your photo could not be uploaded: ${err.message}` : 'Your photo could not be uploaded. Please try again.', 422); }
+}
+
 const reportNumber = (ref: string): number => reportIdOf(ref) ?? fail('That report could not be found.', 404);
 const numeric = (value: string, what: string): number => {
   const n = Number(value);
@@ -157,7 +163,7 @@ async function sendUpdate(reportId: number, text: string, media: Media[]): Promi
   const urls: string[] = [];
   for (const m of media) {
     if (!m.file) continue;
-    urls.push((await uploadDirectToCloudinary(m.file, 'case-chat')).url);          // nothing is sent until every photo is up, so a failure sends nothing
+    urls.push(await uploadFile(m.file, 'case-chat'));          // nothing is sent until every photo is up, so a failure sends nothing
   }
   await residentApi.sendChat(reportId, text, urls[0] ?? null);
   for (const url of urls.slice(1)) await residentApi.sendChat(reportId, 'Photo', url);
@@ -190,7 +196,7 @@ async function submitClaim(a: Extract<ResidentAction, { type: 'claim/submit' }>,
   const number = notice?.reportNumber ?? fail('That notice could not be found.', 404);
   const urls: string[] = [];
   for (const m of a.media ?? []) {
-    if (m.file) urls.push((await uploadDirectToCloudinary(m.file, 'ownership-claims')).url);
+    if (m.file) urls.push(await uploadFile(m.file, 'ownership-claims'));
   }
   const proof = a.evidence.filter((e) => !e.startsWith('Photo: '));
   await residentApi.submitClaim(number, {
