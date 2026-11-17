@@ -11,12 +11,12 @@ import { AdminApiError, errorMessage } from '../../preview/lib/errors';
 import { fromLocalInput } from '../../preview/lib/format';
 import { toServer } from '../../live/dates';
 import { reportIdOf } from '../../live/refs';
-import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import { normalizeColorList } from '../data/colors';
 import type { ResidentAction } from '../data/reducer';
 import type { CategoryId, Draft, Media, Notice, ResidentState } from '../data/types';
 import { ANIMAL_LABEL, PINNED_LABEL, evidenceIdsFrom, joinAddress, joinExtra, noticeRef, petToApi, preferencesFrom } from './adapters';
 import { residentApi, type ApiResidentCategories } from './api';
+import { prepareForUpload } from '../lib/media';
 
 export interface ResidentActionContext {
   userId: number;
@@ -48,10 +48,20 @@ export interface ResidentActionResult {
 const done = (r: Partial<ResidentActionResult> = {}): ResidentActionResult => ({ reportNumbers: [], ...r });
 const fail = (message: string, status = 409): never => { throw new AdminApiError('server', message, status); };
 
-/** Uploads one picked file straight to Cloudinary; a refusal (bad type, too large, upload failed) is shown in its own words. */
-async function uploadFile(file: File, folder: string): Promise<string> {
-  try { return (await uploadDirectToCloudinary(file, folder)).url; }
-  catch (err) { return fail(err instanceof Error && err.message ? `Your photo could not be uploaded: ${err.message}` : 'Your photo could not be uploaded. Please try again.', 422); }
+/**
+ * Uploads one picked file the way report photos go: phone -> backend -> Cloudinary (POST /chat/media). Some phone networks block
+ * api.cloudinary.com, and the app can always reach the backend. The file is first made ready (HEIC and large photos redrawn as a
+ * JPEG, a proper file name). A refusal is shown in its own words.
+ */
+async function uploadFile(file: File): Promise<string> {
+  const refuse = (err: unknown): never => fail(err instanceof Error && err.message ? `Your photo could not be uploaded: ${err.message}` : 'Your photo could not be uploaded. Please try again.', 422);
+  let ready: File;
+  try { ready = await prepareForUpload(file); } catch (err) { return refuse(err); }
+  try { return (await residentApi.uploadChatMedia(ready)).url; }
+  catch (err) {
+    if (err instanceof AdminApiError && err.kind !== 'server') throw err;   // offline or signed out: the app's own handling and wording
+    return refuse(err);
+  }
 }
 
 const reportNumber = (ref: string): number => reportIdOf(ref) ?? fail('That report could not be found.', 404);
@@ -163,7 +173,7 @@ async function sendUpdate(reportId: number, text: string, media: Media[]): Promi
   const urls: string[] = [];
   for (const m of media) {
     if (!m.file) continue;
-    urls.push(await uploadFile(m.file, 'case-chat'));          // nothing is sent until every photo is up, so a failure sends nothing
+    urls.push(await uploadFile(m.file));          // nothing is sent until every photo is up, so a failure sends nothing
   }
   await residentApi.sendChat(reportId, text, urls[0] ?? null);
   for (const url of urls.slice(1)) await residentApi.sendChat(reportId, 'Photo', url);
@@ -196,7 +206,7 @@ async function submitClaim(a: Extract<ResidentAction, { type: 'claim/submit' }>,
   const number = notice?.reportNumber ?? fail('That notice could not be found.', 404);
   const urls: string[] = [];
   for (const m of a.media ?? []) {
-    if (m.file) urls.push(await uploadFile(m.file, 'ownership-claims'));
+    if (m.file) urls.push(await uploadFile(m.file));
   }
   const proof = a.evidence.filter((e) => !e.startsWith('Photo: '));
   await residentApi.submitClaim(number, {

@@ -38,6 +38,8 @@ Status values: **Current** (matches the code when last checked), **Reference** (
 
 | Document | Status | Notes |
 |---|---|---|
+`| [Resident Photo Uploads Always Go Phone → Backend → Cloudinary](05-operations/agents/feature-updates/2026-11-17_1835_resident-uploads-always-via-backend.md) | Current | Add information and claims always upload via `POST /chat/media`; HEIC and large photos redrawn as JPEG in the app; backend videos up to 50 MB; supersedes the 18:12 fallback |
+| [Upload Photos Through the Backend When the App Cannot Reach Cloudinary](05-operations/agents/feature-updates/2026-11-17_1812_chat-media-upload-via-backend-fallback.md) | Current | New `POST /chat/media`; resident uploads fall back to it on `ERR_NETWORK`; progress listener (CORS preflight) only when asked |
 | [Show Attached Photos and Videos in a Report's Updates](05-operations/agents/feature-updates/2026-11-17_1800_report-updates-show-photos.md) | Current | The Updates timeline now shows the photo or video saved on a case chat message (`media_url`), not only its text |
 | [Read Photos into Memory Before Direct Cloudinary Upload (Android "Network Error")](05-operations/agents/feature-updates/2026-11-17_1751_cloudinary-upload-network-error-android.md) | Current | Picked file copied into memory before the Cloudinary upload (WebView content:// streaming failure); separate messages for unreadable file vs Cloudinary unreachable |
 | [Fix Photo Upload Failing on Android in "Add information" and Ownership Claims](05-operations/agents/feature-updates/2026-11-17_1717_resident-update-photo-upload-android.md) | Current | File type now detected from the MIME type when Android gives a name without an extension; HEIC/MOV links converted to JPG/MP4; real upload errors shown |
