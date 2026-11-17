@@ -89,9 +89,16 @@ export function updateFromHistory(h: { history_id: number; remarks: string | nul
 export function updateFromChat(m: ApiChatMessage, me: number): ReportUpdate | null {
   if (m.is_system) return null;                                   // the server's own notices are already on the timeline
   const mine = m.sender_id === me;
-  const body = (m.message_text ?? '').trim() || (m.media_url ? '[Photo attached]' : '');
-  if (!body) return null;
-  return { id: `c${m.message_id}`, at: fromServer(m.sent_at), kind: mine ? 'you' : 'message', title: mine ? 'You added information' : 'Message from the subdivision', body };
+  const text = (m.message_text ?? '').trim();
+  const mediaUrl = m.media_url || undefined;
+  if (!text && !mediaUrl) return null;
+  // Extra photos of one update are sent as their own messages with the placeholder text "Photo" (sendUpdate): show just the photo.
+  const body = mediaUrl && /^photo$/i.test(text) ? undefined : text || undefined;
+  return {
+    id: `c${m.message_id}`, at: fromServer(m.sent_at), kind: mine ? 'you' : 'message',
+    title: mine ? (body ? 'You added information' : 'You added a photo') : 'Message from the subdivision',
+    ...(body ? { body } : {}), ...(mediaUrl ? { mediaUrl } : {}),
+  };
 }
 
 const OUTCOME_SUMMARY = {

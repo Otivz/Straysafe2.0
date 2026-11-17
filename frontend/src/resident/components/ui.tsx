@@ -155,6 +155,11 @@ export function UpdateTimeline({ updates, now, label = 'Updates' }: { updates: R
             <div className="min-w-0">
               <p className="rs-timeline__title">{u.title}</p>
               {u.body ? <p className="rs-timeline__body">{u.body}</p> : null}
+              {u.mediaUrl ? (
+                /\.(mp4|mov|webm)(\?|$)/i.test(u.mediaUrl)
+                  ? <video src={u.mediaUrl} controls preload="metadata" className="mt-2 block max-h-56 w-full max-w-xs rounded-xl border border-[var(--sa-line)] bg-black" />
+                  : <a href={u.mediaUrl} target="_blank" rel="noreferrer" className="mt-2 block w-full max-w-xs" aria-label="Open the photo full size"><img src={u.mediaUrl} alt="Attached photo" loading="lazy" className="block max-h-56 w-full rounded-xl border border-[var(--sa-line)] object-cover" /></a>
+              ) : null}
               <p className="rs-meta"><time dateTime={u.at} title={fmtDateTime(u.at)}>{relative(u.at, now)}</time></p>
             </div>
           </li>

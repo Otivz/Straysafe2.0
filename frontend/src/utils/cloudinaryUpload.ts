@@ -38,8 +38,17 @@ export async function uploadDirectToCloudinary(
         throw new Error(validation.error);
     }
 
+    // Read the file into memory before sending. In the Android app the picked file is a content:// URI that the web view sometimes
+    // refuses to stream at send time (net::ERR_UPLOAD_FILE_CHANGED, reported only as "Network Error"); a copy in memory always sends.
+    let body: Blob;
+    try {
+        body = new Blob([await file.arrayBuffer()], { type: file.type || 'application/octet-stream' });
+    } catch {
+        throw new Error('the photo could not be read from your phone. Choose it again, or take a new one.');
+    }
+
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', body, file.name || 'upload');
     formData.append('upload_preset', UPLOAD_PRESET);
     formData.append('folder', folder);
 
@@ -65,7 +74,9 @@ export async function uploadDirectToCloudinary(
     } catch (err: any) {
         let message = 'Upload to Cloudinary failed.';
         if (axios.isAxiosError(err)) {
-            message = err.response?.data?.error?.message || err.message || message;
+            message = err.response
+                ? err.response.data?.error?.message || `the photo service answered ${err.response.status}.`
+                : `the photo service (api.cloudinary.com) could not be reached${err.code ? ` [${err.code}]` : ''}. Check the phone's internet connection and try again.`;
         } else if (err instanceof Error) {
             message = err.message;
         }
