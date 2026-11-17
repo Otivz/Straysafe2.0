@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -19,12 +20,30 @@ from app.schemas.chat import (
 )
 from app.utils.pet_ownership import became_owner_after
 from app.utils.auth import get_current_user
-from app.utils.uploads import validate_cloudinary_url
+from app.utils.uploads import read_and_validate_upload, validate_cloudinary_url
+from app.utils.cloudinary_config import upload_to_cloudinary
+from app.limiter import limiter
 
 router = APIRouter(
     prefix="/chat",
     tags=["chat"]
 )
+
+
+@router.post("/media")
+@limiter.limit("20/minute")
+async def upload_chat_media(request: Request, file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
+    """
+    A photo or video for a case chat message ("Add information") or an ownership claim, uploaded to Cloudinary by the server, the
+    same path report photos take (phone -> backend -> Cloudinary). The resident app always sends these here: some phone networks
+    block api.cloudinary.com, and the app can always reach the backend. Nothing is stored here: the returned link is then sent with
+    the message or claim (validate_cloudinary_url accepts it). Photos up to 10 MB, MP4 videos up to 50 MB.
+    """
+    content, unique_filename, media_type, resource_type = await read_and_validate_upload(file, allowed={'Image', 'Video'})
+    url = await run_in_threadpool(upload_to_cloudinary, content, folder="straysafe/chat", resource_type=resource_type, filename=unique_filename)
+    if not url:
+        raise HTTPException(status_code=502, detail="The photo service did not return a link. Please try again.")
+    return {"url": url, "media_type": media_type}
 
 def sender_role_label(sender: Optional[User]) -> str:
     """Human-readable role label for a chat participant."""

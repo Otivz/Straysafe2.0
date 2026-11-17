@@ -53,18 +53,16 @@ export async function uploadDirectToCloudinary(
     formData.append('folder', folder);
 
     try {
+        // The progress listener is added only when asked for: listening to upload progress turns this cross-origin request into one
+        // that needs a CORS preflight, which a plain multipart POST does not.
         const response = await axios.post(
             `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`,
             formData,
-            {
-                headers: { 'Content-Type': 'multipart/form-data' },
+            onProgress ? {
                 onUploadProgress: (progressEvent) => {
-                    if (progressEvent.total && onProgress) {
-                        const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-                        onProgress(percent);
-                    }
+                    if (progressEvent.total) onProgress(Math.round((progressEvent.loaded * 100) / progressEvent.total));
                 },
-            }
+            } : undefined
         );
 
         return {
@@ -76,11 +74,10 @@ export async function uploadDirectToCloudinary(
         if (axios.isAxiosError(err)) {
             message = err.response
                 ? err.response.data?.error?.message || `the photo service answered ${err.response.status}.`
-                : `the photo service (api.cloudinary.com) could not be reached${err.code ? ` [${err.code}]` : ''}. Check the phone's internet connection and try again.`;
+                : `the photo service (api.cloudinary.com) could not be reached${err.code ? ` [${err.code}]` : ''}.`;
         } else if (err instanceof Error) {
             message = err.message;
         }
         throw new Error(message);
     }
 }
-

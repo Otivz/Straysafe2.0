@@ -17,8 +17,9 @@ IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp'}
 VIDEO_EXTS = {'.mp4'}
 DOCUMENT_EXTS = {'.pdf', '.doc', '.docx'}
 
-# Strict 10MB limit across file uploads
+# 10 MB for photos and documents; videos may be up to 50 MB (the resident app's picker allows the same).
 MAX_FILE_SIZE = 10 * 1024 * 1024
+MAX_VIDEO_SIZE = 50 * 1024 * 1024
 
 # Allowed MIME types as required by Task 4.3 (MEDIUM-01)
 ALLOWED_MIME_TYPES: Set[str] = {
@@ -34,10 +35,10 @@ DOCUMENT_MIME_TYPES: Set[str] = {
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 }
 
-# Max size per media category, in bytes (10MB maximum).
+# Max size per media category, in bytes.
 MAX_SIZES = {
     'Image': MAX_FILE_SIZE,
-    'Video': MAX_FILE_SIZE,
+    'Video': MAX_VIDEO_SIZE,
     'Document': MAX_FILE_SIZE,
 }
 
@@ -83,11 +84,11 @@ def classify_extension(filename: str) -> Tuple[str, str]:
 async def read_and_validate_upload(
     file: UploadFile,
     allowed: Optional[Set[str]] = None,
-    max_size: int = MAX_FILE_SIZE
+    max_size: Optional[int] = None
 ) -> Tuple[bytes, str, str, str]:
     """
     Reads and validates an UploadFile against the shared extension, MIME type,
-    magic byte signature, and 10MB size rules.
+    magic byte signature, and size rules (10 MB, 50 MB for a video; `max_size` may lower it).
 
     `allowed` restricts which media categories are accepted here (subset of
     {'Image', 'Video', 'Document'}); defaults to all three.
@@ -120,7 +121,9 @@ async def read_and_validate_upload(
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
-    category_max = min(max_size, MAX_SIZES.get(media_type, MAX_FILE_SIZE))
+    category_max = MAX_SIZES.get(media_type, MAX_FILE_SIZE)
+    if max_size is not None:
+        category_max = min(max_size, category_max)
     if len(content) > category_max:
         raise HTTPException(
             status_code=413,

@@ -147,6 +147,8 @@ export const residentApi = {
   report: (id: number) => httpGet<ApiResidentReport>(`/reports/${id}`),
   createReport: (body: Record<string, unknown>) => httpPost<ApiResidentReport>('/reports/', body),
   uploadReportMedia: (id: number, file: File) => { const form = new FormData(); form.append('file', file); form.append('is_evidence', 'false'); return httpUpload(`/reports/${id}/media`, form); },
+  /** A photo or video for "Add information" or a claim, uploaded to Cloudinary by the server (phone -> backend -> Cloudinary). */
+  uploadChatMedia: (file: File) => { const form = new FormData(); form.append('file', file); return httpUpload<{ url: string; media_type: string }>('/chat/media', form); },
   chat: (id: number) => httpGet<ApiChatMessage[]>(`/chat/reports/${id}/messages`),
   sendChat: (id: number, text: string, mediaUrl?: string | null) => httpPost(`/chat/reports/${id}/messages`, { message_text: text, media_url: mediaUrl ?? null }),
   confirmReunited: (id: number, notes: string) => httpPost(`/reports/${id}/confirm-reunited`, { notes }),
