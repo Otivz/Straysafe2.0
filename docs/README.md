@@ -38,6 +38,7 @@ Status values: **Current** (matches the code when last checked), **Reference** (
 
 | Document | Status | Notes |
 |---|---|---|
+| [Report Photos on Step 1 and Device Camera Capture](05-operations/agents/feature-updates/2026-11-17_1616_report-photos-first-and-camera-capture.md) | Current | Merged the complaint photo step into Details (3 steps for every report), `/report/evidence` redirects, and `MediaPicker` gained Take photo / Record video / Choose from gallery with Android `<queries>` for the camera app |
 | [Filter Complaint Registry Leads by Breed & Colour Tag Arrays](05-operations/agents/feature-updates/2026-11-17_1500_complaint-leads-breed-and-color-arrays.md) | Current | Filtered `leads()` by `breeds_compatible` (using `animal_breed` and breed text mentions), added `pet.colors`/`animal_colors` array matching, ranked breed matches first, and displayed `animal_breed` on `ComplaintPage.tsx` |
 | [Filter Same-Occurrence Candidates by Breed & Colour and Show Comparison Chips](05-operations/agents/feature-updates/2026-11-17_1455_same-occurrence-breed-color-filter.md) | Current | Added `breeds_compatible` & `colors_compatible` to `same_occurrence_candidate()` (blocks Aspin vs German Shepherd) and rendered breed/colour chips in `SameOccurrenceDialog` |
 | [Restrict Resident Warning Letter Downloads to PDF Only](05-operations/agents/feature-updates/2026-11-17_1348_resident-warning-pdf-only-download.md) | Current | Removed DOCX download buttons and updated copy on resident `WarningLetterPage.tsx` and `WarningsPage.tsx` to offer PDF downloads only |

@@ -6,6 +6,7 @@ import { ColorTagInput } from '../../components/ColorTagInput';
 import { ChoiceChips, Field, FieldGroup, Input, Select, Textarea } from '../../components/form';
 import { MediaPicker } from '../../components/MediaPicker';
 import { ConfirmSheet } from '../../components/Sheet';
+import { ShieldAlert } from 'lucide-react';
 import { Button, Callout } from '../../components/ui';
 import { residentPath } from '../../config';
 import { ANIMAL_TYPES, ANIMAL_TYPE_IDS, CATEGORIES, EXTRA_FIELD } from '../../data/constants';
@@ -96,6 +97,15 @@ function DetailsForm({ draft }: { draft: Draft }) {
 
       <form id="report-details" className="rs-stack" onSubmit={submit} noValidate>
         <div ref={ref} className="rs-stack">
+          {kind === 'incident' ? (
+            <FieldGroup label="Photos or video (optional)" hint="Take one now if you safely can, while the animal is still there. Up to 5 files: photos up to 10 MB, videos up to 50 MB. Only authorized administrators see them.">
+              <MediaPicker value={draft.media} onChange={(media) => patch({ media })} accept="both" max={5} />
+              <Callout tone="amber" icon={ShieldAlert} title="Keep a safe distance." className="mt-3">
+                Never approach, touch or corner an animal to get a better picture. Avoid showing people’s faces, children or house numbers.
+              </Callout>
+            </FieldGroup>
+          ) : null}
+
           <FieldGroup label={kind === 'incident' ? 'What kind of animal?' : 'What kind of animal is it?'} required error={errors.animalType}>
             <ChoiceChips
               label="Kind of animal"

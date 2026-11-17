@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Film, ImagePlus, X } from 'lucide-react';
+import { Camera, ChevronLeft, ChevronRight, Film, ImagePlus, Video, X } from 'lucide-react';
 import type { Media } from '../data/types';
 import { revoke, takeFiles } from '../lib/media';
 import { Button } from './ui';
@@ -7,9 +7,13 @@ import { Button } from './ui';
 /**
  * Optional evidence: photos (and videos where allowed) with previews and remove. Problems are shown in plain language and
  * never block the rest of the batch. Evidence is always optional, and nobody should go near an animal to get a photo.
+ * "Take photo" and "Record video" open the device camera (`capture`); on a computer they fall back to the file chooser.
+ * In the Android app, Capacitor hands a `capture` input to the phone's camera app, which needs no CAMERA permission.
  */
-export function MediaPicker({ value, onChange, accept = 'both', max = 5, addLabel }: { value: Media[]; onChange: (next: Media[]) => void; accept?: 'photo' | 'both'; max?: number; addLabel?: string }) {
+export function MediaPicker({ value, onChange, accept = 'both', max = 5 }: { value: Media[]; onChange: (next: Media[]) => void; accept?: 'photo' | 'both'; max?: number }) {
   const input = useRef<HTMLInputElement>(null);
+  const photoCam = useRef<HTMLInputElement>(null);
+  const videoCam = useRef<HTMLInputElement>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [previewIdx, setPreviewIdx] = useState(0);
 
@@ -19,7 +23,7 @@ export function MediaPicker({ value, onChange, accept = 'both', max = 5, addLabe
     const { added, errors: problems } = takeFiles(Array.from(files ?? []), value.length, { accept, max });
     setErrors(problems);
     if (added.length) onChange([...value, ...added]);
-    if (input.current) input.current.value = '';
+    for (const el of [input.current, photoCam.current, videoCam.current]) if (el) el.value = '';
   };
   const remove = (m: Media) => { revoke(m); onChange(value.filter((x) => x.id !== m.id)); setErrors([]); };
 
@@ -81,8 +85,18 @@ export function MediaPicker({ value, onChange, accept = 'both', max = 5, addLabe
           ))}
         </ul>
       ) : null}
-      {value.length < max ? <Button icon={ImagePlus} block onClick={() => input.current?.click()}>{addLabel ?? (accept === 'both' ? 'Add photos or videos' : 'Add a photo')}</Button> : <p className="rs-hint">You have added the most files you can ({max}).</p>}
+      {value.length < max ? (
+        <div className="flex flex-col gap-2">
+          <div className={accept === 'both' ? 'grid grid-cols-2 gap-2' : undefined}>
+            <Button icon={Camera} block onClick={() => photoCam.current?.click()}>Take photo</Button>
+            {accept === 'both' ? <Button icon={Video} block onClick={() => videoCam.current?.click()}>Record video</Button> : null}
+          </div>
+          <Button icon={ImagePlus} block onClick={() => input.current?.click()}>Choose from gallery</Button>
+        </div>
+      ) : <p className="rs-hint">You have added the most files you can ({max}).</p>}
       <input ref={input} type="file" hidden multiple accept={accept === 'both' ? 'image/*,video/*' : 'image/*'} onChange={(e) => pick(e.target.files)} />
+      <input ref={photoCam} type="file" hidden accept="image/*" capture="environment" onChange={(e) => pick(e.target.files)} />
+      {accept === 'both' ? <input ref={videoCam} type="file" hidden accept="video/*" capture="environment" onChange={(e) => pick(e.target.files)} /> : null}
       {errors.length > 0 ? <ul className="rs-errorlist" role="alert">{errors.map((e) => <li key={e}>{e}</li>)}</ul> : null}
     </div>
   );

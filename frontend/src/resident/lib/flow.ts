@@ -3,7 +3,7 @@ import { residentPath } from '../config';
 import { CATEGORIES } from '../data/constants';
 import { useResidentData } from '../data/context';
 import { carryOver, entryOf } from '../data/entries';
-import { flowSteps, type FlowStep } from '../data/selectors';
+import { FLOW_STEPS, type FlowStep } from '../data/selectors';
 import type { CategoryId, Draft } from '../data/types';
 import { useBack } from './hooks';
 
@@ -23,14 +23,13 @@ export function useStartReport() {
 }
 
 /**
- * Moving between the steps of the report flow. Steps differ by kind (lost and found reports collect the photo on the first
- * step). When a step was opened from the review screen to fix something, `next` returns to the review.
+ * Moving between the steps of the report flow. Every kind collects its photos on the first (details) step. When a step was opened from the review screen to fix something, `next` returns to the review.
  */
-export function useFlowNav(step: FlowStep, kind?: Draft['kind']) {
+export function useFlowNav(step: FlowStep) {
   const { state } = useResidentData();
   const navigate = useNavigate();
   const fromReview = useSearchParams()[0].get('from') === 'review';
-  const steps = flowSteps(kind ?? state.draft?.kind ?? 'incident');
+  const steps = FLOW_STEPS;
   const at = steps.indexOf(step);
   // Every step pushed the next one, so Back simply unwinds where the resident came from (a Back that pushed a screen of its own would
   // loop between two screens). Opened on its own (a reload or a link) there is nothing to unwind: it goes to the previous step, and from

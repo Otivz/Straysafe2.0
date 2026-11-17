@@ -15,7 +15,7 @@ import { useFlowNav } from '../../lib/flow';
 export function FlowScreen({ step, title, footer, draft: given, children }: { step: FlowStep; title: string; footer?: ReactNode; draft?: Draft; children: ReactNode }) {
   const { state } = useResidentData();
   const draft = given ?? state.draft;
-  const { steps, index, back } = useFlowNav(step, draft?.kind);
+  const { steps, index, back } = useFlowNav(step);
   if (!draft) return <Navigate to={residentPath('/report')} replace />;
   return (
     <Screen title={title} subtitle={`Step ${index + 1} of ${steps.length} · ${CATEGORIES[draft.category].label}`} onBack={back} footer={footer}>
