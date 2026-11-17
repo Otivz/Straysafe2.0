@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getMediaKind, validateFile, type MediaKind } from './uploadValidation';
+import { getFileKind, validateFile, type MediaKind } from './uploadValidation';
 
 const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
 const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
@@ -10,6 +10,19 @@ export interface CloudinaryUploadResult {
 }
 
 export type UploadProgressCallback = (percent: number) => void;
+
+/**
+ * The backend stores only .jpg/.jpeg/.png/.webp images and .mp4 videos (utils/uploads.py). Cloudinary keeps the original
+ * format (a phone's HEIC photo, a .mov video), but converts on delivery when the link's extension changes, so other formats
+ * are asked for as .jpg / .mp4.
+ */
+function deliverableUrl(url: string, resourceType: string): string {
+    const m = url.match(/\.([a-z0-9]+)$/i);
+    const ext = m ? m[1].toLowerCase() : '';
+    if (resourceType === 'image' && !['jpg', 'jpeg', 'png', 'webp'].includes(ext)) return m ? url.slice(0, -m[0].length) + '.jpg' : `${url}.jpg`;
+    if (resourceType === 'video' && ext !== 'mp4') return m ? url.slice(0, -m[0].length) + '.mp4' : `${url}.mp4`;
+    return url;
+}
 
 export async function uploadDirectToCloudinary(
     file: File,
@@ -46,8 +59,8 @@ export async function uploadDirectToCloudinary(
         );
 
         return {
-            url: response.data.secure_url as string,
-            kind: getMediaKind(file.name),
+            url: deliverableUrl(response.data.secure_url as string, response.data.resource_type as string),
+            kind: getFileKind(file),
         };
     } catch (err: any) {
         let message = 'Upload to Cloudinary failed.';

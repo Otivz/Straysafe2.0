@@ -29,6 +29,20 @@ export function getMediaKind(nameOrUrl: string): MediaKind {
     return 'unknown';
 }
 
+/**
+ * The kind of a picked file: by its name, else by its MIME type. Android's photo picker and camera often hand over names
+ * with no extension (e.g. "1000012345") or HEIC photos, which the name alone would reject.
+ */
+export function getFileKind(file: File): MediaKind {
+    const byName = getMediaKind(file.name);
+    if (byName !== 'unknown') return byName;
+    const type = (file.type || '').toLowerCase();
+    if (type.startsWith('image/')) return 'image';
+    if (type.startsWith('video/')) return 'video';
+    if (type === 'application/pdf' || type === 'application/msword' || type.includes('officedocument.wordprocessingml')) return 'document';
+    return 'unknown';
+}
+
 export interface FileValidationResult {
     valid: boolean;
     kind: MediaKind;
@@ -36,7 +50,7 @@ export interface FileValidationResult {
 }
 
 export function validateFile(file: File): FileValidationResult {
-    const kind = getMediaKind(file.name);
+    const kind = getFileKind(file);
     if (kind === 'unknown') {
         const ext = extensionOf(file.name);
         return {
