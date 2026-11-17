@@ -125,7 +125,7 @@ function ReviewForm({ draft, live, onSending }: { draft: Draft; /** false once t
             ? <Callout tone="amber" icon={Camera} title="No photo yet.">The photo is how the owner recognises their pet in the notice. Add one if the animal is still with you or nearby, and only if it is safe.
                 <span className="rs-row-actions rs-mt"><LinkButton size="sm" variant="secondary" to={`${stepPath('details')}?from=review`}>Add a photo</LinkButton></span></Callout>
             : <Callout icon={Camera} title="No photo or video yet.">{/bark|howl|noise|ingay|tahol/i.test(draft.description) ? 'For barking, a short video taken from your home records the sound and helps your Subdivision Leader check it.' : 'A photo or a short video helps your Subdivision Leader check it and find the owner.'} You can submit without one.
-                <span className="rs-row-actions rs-mt"><LinkButton size="sm" variant="secondary" to={`${stepPath(cat.kind === 'incident' ? 'evidence' : 'details')}?from=review`}>{/bark|howl|noise|ingay|tahol/i.test(draft.description) ? 'Add a video' : 'Add a photo or video'}</LinkButton></span></Callout>
+                <span className="rs-row-actions rs-mt"><LinkButton size="sm" variant="secondary" to={`${stepPath('details')}?from=review`}>{/bark|howl|noise|ingay|tahol/i.test(draft.description) ? 'Add a video' : 'Add a photo or video'}</LinkButton></span></Callout>
       ) : null}
 
       <dl className="rs-summary">
@@ -156,7 +156,7 @@ function ReviewForm({ draft, live, onSending }: { draft: Draft; /** false once t
           </>
         )}
         <Item label="Where" to={stepPath('location')}>{draft.location ? <>{draft.location.label}{draft.location.lat === null ? <span className="rs-meta"> · described in words</span> : draft.location.label === PINNED_LABEL ? null : <span className="rs-meta"> · pinned on the map</span>}</> : 'Not chosen'}</Item>
-        <Item label="Photos" to={cat.kind === 'incident' ? stepPath('evidence') : stepPath('details')}>{draft.media.length === 0 ? (lost && pet?.photoUrl ? 'Your pet’s registered photo' : 'None added') : <MediaThumbs media={draft.media} />}</Item>
+        <Item label="Photos" to={stepPath('details')}>{draft.media.length === 0 ? (lost && pet?.photoUrl ? 'Your pet’s registered photo' : 'None added') : <MediaThumbs media={draft.media} />}</Item>
       </dl>
 
       {pin ? (

@@ -74,6 +74,6 @@ export const latestAdvisory = (s: ResidentState) => feed(s, 'safety_advisory')[0
 export const latestSighting = (n: Notice) => [...n.sightings].filter((s) => s.review?.status !== 'dismissed').sort((a, b) => b.observedAt.localeCompare(a.observedAt))[0] ?? n.latestSighting;
 export const claimForNotice = (s: ResidentState, noticeId: string): Claim | undefined => s.claims.find((c) => c.noticeId === noticeId);
 
-/** Draft steps differ by kind: general concerns have a separate evidence step; lost and found put the photo on the details form. */
-export type FlowStep = 'details' | 'location' | 'evidence' | 'review';
-export const flowSteps = (kind: 'incident' | 'lost' | 'found'): FlowStep[] => (kind === 'incident' ? ['details', 'location', 'evidence', 'review'] : ['details', 'location', 'review']);
+/** Every kind of report takes three steps: photos are collected on the details form (first, for a complaint, while the animal is still there). */
+export type FlowStep = 'details' | 'location' | 'review';
+export const FLOW_STEPS: readonly FlowStep[] = ['details', 'location', 'review'];

@@ -48,8 +48,10 @@
          INTERNET and ACCESS_NETWORK_STATE: the backend, and the app's offline notice (online/offline events).
          Location (coarse and fine are requested together, as Android 12+ asks): "use my current location" on the report map, asked for
          when the resident taps it, while the app is open. No background location, no continuous tracking.
-         Photos and videos are chosen through the system picker (an <input type="file">, no capture), which needs no storage or camera
-         permission. A "take a photo now" button would need CAMERA added back.
+         Photos and videos are chosen through the system picker (an <input type="file">), which needs no storage permission. "Take photo"
+         and "Record video" (an <input capture>) hand off to the phone's own camera app. That needs no CAMERA permission as long as CAMERA
+         stays undeclared (declaring it would make Android demand it at runtime first). The <queries> below let Android 11+ find that
+         camera app; without them the buttons fall back to the gallery picker.
          POST_NOTIFICATIONS: push notifications (Android 13 and later asks the resident once, after they sign in). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -57,4 +59,10 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <queries>
+        <intent><action android:name="android.media.action.IMAGE_CAPTURE" /></intent>
+        <intent><action android:name="android.media.action.VIDEO_CAPTURE" /></intent>
+    </queries>
 </manifest>

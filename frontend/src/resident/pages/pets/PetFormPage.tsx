@@ -141,7 +141,7 @@ function PetForm({ pet }: { pet?: Pet }) {
             <Textarea value={v.description} onChange={(e) => set('description', e.target.value)} rows={3} maxLength={300} />
           </Field>
           <FieldGroup label="Photo" hint="A clear photo helps neighbours recognise your pet if they go missing. You can add one later.">
-            <MediaPicker value={media} onChange={setMedia} accept="photo" max={1} addLabel={media.length ? 'Replace photo' : 'Add a photo'} />
+            <MediaPicker value={media} onChange={setMedia} accept="photo" max={1} />
           </FieldGroup>
         </div>
       </form>
