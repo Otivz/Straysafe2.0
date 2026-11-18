@@ -19,19 +19,19 @@ from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 import app.models  # noqa: E402,F401
-from _case_helpers import make_warning_ready  # noqa: E402  (what an owner warning now requires)
+from _case_helpers import make_warning_ready, template_id_for  # noqa: E402  (what an owner warning now requires)
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
 from app.models.report import Report, ReportStatus  # noqa: E402
 from app.models.report_match import ReportMatch  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
-from app.routes import matches, reports, warnings  # noqa: E402
+from app.routes import matches, reports, warning_letters, warnings  # noqa: E402
 from app.utils.auth import create_access_token  # noqa: E402
 from app.utils.owner_returns import owner_already_on_record  # noqa: E402
 
 Base.metadata.create_all(bind=engine)
 api = FastAPI()
-for r in (reports.router, matches.router, warnings.router):
+for r in (reports.router, matches.router, warnings.router, warning_letters.templates_router):
     api.include_router(r)
 client = TestClient(api, raise_server_exceptions=False)
 db = SessionLocal()
@@ -114,7 +114,8 @@ check("D4 the inherited link is not proof of ownership at handover", owner_alrea
 check("D4 ...the report's own confirmation still is", owner_already_on_record(get(R1), OWNER, db) is True)
 
 # D5: warnings don't auto-fill an inherited pet
-w = {"user_id": OWNER, "report_id": R15, "warning_level": "Notice", "violation_type": "Free-Roaming Unleashed", "description": "roaming"}
+w = {"user_id": OWNER, "report_id": R15, "warning_level": "Notice", "violation_type": "Free-Roaming Unleashed", "description": "roaming",
+     "template_id": template_id_for(client, HL, "Notice")}
 r = client.post("/warnings/", json=w, headers=HL)
 check("D5 a warning can't auto-fill the inherited pet", r.status_code == 409 and "re-check" in r.text, r.text[:200])
 

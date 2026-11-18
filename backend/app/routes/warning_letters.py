@@ -132,9 +132,6 @@ def list_templates(
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     sub_id = _staff_subdivision(current_user, subdivision_id, write=False)
-    WL.ensure_default_templates(db, sub_id, actor_id=current_user.user_id)
-    db.commit()
-
     q = db.query(WarningLetterTemplate)
     if sub_id is not None:
         q = q.filter(WarningLetterTemplate.subdivision_id == sub_id)
@@ -166,7 +163,8 @@ def create_template(
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     sub_id = _staff_subdivision(current_user, body.subdivision_id, write=True)
-    level = (body.warning_level or "").strip() or None
+    level = WL.normalize_warning_level(body.warning_level)
+    WL.validate_template_text(body.subject_template, body.body_template)   # only placeholders the system supplies
     tpl = WarningLetterTemplate(
         subdivision_id=sub_id,
         name=body.name.strip(),
@@ -229,13 +227,14 @@ async def import_docx_template(
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     sub_id = _staff_subdivision(current_user, subdivision_id, write=True)
+    level = WL.normalize_warning_level(warning_level)
     raw = await file.read()
     if len(raw) > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="DOCX file is too large (max 5 MB).")
 
     parsed = WL.parse_docx_bytes(raw)
+    WL.validate_template_text(parsed["subject_template"], parsed["body_template"])   # an unsupported {{key}} in the Word file is refused, by name
     fname = (file.filename or "warning_template.docx").strip()
-    level = (warning_level or "").strip() or None
 
     if template_id is not None:
         tpl = db.get(WarningLetterTemplate, template_id)
@@ -323,18 +322,20 @@ def update_template(
     )
     next_ver = (latest.version_number + 1) if latest else 1
 
+    sent = body.model_fields_set   # a field sent as null or "" clears it; a field not sent is left as it is
     if body.name is not None:
         tpl.name = body.name.strip()
-    if body.description is not None:
-        tpl.description = body.description.strip() or None
-    if body.warning_level is not None:
-        tpl.warning_level = body.warning_level.strip() or None
+    if "description" in sent:
+        tpl.description = (body.description or "").strip() or None
+    if "warning_level" in sent:
+        tpl.warning_level = WL.normalize_warning_level(body.warning_level)   # None = all levels
     if body.is_default is not None:
         tpl.is_default = body.is_default
     tpl.updated_by = current_user.user_id
 
     subj = body.subject_template.strip()
     btxt = body.body_template.strip()
+    WL.validate_template_text(subj, btxt)
     ver = WarningLetterTemplateVersion(
         template_id=tpl.template_id,
         version_number=next_ver,

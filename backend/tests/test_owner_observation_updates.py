@@ -24,7 +24,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401
-from _case_helpers import make_warning_ready  # what an owner warning now requires
+from _case_helpers import make_warning_ready, template_id_for  # what an owner warning now requires
 from app.models.audit_log import AuditLog  # noqa: F401  (audit table for log_activity)
 from app.database import Base, get_db
 from app.models.user import Barangay, Subdivision, User
@@ -32,7 +32,7 @@ from app.models.report import Report, ReportStatus, ReportCategory
 from app.models.pet import Pet
 from app.models.notification import Notification
 from app.models.owner_followup import OwnerFollowUp, OwnerObservationUpdate, OwnerObservationUpdatePhoto
-from app.routes import owner_followups, warnings
+from app.routes import owner_followups, warning_letters, warnings
 from app.utils.auth import create_access_token
 from app.utils.owner_followups import _now, check_and_notify_due_followups
 
@@ -43,6 +43,7 @@ Base.metadata.create_all(engine)
 api = FastAPI()
 api.include_router(owner_followups.router)
 api.include_router(warnings.router)
+api.include_router(warning_letters.templates_router)   # the Leader picks a letter template
 
 
 def test_db():
@@ -132,6 +133,7 @@ with patch("app.services.email_templates.render_owner_warning_email", return_val
     res_warn = client.post("/warnings/", json={
         "user_id": 1, "pet_id": 1, "report_id": 1, "warning_level": "1st Warning",
         "violation_type": "Free-Roaming Unleashed", "description": "Pet seen unattended outside.", "fine_amount": 0.0,
+        "template_id": template_id_for(client, leader_hdr, "1st Warning", session_factory=Session),
     }, headers=leader_hdr)
 check(res_warn.status_code in (200, 201), f"First Warning issued (got {res_warn.status_code})")
 check(notifications_for(1, "Observation Period Started") == 1, "Owner notified that the 3-day observation started")

@@ -153,6 +153,25 @@ def issue_warning(
     # The case must qualify: open, a concern an owner can be warned for, a verified incident, a confirmed owner and a
     # confirmed policy. Enforced here whatever the screen shows.
     policy = require_warning_eligible(db, rep, owner, warning_in.policy_id)
+    # The letter must be issuable before anything is written: the Leader chose an active template that fits this level, it uses only
+    # supported placeholders, and every needed detail is there (a refusal leaves no warning, follow-up or notice behind).
+    WL.validate_letter_ready(
+        db=db,
+        subdivision_id=rep.subdivision_id if rep else current_user.subdivision_id,
+        report=rep,
+        owner=owner,
+        recipient_name=owner.name,
+        recipient_address=owner.address,
+        pet=pet,
+        issuer=current_user,
+        warning_level=warning_in.warning_level,
+        policy_reference=f"{policy.reference} — {policy.title}" if policy.reference else policy.title,
+        violation_description=warning_in.description,
+        required_action=(warning_in.required_action or "").strip() or INSTRUCTIONS.get(warning_in.violation_type, INSTRUCTIONS["Other"]),
+        template_id=warning_in.template_id,
+        observation_days=policy.observation_days,
+        overrides=warning_in.field_overrides,
+    )
     # One warning per incident, pet, violation and tier (a logged repeat incident is its own report)
     check_tier_for_incident(db, rep.report_id, warning_in.violation_type, warning_in.pet_id, warning_in.warning_level)
     if pet is not None and not rep.pet_id:
@@ -299,7 +318,6 @@ def issue_warning(
         warning=new_warning,
         observation_days=observation_days,
         overrides=warning_in.field_overrides,
-        strict_required=warning_in.template_id is not None,
     )
     WL.deliver_warning_notification(
         db=db,

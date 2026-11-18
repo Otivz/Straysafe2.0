@@ -15,7 +15,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from xml.etree import ElementTree as ET
 
 from fastapi import HTTPException
-from sqlalchemy import func, or_
+from sqlalchemy import event, func, or_
 from sqlalchemy.orm import Session
 
 from app.models.notification import Notification
@@ -32,68 +32,50 @@ from app.services import email_templates
 from app.utils import case_policy
 from app.utils.audit import log_activity
 from app.utils.notification_dispatcher import dispatch_notification
+from app.utils.warning_rules import TIERS as WARNING_LEVELS
 
 PLACEHOLDER_PATTERN = re.compile(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}")
 
-# Canonical placeholders required by Module 3 + helpful case extras
-PLACEHOLDER_DEFINITIONS: List[Dict[str, Any]] = [
-    {"key": "resident_name", "label": "Resident Name", "required": True, "example": "Juan Dela Cruz", "description": "Full name of the responsible resident or pet owner."},
-    {"key": "resident_address", "label": "Resident Address", "required": True, "example": "Block 3 Lot 8, Narra St.", "description": "House address or unit of the resident."},
-    {"key": "pet_name", "label": "Pet Name", "required": False, "example": "Bantay", "description": "Name of the registered pet involved (if registered)."},
-    {"key": "pet_type", "label": "Pet Type / Species", "required": True, "example": "Dog", "description": "Species of the animal (Dog, Cat, etc.)."},
-    {"key": "case_reference", "label": "Case Reference", "required": True, "example": "SS-2026-0023", "description": "Official case reference number."},
-    {"key": "warning_reference", "label": "Warning Reference", "required": True, "example": "WARN-2026-0001", "description": "Unique reference number of this issued warning."},
-    {"key": "warning_level", "label": "Warning Level", "required": True, "example": "1st Warning", "description": "Notice, 1st Warning, 2nd Warning, or Final Notice / Escalation."},
-    {"key": "violation_description", "label": "Violation Description", "required": True, "example": "Pet was seen roaming unleashed in common areas.", "description": "Factual description of the verified violation."},
-    {"key": "incident_date", "label": "Incident Date", "required": True, "example": "November 17, 2026 at 2:13 PM", "description": "Date and time when the incident occurred."},
-    {"key": "issue_date", "label": "Date Issued", "required": True, "example": "November 17, 2026", "description": "Date when the warning letter is issued."},
-    {"key": "required_action", "label": "Required Action", "required": True, "example": "Keep your pet inside your property or on a leash when outside.", "description": "Corrective action required from the resident."},
-    {"key": "policy_reference", "label": "Policy Reference", "required": True, "example": "House Rules §6.3 — Free-Roaming Pets", "description": "Subdivision rule or policy reference broken."},
-    {"key": "issued_by", "label": "Issued By", "required": True, "example": "Maria Santos (Subdivision Leader)", "description": "Name and role of the issuing Subdivision Leader."},
-    {"key": "subdivision_name", "label": "Subdivision Name", "required": False, "example": "Selera Homes", "description": "Name of the subdivision."},
-    {"key": "observation_days", "label": "Observation Period", "required": False, "example": "3 days", "description": "Monitoring period defined by the policy (if applicable)."},
-    {"key": "summons_date", "label": "Summons Date & Time", "required": False, "example": "November 22, 2026 at 4:00 PM", "description": "Scheduled subdivision office meeting date (for 2nd Warning)."},
-    {"key": "summons_place", "label": "Summons Location", "required": False, "example": "Subdivision Office", "description": "Venue for the office summons."},
+# THE official registry of placeholders (the one list the editor, the DOCX import, the preview and issuing all use).
+# `requirement` says what issuing needs:
+#   required     the letter cannot be issued without a value, whether or not the template uses it
+#   conditional  a value is needed when the template uses it (for example the summons of a 2nd Warning)
+#   optional     may be blank
+#   system       supplied by the system when the letter is issued (the warning reference)
+# `required` (kept for the screens) is true for everything that must have a value.
+_REGISTRY: List[Tuple[str, str, str, str, str]] = [
+    # key, label, requirement, example, description
+    ("resident_name", "Resident Name", "required", "Juan Dela Cruz", "Full name of the responsible resident or pet owner."),
+    ("case_reference", "Case Reference", "required", "SS-2026-0023", "Official case reference number."),
+    ("warning_level", "Warning Level", "required", "1st Warning", "Notice, 1st Warning, 2nd Warning, or Final Notice / Escalation."),
+    ("violation_description", "Violation Description", "required", "Pet was seen roaming unleashed in common areas.", "Factual description of the verified violation."),
+    ("required_action", "Required Action", "required", "Keep your pet inside your property or on a leash when outside.", "Corrective action required from the resident."),
+    ("policy_reference", "Policy Reference", "required", "House Rules §6.3 — Free-Roaming Pets", "The confirmed subdivision rule or policy that applies."),
+    ("issue_date", "Date Issued", "required", "November 17, 2026", "Date when the warning letter is issued."),
+    ("issued_by", "Issued By", "required", "Maria Santos (Subdivision Leader)", "Name and role of the issuing Subdivision Leader."),
+    ("subdivision_name", "Subdivision Name", "required", "Selera Homes", "Name of the subdivision."),
+    ("warning_reference", "Warning Reference", "system", "WARN-2026-0001", "Unique reference number of this issued warning (assigned when it is issued)."),
+    ("resident_address", "Resident Address", "conditional", "Block 3 Lot 8, Narra St.", "House address or unit of the resident. Needed when the template uses it."),
+    ("pet_type", "Pet Type / Species", "conditional", "Dog", "Species of the animal (Dog, Cat, etc.). Needed when the template uses it."),
+    ("incident_date", "Incident Date", "conditional", "November 17, 2026 at 2:13 PM", "Date and time when the incident occurred. Needed when the template uses it."),
+    ("observation_days", "Observation Period", "conditional", "3 days", "Monitoring period defined by the policy. Needed when the template uses it."),
+    ("summons_date", "Summons Date & Time", "conditional", "November 22, 2026 at 4:00 PM", "Scheduled meeting at the subdivision office (2nd Warning). Needed when the template uses it."),
+    ("summons_place", "Summons Location", "conditional", "Subdivision Office", "Venue for the office summons. Needed when the template uses it."),
+    ("pet_name", "Pet Name", "optional", "Bantay", "Name of the registered pet involved. When there is none, the letter says \"your dog\", \"your cat\" or \"your pet\"."),
+    ("issuer_name", "Issuer Name", "optional", "Maria Santos", "Name of the issuing Subdivision Leader."),
+    ("issuer_role", "Issuer Role", "optional", "Subdivision Leader", "Role of the issuer."),
+    ("subdivision_address", "Office Address", "optional", "Narra St., Selera Homes", "The subdivision office's address, when it has recorded one."),
+    ("subdivision_phone", "Office Phone", "optional", "0917 000 0000", "The subdivision office's phone, when it has recorded one."),
+    ("subdivision_email", "Office Email", "optional", "office@selera.example", "The subdivision office's email, when it has recorded one."),
 ]
 
+PLACEHOLDER_DEFINITIONS: List[Dict[str, Any]] = [
+    {"key": k, "label": label, "requirement": req, "required": req != "optional", "example": ex, "description": desc}
+    for (k, label, req, ex, desc) in _REGISTRY
+]
 PLACEHOLDER_LABELS: Dict[str, str] = {p["key"]: p["label"] for p in PLACEHOLDER_DEFINITIONS}
-PLACEHOLDER_REQUIRED: Dict[str, bool] = {p["key"]: bool(p["required"]) for p in PLACEHOLDER_DEFINITIONS}
-
-DEFAULT_STANDARD_SUBJECT = "Official {{warning_level}} Regarding {{policy_reference}}"
-DEFAULT_STANDARD_BODY = """SUBJECT: Official {{warning_level}} Regarding {{policy_reference}}
-
-Dear {{resident_name}},
-
-This official {{warning_level}} is issued regarding an animal incident recorded under {{case_reference}} on {{incident_date}} involving {{pet_name}} ({{pet_type}}).
-
-Violation Details
-{{violation_description}}
-
-Applicable Subdivision Policy
-{{policy_reference}}
-
-Required Corrective Action
-{{required_action}}
-
-Please address this matter promptly. Failure to comply or repeated violations may result in further escalation in accordance with subdivision rules and local ordinances."""
-
-DEFAULT_SUMMONS_SUBJECT = "Official {{warning_level}} and Notice of Office Summons — {{policy_reference}}"
-DEFAULT_SUMMONS_BODY = """SUBJECT: Official {{warning_level}} and Notice of Office Summons — {{policy_reference}}
-
-Dear {{resident_name}},
-
-Following our previous notice, this {{warning_level}} is issued in connection with {{case_reference}} on {{incident_date}} involving {{pet_name}} ({{pet_type}}).
-
-Violation Details
-{{violation_description}}
-
-Applicable Subdivision Policy
-{{policy_reference}}
-
-Required Corrective Action
-{{required_action}}
-
-You are requested to appear at {{summons_place}} on {{summons_date}} to discuss compliance and prevent further escalation to the Barangay."""
+PLACEHOLDER_REQUIREMENT: Dict[str, str] = {p["key"]: p["requirement"] for p in PLACEHOLDER_DEFINITIONS}
+ALWAYS_REQUIRED: List[str] = [k for k, _l, req, _e, _d in _REGISTRY if req == "required"]
 
 
 def case_ref_for(report: Optional[Report], report_id: Optional[int] = None) -> str:
@@ -107,6 +89,22 @@ def case_ref_for(report: Optional[Report], report_id: Optional[int] = None) -> s
 def warning_ref_for(letter_id: int, issued_at: Optional[datetime] = None) -> str:
     year = (issued_at or datetime.now()).year
     return f"WARN-{year}-{int(letter_id):04d}"
+
+
+def unknown_placeholders(subject: str, body: str) -> List[str]:
+    """The `{{keys}}` in this text that are not in the official registry (a typo, or a field this system does not have)."""
+    return [k for k in extract_placeholders(subject, body) if k not in PLACEHOLDER_REQUIREMENT]
+
+
+def validate_template_text(subject: str, body: str) -> None:
+    """Refuse a template that uses a placeholder the system does not supply, naming each one and listing the valid ones (422)."""
+    bad = unknown_placeholders(subject, body)
+    if bad:
+        shown = ", ".join("{{" + k + "}}" for k in bad)
+        raise HTTPException(
+            status_code=422,
+            detail=f"These placeholders are not supported: {shown}. Use only: " + ", ".join(PLACEHOLDER_LABELS[k] + " ({{" + k + "}})" for k in PLACEHOLDER_REQUIREMENT) + ".",
+        )
 
 
 def extract_placeholders(subject: str, body: str) -> List[str]:
@@ -669,66 +667,80 @@ def render_letter_pdf(letter: GeneratedWarningLetter, db: Optional[Session] = No
 # ---------------------------------------------------------------------------
 # Template CRUD & Versioning
 # ---------------------------------------------------------------------------
-def ensure_default_templates(db: Session, subdivision_id: Optional[int], actor_id: Optional[int] = None) -> List[WarningLetterTemplate]:
-    """Lazily seed editable default warning letter templates for a subdivision if none exist yet."""
-    q = db.query(WarningLetterTemplate)
-    if subdivision_id is not None:
-        q = q.filter(WarningLetterTemplate.subdivision_id == subdivision_id)
-    else:
-        q = q.filter(WarningLetterTemplate.subdivision_id.is_(None))
-    existing = q.order_by(WarningLetterTemplate.is_default.desc(), WarningLetterTemplate.template_id.asc()).all()
-    if existing:
-        return existing
+SEED_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "seed_data", "warning_templates.json")
 
-    seeds = [
-        (
-            "Standard Subdivision Warning Letter",
-            "Customizable general warning letter for Notice, 1st Warning, and Final Warning notifications.",
-            None,
-            True,
-            DEFAULT_STANDARD_SUBJECT,
-            DEFAULT_STANDARD_BODY,
-        ),
-        (
-            "Second Warning & Office Summons Notice",
-            "Template for 2nd Warning citations that include a Subdivision Office summons date and venue.",
-            "2nd Warning",
-            False,
-            DEFAULT_SUMMONS_SUBJECT,
-            DEFAULT_SUMMONS_BODY,
-        ),
-    ]
-    created: List[WarningLetterTemplate] = []
-    for name, desc, level, is_def, subj, body in seeds:
-        tpl = WarningLetterTemplate(
-            subdivision_id=subdivision_id,
-            name=name,
-            description=desc,
-            warning_level=level,
-            source_type="editor",
-            status="active",
-            is_default=is_def,
+
+def load_standard_templates() -> List[Dict[str, Any]]:
+    """The four standard templates (one per level) from the seed data file. The letter wording lives in that file, not in code."""
+    import json
+    with open(SEED_FILE, encoding="utf-8") as fh:
+        items = json.load(fh)["templates"]
+    for item in items:
+        normalize_warning_level(item["warning_level"])
+        unknown = unknown_placeholders(item["subject_template"], item["body_template"])
+        if unknown:
+            raise ValueError(f"Seed template '{item['name']}' uses unknown placeholders: {', '.join(unknown)}")
+    return items
+
+
+def seed_standard_templates(connection, subdivision_id: int, actor_id: Optional[int] = None) -> List[int]:
+    """
+    Give one subdivision its own copy of the four standard templates, as ordinary editable rows (template + version 1). A level the
+    subdivision already has an active template for is skipped, so this is safe to run more than once. Works on a Core connection
+    (`session.connection()`, or the connection of a mapper event), so it can also run while a subdivision is being inserted.
+    Returns the ids of the templates it created. Never touches an existing template, version or issued letter.
+    """
+    T = WarningLetterTemplate.__table__
+    V = WarningLetterTemplateVersion.__table__
+    created: List[int] = []
+    for item in load_standard_templates():
+        level = item["warning_level"]
+        has_active = connection.execute(
+            T.select().with_only_columns(T.c.template_id).where(
+                T.c.subdivision_id == subdivision_id, T.c.warning_level == level, T.c.status == "active").limit(1)
+        ).first()
+        if has_active:
+            continue
+        template_id = connection.execute(T.insert().values(
+            subdivision_id=subdivision_id, name=item["name"], description=item["description"], warning_level=level,
+            source_type="editor", status="active", is_default=True, created_by=actor_id, updated_by=actor_id,
+        )).inserted_primary_key[0]
+        subject, body = item["subject_template"], item["body_template"]
+        version_id = connection.execute(V.insert().values(
+            template_id=template_id, version_number=1, subject_template=subject, body_template=body,
+            html_template=render_html_document(subject, body, "{{warning_reference}}", "{{case_reference}}"),
+            placeholders_used=extract_placeholders(subject, body), change_note=item.get("change_note") or "Initial standard template",
             created_by=actor_id,
-            updated_by=actor_id,
-        )
-        db.add(tpl)
-        db.flush()
-        ver = WarningLetterTemplateVersion(
-            template_id=tpl.template_id,
-            version_number=1,
-            subject_template=subj,
-            body_template=body,
-            html_template=render_html_document(subj, body, "{{warning_reference}}", "{{case_reference}}"),
-            placeholders_used=extract_placeholders(subj, body),
-            change_note="Initial default template",
-            created_by=actor_id,
-        )
-        db.add(ver)
-        db.flush()
-        tpl.current_version_id = ver.version_id
-        created.append(tpl)
-    db.flush()
+        )).inserted_primary_key[0]
+        connection.execute(T.update().where(T.c.template_id == template_id).values(current_version_id=version_id))
+        created.append(template_id)
     return created
+
+
+def seed_new_subdivisions(connection) -> List[int]:
+    """Safety net for subdivisions created outside the app (raw SQL): one that has no template rows at all gets the four standard ones."""
+    T = WarningLetterTemplate.__table__
+    S = Subdivision.__table__
+    seeded: List[int] = []
+    for (sub_id,) in connection.execute(S.select().with_only_columns(S.c.subdivision_id)).all():
+        if connection.execute(T.select().with_only_columns(T.c.template_id).where(T.c.subdivision_id == sub_id).limit(1)).first() is None:
+            if seed_standard_templates(connection, sub_id):
+                seeded.append(sub_id)
+    return seeded
+
+
+@event.listens_for(Subdivision, "after_insert")
+def _seed_templates_for_new_subdivision(mapper, connection, target) -> None:
+    """
+    A new subdivision automatically gets its own, independent set of the four standard templates. Creating a subdivision must never
+    fail because of this: it runs in a savepoint, and if it cannot (the tables are missing, say), the subdivision is still created and
+    the startup safety net (`seed_new_subdivisions`) gives it its templates later.
+    """
+    try:
+        with connection.begin_nested():
+            seed_standard_templates(connection, target.subdivision_id)
+    except Exception as exc:  # noqa: BLE001
+        print(f"Notice: the standard warning letter templates were not added to subdivision {target.subdivision_id} yet: {exc}")
 
 
 def serialize_version(v: WarningLetterTemplateVersion, names: Optional[Dict[int, str]] = None) -> Dict[str, Any]:
@@ -782,6 +794,24 @@ def serialize_template(t: WarningLetterTemplate, db: Session, include_versions: 
     }
 
 
+def normalize_warning_level(value: Optional[str]) -> Optional[str]:
+    """
+    A template's level as stored: None means universal (usable for every level); otherwise one of the four tiers exactly.
+    An empty value is universal. Anything else is refused, so a typo can never quietly disable a template.
+    """
+    level = (value or "").strip()
+    if not level:
+        return None
+    if level not in WARNING_LEVELS:
+        raise HTTPException(status_code=422, detail=f"Unknown warning level '{level}'. Use one of: {', '.join(WARNING_LEVELS)}, or leave it empty for all levels.")
+    return level
+
+
+def template_fits_level(tpl: WarningLetterTemplate, warning_level: Optional[str]) -> bool:
+    """A universal template fits every level; a level-specific one fits only its own level."""
+    return tpl.warning_level is None or tpl.warning_level == warning_level
+
+
 def resolve_template_for_issuance(
     db: Session,
     subdivision_id: Optional[int],
@@ -789,30 +819,22 @@ def resolve_template_for_issuance(
     warning_level: Optional[str],
     actor_id: Optional[int] = None,
 ) -> Tuple[WarningLetterTemplate, WarningLetterTemplateVersion]:
-    ensure_default_templates(db, subdivision_id, actor_id=actor_id)
-    tpl: Optional[WarningLetterTemplate] = None
-    if template_id is not None:
-        tpl = db.get(WarningLetterTemplate, template_id)
-        if tpl is None or (subdivision_id is not None and tpl.subdivision_id not in (subdivision_id, None)):
-            raise HTTPException(status_code=404, detail="Selected warning letter template was not found.")
-        if tpl.status != "active":
-            raise HTTPException(status_code=409, detail=f"Template '{tpl.name}' is archived and cannot be used.")
-    else:
-        q = db.query(WarningLetterTemplate).filter(WarningLetterTemplate.status == "active")
-        if subdivision_id is not None:
-            q = q.filter(WarningLetterTemplate.subdivision_id == subdivision_id)
-        candidates = q.order_by(WarningLetterTemplate.is_default.desc(), WarningLetterTemplate.template_id.asc()).all()
-        if warning_level:
-            tpl = (
-                next((c for c in candidates if c.is_default and c.warning_level == warning_level), None)
-                or next((c for c in candidates if c.is_default and c.warning_level is None), None)
-                or next((c for c in candidates if c.warning_level == warning_level), None)
-                or (candidates[0] if candidates else None)
-            )
-        else:
-            tpl = next((c for c in candidates if c.is_default), None) or (candidates[0] if candidates else None)
-    if tpl is None:
-        raise HTTPException(status_code=409, detail="No active warning letter template is configured for this subdivision.")
+    """
+    The template the Leader chose, checked. There is no automatic choice: the Leader must pick one, it must be active, in their
+    subdivision (or platform-wide), and compatible with the letter's level. `is_default` only marks a suggestion in the picker.
+    """
+    if template_id is None:
+        raise HTTPException(status_code=422, detail="Choose a warning letter template for this letter.")
+    tpl = db.get(WarningLetterTemplate, template_id)
+    if tpl is None or (subdivision_id is not None and tpl.subdivision_id not in (subdivision_id, None)):
+        raise HTTPException(status_code=404, detail="Selected warning letter template was not found.")
+    if tpl.status != "active":
+        raise HTTPException(status_code=409, detail=f"Template '{tpl.name}' is archived and cannot be used.")
+    if not template_fits_level(tpl, warning_level):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Template '{tpl.name}' is for {tpl.warning_level} letters. Choose a template for {warning_level or 'this level'}, or one for all levels.",
+        )
     ver = (
         db.get(WarningLetterTemplateVersion, tpl.current_version_id)
         if tpl.current_version_id
@@ -917,6 +939,9 @@ def build_letter_context(
         "summons_place": (summons_place or "").strip(),
     }
     if overrides:
+        bad = [k for k in overrides if k not in PLACEHOLDER_REQUIREMENT or PLACEHOLDER_REQUIREMENT[k] == "system"]
+        if bad:
+            raise HTTPException(status_code=422, detail=f"These details cannot be filled in by hand: {', '.join(bad)}.")
         for k, v in overrides.items():
             if v is not None and str(v).strip():
                 ctx[k] = str(v).strip()
@@ -930,27 +955,31 @@ def detect_missing_fields(
     *,
     strict_pet_name: bool = False,
 ) -> List[Dict[str, Any]]:
+    """
+    What blocks this letter: a placeholder the system does not supply (an `unknown` entry), or a value that is needed and blank.
+    Needed = every "required" placeholder (whether or not the template uses it) plus the "conditional" ones the template uses.
+    "optional" ones may be blank; "system" ones (the warning reference) are assigned at issue.
+    """
     used = extract_placeholders(subject_template, body_template)
     missing: List[Dict[str, Any]] = []
-    # Core required fields must always be verified even if a custom template omits one, plus any placeholder in template
+    for key in used:
+        if key not in PLACEHOLDER_REQUIREMENT:
+            missing.append({"key": key, "label": key, "required": True, "unknown": True,
+                            "message": f"This template uses {{{{{key}}}}}, which is not a supported placeholder. Edit the template to fix it."})
     check_keys: List[str] = []
-    for k in [*used, "resident_name", "warning_level", "violation_description", "required_action", "policy_reference", "issued_by"]:
+    for k in [*ALWAYS_REQUIRED, *[u for u in used if u in PLACEHOLDER_REQUIREMENT]]:
         if k not in check_keys:
             check_keys.append(k)
     for key in check_keys:
-        if key == "warning_reference":
-            continue  # auto-assigned at generation time
-        val = (context.get(key) or "").strip()
-        if not val:
-            is_req = PLACEHOLDER_REQUIRED.get(key, True)
-            if key == "pet_name" and strict_pet_name:
-                is_req = True
-            missing.append({
-                "key": key,
-                "label": PLACEHOLDER_LABELS.get(key, key.replace("_", " ").title()),
-                "required": is_req,
-                "message": f"Missing {PLACEHOLDER_LABELS.get(key, key)} for this template.",
-            })
+        requirement = PLACEHOLDER_REQUIREMENT[key]
+        if requirement == "system":
+            continue
+        if (context.get(key) or "").strip():
+            continue
+        if requirement == "optional" and not (key == "pet_name" and strict_pet_name):
+            continue
+        label = PLACEHOLDER_LABELS[key]
+        missing.append({"key": key, "label": label, "required": True, "unknown": False, "message": f"Missing {label} for this letter."})
     return missing
 
 
@@ -960,8 +989,10 @@ def render_preview(
     context: Dict[str, str],
 ) -> Dict[str, Any]:
     missing = detect_missing_fields(subject_template, body_template, context)
-    rendered_subject = substitute_placeholders(subject_template, context)
-    rendered_body = substitute_placeholders(body_template, context)
+    # A needed value that is missing is shown as "[missing: Label]" so nobody reads a letter with a silent gap in it.
+    shown = {**context, **{m["key"]: f"[missing: {m['label']}]" for m in missing if not m.get("unknown")}}
+    rendered_subject = substitute_placeholders(subject_template, shown)
+    rendered_body = substitute_placeholders(body_template, shown)
     rendered_html = render_html_document(
         rendered_subject,
         rendered_body,
@@ -975,7 +1006,7 @@ def render_preview(
         "html": rendered_html,
         "placeholders": context,
         "missing_fields": missing,
-        "can_issue": not any(m["required"] for m in missing),
+        "can_issue": not missing,
     }
 
 
@@ -1056,6 +1087,67 @@ def deliver_warning_notification(
         _sync_notification_delivery_status(letter, False, str(exc))
 
 
+def validate_letter_ready(
+    *,
+    db: Session,
+    subdivision_id: Optional[int],
+    report: Optional[Report],
+    owner: Optional[User],
+    recipient_name: Optional[str],
+    recipient_address: Optional[str],
+    pet: Optional[Pet],
+    issuer: User,
+    warning_level: str,
+    policy_reference: str,
+    violation_description: str,
+    required_action: str,
+    template_id: Optional[int],
+    observation_days: Optional[int] = None,
+    summons_at: Optional[datetime] = None,
+    summons_place: Optional[str] = None,
+    overrides: Optional[Dict[str, str]] = None,
+    issue_date: Optional[datetime] = None,
+) -> Tuple[WarningLetterTemplate, WarningLetterTemplateVersion, Optional[Pet], Dict[str, str]]:
+    """
+    Everything that must be true before a warning letter is made, and nothing is written: the chosen template exists, is active and fits
+    the level; the template uses only placeholders the system supplies; every needed value is present. Raises 422/409/404 with a plain
+    message. Callers run it BEFORE they write anything (so a refusal leaves no half-made warning), and `create_generated_letter` runs it
+    again, so no issuing path can skip it. Returns (template, version, the pet used, the values to fill in).
+    """
+    tpl, ver = resolve_template_for_issuance(db, subdivision_id, template_id, warning_level, actor_id=issuer.user_id)
+    resolved_pet = _resolve_pet(db, pet, owner, report)
+    ctx = build_letter_context(
+        db=db,
+        subdivision_id=subdivision_id,
+        report=report,
+        owner=owner,
+        recipient_name=recipient_name,
+        recipient_address=recipient_address,
+        pet=resolved_pet,
+        issuer=issuer,
+        warning_level=warning_level,
+        violation_description=violation_description,
+        required_action=required_action,
+        policy_reference=policy_reference,
+        warning_reference="WARN-PENDING",
+        issue_date=issue_date or datetime.now(),
+        observation_days=observation_days,
+        summons_at=summons_at,
+        summons_place=summons_place,
+        overrides=overrides,
+    )
+    # No letter is made with a needed value missing or with a placeholder the system does not supply. Nothing is filled in on the
+    # Leader's behalf.
+    missing = detect_missing_fields(ver.subject_template, ver.body_template, ctx)
+    if missing:
+        unknown = [m for m in missing if m.get("unknown")]
+        if unknown:
+            raise HTTPException(status_code=422, detail=f"Template '{tpl.name}' uses unsupported placeholders ({', '.join('{{' + m['key'] + '}}' for m in unknown)}). Edit the template, then try again.")
+        names = ", ".join(m["label"] for m in missing)
+        raise HTTPException(status_code=422, detail=f"Cannot issue this warning letter; missing required fields: {names}.")
+    return tpl, ver, resolved_pet, ctx
+
+
 def create_generated_letter(
     *,
     db: Session,
@@ -1078,46 +1170,17 @@ def create_generated_letter(
     summons_at: Optional[datetime] = None,
     summons_place: Optional[str] = None,
     overrides: Optional[Dict[str, str]] = None,
-    strict_required: bool = False,
     attachment_url: Optional[str] = None,
     attachment_name: Optional[str] = None,
 ) -> GeneratedWarningLetter:
-    tpl, ver = resolve_template_for_issuance(db, subdivision_id, template_id, warning_level, actor_id=issuer.user_id)
     now = datetime.now()
-    resolved_pet = _resolve_pet(db, pet, owner, report)
-    ctx = build_letter_context(
-        db=db,
-        subdivision_id=subdivision_id,
-        report=report,
-        owner=owner,
-        recipient_name=recipient_name,
-        recipient_address=recipient_address,
-        pet=resolved_pet,
-        issuer=issuer,
-        warning_level=warning_level,
-        violation_description=violation_description,
-        required_action=required_action,
-        policy_reference=policy_reference,
-        warning_reference="WARN-PENDING",
-        issue_date=now,
-        observation_days=observation_days,
-        summons_at=summons_at,
-        summons_place=summons_place,
-        overrides=overrides,
+    # Every issuing path goes through this check, whichever service called it (a caller may also run it earlier, before it writes).
+    tpl, ver, resolved_pet, ctx = validate_letter_ready(
+        db=db, subdivision_id=subdivision_id, report=report, owner=owner, recipient_name=recipient_name, recipient_address=recipient_address,
+        pet=pet, issuer=issuer, warning_level=warning_level, policy_reference=policy_reference, violation_description=violation_description,
+        required_action=required_action, template_id=template_id, observation_days=observation_days, summons_at=summons_at,
+        summons_place=summons_place, overrides=overrides, issue_date=now,
     )
-    if strict_required:
-        missing = [m for m in detect_missing_fields(ver.subject_template, ver.body_template, ctx) if m["required"]]
-        if missing:
-            names = ", ".join(m["label"] for m in missing)
-            raise HTTPException(status_code=422, detail=f"Cannot generate warning letter; missing required fields: {names}.")
-
-    # Fallbacks for optional/legacy API calls so generated letters never render dangling empty blanks
-    if not ctx["resident_address"]:
-        ctx["resident_address"] = (report.landmark if report else None) or "Subdivision Resident"
-    if not ctx["pet_name"]:
-        ctx["pet_name"] = ctx["pet_type"] or "Animal"
-    if not ctx["pet_type"]:
-        ctx["pet_type"] = "Animal"
     if attachment_url:
         ctx["attachment_url"] = attachment_url
         ctx["attachment_name"] = attachment_name or "Warning letter attachment"
@@ -1132,10 +1195,10 @@ def create_generated_letter(
         case_reference=ctx["case_reference"],
         recipient_user_id=owner.user_id if owner else None,
         recipient_name=ctx["resident_name"] or "Resident",
-        recipient_address=ctx["resident_address"],
+        recipient_address=ctx["resident_address"] or None,
         pet_id=resolved_pet.pet_id if resolved_pet else None,
         pet_name=ctx["pet_name"],
-        pet_type=ctx["pet_type"],
+        pet_type=ctx["pet_type"] or None,
         warning_level=warning_level,
         policy_id=policy_id,
         policy_reference=policy_reference,

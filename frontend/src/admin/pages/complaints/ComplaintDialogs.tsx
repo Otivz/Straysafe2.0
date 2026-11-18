@@ -11,7 +11,8 @@ import { useAdminData } from '../../data/context';
 import type { Case } from '../../data/types';
 import { FormFooter } from '../../dialogs/BasicDialogs';
 import { useSubmit } from '../../lib/useSubmit';
-import { adminApi, type ApiGeneratedWarningLetter, type ApiTemplatePreviewResult } from '../../live/api';
+import { adminApi, type ApiGeneratedWarningLetter, type ApiTemplatePreviewResult, type ApiWarningTemplate } from '../../live/api';
+import { templateOptionLabel, templatesForLevel } from '../../lib/warningTemplates';
 import { reportIdOf } from '../../../live/refs';
 import { toLocalInput } from '../../../preview/lib/format';
 import { complaintsApi, type ApiComplaint, type ApiLeads, type ApiPersonRow, type EvidenceId, type ResponsibleIn, type StepAction } from '../../complaints/api';
@@ -650,32 +651,28 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
   }[p.action];
   const { pending, error, save } = useSave(p, 'Saved');
 
+  const [templates, setTemplates] = useState<ApiWarningTemplate[]>([]);
   const [templateId, setTemplateId] = useState<string>('');
   const [tplPreview, setTplPreview] = useState<ApiTemplatePreviewResult | null>(null);
+  const wlevel = letterKind === 'letter_2' ? '2nd Warning' : '1st Warning';
+  const fitting = templatesForLevel(templates, wlevel);
+  // The Leader chooses the template; nothing is selected for them. A choice that does not fit this letter's level counts as none.
+  const chosenTemplateId = fitting.some((t) => String(t.template_id) === templateId) ? templateId : '';
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (p.action !== 'prepare') return;
     let live = true;
-    const wlevel = letterKind === 'letter_2' ? '2nd Warning' : '1st Warning';
-    adminApi.warningTemplates('active').then((res) => {
-      if (!live) return;
-      const def = res.items.find((t) => t.is_default && t.warning_level === wlevel)
-        || res.items.find((t) => t.is_default && !t.warning_level)
-        || res.items.find((t) => t.warning_level === wlevel)
-        || res.items[0];
-      if (def) setTemplateId(String(def.template_id));
-    }).catch(() => undefined);
+    adminApi.warningTemplates('active').then((res) => { if (live) setTemplates(res.items); }).catch(() => undefined);
     return () => { live = false; };
-  }, [p.action, letterKind]);
+  }, [p.action]);
 
   useEffect(() => {
-    if (p.action !== 'prepare' || !p.d.respondent || !p.d.rule) return;
+    if (p.action !== 'prepare' || !p.d.respondent || !p.d.rule || !chosenTemplateId) return;
     let live = true;
-    const wlevel = letterKind === 'letter_2' ? '2nd Warning' : '1st Warning';
     adminApi.previewWarningTemplate({
-      ...(templateId ? { template_id: Number(templateId) } : {}),
+      template_id: Number(chosenTemplateId),
       report_id: rid(p.c),
       ...(p.d.respondent.user_id ? { user_id: p.d.respondent.user_id } : {}),
       recipient_name: p.d.respondent.name,
@@ -690,7 +687,7 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
       field_overrides: overrides,
     }).then((res) => { if (live) setTplPreview(res); }, () => undefined);
     return () => { live = false; };
-  }, [p.action, p.c, p.d.respondent, p.d.rule, templateId, letterKind, f.letter_date, f.summons_at, f.place, f.required_action, overrides]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [p.action, p.c, p.d.respondent, p.d.rule, chosenTemplateId, letterKind, f.letter_date, f.summons_at, f.place, f.required_action, overrides]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!step) return null;
   const title = STEP_TITLE[step.kind];
@@ -704,6 +701,7 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
       switch (p.action) {
         case 'prepare':
           need('letter_date', 'Choose the date on the letter.');
+          if (!chosenTemplateId) throw new Error('Choose the letter template.');
           if (step.kind === 'letter_2') need('summons_at', 'Choose the date and time of the summons.');
           if (letterSource === 'import' && !attachedFile && !existingAttachmentUrl) {
             throw new Error('Choose a PDF, Word document, or image file to import.');
@@ -712,7 +710,7 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
             action: 'prepare',
             letter_date: s('letter_date'),
             ...(step.kind === 'letter_2' ? { summons_at: localToServer(s('summons_at')), place: s('place') } : {}),
-            ...(templateId ? { template_id: Number(templateId) } : {}),
+            template_id: Number(chosenTemplateId),
             ...(s('required_action').trim() ? { required_action: s('required_action').trim() } : {}),
             ...(Object.keys(overrides).length ? { field_overrides: overrides } : {}),
             ...(letterSource === 'import' && !attachedFile && existingAttachmentUrl
@@ -796,11 +794,25 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
               onChange={(v) => setLetterSource(v)}
               cols={2}
               options={[
-                { value: 'generated', label: 'Use StraySafe standard letter', description: 'Automatically filled from the subdivision’s fixed letter.' },
+                { value: 'generated', label: 'Use a letter template', description: 'Filled in from the template you choose below.' },
                 { value: 'import', label: 'Import your own file', description: 'Upload a PDF, Word document (.doc, .docx), or image.' },
               ]}
             />
           </FieldGroup>
+          <Field
+            label="Letter template"
+            required
+            hint={fitting.length === 0
+              ? `No active template fits a ${wlevel}. Add one under Warning templates.`
+              : letterSource === 'import'
+                ? `The resident's in-app copy uses this template's text, with your file attached. Templates for ${wlevel} and for all levels.`
+                : `Templates for ${wlevel} and for all levels.`}
+          >
+            <Select value={chosenTemplateId} onChange={(e) => setTemplateId(e.target.value)}>
+              <option value="">Choose a template</option>
+              {fitting.map((t) => <option key={t.template_id} value={String(t.template_id)}>{templateOptionLabel(t)}</option>)}
+            </Select>
+          </Field>
           {letterSource === 'import' ? (
             <FieldGroup
               label="Import warning letter file"
@@ -851,10 +863,12 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
             </FieldGroup>
           ) : (
             <>
-              {tplPreview && tplPreview.missing_fields.length > 0 ? (
+              {chosenTemplateId && tplPreview && tplPreview.missing_fields.length > 0 ? (
                 <Callout tone="amber" title="Complete missing template fields">
                   <div className="flex flex-col gap-2 mt-1">
-                    {tplPreview.missing_fields.map((m) => (
+                    {tplPreview.missing_fields.map((m) => m.unknown ? (
+                      <p key={m.key} className="sa-small m-0"><strong>{m.message}</strong></p>
+                    ) : (
                       <div key={m.key} className="flex flex-wrap items-center gap-2">
                         <label className="sa-small font-medium w-36">{m.label}</label>
                         <Input className="flex-1" value={overrides[m.key] ?? ''} onChange={(e) => setOverrides((x) => ({ ...x, [m.key]: e.target.value }))} placeholder={`Enter ${m.label.toLowerCase()}`} />
@@ -863,7 +877,7 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
                   </div>
                 </Callout>
               ) : null}
-              {tplPreview ? (
+              {chosenTemplateId && tplPreview ? (
                 <WarningLetterDocument
                   subdivisionName={tplPreview.placeholders?.subdivision_name}
                   subdivisionAddress={tplPreview.placeholders?.subdivision_address}

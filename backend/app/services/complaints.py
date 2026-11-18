@@ -80,6 +80,18 @@ def _respondents(db: Session, ids) -> Dict[int, Dict[str, Any]]:
     return {r.respondent_id: R.respondent_view(r, users.get(r.user_id) if r.user_id is not None else None) for r in rows}
 
 
+# What a respondent's address reads when the account has none (the column is not nullable). It is display text, never an address: a
+# warning letter treats it as "no address", so it can never be printed as one.
+NO_ADDRESS_TEXT = "No address recorded"
+
+
+def _letter_address(resp_row, resp_user) -> Optional[str]:
+    """The respondent's address for a warning letter, or None when there is none on record."""
+    address = (resp_row.address if resp_row else (resp_user.address if resp_user else None)) or ""
+    address = address.strip()
+    return None if (not address or address == NO_ADDRESS_TEXT) else address
+
+
 def _policy(db: Session, subdivision_id: int, policy_id: Optional[str]) -> Optional[PolicyIn]:
     if not policy_id:
         return None
@@ -522,7 +534,7 @@ def _resolve_person(db: Session, report: Report, actor: User, data: ResponsibleI
             raise HTTPException(status_code=409, detail="The person who filed the complaint can't be the person responsible for it.")
         r = db.query(ComplaintRespondent).filter(ComplaintRespondent.subdivision_id == sub, ComplaintRespondent.user_id == u.user_id).first()
         if r is None:
-            r = ComplaintRespondent(subdivision_id=sub, user_id=u.user_id, name=u.name, address=(u.address or "").strip() or "No address recorded",
+            r = ComplaintRespondent(subdivision_id=sub, user_id=u.user_id, name=u.name, address=(u.address or "").strip() or NO_ADDRESS_TEXT,
                                     created_by=actor.user_id)
             db.add(r)
             db.flush()
@@ -730,12 +742,32 @@ def step_action(db: Session, report: Report, actor: User, step_id: int, data: St
         if step.state not in ("to_prepare", "prepared"):
             wrong("This letter was already issued for delivery. Print it again from the step if you need a copy.")
         letter_date = need(data.letter_date, "Choose the date on the letter.")
+        from app.services import warning_letters as WL
         info: Dict[str, Any] = {"letter_date": letter_date.isoformat()}
         summons_at = None
         place = None
         if kind == R.LETTER_2:
             summons_at = need(data.summons_at, "Choose the date and time of the summons.").replace(tzinfo=None)
             place = (data.place or "").strip() or "Subdivision office"
+        # What the letter needs, read first, and the letter checked BEFORE anything is changed: the chosen template (active, fits this
+        # level), only supported placeholders, and every needed detail. A refusal leaves the step and the summons as they were.
+        resp_row = db.get(ComplaintRespondent, off.respondent_id)
+        resp_user = db.get(User, resp_row.user_id) if (resp_row and resp_row.user_id) else None
+        pet_obj = db.get(Pet, report.pet_id) if report.pet_id else None
+        pol = _policy(db, report.subdivision_id, off.policy_id)
+        pol_ref = f"{off.policy_reference} — {off.policy_title}" if off.policy_reference else off.policy_title
+        req_act = (data.required_action or "").strip() or (pol.summary if pol and pol.summary else "Comply with subdivision rules and prevent recurrence.")
+        wlevel = "2nd Warning" if kind == R.LETTER_2 else "1st Warning"
+        letter_args = dict(
+            db=db, subdivision_id=report.subdivision_id, report=report, owner=resp_user,
+            recipient_name=resp_row.name if resp_row else (resp_user.name if resp_user else "Resident"),
+            recipient_address=_letter_address(resp_row, resp_user),
+            pet=pet_obj, issuer=actor, warning_level=wlevel, policy_reference=pol_ref,
+            violation_description=report.description or f"Verified violation of {off.policy_title}.",
+            required_action=req_act, template_id=data.template_id, summons_at=summons_at, summons_place=place, overrides=data.field_overrides,
+        )
+        WL.validate_letter_ready(**letter_args)
+        if kind == R.LETTER_2:
             info.update(summons_at=summons_at.isoformat(), place=place)
             summons = next((s for s in R.step_rows(db, off.offense_id) if s.kind == R.SUMMONS), None)
             if summons is not None and summons.state in ("waiting", "scheduled"):
@@ -753,38 +785,14 @@ def step_action(db: Session, report: Report, actor: User, step_id: int, data: St
             details["attachment_url"] = data.attachment_url
             details["attachment_name"] = data.attachment_name or "Warning letter attachment"
         # Generate/store an immutable warning letter snapshot from the subdivision's dynamic template
-        from app.services import warning_letters as WL
-        resp_row = db.get(ComplaintRespondent, off.respondent_id)
-        resp_user = db.get(User, resp_row.user_id) if (resp_row and resp_row.user_id) else None
-        pet_obj = db.get(Pet, report.pet_id) if report.pet_id else None
-        pol = _policy(db, report.subdivision_id, off.policy_id)
-        pol_ref = f"{off.policy_reference} — {off.policy_title}" if off.policy_reference else off.policy_title
-        req_act = (data.required_action or "").strip() or (pol.summary if pol and pol.summary else "Comply with subdivision rules and prevent recurrence.")
-        wlevel = "2nd Warning" if kind == R.LETTER_2 else "1st Warning"
         existing_letter = db.query(WL.GeneratedWarningLetter).filter(
             WL.GeneratedWarningLetter.complaint_step_id == step.step_id
         ).first()
         if existing_letter is None:
             gen = WL.create_generated_letter(
-                db=db,
-                subdivision_id=report.subdivision_id,
-                report=report,
-                owner=resp_user,
-                recipient_name=resp_row.name if resp_row else (resp_user.name if resp_user else "Resident"),
-                recipient_address=resp_row.address if resp_row else (resp_user.address if resp_user else None),
-                pet=pet_obj,
-                issuer=actor,
-                warning_level=wlevel,
+                **letter_args,
                 policy_id=off.policy_id,
-                policy_reference=pol_ref,
-                violation_description=report.description or f"Verified violation of {off.policy_title}.",
-                required_action=req_act,
-                template_id=data.template_id,
                 complaint_step_id=step.step_id,
-                summons_at=summons_at,
-                summons_place=place,
-                overrides=data.field_overrides,
-                strict_required=data.template_id is not None,
                 attachment_url=data.attachment_url,
                 attachment_name=data.attachment_name,
             )
@@ -822,7 +830,7 @@ def step_action(db: Session, report: Report, actor: User, step_id: int, data: St
                 report=report,
                 owner=resp_user,
                 recipient_name=resp_row.name if resp_row else (resp_user.name if resp_user else "Resident"),
-                recipient_address=resp_row.address if resp_row else (resp_user.address if resp_user else None),
+                recipient_address=_letter_address(resp_row, resp_user),
                 pet=pet_obj,
                 issuer=actor,
                 warning_level="2nd Warning" if kind == R.LETTER_2 else "1st Warning",

@@ -34,3 +34,22 @@ def make_warning_ready(db, report_id: int, owner_user_id: int, observation_days:
         observation_days=observation_days, status="confirmed")]
     case_policy.save_settings(db, sub, settings, None)
     db.commit()
+
+
+def template_id_for(client, headers, level: str = "1st Warning", subdivision_id: int = 1, session_factory=None) -> int:
+    """
+    A warning letter must name the template the Leader chose (the server never picks one), and templates are no longer created
+    lazily when a page is opened. Tests that issue warnings as a setup step therefore give the subdivision its standard templates
+    (the same call a new subdivision gets; safe to repeat) and choose the one for this level, as a Leader would.
+    `session_factory` is for a test that builds its own database instead of using the shared one.
+    """
+    from app.database import SessionLocal
+    from app.services import warning_letters as WL
+    with (session_factory or SessionLocal)() as db:
+        WL.seed_standard_templates(db.connection(), subdivision_id)
+        db.commit()
+    res = client.get("/warning-templates", params={"status": "active"}, headers=headers)
+    assert res.status_code == 200, res.text
+    fitting = [t for t in res.json()["items"] if t["warning_level"] in (None, level) and t["subdivision_id"] == subdivision_id]
+    assert fitting, f"no active warning letter template for {level} in subdivision {subdivision_id}"
+    return next((t for t in fitting if t["warning_level"] == level), fitting[0])["template_id"]

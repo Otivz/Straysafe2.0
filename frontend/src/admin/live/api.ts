@@ -283,7 +283,8 @@ export interface ApiAnalytics {
 }
 
 // ------------------------------------------------------------------------------------------------ warning templates & letters
-export interface ApiPlaceholderDef { key: string; label: string; required: boolean; example: string; description: string }
+/** `requirement`: required = always needed; conditional = needed when the template uses it; optional = may be blank; system = assigned when the letter is issued. */
+export interface ApiPlaceholderDef { key: string; label: string; required: boolean; requirement: 'required' | 'conditional' | 'optional' | 'system'; example: string; description: string }
 export interface ApiWarningTemplateVersion {
   version_id: number; template_id: number; version_number: number; subject_template: string; body_template: string;
   html_template: string | null; source_filename: string | null; has_docx: boolean; placeholders_used: string[];
@@ -298,7 +299,8 @@ export interface ApiWarningTemplate {
 }
 export interface ApiTemplatePreviewResult {
   subject: string; body: string; html: string; placeholders: Record<string, string>;
-  missing_fields: { key: string; label: string; required: boolean; message: string }[];
+  /** `unknown`: the template uses a placeholder the system does not supply (fixed by editing the template, not by typing a value). */
+  missing_fields: { key: string; label: string; required: boolean; unknown?: boolean; message: string }[];
   can_issue: boolean; template?: { template_id: number; name: string; version_number: number };
 }
 export interface ApiGeneratedWarningLetter {

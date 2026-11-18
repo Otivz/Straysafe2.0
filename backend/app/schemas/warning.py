@@ -14,7 +14,8 @@ class WarningCreate(BaseModel):
     # The confirmed subdivision policy the warning is issued under. May be left out when exactly one confirmed
     # policy applies to the concern; required when several do.
     policy_id: Optional[str] = None
-    # Dynamic warning letter template fields (optional for backwards compatibility)
+    # The warning letter template the Leader chose. Required: the server refuses a missing one (422) or one for another level (409);
+    # it is typed Optional only so that refusal comes with a plain message.
     template_id: Optional[int] = None
     required_action: Optional[str] = None
     field_overrides: Optional[Dict[str, str]] = None

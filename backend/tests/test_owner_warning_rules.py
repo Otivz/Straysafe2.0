@@ -20,7 +20,7 @@ from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 import app.models  # noqa: E402,F401
-from _case_helpers import make_warning_ready  # noqa: E402  (what an owner warning now requires)
+from _case_helpers import make_warning_ready, template_id_for  # noqa: E402  (what an owner warning now requires)
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models.leader_identity import LeaderIdentityVerification  # noqa: E402
 from app.models.notification import Notification  # noqa: E402
@@ -32,14 +32,14 @@ from app.models.report_dispute import ReportDispute  # noqa: E402
 from app.models.report_match import ReportMatch  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
 from app.models.warning import OwnerWarning  # noqa: E402
-from app.routes import leader_identity, owner_followups, warnings  # noqa: E402
+from app.routes import leader_identity, owner_followups, warning_letters, warnings  # noqa: E402
 from app.utils.auth import create_access_token  # noqa: E402
 from app.utils.owner_followups import check_and_notify_due_followups  # noqa: E402
 from app.utils.owner_returns import owner_already_on_record  # noqa: E402
 
 Base.metadata.create_all(bind=engine)
 api = FastAPI()
-for r in (warnings.router, owner_followups.router, leader_identity.router):
+for r in (warnings.router, owner_followups.router, leader_identity.router, warning_letters.templates_router):
     api.include_router(r)
 client = TestClient(api, raise_server_exceptions=False)
 db = SessionLocal()
@@ -96,7 +96,8 @@ def report(pet_id=None, subd=1, assigned=None, **kw):
 
 def warn(h, rid, level="1st Warning", user=None, pet=None, violation="Free-Roaming Unleashed"):
     body = {"user_id": (user or owner).user_id, "report_id": rid, "warning_level": level, "violation_type": violation,
-            "description": "Seen roaming outside without a leash."}
+            "description": "Seen roaming outside without a leash.",
+            "template_id": template_id_for(client, HL, level)}   # the template the subdivision's Leader chose
     if pet:
         body["pet_id"] = pet
     with patch("app.routes.warnings.dispatch_notification"), \
