@@ -32,7 +32,7 @@ from app.models.owner_followup import OwnerFollowUp  # noqa: E402
 from app.models.report import Report, ReportCategory, ReportStatus, StatusHistory  # noqa: E402
 from app.models.user import Barangay, Role, Subdivision, User  # noqa: E402
 from app.models.warning import OwnerWarning  # noqa: E402
-from app.routes import barangay_referrals, cases, warnings  # noqa: E402
+from app.routes import barangay_referrals, cases, warning_letters, warnings  # noqa: E402
 from app.utils.auth import create_access_token  # noqa: E402
 
 Base.metadata.create_all(bind=engine)
@@ -40,7 +40,7 @@ check_run = run_case_alignment(engine)          # seeds the six categories on a 
 assert check_run["errors"] == [], check_run
 
 api = FastAPI()
-for router in (cases.router, warnings.router, barangay_referrals.router):
+for router in (cases.router, warnings.router, barangay_referrals.router, warning_letters.templates_router):
     api.include_router(router)
 client = TestClient(api, raise_server_exceptions=False)
 db = SessionLocal()
@@ -227,9 +227,13 @@ check("follow-up days must be ordered (min <= default <= max)", client.put("/cas
 check("an unknown category id is refused", client.put("/cases/settings/1", json={"categories": {"dragons": True}}, headers=H(leader)).status_code == 422)
 
 
+from _case_helpers import template_id_for  # noqa: E402  (a warning names the template the Leader chose)
+
+
 def warn(report_id, owner_user=owner, **extra):
     payload = {"user_id": owner_user.user_id, "report_id": report_id, "warning_level": "1st Warning",
-               "violation_type": "Free-Roaming Unleashed", "description": "Keep your dog inside the property."}
+               "violation_type": "Free-Roaming Unleashed", "description": "Keep your dog inside the property.",
+               "template_id": template_id_for(client, H(leader), extra.get("warning_level", "1st Warning"))}
     payload.update(extra)
     return client.post("/warnings/", json=payload, headers=H(extra.pop("by", None) or leader) if False else H(leader))
 

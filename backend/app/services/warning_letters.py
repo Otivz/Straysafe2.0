@@ -15,7 +15,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from xml.etree import ElementTree as ET
 
 from fastapi import HTTPException
-from sqlalchemy import func, or_
+from sqlalchemy import event, func, or_
 from sqlalchemy.orm import Session
 
 from app.models.notification import Notification
@@ -32,68 +32,50 @@ from app.services import email_templates
 from app.utils import case_policy
 from app.utils.audit import log_activity
 from app.utils.notification_dispatcher import dispatch_notification
+from app.utils.warning_rules import TIERS as WARNING_LEVELS
 
 PLACEHOLDER_PATTERN = re.compile(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}")
 
-# Canonical placeholders required by Module 3 + helpful case extras
-PLACEHOLDER_DEFINITIONS: List[Dict[str, Any]] = [
-    {"key": "resident_name", "label": "Resident Name", "required": True, "example": "Juan Dela Cruz", "description": "Full name of the responsible resident or pet owner."},
-    {"key": "resident_address", "label": "Resident Address", "required": True, "example": "Block 3 Lot 8, Narra St.", "description": "House address or unit of the resident."},
-    {"key": "pet_name", "label": "Pet Name", "required": False, "example": "Bantay", "description": "Name of the registered pet involved (if registered)."},
-    {"key": "pet_type", "label": "Pet Type / Species", "required": True, "example": "Dog", "description": "Species of the animal (Dog, Cat, etc.)."},
-    {"key": "case_reference", "label": "Case Reference", "required": True, "example": "SS-2026-0023", "description": "Official case reference number."},
-    {"key": "warning_reference", "label": "Warning Reference", "required": True, "example": "WARN-2026-0001", "description": "Unique reference number of this issued warning."},
-    {"key": "warning_level", "label": "Warning Level", "required": True, "example": "1st Warning", "description": "Notice, 1st Warning, 2nd Warning, or Final Notice / Escalation."},
-    {"key": "violation_description", "label": "Violation Description", "required": True, "example": "Pet was seen roaming unleashed in common areas.", "description": "Factual description of the verified violation."},
-    {"key": "incident_date", "label": "Incident Date", "required": True, "example": "November 17, 2026 at 2:13 PM", "description": "Date and time when the incident occurred."},
-    {"key": "issue_date", "label": "Date Issued", "required": True, "example": "November 17, 2026", "description": "Date when the warning letter is issued."},
-    {"key": "required_action", "label": "Required Action", "required": True, "example": "Keep your pet inside your property or on a leash when outside.", "description": "Corrective action required from the resident."},
-    {"key": "policy_reference", "label": "Policy Reference", "required": True, "example": "House Rules §6.3 — Free-Roaming Pets", "description": "Subdivision rule or policy reference broken."},
-    {"key": "issued_by", "label": "Issued By", "required": True, "example": "Maria Santos (Subdivision Leader)", "description": "Name and role of the issuing Subdivision Leader."},
-    {"key": "subdivision_name", "label": "Subdivision Name", "required": False, "example": "Selera Homes", "description": "Name of the subdivision."},
-    {"key": "observation_days", "label": "Observation Period", "required": False, "example": "3 days", "description": "Monitoring period defined by the policy (if applicable)."},
-    {"key": "summons_date", "label": "Summons Date & Time", "required": False, "example": "November 22, 2026 at 4:00 PM", "description": "Scheduled subdivision office meeting date (for 2nd Warning)."},
-    {"key": "summons_place", "label": "Summons Location", "required": False, "example": "Subdivision Office", "description": "Venue for the office summons."},
+# THE official registry of placeholders (the one list the editor, the DOCX import, the preview and issuing all use).
+# `requirement` says what issuing needs:
+#   required     the letter cannot be issued without a value, whether or not the template uses it
+#   conditional  a value is needed when the template uses it (for example the summons of a 2nd Warning)
+#   optional     may be blank
+#   system       supplied by the system when the letter is issued (the warning reference)
+# `required` (kept for the screens) is true for everything that must have a value.
+_REGISTRY: List[Tuple[str, str, str, str, str]] = [
+    # key, label, requirement, example, description
+    ("resident_name", "Resident Name", "required", "Juan Dela Cruz", "Full name of the responsible resident or pet owner."),
+    ("case_reference", "Case Reference", "required", "SS-2026-0023", "Official case reference number."),
+    ("warning_level", "Warning Level", "required", "1st Warning", "Notice, 1st Warning, 2nd Warning, or Final Notice / Escalation."),
+    ("violation_description", "Violation Description", "required", "Pet was seen roaming unleashed in common areas.", "Factual description of the verified violation."),
+    ("required_action", "Required Action", "required", "Keep your pet inside your property or on a leash when outside.", "Corrective action required from the resident."),
+    ("policy_reference", "Policy Reference", "required", "House Rules §6.3 — Free-Roaming Pets", "The confirmed subdivision rule or policy that applies."),
+    ("issue_date", "Date Issued", "required", "November 17, 2026", "Date when the warning letter is issued."),
+    ("issued_by", "Issued By", "required", "Maria Santos (Subdivision Leader)", "Name and role of the issuing Subdivision Leader."),
+    ("subdivision_name", "Subdivision Name", "required", "Selera Homes", "Name of the subdivision."),
+    ("warning_reference", "Warning Reference", "system", "WARN-2026-0001", "Unique reference number of this issued warning (assigned when it is issued)."),
+    ("resident_address", "Resident Address", "conditional", "Block 3 Lot 8, Narra St.", "House address or unit of the resident. Needed when the template uses it."),
+    ("pet_type", "Pet Type / Species", "conditional", "Dog", "Species of the animal (Dog, Cat, etc.). Needed when the template uses it."),
+    ("incident_date", "Incident Date", "conditional", "November 17, 2026 at 2:13 PM", "Date and time when the incident occurred. Needed when the template uses it."),
+    ("observation_days", "Observation Period", "conditional", "3 days", "Monitoring period defined by the policy. Needed when the template uses it."),
+    ("summons_date", "Summons Date & Time", "conditional", "November 22, 2026 at 4:00 PM", "Scheduled meeting at the subdivision office (2nd Warning). Needed when the template uses it."),
+    ("summons_place", "Summons Location", "conditional", "Subdivision Office", "Venue for the office summons. Needed when the template uses it."),
+    ("pet_name", "Pet Name", "optional", "Bantay", "Name of the registered pet involved. When there is none, the letter says \"your dog\", \"your cat\" or \"your pet\"."),
+    ("issuer_name", "Issuer Name", "optional", "Maria Santos", "Name of the issuing Subdivision Leader."),
+    ("issuer_role", "Issuer Role", "optional", "Subdivision Leader", "Role of the issuer."),
+    ("subdivision_address", "Office Address", "optional", "Narra St., Selera Homes", "The subdivision office's address, when it has recorded one."),
+    ("subdivision_phone", "Office Phone", "optional", "0917 000 0000", "The subdivision office's phone, when it has recorded one."),
+    ("subdivision_email", "Office Email", "optional", "office@selera.example", "The subdivision office's email, when it has recorded one."),
 ]
 
+PLACEHOLDER_DEFINITIONS: List[Dict[str, Any]] = [
+    {"key": k, "label": label, "requirement": req, "required": req != "optional", "example": ex, "description": desc}
+    for (k, label, req, ex, desc) in _REGISTRY
+]
 PLACEHOLDER_LABELS: Dict[str, str] = {p["key"]: p["label"] for p in PLACEHOLDER_DEFINITIONS}
-PLACEHOLDER_REQUIRED: Dict[str, bool] = {p["key"]: bool(p["required"]) for p in PLACEHOLDER_DEFINITIONS}
-
-DEFAULT_STANDARD_SUBJECT = "Official {{warning_level}} Regarding {{policy_reference}}"
-DEFAULT_STANDARD_BODY = """SUBJECT: Official {{warning_level}} Regarding {{policy_reference}}
-
-Dear {{resident_name}},
-
-This official {{warning_level}} is issued regarding an animal incident recorded under {{case_reference}} on {{incident_date}} involving {{pet_name}} ({{pet_type}}).
-
-Violation Details
-{{violation_description}}
-
-Applicable Subdivision Policy
-{{policy_reference}}
-
-Required Corrective Action
-{{required_action}}
-
-Please address this matter promptly. Failure to comply or repeated violations may result in further escalation in accordance with subdivision rules and local ordinances."""
-
-DEFAULT_SUMMONS_SUBJECT = "Official {{warning_level}} and Notice of Office Summons — {{policy_reference}}"
-DEFAULT_SUMMONS_BODY = """SUBJECT: Official {{warning_level}} and Notice of Office Summons — {{policy_reference}}
-
-Dear {{resident_name}},
-
-Following our previous notice, this {{warning_level}} is issued in connection with {{case_reference}} on {{incident_date}} involving {{pet_name}} ({{pet_type}}).
-
-Violation Details
-{{violation_description}}
-
-Applicable Subdivision Policy
-{{policy_reference}}
-
-Required Corrective Action
-{{required_action}}
-
-You are requested to appear at {{summons_place}} on {{summons_date}} to discuss compliance and prevent further escalation to the Barangay."""
+PLACEHOLDER_REQUIREMENT: Dict[str, str] = {p["key"]: p["requirement"] for p in PLACEHOLDER_DEFINITIONS}
+ALWAYS_REQUIRED: List[str] = [k for k, _l, req, _e, _d in _REGISTRY if req == "required"]
 
 
 def case_ref_for(report: Optional[Report], report_id: Optional[int] = None) -> str:
@@ -107,6 +89,22 @@ def case_ref_for(report: Optional[Report], report_id: Optional[int] = None) -> s
 def warning_ref_for(letter_id: int, issued_at: Optional[datetime] = None) -> str:
     year = (issued_at or datetime.now()).year
     return f"WARN-{year}-{int(letter_id):04d}"
+
+
+def unknown_placeholders(subject: str, body: str) -> List[str]:
+    """The `{{keys}}` in this text that are not in the official registry (a typo, or a field this system does not have)."""
+    return [k for k in extract_placeholders(subject, body) if k not in PLACEHOLDER_REQUIREMENT]
+
+
+def validate_template_text(subject: str, body: str) -> None:
+    """Refuse a template that uses a placeholder the system does not supply, naming each one and listing the valid ones (422)."""
+    bad = unknown_placeholders(subject, body)
+    if bad:
+        shown = ", ".join("{{" + k + "}}" for k in bad)
+        raise HTTPException(
+            status_code=422,
+            detail=f"These placeholders are not supported: {shown}. Use only: " + ", ".join(PLACEHOLDER_LABELS[k] + " ({{" + k + "}})" for k in PLACEHOLDER_REQUIREMENT) + ".",
+        )
 
 
 def extract_placeholders(subject: str, body: str) -> List[str]:
@@ -124,7 +122,73 @@ _SECTION_TITLES = {
     "applicable policy",
     "required corrective action",
     "required action & summons schedule",
+    # the standard templates' headings (seed_data/warning_templates.json)
+    "what was reported",
+    "subdivision policy",
+    "what we ask you to do",
+    "office summons",
 }
+
+# Letters issued from this version on carry this marker in their snapshot (placeholders_json). A letter WITHOUT it was issued earlier,
+# from templates that wrote the header, "Date Issued", "TO:" and "Issued by:" into the text; only those letters have those lines hidden
+# (the letter prints its own), so they look exactly as they always did. Everything else is shown exactly as written.
+RENDER_LAYOUT_KEY = "render_layout"
+RENDER_LAYOUT = "2"
+
+
+def is_legacy_layout(letter: "GeneratedWarningLetter") -> bool:
+    """A letter issued before the layout marker existed (its own header/recipient/signature lines are hidden when shown)."""
+    return not (letter.placeholders_json or {}).get(RENDER_LAYOUT_KEY)
+
+
+_HEADING_WORDS = re.compile(r"^[A-Z][A-Za-z/&()' -]*$")
+
+
+def is_heading(first: str, line_count: int) -> bool:
+    """
+    The heading rule every view uses (screen, PDF, DOCX; the screen's copy is in frontend/src/components/warningLetterBlocks.ts):
+    a known section title; or, when more lines follow, a short line ending in ":"; or a short title-like line (letters only, at most
+    six words, no closing punctuation), such as "Office Summons".
+    """
+    if first.rstrip(":").strip().lower() in _SECTION_TITLES:
+        return True
+    if line_count < 2 or len(first) > 48:
+        return False
+    if first.endswith(":"):
+        return True
+    return bool(_HEADING_WORDS.match(first)) and len(first) <= 40 and len(first.split()) <= 6
+
+
+def _paragraphs(body: str) -> List[str]:
+    out: List[str] = []
+    for p in (body or "").replace("\r\n", "\n").split("\n\n"):
+        lines = [ln.strip() for ln in p.split("\n") if ln.strip()]
+        if lines:
+            out.append("\n".join(lines))
+    return out
+
+
+def body_blocks(body: str, legacy: bool = False) -> List[Dict[str, Any]]:
+    """
+    The letter text as blocks, the same for every view: {"kind": "subject", "text"}, {"kind": "section", "heading", "lines"} or
+    {"kind": "para", "lines"}. Every line the author wrote is kept, line breaks included; only a `legacy` letter has its old
+    header/recipient/signature lines hidden (see is_legacy_layout).
+    """
+    blocks: List[Dict[str, Any]] = []
+    for para in (_strip_legacy_chrome(body) if legacy else _paragraphs(body)):
+        lines = [ln.strip() for ln in para.split("\n") if ln.strip()]
+        if not lines:
+            continue
+        if lines[0].upper().startswith("SUBJECT:"):
+            blocks.append({"kind": "subject", "text": lines[0].split(":", 1)[1].strip()})
+            lines = lines[1:]
+            if not lines:
+                continue
+        if is_heading(lines[0], len(lines)):
+            blocks.append({"kind": "section", "heading": lines[0].rstrip(":").strip(), "lines": lines[1:]})
+        else:
+            blocks.append({"kind": "para", "lines": lines})
+    return blocks
 
 
 def _strip_legacy_chrome(body: str) -> List[str]:
@@ -159,7 +223,9 @@ def _office_contact_lines(db: Optional[Session], subdivision_id: Optional[int], 
             sub = db.get(Subdivision, subdivision_id)
             if sub:
                 sub_name = sub.subdivision_name
-        if not (sub_addr or sub_phone or sub_email):
+        # An issued letter keeps the office details it was issued with (blank stays blank). Only a very old letter that never stored
+        # them falls back to the office's current details.
+        if not any(k in ph for k in ("subdivision_address", "subdivision_phone", "subdivision_email")):
             office = case_policy.load_settings(db, subdivision_id).office
             sub_addr = (office.address or "").strip()
             sub_phone = (office.phone or "").strip()
@@ -174,17 +240,22 @@ def render_html_document(
     warning_reference: str,
     case_reference: str,
     subdivision_name: str = "StraySafe Subdivision",
+    legacy: bool = False,
 ) -> str:
     safe_sub = html.escape(subdivision_name or "StraySafe Subdivision")
     safe_subj = html.escape(subject or "Official Warning Letter")
     safe_wref = html.escape(warning_reference)
     safe_cref = html.escape(case_reference)
-    blocks = []
-    for para in _strip_legacy_chrome(body):
-        lines = [html.escape(line.rstrip()) for line in para.split("\n") if line.strip() != ""]
-        if lines:
-            blocks.append(f"<p>{'<br/>'.join(lines)}</p>")
-    body_html = "\n".join(blocks)
+    out = []
+    for b in body_blocks(body, legacy=legacy):
+        if b["kind"] == "subject":
+            out.append(f"<p class=\"ss-warning-letter__subject-line\"><strong>SUBJECT:</strong> {html.escape(b['text'])}</p>")
+        elif b["kind"] == "section":
+            lines = "<br/>".join(html.escape(ln) for ln in b["lines"])
+            out.append(f"<h3>{html.escape(b['heading'])}</h3>" + (f"<p>{lines}</p>" if lines else ""))
+        else:
+            out.append(f"<p>{'<br/>'.join(html.escape(ln) for ln in b['lines'])}</p>")
+    body_html = "\n".join(out)
     return f"""<div class="ss-warning-letter">
   <div class="ss-warning-letter__header">
     <div>
@@ -220,100 +291,231 @@ def _local_tag(tag: str) -> str:
     return tag.split("}", 1)[-1] if "}" in tag else tag
 
 
-def parse_docx_bytes(raw: bytes) -> Dict[str, Any]:
-    """Extract readable paragraphs, basic HTML, and {{placeholders}} from an uploaded .docx file."""
+# Limits for an uploaded Word file (it is also re-checked before a letter is made from a stored one).
+DOCX_MAX_ENTRIES = 2000
+DOCX_MAX_PART_BYTES = 20 * 1024 * 1024          # one decompressed part
+DOCX_MAX_TOTAL_BYTES = 60 * 1024 * 1024         # everything, decompressed
+_UNSAFE_XML = re.compile(rb"<!\s*(DOCTYPE|ENTITY)", re.I)
+
+
+def _read_docx_parts(raw: bytes) -> Dict[str, bytes]:
+    """
+    The XML parts of a .docx, read safely: a real ZIP, a bounded number of entries, every part read with a hard size limit (so a
+    "zip bomb" cannot exhaust memory), and no DOCTYPE or ENTITY declarations anywhere (they have no place in a Word file and are how
+    XML expansion attacks work). Refuses with 400/413 and a plain message.
+    """
     if not raw or not raw.startswith(b"PK"):
         raise HTTPException(status_code=400, detail="Invalid DOCX file. Please upload a valid Microsoft Word (.docx) document.")
     try:
         zf = zipfile.ZipFile(io.BytesIO(raw))
     except zipfile.BadZipFile as exc:
         raise HTTPException(status_code=400, detail="Could not read DOCX archive. Ensure the file is a valid .docx.") from exc
-
+    parts: Dict[str, bytes] = {}
     with zf:
-        if "word/document.xml" not in zf.namelist():
-            raise HTTPException(status_code=400, detail="The uploaded DOCX file does not contain word/document.xml.")
-        xml_parts: List[bytes] = []
-        for name in sorted(zf.namelist()):
-            if name.startswith("word/header") and name.endswith(".xml"):
-                xml_parts.append(zf.read(name))
-        xml_parts.append(zf.read("word/document.xml"))
-        for name in sorted(zf.namelist()):
-            if name.startswith("word/footer") and name.endswith(".xml"):
-                xml_parts.append(zf.read(name))
-
-    paragraphs: List[str] = []
-    html_parts: List[str] = []
-    for part in xml_parts:
-        try:
-            root = ET.fromstring(part)
-        except ET.ParseError as exc:
-            raise HTTPException(status_code=400, detail="Malformed XML inside the uploaded DOCX file.") from exc
-        for p in root.iter():
-            if _local_tag(p.tag) != "p":
+        infos = zf.infolist()
+        if len(infos) > DOCX_MAX_ENTRIES:
+            raise HTTPException(status_code=413, detail="This Word file has too many parts to be a letter template.")
+        total = 0
+        for info in infos:
+            if not info.filename.endswith((".xml", ".rels")):
                 continue
-            buf: List[str] = []
-            is_bold = False
-            for node in p.iter():
-                lt = _local_tag(node.tag)
-                if lt == "t" and node.text:
-                    buf.append(node.text)
-                elif lt == "tab":
-                    buf.append("    ")
-                elif lt in ("br", "cr"):
-                    buf.append("\n")
-                elif lt == "b":
-                    val = node.attrib.get(f"{{{W_NS}}}val", "true").lower()
-                    if val not in ("0", "false", "off"):
-                        is_bold = True
-            line = "".join(buf).strip()
-            if not line:
-                continue
-            paragraphs.append(line)
-            escaped = html.escape(line).replace("\n", "<br/>")
-            html_parts.append(f"<p><strong>{escaped}</strong></p>" if is_bold and len(line) < 120 else f"<p>{escaped}</p>")
+            with zf.open(info) as fh:
+                data = fh.read(DOCX_MAX_PART_BYTES + 1)
+            if len(data) > DOCX_MAX_PART_BYTES:
+                raise HTTPException(status_code=413, detail="This Word file is too large once unpacked to be a letter template.")
+            total += len(data)
+            if total > DOCX_MAX_TOTAL_BYTES:
+                raise HTTPException(status_code=413, detail="This Word file is too large once unpacked to be a letter template.")
+            if _UNSAFE_XML.search(data):
+                raise HTTPException(status_code=400, detail="This Word file contains XML declarations (DOCTYPE/ENTITY) that a Word document never needs, so it was refused. Save it again from Word and upload that copy.")
+            parts[info.filename] = data
+        media = [i.filename for i in infos if i.filename.startswith("word/media/")]
+    if "word/document.xml" not in parts:
+        raise HTTPException(status_code=400, detail="The uploaded DOCX file does not contain word/document.xml.")
+    parts["__media__"] = "\n".join(media).encode()
+    return parts
 
+
+def _xml_root(data: bytes, name: str) -> ET.Element:
+    try:
+        return ET.fromstring(data)
+    except ET.ParseError as exc:
+        raise HTTPException(status_code=400, detail=f"The Word file has a damaged part ({name}).") from exc
+
+
+def _para_text(p: ET.Element) -> str:
+    buf: List[str] = []
+    for node in p.iter():
+        lt = _local_tag(node.tag)
+        if lt == "t" and node.text:
+            buf.append(node.text)
+        elif lt == "tab":
+            buf.append("    ")
+        elif lt in ("br", "cr"):
+            buf.append("\n")
+    return "".join(buf).strip()
+
+
+def _blocks_of(container: ET.Element, notes: Dict[str, int]) -> List[str]:
+    """The text of a body (or header/footer) in reading order: one entry per paragraph; a table as one line per row ("cell | cell")."""
+    out: List[str] = []
+    for child in container:
+        lt = _local_tag(child.tag)
+        if lt == "p":
+            text = _para_text(child)
+            if text:
+                out.append(text)
+        elif lt == "tbl":
+            notes["tables"] = notes.get("tables", 0) + 1
+            rows: List[str] = []
+            for tr in child.iter():
+                if _local_tag(tr.tag) != "tr":
+                    continue
+                cells = [" ".join(t for t in (_para_text(p) for p in tc.iter() if _local_tag(p.tag) == "p") if t)
+                         for tc in tr if _local_tag(tc.tag) == "tc"]
+                line = " | ".join(c for c in cells if c)
+                if line:
+                    rows.append(line)
+            if rows:
+                out.append("\n".join(rows))
+        elif lt in ("sdt", "sdtContent", "customXml", "smartTag"):
+            out.extend(_blocks_of(child, notes))
+    return out
+
+
+def parse_docx_bytes(raw: bytes) -> Dict[str, Any]:
+    """
+    Read an uploaded .docx as a template: the body text in reading order (tables as "cell | cell" lines), the header and footer
+    kept apart (the Word download keeps them where they are; the screen and PDF use the standard letterhead), the placeholders it
+    uses, and plain notes about what the preview cannot show. The original file is stored as is for the Word download.
+    """
+    parts = _read_docx_parts(raw)
+    notes_count: Dict[str, int] = {}
+    doc = _xml_root(parts["word/document.xml"], "document")
+    body = next((c for c in doc if _local_tag(c.tag) == "body"), doc)
+    paragraphs = _blocks_of(body, notes_count)
+    header_footer: List[str] = []
+    for name in sorted(parts):
+        if name.startswith(("word/header", "word/footer")) and name.endswith(".xml"):
+            header_footer.extend(_blocks_of(_xml_root(parts[name], name), notes_count))
     if not paragraphs:
         raise HTTPException(status_code=400, detail="The uploaded DOCX file appears to be empty.")
 
+    subject_guess = paragraphs[0][:255]
+    for cand in paragraphs[:5]:
+        if "subject" in cand.lower() or "warning" in cand.lower() or "notice" in cand.lower():
+            subject_guess = cand.split("\n")[0][:255]
+            break
     body_text = "\n\n".join(paragraphs)
-    subject_guess = paragraphs[0][:255] if paragraphs else "{{warning_level}} ({{warning_reference}})"
-    if len(paragraphs) > 1:
-        for cand in paragraphs[:5]:
-            if "subject" in cand.lower() or "warning" in cand.lower() or "notice" in cand.lower():
-                subject_guess = cand[:255]
-                break
-    placeholders = extract_placeholders(subject_guess, body_text)
+    other_text = "\n\n".join(header_footer)
+
+    notes: List[str] = [f"The subject was taken from the line \u201c{subject_guess[:80]}\u201d. Change it in the editor if it is not right."]
+    if notes_count.get("tables"):
+        notes.append(f"It has {notes_count['tables']} table(s). The on-screen preview and the PDF show each row as a line of text; the Word download keeps the table.")
+    media = [m for m in parts["__media__"].decode().split("\n") if m]
+    if media:
+        notes.append(f"It has {len(media)} picture(s), such as a logo or a signature. They are kept in the Word download but not shown in the on-screen preview or the PDF.")
+    if header_footer:
+        notes.append("Its header and footer text is kept in the Word download. The on-screen preview and the PDF use the standard letterhead instead.")
     return {
         "subject_template": subject_guess,
         "body_template": body_text,
-        "html_template": "\n".join(html_parts),
-        "placeholders_used": placeholders,
+        "other_text": other_text,
+        "html_template": render_html_document(subject_guess, body_text, "{{warning_reference}}", "{{case_reference}}"),
+        "placeholders_used": extract_placeholders(subject_guess, body_text + "\n\n" + other_text),
+        "notes": notes,
     }
 
 
-def _replace_placeholders_in_xml_bytes(xml_bytes: bytes, values: Dict[str, str]) -> bytes:
+_DOCX_TAG = re.compile(r"<(/?)w:(p|t)\b([^>]*)>")
+
+
+def _xml_text_escape(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _replace_placeholders_in_xml_bytes(xml_bytes: bytes, values: Dict[str, str]) -> Tuple[bytes, List[str]]:
     """
-    Replace {{placeholder}} tokens inside a DOCX XML part, handling cases where Microsoft Word
-    splits a single {{placeholder}} across multiple consecutive <w:r><w:t> runs.
+    Fill the {{placeholders}} of one Word XML part (body, header or footer) by editing ONLY the text inside its <w:t> elements, in
+    place; every other byte of the file stays exactly as Word wrote it (namespaces, styles, tables, pictures). The XML is never
+    re-serialised, which is what used to make Word report "unreadable content".
+      * A placeholder Word split over several runs is joined; its value goes into the run where it starts, so that run's formatting
+        is kept and the formatting of the text around it (a bold "Dear ", say) is untouched.
+      * A value with line breaks becomes real Word line breaks.
+      * A key with no value is left as it is, and reported.
+    Returns (the new part, the placeholders still in it).
     """
-    ET.register_namespace("w", W_NS)
-    root = ET.fromstring(xml_bytes)
-    for p in root.iter():
-        if _local_tag(p.tag) != "p":
+    xml = xml_bytes.decode("utf-8")
+    paras: List[List[Dict[str, Any]]] = []
+    stack: List[int] = []
+    for m in _DOCX_TAG.finditer(xml):
+        closing, name, rest = m.group(1), m.group(2), m.group(3)
+        if rest.rstrip().endswith("/"):
+            continue                                           # <w:p/> or <w:t/>: nothing inside
+        if name == "p":
+            if closing:
+                if stack:
+                    stack.pop()
+            else:
+                paras.append([])
+                stack.append(len(paras) - 1)
+        elif not closing and stack:
+            end = xml.find("</w:t>", m.end())
+            if end < 0:
+                raise ValueError("unterminated <w:t>")
+            paras[stack[-1]].append({"tag_start": m.start(), "tag": m.group(0), "text_start": m.end(), "text_end": end,
+                                     "text": html.unescape(xml[m.end():end]), "changed": False})
+
+    leftovers: List[str] = []
+    for nodes in paras:
+        if not nodes:
             continue
-        t_nodes = [n for n in p.iter() if _local_tag(n.tag) == "t"]
-        if not t_nodes:
-            continue
-        joined = "".join(n.text or "" for n in t_nodes)
+        joined = "".join(n["text"] for n in nodes)
         if "{{" not in joined:
             continue
-        replaced = substitute_placeholders(joined, values)
-        if replaced != joined:
-            t_nodes[0].text = replaced
-            t_nodes[0].set(f"{{{XML_NS}}}space", "preserve")
-            for extra in t_nodes[1:]:
-                extra.text = ""
-    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+        starts, lengths, pos = [], [], 0                       # where each node's ORIGINAL text sits in `joined`
+        for n in nodes:
+            starts.append(pos)
+            lengths.append(len(n["text"]))
+            pos += len(n["text"])
+
+        def holder(char_index: int) -> int:
+            """The node whose original text contains this character of `joined`."""
+            return next(k for k in range(len(nodes)) if starts[k] <= char_index < starts[k] + lengths[k])
+
+        # Right to left: an edit only ever changes text to the right of the matches still to come, so their offsets stay valid.
+        for match in reversed(list(PLACEHOLDER_PATTERN.finditer(joined))):
+            key = match.group(1)
+            if values.get(key) is None:
+                continue
+            i = holder(match.start())
+            j = holder(match.end() - 1)
+            off_i = match.start() - starts[i]
+            off_j = match.end() - starts[j]
+            if i == j:
+                t = nodes[i]["text"]
+                nodes[i]["text"] = t[:off_i] + values[key] + t[off_j:]
+            else:
+                nodes[i]["text"] = nodes[i]["text"][:off_i] + values[key]
+                for k in range(i + 1, j):
+                    nodes[k]["text"] = ""
+                    nodes[k]["changed"] = True
+                nodes[j]["text"] = nodes[j]["text"][off_j:]
+                nodes[j]["changed"] = True
+            nodes[i]["changed"] = True
+        leftovers.extend(PLACEHOLDER_PATTERN.findall("".join(n["text"] for n in nodes)))
+
+    edits = []
+    for nodes in paras:
+        for n in nodes:
+            if not n["changed"]:
+                continue
+            tag = n["tag"] if "xml:space" in n["tag"] else n["tag"][:-1] + ' xml:space="preserve">'
+            text = '</w:t><w:br/><w:t xml:space="preserve">'.join(_xml_text_escape(seg) for seg in n["text"].split("\n"))
+            edits.append((n["tag_start"], n["text_end"], tag + text))
+    for start, end, new in sorted(edits, reverse=True):
+        xml = xml[:start] + new + xml[end:]
+    return xml.encode("utf-8"), leftovers
 
 
 def _issuer_lines(letter: GeneratedWarningLetter, sub_name: str) -> Tuple[str, str, str]:
@@ -397,31 +599,18 @@ def _build_minimal_docx(letter: GeneratedWarningLetter, db: Optional[Session] = 
     if letter.recipient_address:
         paras.append(_label_p("Address:", letter.recipient_address, space_after=180))
 
-    body_paras = _strip_legacy_chrome(letter.rendered_body)
-    has_subject_in_body = any(p.upper().startswith("SUBJECT:") for p in body_paras[:2])
-    if not has_subject_in_body and letter.rendered_subject:
+    blocks = body_blocks(letter.rendered_body, legacy=is_legacy_layout(letter))
+    if not any(b["kind"] == "subject" for b in blocks[:2]) and letter.rendered_subject:
         paras.append(_label_p("SUBJECT:", letter.rendered_subject, space_after=160))
-
-    for block in body_paras:
-        lines = [ln.strip() for ln in block.split("\n") if ln.strip()]
-        if not lines:
-            continue
-        first = lines[0]
-        if first.upper().startswith("SUBJECT:"):
-            subj_val = first.split(":", 1)[1].strip()
-            paras.append(_label_p("SUBJECT:", subj_val, space_after=160))
-            if len(lines) > 1:
-                paras.append(_p_xml("\n".join(lines[1:]), space_after=140))
-            continue
-        heading_key = first.rstrip(":").strip().lower()
-        if heading_key in _SECTION_TITLES or (first.endswith(":") and len(first) <= 48 and len(lines) > 1):
-            paras.append(_p_xml(first.rstrip(":"), bold=True, size_half_pt=21, space_before=100, space_after=60, color="0F172A"))
-            if len(lines) > 1:
-                paras.append(_p_xml("\n".join(lines[1:]), space_after=140))
-        elif heading_key in _SECTION_TITLES or (len(lines) == 1 and first.endswith(":") and len(first) <= 48):
-            paras.append(_p_xml(first.rstrip(":"), bold=True, size_half_pt=21, space_before=100, space_after=60, color="0F172A"))
+    for b in blocks:
+        if b["kind"] == "subject":
+            paras.append(_label_p("SUBJECT:", b["text"], space_after=160))
+        elif b["kind"] == "section":
+            paras.append(_p_xml(b["heading"], bold=True, size_half_pt=21, space_before=100, space_after=60, color="0F172A"))
+            if b["lines"]:
+                paras.append(_p_xml("\n".join(b["lines"]), space_after=140))
         else:
-            paras.append(_p_xml("\n".join(lines), space_after=140))
+            paras.append(_p_xml("\n".join(b["lines"]), space_after=140))
 
     paras.append(_p_xml("Issued by:", bold=True, size_half_pt=20, space_before=240, space_after=480, color="334155"))
     paras.append(_p_xml(f"{issuer_name}\n{issuer_role}\n{sub_name}", bold=False, size_half_pt=21, space_after=120, color="0F172A"))
@@ -441,24 +630,35 @@ def _build_minimal_docx(letter: GeneratedWarningLetter, db: Optional[Session] = 
     return out.getvalue()
 
 
+_DOCX_TEXT_PARTS = ("word/document.xml", "word/footnotes.xml", "word/endnotes.xml")
+
+
 def render_letter_docx(letter: GeneratedWarningLetter, db: Session) -> bytes:
+    """
+    The letter as a Word file. A letter whose template version was imported from Word is that file with its placeholders filled in
+    (see _replace_placeholders_in_xml_bytes); any other letter gets the standard generated layout. Nothing is hidden: a part that
+    cannot be filled gives an error, and a file that would still contain an unfilled {{placeholder}} is refused (422).
+    """
     values: Dict[str, str] = {k: str(v or "") for k, v in (letter.placeholders_json or {}).items()}
     if letter.template_version_id:
         ver = db.get(WarningLetterTemplateVersion, letter.template_version_id)
         if ver is not None and ver.source_docx_bytes:
-            src = io.BytesIO(ver.source_docx_bytes)
+            _read_docx_parts(ver.source_docx_bytes)                # the stored file is checked again (older uploads predate the checks)
+            leftovers: List[str] = []
             dst = io.BytesIO()
-            with zipfile.ZipFile(src, "r") as zin, zipfile.ZipFile(dst, "w", compression=zipfile.ZIP_DEFLATED) as zout:
+            with zipfile.ZipFile(io.BytesIO(ver.source_docx_bytes), "r") as zin, zipfile.ZipFile(dst, "w", compression=zipfile.ZIP_DEFLATED) as zout:
                 for item in zin.infolist():
                     data = zin.read(item.filename)
-                    if item.filename == "word/document.xml" or (
-                        item.filename.startswith(("word/header", "word/footer")) and item.filename.endswith(".xml")
-                    ):
+                    if item.filename in _DOCX_TEXT_PARTS or (item.filename.startswith(("word/header", "word/footer")) and item.filename.endswith(".xml")):
                         try:
-                            data = _replace_placeholders_in_xml_bytes(data, values)
-                        except Exception:
-                            pass
+                            data, left = _replace_placeholders_in_xml_bytes(data, values)
+                        except Exception as exc:  # noqa: BLE001
+                            raise HTTPException(status_code=500, detail=f"The Word file for {letter.warning_reference} could not be made ({item.filename}: {exc}). Download the PDF instead.") from exc
+                        leftovers.extend(left)
                     zout.writestr(item, data)
+            if leftovers:
+                shown = ", ".join(sorted({"{{" + k + "}}" for k in leftovers}))
+                raise HTTPException(status_code=422, detail=f"The Word file for {letter.warning_reference} would still contain unfilled placeholders ({shown}), so it was not made. Download the PDF instead.")
             return dst.getvalue()
     return _build_minimal_docx(letter, db)
 
@@ -529,42 +729,26 @@ def render_letter_pdf(letter: GeneratedWarningLetter, db: Optional[Session] = No
     else:
         ops.append(("gap", "", "", 0, 8, ""))
 
-    # Letter body sections
-    body_paras = _strip_legacy_chrome(letter.rendered_body)
-    has_subject_in_body = any(p.upper().startswith("SUBJECT:") for p in body_paras[:2])
-    if not has_subject_in_body and letter.rendered_subject:
+    # Letter body sections (the same blocks as the screen and the DOCX; every line kept, line breaks included)
+    blocks = body_blocks(letter.rendered_body, legacy=is_legacy_layout(letter))
+    if not any(b["kind"] == "subject" for b in blocks[:2]) and letter.rendered_subject:
         for wline in textwrap.wrap(f"SUBJECT: {letter.rendered_subject}", width=max_chars - 4) or [""]:
             ops.append(("text", "/F2", wline, 10, 15, "left"))
         ops.append(("gap", "", "", 0, 8, ""))
 
-    for para in body_paras:
-        lines = [ln.strip() for ln in para.split("\n") if ln.strip()]
-        if not lines:
-            continue
-        first = lines[0]
-        if first.upper().startswith("SUBJECT:"):
-            for wline in textwrap.wrap(first, width=max_chars - 4) or [""]:
+    for b in blocks:
+        if b["kind"] == "subject":
+            for wline in textwrap.wrap(f"SUBJECT: {b['text']}", width=max_chars - 4) or [""]:
                 ops.append(("text", "/F2", wline, 10, 15, "left"))
             ops.append(("gap", "", "", 0, 6, ""))
-            lines = lines[1:]
-            if not lines:
-                continue
-        heading_key = first.rstrip(":").strip().lower()
-        if heading_key in _SECTION_TITLES or (first.endswith(":") and len(first) <= 48 and len(lines) > 1):
+            continue
+        if b["kind"] == "section":
             ops.append(("gap", "", "", 0, 4, ""))
-            ops.append(("text", "/F2", first.rstrip(":"), 10, 15, "left"))
-            for body_ln in lines[1:]:
-                for wline in textwrap.wrap(body_ln, width=max_chars) or [""]:
-                    ops.append(("text", "/F1", wline, 10, 15, "left"))
-            ops.append(("gap", "", "", 0, 6, ""))
-        elif len(lines) == 1 and first.endswith(":") and len(first) <= 48:
-            ops.append(("gap", "", "", 0, 4, ""))
-            ops.append(("text", "/F2", first.rstrip(":"), 10, 15, "left"))
-        else:
-            joined = " ".join(lines)
-            for wline in textwrap.wrap(joined, width=max_chars) or [""]:
+            ops.append(("text", "/F2", b["heading"], 10, 15, "left"))
+        for body_ln in b["lines"]:
+            for wline in textwrap.wrap(body_ln, width=max_chars) or [""]:
                 ops.append(("text", "/F1", wline, 10, 15, "left"))
-            ops.append(("gap", "", "", 0, 7, ""))
+        ops.append(("gap", "", "", 0, 6 if b["kind"] == "section" else 7, ""))
 
     # Issuing Authority / Signature block (kept together)
     sig_ops: List[Tuple[str, str, str, int, int, str]] = [
@@ -669,66 +853,80 @@ def render_letter_pdf(letter: GeneratedWarningLetter, db: Optional[Session] = No
 # ---------------------------------------------------------------------------
 # Template CRUD & Versioning
 # ---------------------------------------------------------------------------
-def ensure_default_templates(db: Session, subdivision_id: Optional[int], actor_id: Optional[int] = None) -> List[WarningLetterTemplate]:
-    """Lazily seed editable default warning letter templates for a subdivision if none exist yet."""
-    q = db.query(WarningLetterTemplate)
-    if subdivision_id is not None:
-        q = q.filter(WarningLetterTemplate.subdivision_id == subdivision_id)
-    else:
-        q = q.filter(WarningLetterTemplate.subdivision_id.is_(None))
-    existing = q.order_by(WarningLetterTemplate.is_default.desc(), WarningLetterTemplate.template_id.asc()).all()
-    if existing:
-        return existing
+SEED_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "seed_data", "warning_templates.json")
 
-    seeds = [
-        (
-            "Standard Subdivision Warning Letter",
-            "Customizable general warning letter for Notice, 1st Warning, and Final Warning notifications.",
-            None,
-            True,
-            DEFAULT_STANDARD_SUBJECT,
-            DEFAULT_STANDARD_BODY,
-        ),
-        (
-            "Second Warning & Office Summons Notice",
-            "Template for 2nd Warning citations that include a Subdivision Office summons date and venue.",
-            "2nd Warning",
-            False,
-            DEFAULT_SUMMONS_SUBJECT,
-            DEFAULT_SUMMONS_BODY,
-        ),
-    ]
-    created: List[WarningLetterTemplate] = []
-    for name, desc, level, is_def, subj, body in seeds:
-        tpl = WarningLetterTemplate(
-            subdivision_id=subdivision_id,
-            name=name,
-            description=desc,
-            warning_level=level,
-            source_type="editor",
-            status="active",
-            is_default=is_def,
+
+def load_standard_templates() -> List[Dict[str, Any]]:
+    """The four standard templates (one per level) from the seed data file. The letter wording lives in that file, not in code."""
+    import json
+    with open(SEED_FILE, encoding="utf-8") as fh:
+        items = json.load(fh)["templates"]
+    for item in items:
+        normalize_warning_level(item["warning_level"])
+        unknown = unknown_placeholders(item["subject_template"], item["body_template"])
+        if unknown:
+            raise ValueError(f"Seed template '{item['name']}' uses unknown placeholders: {', '.join(unknown)}")
+    return items
+
+
+def seed_standard_templates(connection, subdivision_id: int, actor_id: Optional[int] = None) -> List[int]:
+    """
+    Give one subdivision its own copy of the four standard templates, as ordinary editable rows (template + version 1). A level the
+    subdivision already has an active template for is skipped, so this is safe to run more than once. Works on a Core connection
+    (`session.connection()`, or the connection of a mapper event), so it can also run while a subdivision is being inserted.
+    Returns the ids of the templates it created. Never touches an existing template, version or issued letter.
+    """
+    T = WarningLetterTemplate.__table__
+    V = WarningLetterTemplateVersion.__table__
+    created: List[int] = []
+    for item in load_standard_templates():
+        level = item["warning_level"]
+        has_active = connection.execute(
+            T.select().with_only_columns(T.c.template_id).where(
+                T.c.subdivision_id == subdivision_id, T.c.warning_level == level, T.c.status == "active").limit(1)
+        ).first()
+        if has_active:
+            continue
+        template_id = connection.execute(T.insert().values(
+            subdivision_id=subdivision_id, name=item["name"], description=item["description"], warning_level=level,
+            source_type="editor", status="active", is_default=True, created_by=actor_id, updated_by=actor_id,
+        )).inserted_primary_key[0]
+        subject, body = item["subject_template"], item["body_template"]
+        version_id = connection.execute(V.insert().values(
+            template_id=template_id, version_number=1, subject_template=subject, body_template=body,
+            html_template=render_html_document(subject, body, "{{warning_reference}}", "{{case_reference}}"),
+            placeholders_used=extract_placeholders(subject, body), change_note=item.get("change_note") or "Initial standard template",
             created_by=actor_id,
-            updated_by=actor_id,
-        )
-        db.add(tpl)
-        db.flush()
-        ver = WarningLetterTemplateVersion(
-            template_id=tpl.template_id,
-            version_number=1,
-            subject_template=subj,
-            body_template=body,
-            html_template=render_html_document(subj, body, "{{warning_reference}}", "{{case_reference}}"),
-            placeholders_used=extract_placeholders(subj, body),
-            change_note="Initial default template",
-            created_by=actor_id,
-        )
-        db.add(ver)
-        db.flush()
-        tpl.current_version_id = ver.version_id
-        created.append(tpl)
-    db.flush()
+        )).inserted_primary_key[0]
+        connection.execute(T.update().where(T.c.template_id == template_id).values(current_version_id=version_id))
+        created.append(template_id)
     return created
+
+
+def seed_new_subdivisions(connection) -> List[int]:
+    """Safety net for subdivisions created outside the app (raw SQL): one that has no template rows at all gets the four standard ones."""
+    T = WarningLetterTemplate.__table__
+    S = Subdivision.__table__
+    seeded: List[int] = []
+    for (sub_id,) in connection.execute(S.select().with_only_columns(S.c.subdivision_id)).all():
+        if connection.execute(T.select().with_only_columns(T.c.template_id).where(T.c.subdivision_id == sub_id).limit(1)).first() is None:
+            if seed_standard_templates(connection, sub_id):
+                seeded.append(sub_id)
+    return seeded
+
+
+@event.listens_for(Subdivision, "after_insert")
+def _seed_templates_for_new_subdivision(mapper, connection, target) -> None:
+    """
+    A new subdivision automatically gets its own, independent set of the four standard templates. Creating a subdivision must never
+    fail because of this: it runs in a savepoint, and if it cannot (the tables are missing, say), the subdivision is still created and
+    the startup safety net (`seed_new_subdivisions`) gives it its templates later.
+    """
+    try:
+        with connection.begin_nested():
+            seed_standard_templates(connection, target.subdivision_id)
+    except Exception as exc:  # noqa: BLE001
+        print(f"Notice: the standard warning letter templates were not added to subdivision {target.subdivision_id} yet: {exc}")
 
 
 def serialize_version(v: WarningLetterTemplateVersion, names: Optional[Dict[int, str]] = None) -> Dict[str, Any]:
@@ -782,6 +980,24 @@ def serialize_template(t: WarningLetterTemplate, db: Session, include_versions: 
     }
 
 
+def normalize_warning_level(value: Optional[str]) -> Optional[str]:
+    """
+    A template's level as stored: None means universal (usable for every level); otherwise one of the four tiers exactly.
+    An empty value is universal. Anything else is refused, so a typo can never quietly disable a template.
+    """
+    level = (value or "").strip()
+    if not level:
+        return None
+    if level not in WARNING_LEVELS:
+        raise HTTPException(status_code=422, detail=f"Unknown warning level '{level}'. Use one of: {', '.join(WARNING_LEVELS)}, or leave it empty for all levels.")
+    return level
+
+
+def template_fits_level(tpl: WarningLetterTemplate, warning_level: Optional[str]) -> bool:
+    """A universal template fits every level; a level-specific one fits only its own level."""
+    return tpl.warning_level is None or tpl.warning_level == warning_level
+
+
 def resolve_template_for_issuance(
     db: Session,
     subdivision_id: Optional[int],
@@ -789,30 +1005,22 @@ def resolve_template_for_issuance(
     warning_level: Optional[str],
     actor_id: Optional[int] = None,
 ) -> Tuple[WarningLetterTemplate, WarningLetterTemplateVersion]:
-    ensure_default_templates(db, subdivision_id, actor_id=actor_id)
-    tpl: Optional[WarningLetterTemplate] = None
-    if template_id is not None:
-        tpl = db.get(WarningLetterTemplate, template_id)
-        if tpl is None or (subdivision_id is not None and tpl.subdivision_id not in (subdivision_id, None)):
-            raise HTTPException(status_code=404, detail="Selected warning letter template was not found.")
-        if tpl.status != "active":
-            raise HTTPException(status_code=409, detail=f"Template '{tpl.name}' is archived and cannot be used.")
-    else:
-        q = db.query(WarningLetterTemplate).filter(WarningLetterTemplate.status == "active")
-        if subdivision_id is not None:
-            q = q.filter(WarningLetterTemplate.subdivision_id == subdivision_id)
-        candidates = q.order_by(WarningLetterTemplate.is_default.desc(), WarningLetterTemplate.template_id.asc()).all()
-        if warning_level:
-            tpl = (
-                next((c for c in candidates if c.is_default and c.warning_level == warning_level), None)
-                or next((c for c in candidates if c.is_default and c.warning_level is None), None)
-                or next((c for c in candidates if c.warning_level == warning_level), None)
-                or (candidates[0] if candidates else None)
-            )
-        else:
-            tpl = next((c for c in candidates if c.is_default), None) or (candidates[0] if candidates else None)
-    if tpl is None:
-        raise HTTPException(status_code=409, detail="No active warning letter template is configured for this subdivision.")
+    """
+    The template the Leader chose, checked. There is no automatic choice: the Leader must pick one, it must be active, in their
+    subdivision (or platform-wide), and compatible with the letter's level. `is_default` only marks a suggestion in the picker.
+    """
+    if template_id is None:
+        raise HTTPException(status_code=422, detail="Choose a warning letter template for this letter.")
+    tpl = db.get(WarningLetterTemplate, template_id)
+    if tpl is None or (subdivision_id is not None and tpl.subdivision_id not in (subdivision_id, None)):
+        raise HTTPException(status_code=404, detail="Selected warning letter template was not found.")
+    if tpl.status != "active":
+        raise HTTPException(status_code=409, detail=f"Template '{tpl.name}' is archived and cannot be used.")
+    if not template_fits_level(tpl, warning_level):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Template '{tpl.name}' is for {tpl.warning_level} letters. Choose a template for {warning_level or 'this level'}, or one for all levels.",
+        )
     ver = (
         db.get(WarningLetterTemplateVersion, tpl.current_version_id)
         if tpl.current_version_id
@@ -917,6 +1125,9 @@ def build_letter_context(
         "summons_place": (summons_place or "").strip(),
     }
     if overrides:
+        bad = [k for k in overrides if k not in PLACEHOLDER_REQUIREMENT or PLACEHOLDER_REQUIREMENT[k] == "system"]
+        if bad:
+            raise HTTPException(status_code=422, detail=f"These details cannot be filled in by hand: {', '.join(bad)}.")
         for k, v in overrides.items():
             if v is not None and str(v).strip():
                 ctx[k] = str(v).strip()
@@ -930,27 +1141,31 @@ def detect_missing_fields(
     *,
     strict_pet_name: bool = False,
 ) -> List[Dict[str, Any]]:
+    """
+    What blocks this letter: a placeholder the system does not supply (an `unknown` entry), or a value that is needed and blank.
+    Needed = every "required" placeholder (whether or not the template uses it) plus the "conditional" ones the template uses.
+    "optional" ones may be blank; "system" ones (the warning reference) are assigned at issue.
+    """
     used = extract_placeholders(subject_template, body_template)
     missing: List[Dict[str, Any]] = []
-    # Core required fields must always be verified even if a custom template omits one, plus any placeholder in template
+    for key in used:
+        if key not in PLACEHOLDER_REQUIREMENT:
+            missing.append({"key": key, "label": key, "required": True, "unknown": True,
+                            "message": f"This template uses {{{{{key}}}}}, which is not a supported placeholder. Edit the template to fix it."})
     check_keys: List[str] = []
-    for k in [*used, "resident_name", "warning_level", "violation_description", "required_action", "policy_reference", "issued_by"]:
+    for k in [*ALWAYS_REQUIRED, *[u for u in used if u in PLACEHOLDER_REQUIREMENT]]:
         if k not in check_keys:
             check_keys.append(k)
     for key in check_keys:
-        if key == "warning_reference":
-            continue  # auto-assigned at generation time
-        val = (context.get(key) or "").strip()
-        if not val:
-            is_req = PLACEHOLDER_REQUIRED.get(key, True)
-            if key == "pet_name" and strict_pet_name:
-                is_req = True
-            missing.append({
-                "key": key,
-                "label": PLACEHOLDER_LABELS.get(key, key.replace("_", " ").title()),
-                "required": is_req,
-                "message": f"Missing {PLACEHOLDER_LABELS.get(key, key)} for this template.",
-            })
+        requirement = PLACEHOLDER_REQUIREMENT[key]
+        if requirement == "system":
+            continue
+        if (context.get(key) or "").strip():
+            continue
+        if requirement == "optional" and not (key == "pet_name" and strict_pet_name):
+            continue
+        label = PLACEHOLDER_LABELS[key]
+        missing.append({"key": key, "label": label, "required": True, "unknown": False, "message": f"Missing {label} for this letter."})
     return missing
 
 
@@ -960,8 +1175,10 @@ def render_preview(
     context: Dict[str, str],
 ) -> Dict[str, Any]:
     missing = detect_missing_fields(subject_template, body_template, context)
-    rendered_subject = substitute_placeholders(subject_template, context)
-    rendered_body = substitute_placeholders(body_template, context)
+    # A needed value that is missing is shown as "[missing: Label]" so nobody reads a letter with a silent gap in it.
+    shown = {**context, **{m["key"]: f"[missing: {m['label']}]" for m in missing if not m.get("unknown")}}
+    rendered_subject = substitute_placeholders(subject_template, shown)
+    rendered_body = substitute_placeholders(body_template, shown)
     rendered_html = render_html_document(
         rendered_subject,
         rendered_body,
@@ -975,7 +1192,7 @@ def render_preview(
         "html": rendered_html,
         "placeholders": context,
         "missing_fields": missing,
-        "can_issue": not any(m["required"] for m in missing),
+        "can_issue": not missing,
     }
 
 
@@ -1056,6 +1273,67 @@ def deliver_warning_notification(
         _sync_notification_delivery_status(letter, False, str(exc))
 
 
+def validate_letter_ready(
+    *,
+    db: Session,
+    subdivision_id: Optional[int],
+    report: Optional[Report],
+    owner: Optional[User],
+    recipient_name: Optional[str],
+    recipient_address: Optional[str],
+    pet: Optional[Pet],
+    issuer: User,
+    warning_level: str,
+    policy_reference: str,
+    violation_description: str,
+    required_action: str,
+    template_id: Optional[int],
+    observation_days: Optional[int] = None,
+    summons_at: Optional[datetime] = None,
+    summons_place: Optional[str] = None,
+    overrides: Optional[Dict[str, str]] = None,
+    issue_date: Optional[datetime] = None,
+) -> Tuple[WarningLetterTemplate, WarningLetterTemplateVersion, Optional[Pet], Dict[str, str]]:
+    """
+    Everything that must be true before a warning letter is made, and nothing is written: the chosen template exists, is active and fits
+    the level; the template uses only placeholders the system supplies; every needed value is present. Raises 422/409/404 with a plain
+    message. Callers run it BEFORE they write anything (so a refusal leaves no half-made warning), and `create_generated_letter` runs it
+    again, so no issuing path can skip it. Returns (template, version, the pet used, the values to fill in).
+    """
+    tpl, ver = resolve_template_for_issuance(db, subdivision_id, template_id, warning_level, actor_id=issuer.user_id)
+    resolved_pet = _resolve_pet(db, pet, owner, report)
+    ctx = build_letter_context(
+        db=db,
+        subdivision_id=subdivision_id,
+        report=report,
+        owner=owner,
+        recipient_name=recipient_name,
+        recipient_address=recipient_address,
+        pet=resolved_pet,
+        issuer=issuer,
+        warning_level=warning_level,
+        violation_description=violation_description,
+        required_action=required_action,
+        policy_reference=policy_reference,
+        warning_reference="WARN-PENDING",
+        issue_date=issue_date or datetime.now(),
+        observation_days=observation_days,
+        summons_at=summons_at,
+        summons_place=summons_place,
+        overrides=overrides,
+    )
+    # No letter is made with a needed value missing or with a placeholder the system does not supply. Nothing is filled in on the
+    # Leader's behalf.
+    missing = detect_missing_fields(ver.subject_template, ver.body_template, ctx)
+    if missing:
+        unknown = [m for m in missing if m.get("unknown")]
+        if unknown:
+            raise HTTPException(status_code=422, detail=f"Template '{tpl.name}' uses unsupported placeholders ({', '.join('{{' + m['key'] + '}}' for m in unknown)}). Edit the template, then try again.")
+        names = ", ".join(m["label"] for m in missing)
+        raise HTTPException(status_code=422, detail=f"Cannot issue this warning letter; missing required fields: {names}.")
+    return tpl, ver, resolved_pet, ctx
+
+
 def create_generated_letter(
     *,
     db: Session,
@@ -1078,46 +1356,18 @@ def create_generated_letter(
     summons_at: Optional[datetime] = None,
     summons_place: Optional[str] = None,
     overrides: Optional[Dict[str, str]] = None,
-    strict_required: bool = False,
     attachment_url: Optional[str] = None,
     attachment_name: Optional[str] = None,
+    letter_date: Optional[datetime] = None,
 ) -> GeneratedWarningLetter:
-    tpl, ver = resolve_template_for_issuance(db, subdivision_id, template_id, warning_level, actor_id=issuer.user_id)
     now = datetime.now()
-    resolved_pet = _resolve_pet(db, pet, owner, report)
-    ctx = build_letter_context(
-        db=db,
-        subdivision_id=subdivision_id,
-        report=report,
-        owner=owner,
-        recipient_name=recipient_name,
-        recipient_address=recipient_address,
-        pet=resolved_pet,
-        issuer=issuer,
-        warning_level=warning_level,
-        violation_description=violation_description,
-        required_action=required_action,
-        policy_reference=policy_reference,
-        warning_reference="WARN-PENDING",
-        issue_date=now,
-        observation_days=observation_days,
-        summons_at=summons_at,
-        summons_place=summons_place,
-        overrides=overrides,
+    # Every issuing path goes through this check, whichever service called it (a caller may also run it earlier, before it writes).
+    tpl, ver, resolved_pet, ctx = validate_letter_ready(
+        db=db, subdivision_id=subdivision_id, report=report, owner=owner, recipient_name=recipient_name, recipient_address=recipient_address,
+        pet=pet, issuer=issuer, warning_level=warning_level, policy_reference=policy_reference, violation_description=violation_description,
+        required_action=required_action, template_id=template_id, observation_days=observation_days, summons_at=summons_at,
+        summons_place=summons_place, overrides=overrides, issue_date=letter_date or now,   # "Date issued": the date the Leader put on the letter
     )
-    if strict_required:
-        missing = [m for m in detect_missing_fields(ver.subject_template, ver.body_template, ctx) if m["required"]]
-        if missing:
-            names = ", ".join(m["label"] for m in missing)
-            raise HTTPException(status_code=422, detail=f"Cannot generate warning letter; missing required fields: {names}.")
-
-    # Fallbacks for optional/legacy API calls so generated letters never render dangling empty blanks
-    if not ctx["resident_address"]:
-        ctx["resident_address"] = (report.landmark if report else None) or "Subdivision Resident"
-    if not ctx["pet_name"]:
-        ctx["pet_name"] = ctx["pet_type"] or "Animal"
-    if not ctx["pet_type"]:
-        ctx["pet_type"] = "Animal"
     if attachment_url:
         ctx["attachment_url"] = attachment_url
         ctx["attachment_name"] = attachment_name or "Warning letter attachment"
@@ -1132,10 +1382,10 @@ def create_generated_letter(
         case_reference=ctx["case_reference"],
         recipient_user_id=owner.user_id if owner else None,
         recipient_name=ctx["resident_name"] or "Resident",
-        recipient_address=ctx["resident_address"],
+        recipient_address=ctx["resident_address"] or None,
         pet_id=resolved_pet.pet_id if resolved_pet else None,
         pet_name=ctx["pet_name"],
-        pet_type=ctx["pet_type"],
+        pet_type=ctx["pet_type"] or None,
         warning_level=warning_level,
         policy_id=policy_id,
         policy_reference=policy_reference,
@@ -1170,7 +1420,7 @@ def create_generated_letter(
     letter.rendered_subject = rendered_subject
     letter.rendered_body = rendered_body
     letter.rendered_html = rendered_html
-    letter.placeholders_json = ctx
+    letter.placeholders_json = {**ctx, RENDER_LAYOUT_KEY: RENDER_LAYOUT}   # shown exactly as written (see is_legacy_layout)
     db.flush()
     return letter
 
@@ -1203,21 +1453,29 @@ def mark_letter_viewed(db: Session, letter: GeneratedWarningLetter, viewer: User
     return changed
 
 
+def _office_part(db: Session, letter: GeneratedWarningLetter, part: str) -> Optional[str]:
+    """For a very old letter that never stored its office details: the office's current one."""
+    if not letter.subdivision_id:
+        return None
+    return (getattr(case_policy.load_settings(db, letter.subdivision_id).office, part, "") or "").strip() or None
+
+
 def serialize_letter(letter: GeneratedWarningLetter, db: Session) -> Dict[str, Any]:
     notif = db.get(Notification, letter.notification_id) if letter.notification_id else None
     warn = db.get(OwnerWarning, letter.warning_id) if letter.warning_id else None
     ph = letter.placeholders_json or {}
     sub_name, sub_addr, _ = _office_contact_lines(db, letter.subdivision_id, ph)
-    office = case_policy.load_settings(db, letter.subdivision_id).office if letter.subdivision_id else None
     issuer_name, issuer_role, _ = _issuer_lines(letter, sub_name)
     return {
         "letter_id": letter.letter_id,
         "warning_reference": letter.warning_reference,
         "subdivision_id": letter.subdivision_id,
         "subdivision_name": sub_name,
-        "subdivision_address": sub_addr or ((office.address or "").strip() if office else "") or None,
-        "subdivision_phone": (str(ph.get("subdivision_phone") or "").strip() or ((office.phone or "").strip() if office else "")) or None,
-        "subdivision_email": (str(ph.get("subdivision_email") or "").strip() or ((office.email or "").strip() if office else "")) or None,
+        # the office details the letter was issued with (a later change to the office's details never alters an issued letter)
+        "subdivision_address": sub_addr,
+        "subdivision_phone": (str(ph.get("subdivision_phone") or "").strip() or None) if "subdivision_phone" in ph else _office_part(db, letter, "phone"),
+        "subdivision_email": (str(ph.get("subdivision_email") or "").strip() or None) if "subdivision_email" in ph else _office_part(db, letter, "email"),
+        "legacy_layout": is_legacy_layout(letter),
         "warning_id": letter.warning_id,
         "complaint_step_id": letter.complaint_step_id,
         "report_id": letter.report_id,

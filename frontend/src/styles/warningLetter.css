@@ -257,3 +257,25 @@
     padding: 0 !important;
   }
 }
+
+/* Draft (prepared or preview, not issued): a banner at the top and a watermark across the page. In print the watermark is
+   position: fixed, which repeats it on EVERY printed page (the banner stays at the top of the first page, so it never covers text),
+   so no page of a draft can pass for an issued letter. */
+.ss-a4-paper--draft { position: relative; }
+.ss-a4-draft-banner {
+  margin: -40px -40px 28px; padding: 8px 12px; border: 2px solid #b91c1c; border-radius: 4px;
+  color: #b91c1c; background: #fef2f2; font-size: 12.5px; font-weight: 700; letter-spacing: 0.04em; text-align: center; text-transform: uppercase;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.ss-a4-draft-watermark {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 1;
+}
+.ss-a4-draft-watermark span {
+  display: block; transform: rotate(-30deg); white-space: nowrap;
+  color: rgba(185, 28, 28, 0.13); font-size: 40px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+@media print {
+  .ss-a4-draft-banner { margin: 0 0 24px; }
+  .ss-a4-draft-watermark { position: fixed; inset: 0; }
+}

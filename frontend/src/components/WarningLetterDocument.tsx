@@ -1,15 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import '../styles/warningLetter.css';
+import { bodyBlocks } from './warningLetterBlocks';
 
 const A4_WIDTH_PX = 794;
-
-const SECTION_HEADINGS = new Set([
-  'violation details',
-  'applicable subdivision policy',
-  'applicable policy',
-  'required corrective action',
-  'required action & summons schedule',
-]);
 
 export interface WarningLetterDocumentProps {
   subdivisionName?: string | null;
@@ -26,62 +19,16 @@ export interface WarningLetterDocumentProps {
   body: string;
   issuerName: string;
   issuerRole?: string | null;
+  /**
+   * A draft (prepared, or a preview): not an issued letter. It shows "DRAFT — NOT OFFICIALLY ISSUED" across the page and on top
+   * (on every printed page) and no warning reference. Only an issued letter is shown without it.
+   */
+  draft?: boolean;
+  /** An issued letter from before the layout marker (API `legacy_layout`): its old header/recipient/signature lines are hidden. */
+  legacyLayout?: boolean;
 }
 
-type BodyBlock =
-  | { kind: 'subject'; text: string }
-  | { kind: 'section'; heading: string; text: string }
-  | { kind: 'para'; text: string };
-
-function parseBodyBlocks(body: string, fallbackSubject: string): BodyBlock[] {
-  const rawBlocks = (body || '')
-    .replace(/\r\n/g, '\n')
-    .split(/\n{2,}/)
-    .map((b) => b.trim())
-    .filter(Boolean);
-
-  const out: BodyBlock[] = [];
-  let hasSubject = false;
-
-  for (const block of rawBlocks) {
-    const lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
-    if (lines.length === 0) continue;
-    const first = lines[0];
-
-    // Skip legacy header/recipient/signature chrome embedded in older stored snapshots
-    if (first.endsWith('Office of the Subdivision Leader')) continue;
-    if (lines.every((ln) => /^(Date Issued|Warning Reference|Case Reference|TO|Address):/i.test(ln))) continue;
-    if (/^Issued by:$/i.test(first) && lines.length <= 4) continue;
-
-    if (/^SUBJECT:/i.test(first)) {
-      hasSubject = true;
-      const subjText = first.replace(/^SUBJECT:\s*/i, '').trim();
-      out.push({ kind: 'subject', text: subjText });
-      if (lines.length > 1) {
-        out.push({ kind: 'para', text: lines.slice(1).join('\n') });
-      }
-      continue;
-    }
-
-    const normalized = first.replace(/:$/, '').trim().toLowerCase();
-    const looksLikeHeading = SECTION_HEADINGS.has(normalized) || (first.endsWith(':') && first.length <= 48 && lines.length > 1);
-    if (looksLikeHeading) {
-      out.push({
-        kind: 'section',
-        heading: first.replace(/:$/, '').trim(),
-        text: lines.slice(1).join('\n'),
-      });
-      continue;
-    }
-
-    out.push({ kind: 'para', text: lines.join('\n') });
-  }
-
-  if (!hasSubject && fallbackSubject.trim()) {
-    out.unshift({ kind: 'subject', text: fallbackSubject.trim() });
-  }
-  return out;
-}
+const DRAFT_MARK = 'DRAFT — NOT OFFICIALLY ISSUED';
 
 function splitIssuer(nameOrCombined: string, roleHint?: string | null): { name: string; role: string } {
   const raw = (nameOrCombined || 'Subdivision Leader').trim();
@@ -131,7 +78,7 @@ export function WarningLetterDocument(props: WarningLetterDocumentProps) {
   const subName = (props.subdivisionName || '').trim() || 'Subdivision Office';
   const contactLine = [props.subdivisionPhone, props.subdivisionEmail].map((x) => (x || '').trim()).filter(Boolean).join(' · ');
   const { name: issuerName, role: issuerRole } = splitIssuer(props.issuerName, props.issuerRole);
-  const blocks = parseBodyBlocks(props.body, props.subject);
+  const blocks = bodyBlocks(props.body, props.subject, !!props.legacyLayout);
 
   const scaledW = Math.round(A4_WIDTH_PX * scale);
   const scaledH = Math.round(paperHeight * scale);
@@ -141,10 +88,16 @@ export function WarningLetterDocument(props: WarningLetterDocumentProps) {
       <div className="ss-a4-scale-box" style={{ width: `${scaledW}px`, height: `${scaledH}px` }}>
         <article
           ref={paperRef}
-          className="ss-a4-paper"
+          className={props.draft ? 'ss-a4-paper ss-a4-paper--draft' : 'ss-a4-paper'}
           style={scale < 1 ? { transform: `scale(${scale})` } : undefined}
-          aria-label="Official Warning Letter"
+          aria-label={props.draft ? 'Draft warning letter, not officially issued' : 'Official Warning Letter'}
         >
+          {props.draft ? (
+            <>
+              <div className="ss-a4-draft-banner" role="note">{DRAFT_MARK} · no warning reference · not sent to the resident</div>
+              <div className="ss-a4-draft-watermark" aria-hidden="true"><span>{DRAFT_MARK}</span></div>
+            </>
+          ) : null}
           {/* Letterhead */}
           <header className="ss-a4-letterhead">
             <h2 className="ss-a4-letterhead__org">{subName}</h2>
@@ -162,7 +115,7 @@ export function WarningLetterDocument(props: WarningLetterDocumentProps) {
             <div className="ss-a4-meta">
               <div className="ss-a4-meta__item">
                 <span className="ss-a4-meta__label">Warning Reference</span>
-                <span className="ss-a4-meta__value">{props.warningReference}</span>
+                <span className="ss-a4-meta__value">{props.draft ? 'None (draft)' : props.warningReference}</span>
               </div>
               <div className="ss-a4-meta__item">
                 <span className="ss-a4-meta__label">Case Reference</span>

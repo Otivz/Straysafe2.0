@@ -32,7 +32,7 @@ from app.models.notification import Notification
 from app.models.pet import Pet
 from app.models.report import Report, ReportCategory, ReportStatus
 from app.models.user import Barangay, Subdivision, User
-from app.routes import cases, complaints, reports
+from app.routes import cases, complaints, reports, warning_letters
 from app.schemas.case import PolicyIn
 from app.utils import case_policy
 from app.utils import complaint_rules as R
@@ -42,7 +42,7 @@ Base.metadata.create_all(bind=engine)
 api = FastAPI()
 api.state.limiter = limiter
 api.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-for router in (reports.router, cases.router, complaints.router):
+for router in (reports.router, cases.router, complaints.router, warning_letters.templates_router):
     api.include_router(router)
 client = TestClient(api, raise_server_exceptions=False)
 db = SessionLocal()
@@ -123,6 +123,9 @@ def post(path, body, who=leader):
     return client.post(path, json=body, headers=H(who))
 
 
+from _case_helpers import template_id_for  # noqa: E402  (preparing a letter names the template the Leader chose)
+
+
 def detail(rid, who=leader):
     r = client.get(f"/complaints/{rid}", headers=H(who))
     assert r.status_code == 200, r.text
@@ -194,7 +197,7 @@ check("deciding twice is refused", post(f"/complaints/{c1}/offense", {"decision"
 check("the complaint is in progress", fresh(c1).case_status == "in_progress")
 s1 = step(d, "letter_1")["step_id"]
 check("a letter is not issued before it is prepared", post(f"/complaints/{c1}/steps/{s1}", {"action": "issue", "via": "You, by hand"}).status_code == 409)
-post(f"/complaints/{c1}/steps/{s1}", {"action": "prepare", "letter_date": BASE.date().isoformat()})
+post(f"/complaints/{c1}/steps/{s1}", {"action": "prepare", "letter_date": BASE.date().isoformat(), "template_id": template_id_for(client, H(leader), "1st Warning")})
 post(f"/complaints/{c1}/steps/{s1}", {"action": "issue", "via": "You, by hand"})
 d = post(f"/complaints/{c1}/steps/{s1}", {"action": "deliver", "delivered": False, "reason": "nobody_home", "occurred_at": (BASE + timedelta(hours=10)).isoformat()}).json()
 check("a failed delivery is kept, not treated as delivered", step(d, "letter_1")["state"] == "not_delivered")
@@ -219,7 +222,8 @@ check("no attendance before the summons has a date",
       post(f"/complaints/{c2}/steps/{sm}", {"action": "attendance", "result": "attended", "note": "Came on time."}).status_code == 409)
 summons_at = (BASE + timedelta(days=15)).replace(hour=16, minute=0)
 d = post(f"/complaints/{c2}/steps/{l2}", {"action": "prepare", "letter_date": (BASE + timedelta(days=11)).date().isoformat(),
-                                          "summons_at": summons_at.isoformat(), "place": "Subdivision office"}).json()
+                                          "summons_at": summons_at.isoformat(), "place": "Subdivision office",
+                                          "template_id": template_id_for(client, H(leader), "2nd Warning")}).json()
 check("the second letter sets the summons date", step(d, "summons")["state"] == "scheduled" and step(d, "summons")["details"]["place"] == "Subdivision office")
 check("no attendance before the letter that tells them the date is delivered",
       post(f"/complaints/{c2}/steps/{sm}", {"action": "attendance", "result": "attended", "note": "Came on time."}).status_code == 409)

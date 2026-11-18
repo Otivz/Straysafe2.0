@@ -1,0 +1,55 @@
+{
+  "_about": "Shared cases for how a warning letter's text is laid out. The backend (services/warning_letters.py body_blocks, used by the PDF, the DOCX and the HTML) and the screen (frontend/src/components/warningLetterBlocks.ts) must give the same blocks; tests/test_warning_rendering.py and frontend/tests/warningLetterBlocks.test.mjs both read this file. Each expected block: kind, heading (for a section), text (its lines joined with a newline). The screen also adds the subject from the letter's subject line when the text has none; that is not part of these cases.",
+  "cases": [
+    {
+      "name": "a standard letter: greeting, known headings, closing line",
+      "legacy": false,
+      "body": "Dear Juan,\n\nViolation Details\nRoaming at night.\n\nSubdivision Policy\nRule 6.3\n\nThis warning was issued on November 12, 2026.",
+      "expected": [
+        {"kind": "para", "text": "Dear Juan,"},
+        {"kind": "section", "heading": "Violation Details", "text": "Roaming at night."},
+        {"kind": "section", "heading": "Subdivision Policy", "text": "Rule 6.3"},
+        {"kind": "para", "text": "This warning was issued on November 12, 2026."}
+      ]
+    },
+    {
+      "name": "a short title line followed by text is a heading; line breaks inside a block are kept",
+      "legacy": false,
+      "body": "Office Summons\nYou are asked to meet the office.\nDate and time: November 25, 2026 at 4:00 PM\nPlace: Subdivision Office",
+      "expected": [
+        {"kind": "section", "heading": "Office Summons", "text": "You are asked to meet the office.\nDate and time: November 25, 2026 at 4:00 PM\nPlace: Subdivision Office"}
+      ]
+    },
+    {
+      "name": "the author's own TO:, Address: and Issued by: lines are kept in a new letter",
+      "legacy": false,
+      "body": "TO: The Household\nAddress: Block 4\n\nDear Juan,\n\nIssued by:\nThe Committee",
+      "expected": [
+        {"kind": "para", "text": "TO: The Household\nAddress: Block 4"},
+        {"kind": "para", "text": "Dear Juan,"},
+        {"kind": "section", "heading": "Issued by", "text": "The Committee"}
+      ]
+    },
+    {
+      "name": "an old letter (legacy) hides only its old header, recipient and signature lines",
+      "legacy": true,
+      "body": "Selera Homes — Office of the Subdivision Leader\n\nDate Issued: November 17, 2026\nWarning Reference: WARN-2026-0001\n\nTO: Juan\nAddress: Block 4\n\nDear Juan,\n\nViolation Details:\nRoaming.\n\nIssued by:\nLeilah (Subdivision Leader)",
+      "expected": [
+        {"kind": "para", "text": "Dear Juan,"},
+        {"kind": "section", "heading": "Violation Details", "text": "Roaming."}
+      ]
+    },
+    {
+      "name": "a SUBJECT line becomes the subject; a sentence or a short line with numbers is not a heading",
+      "legacy": false,
+      "body": "SUBJECT: First Warning: Rule 6.3\nDear Juan,\n\nPlease note\nthis line follows.\n\nBlock 4 Lot 9\nNarra St.\n\nA single line ending in a colon:",
+      "expected": [
+        {"kind": "subject", "text": "First Warning: Rule 6.3"},
+        {"kind": "para", "text": "Dear Juan,"},
+        {"kind": "section", "heading": "Please note", "text": "this line follows."},
+        {"kind": "para", "text": "Block 4 Lot 9\nNarra St."},
+        {"kind": "para", "text": "A single line ending in a colon:"}
+      ]
+    }
+  ]
+}

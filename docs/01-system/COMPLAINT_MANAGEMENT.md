@@ -45,8 +45,11 @@ animal complaints) was chosen; a person was confirmed as responsible with eviden
 | 3rd | Fine (the amount is read from the confirmed rule; without one it cannot be imposed): imposed, then paid; meeting at the Barangay with the complainant, the person responsible and the Leader: arranged (also written in the case's Barangay referral log), then held or not, with attendance and outcome |
 | 4th and later | None defined: an open question for the subdivision |
 
-Letters: prepared (printed from the Leader app; the letter never names the complainant), issued for delivery (who delivers it),
-delivered (when, received by, how known) or not delivered (why). Every attempt is kept; printing is never delivering. Attendance can
+Letters: prepared (a DRAFT: the Leader chooses a warning letter template for the letter's level and the letter date; it is checked but
+no warning letter record, warning reference or notice exists yet; a printed draft says "DRAFT — NOT OFFICIALLY ISSUED" on every page),
+issued for delivery (who delivers it; only now is the official letter made from the draft, with its warning reference and frozen text,
+dated with the chosen letter date, and the resident notified), delivered (when, received by, how known) or not delivered (why). The
+letter never names the complainant. Every attempt is kept; printing is never delivering. Attendance can
 be recorded only after the letter that tells them the date was delivered. StraySafe records that a fine was paid; it takes no
 payments and keeps no receipts. Every change is an append-only event with who recorded it.
 
@@ -94,8 +97,8 @@ leads, privacy, scope). Frontend unit tests: `frontend/tests/*.test.mjs`.
 - The older warning endpoint (`POST /warnings/`, [OWNER_WARNING_RULES.md](OWNER_WARNING_RULES.md)) still accepts animal complaints, for
   older records and the observation flows; the Leader app no longer offers "Issue warning" on them. Retiring it on the server is a
   separate decision.
-- Letter wording is StraySafe's neutral default (rule title, reference and summary; subdivision and Leader names) until the
-  subdivision confirms its own.
+- Letter wording comes from the subdivision's own warning letter templates (one standard template per level to start with, edited by
+  the Leader), not from fixed wording in the app.
 - Open stakeholder questions (never guessed): the rules and their references, fine amounts and who may fine, expiry, notice before
   escalation, 4th offenses, person vs household, delivery proof, summons no-shows, how fines are told and paid, the complainant's
   consent to the Barangay meeting, an in-app copy for the person responsible, dangerous-animal reports, paper records, appeals.

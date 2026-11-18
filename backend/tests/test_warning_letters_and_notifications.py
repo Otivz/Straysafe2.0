@@ -212,8 +212,13 @@ def main() -> None:
         # ------------------------------------------------------------------
         # 1. Template Management (defaults, create, DOCX import, version, default, archive)
         # ------------------------------------------------------------------
+        rows_before = db.query(WarningLetterTemplate).count()
         listed = wl_routes.list_templates(status="all", subdivision_id=None, db=db, current_user=leader)
-        check("default templates seeded lazily", len(listed["items"]) >= 2, listed)
+        check("opening the template list creates nothing (no lazy seeding)", db.query(WarningLetterTemplate).count() == rows_before)
+        levels = sorted(t["warning_level"] for t in listed["items"])
+        check("a subdivision created through the app already has its four standard templates, one per level",
+              levels == sorted(["Notice", "1st Warning", "2nd Warning", "Final Notice / Escalation"]), levels)
+        check("seeding again adds nothing (idempotent)", WL.seed_standard_templates(db.connection(), 1) == [])
 
         created = wl_routes.create_template(
             body=wl_routes.TemplateCreateIn(

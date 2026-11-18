@@ -1,0 +1,37 @@
+{
+  "_about": "The four standard warning letter templates every subdivision starts with (one per warning level). Seed data, not application code: each subdivision gets its OWN copy as ordinary rows (warning_letter_templates + version 1), which its Leader edits in the template editor or replaces from a DOCX; nothing here is read again after that. No fines, no Barangay steps, no enforcement powers the subdivision has not written itself. Placeholders must be keys of PLACEHOLDER_DEFINITIONS (services/warning_letters.py).",
+  "templates": [
+    {
+      "warning_level": "Notice",
+      "name": "Notice Letter",
+      "description": "A courteous first notice of a recorded concern. It asks for a change and states no consequence.",
+      "subject_template": "{{warning_level}}: {{policy_reference}} ({{case_reference}})",
+      "body_template": "Dear {{resident_name}},\n\nThis is a Notice from the Office of the Subdivision Leader of {{subdivision_name}}. It is a courteous first notice about a concern recorded under case {{case_reference}}. It is not a penalty.\n\nOn {{incident_date}}, an incident involving {{pet_name}} ({{pet_type}}) was reported to the subdivision, and the Office of the Subdivision Leader verified it.\n\nWhat Was Reported\n{{violation_description}}\n\nSubdivision Policy\n{{policy_reference}}\n\nWhat We Ask You To Do\n{{required_action}}\n\nWe hope this can be settled between neighbors. If you believe this notice is mistaken, or you would like to explain what happened, please contact the Office of the Subdivision Leader and mention reference {{warning_reference}}.\n\nThis notice was issued on {{issue_date}}.",
+      "change_note": "Initial standard template"
+    },
+    {
+      "warning_level": "1st Warning",
+      "name": "First Warning Letter",
+      "description": "A formal first warning for a verified violation of a subdivision policy.",
+      "subject_template": "{{warning_level}}: {{policy_reference}} ({{case_reference}})",
+      "body_template": "Dear {{resident_name}},\n\nThis is a formal First Warning from the Office of the Subdivision Leader of {{subdivision_name}}, issued under case {{case_reference}}.\n\nOn {{incident_date}}, an incident involving {{pet_name}} ({{pet_type}}), an animal in your care, was reported and verified as a violation of the subdivision policy below.\n\nViolation Details\n{{violation_description}}\n\nSubdivision Policy\n{{policy_reference}}\n\nRequired Corrective Action\n{{required_action}}\n\nPlease carry out the corrective action above. A further violation of the same policy may lead to a Second Warning. If you wish to respond, or believe this warning was issued in error, contact the Office of the Subdivision Leader and mention reference {{warning_reference}}.\n\nThis warning was issued on {{issue_date}}.",
+      "change_note": "Initial standard template"
+    },
+    {
+      "warning_level": "2nd Warning",
+      "name": "Second Warning Letter (with Office Summons)",
+      "description": "A formal second warning that follows an earlier warning, with the date and place of a meeting at the subdivision office.",
+      "subject_template": "{{warning_level}}: {{policy_reference}} ({{case_reference}})",
+      "body_template": "Dear {{resident_name}},\n\nThis is a formal Second Warning from the Office of the Subdivision Leader of {{subdivision_name}}, issued under case {{case_reference}}. It follows the earlier warning issued to you under the subdivision's rules.\n\nOn {{incident_date}}, a further incident involving {{pet_name}} ({{pet_type}}), an animal in your care, was reported and verified as a violation of the subdivision policy below.\n\nViolation Details\n{{violation_description}}\n\nSubdivision Policy\n{{policy_reference}}\n\nRequired Corrective Action\n{{required_action}}\n\nOffice Summons\nYou are asked to meet the Office of the Subdivision Leader to discuss this matter.\nDate and time: {{summons_date}}\nPlace: {{summons_place}}\n\nA further violation of the same policy may lead to a Final Notice. To respond or to ask about the meeting, contact the Office of the Subdivision Leader and mention reference {{warning_reference}}.\n\nThis warning was issued on {{issue_date}}.",
+      "change_note": "Initial standard template"
+    },
+    {
+      "warning_level": "Final Notice / Escalation",
+      "name": "Final Notice / Escalation Letter",
+      "description": "The last warning level. It states that the subdivision will consider further steps under its own rules. It imposes no penalty itself.",
+      "subject_template": "{{warning_level}}: {{policy_reference}} ({{case_reference}})",
+      "body_template": "Dear {{resident_name}},\n\nThis is a Final Notice from the Office of the Subdivision Leader of {{subdivision_name}}, issued under case {{case_reference}}. It is the last warning level in the subdivision's process.\n\nOn {{incident_date}}, a further incident involving {{pet_name}} ({{pet_type}}), an animal in your care, was reported and verified as a violation of the subdivision policy below, after earlier warnings.\n\nViolation Details\n{{violation_description}}\n\nSubdivision Policy\n{{policy_reference}}\n\nRequired Corrective Action\n{{required_action}}\n\nIf this matter is not resolved, the Subdivision Leader will consider the further steps that the subdivision's own rules allow. This letter does not by itself impose any penalty. To respond, or to ask what happens next, contact the Office of the Subdivision Leader and mention reference {{warning_reference}}.\n\nThis notice was issued on {{issue_date}}.",
+      "change_note": "Initial standard template"
+    }
+  ]
+}

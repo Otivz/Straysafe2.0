@@ -21,18 +21,18 @@ from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 import app.models  # noqa: E402,F401
-from _case_helpers import make_warning_ready  # noqa: E402  (what an owner warning now requires)
+from _case_helpers import make_warning_ready, template_id_for  # noqa: E402  (what an owner warning now requires)
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models.owner_followup import OwnerFollowUp  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
 from app.models.report import Report, ReportCategory, ReportStatus, StatusHistory  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
-from app.routes import owner_followups, reports, warnings  # noqa: E402
+from app.routes import owner_followups, reports, warning_letters, warnings  # noqa: E402
 from app.utils.auth import create_access_token  # noqa: E402
 
 Base.metadata.create_all(bind=engine)
 api = FastAPI()
-for r in (owner_followups.router, reports.router, warnings.router):
+for r in (owner_followups.router, reports.router, warnings.router, warning_letters.templates_router):
     api.include_router(r)
 client = TestClient(api, raise_server_exceptions=False)
 db = SessionLocal()
@@ -126,7 +126,8 @@ make_warning_ready(db, r2, owner.user_id, observation_days=3)   # verified incid
 with patch("app.routes.warnings.dispatch_notification"), \
      patch("app.services.email_templates.render_owner_warning_email", return_value=("S", "B", "<b>B</b>")):
     r = client.post("/warnings/", headers=HL, json={"user_id": owner.user_id, "report_id": r2, "warning_level": "1st Warning",
-                                                    "violation_type": "Free-Roaming Unleashed", "description": "Roaming again"})
+                                                    "violation_type": "Free-Roaming Unleashed", "description": "Roaming again",
+                                                    "template_id": template_id_for(client, HL, "1st Warning")})
 check("warning: first warning issued", r.status_code == 200, r.text[:200])
 h = history(r2)
 check("timeline: the first warning's observation uses the same 'Observation started' entry",

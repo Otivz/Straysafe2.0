@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Camera, Download, FileText, FolderOpen, Image as ImageIcon, Images, Maximize2, PawPrint, Play, Upload, UserRound, X } from 'lucide-react';
 import { WarningLetterDocument } from '../../../components/WarningLetterDocument';
 import { Button } from '../../components/Button';
@@ -11,11 +11,13 @@ import { useAdminData } from '../../data/context';
 import type { Case } from '../../data/types';
 import { FormFooter } from '../../dialogs/BasicDialogs';
 import { useSubmit } from '../../lib/useSubmit';
-import { adminApi, type ApiGeneratedWarningLetter, type ApiTemplatePreviewResult } from '../../live/api';
+import { adminApi, type ApiGeneratedWarningLetter, type ApiTemplatePreviewResult, type ApiWarningTemplate } from '../../live/api';
+import { templateOptionLabel, templatesForLevel } from '../../lib/warningTemplates';
 import { reportIdOf } from '../../../live/refs';
 import { toLocalInput } from '../../../preview/lib/format';
-import { complaintsApi, type ApiComplaint, type ApiLeads, type ApiPersonRow, type EvidenceId, type ResponsibleIn, type StepAction } from '../../complaints/api';
-import { letterOf, printLetter, type Letter } from '../../complaints/letter';
+import { complaintsApi, type ApiComplaint, type ApiLeads, type ApiLetterDraft, type ApiPersonRow, type EvidenceId, type ResponsibleIn, type StepAction } from '../../complaints/api';
+import { printWarningLetter } from '../../../components/printWarningLetter';
+import { errorMessage } from '../../../preview/lib/errors';
 import {
   ATTENDANCE, EVIDENCE, NOT_DELIVERED, PROOF, STAGE_TEXT, STEP_TITLE, fmt, fmtDay, localToServer, newRequestId, ord, peso,
   type ComplaintDialogState,
@@ -24,7 +26,6 @@ import {
 interface Props { c: Case; d: ApiComplaint; refOf: (reportId: number) => string; onClose: () => void; onSaved: (next: ApiComplaint) => void }
 
 const rid = (c: Case) => reportIdOf(c.id) ?? 0;
-const today = () => toLocalInput(new Date()).slice(0, 10);
 
 /** Every complaint window, opened by the complaint page. */
 export function ComplaintDialogs({ dialog, ...p }: Props & { dialog: ComplaintDialogState | null }) {
@@ -511,55 +512,51 @@ function SameOccurrenceDialog(p: Props) {
 }
 
 // ---------------------------------------------------------------------------------------------------- letters
-function useLetter(p: Props, kind: 'letter_1' | 'letter_2', letterDate: string, summonsAt?: string | null, place?: string | null): Letter | null {
-  const { state } = useAdminData();
-  if (!p.d.respondent || !p.d.rule) return null;
-  return letterOf({
-    kind, subdivision: p.d.subdivision_name ?? state.admin.subdivision, leaderName: state.admin.name, letterDate,
-    respondentName: p.d.respondent.name, respondentAddress: p.d.respondent.address, ruleTitle: p.d.rule.title ?? '', ruleReference: p.d.rule.reference,
-    ruleSummary: p.d.rule.summary, incidentAt: p.d.incident_at, where: p.c.location.detail || p.c.location.area, summonsAt, summonsPlace: place,
-  });
-}
-
-function LetterView({ letter }: { letter: Letter }) {
-  return (
-    <div className="sa-cm-letter" aria-label="Letter preview">
-      <p>{letter.heading}</p><p>{letter.date}</p><p>{letter.to[0]}<br />{letter.to[1]}</p><p><b>{letter.subject}</b></p>
-      {letter.paragraphs.map((x) => <p key={x}>{x}</p>)}
-      <p>{letter.signature[0]}<br />{letter.signature[1]}</p>
-      <p className="sa-cm-letter__receipt">Received by: ____________________ Date and time: ______________</p>
-    </div>
-  );
-}
-
+/**
+ * Opens a letter step to read or print it.
+ *  - PREPARED (not issued): the DRAFT, rendered by the server from the saved draft. It is marked "DRAFT — NOT OFFICIALLY ISSUED" on
+ *    every page and has no warning reference; there is no download, because only an issued letter is an official document.
+ *  - ISSUED (and later): the official letter, exactly as it was frozen when it was issued, with its PDF and DOCX downloads.
+ */
 function PrintDialog(p: Props & { stepId: number }) {
   const step = p.d.steps.find((s) => s.step_id === p.stepId);
   const kind = step?.kind === 'letter_2' ? 'letter_2' : 'letter_1';
   const det = (step?.details ?? {}) as Record<string, unknown>;
-  const summons = p.d.steps.find((s) => s.kind === 'summons');
-  const letter = useLetter(p, kind, String(det.letter_date ?? today()), summons?.due_at, (summons?.details as Record<string, string> | undefined)?.place);
-  const storedId = typeof det.letter_id === 'number' ? det.letter_id : null;
+  const isDraft = step?.state === 'prepared';
+  const storedId = !isDraft && typeof det.letter_id === 'number' ? det.letter_id : null;
   const [stored, setStored] = useState<ApiGeneratedWarningLetter | null>(null);
+  const [draft, setDraft] = useState<ApiLetterDraft | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const paperBox = useRef<HTMLDivElement>(null);
   const toast = useToast();
 
   useEffect(() => {
-    if (!storedId) return;
     let live = true;
-    adminApi.warningLetterDetail(storedId).then((res) => { if (live) setStored(res); }, () => undefined);
+    if (isDraft && step) {
+      complaintsApi.stepDraft(rid(p.c), step.step_id).then((res) => { if (live) setDraft(res); }, (e) => { if (live) setLoadError(errorMessage(e)); });
+    } else if (storedId) {
+      adminApi.warningLetterDetail(storedId).then((res) => { if (live) setStored(res); }, (e) => { if (live) setLoadError(errorMessage(e)); });
+    }
     return () => { live = false; };
-  }, [storedId]);
+  }, [isDraft, storedId, step, p.c]);
 
   const dl = (format: 'pdf' | 'docx') => {
     if (!storedId) return;
     void adminApi.downloadWarningLetter(storedId, stored?.warning_reference || `WARN-${storedId}`, format).catch((e) => toast.error(String(e)));
   };
+  const print = () => {
+    const title = stored ? `${stored.warning_reference} · ${STEP_TITLE[kind]}` : `DRAFT · ${STEP_TITLE[kind]}`;
+    if (!printWarningLetter(paperBox.current, title)) toast.error('The print window was blocked. Allow pop-ups for this site, then try again.');
+  };
 
   const storedAttachmentUrl = stored?.attachment_url || (typeof det.attachment_url === 'string' ? det.attachment_url : null);
   const storedAttachmentName = stored?.attachment_name || (typeof det.attachment_name === 'string' ? det.attachment_name : 'Attached file');
+  const ready = isDraft ? !!draft : !!stored;
 
   return (
-    <Dialog size="lg" title={stored ? `${stored.warning_reference} · ${STEP_TITLE[kind]}` : STEP_TITLE[kind]}
-      description={stored ? `Template: ${stored.template_name} (v${stored.template_version_number})` : 'As it prints'}
+    <Dialog size="lg" title={stored ? `${stored.warning_reference} · ${STEP_TITLE[kind]}` : `Draft · ${STEP_TITLE[kind]}`}
+      description={stored ? `Issued letter. Template: ${stored.template_name} (v${stored.template_version_number})`
+        : draft ? `Draft, not issued. Template: ${draft.template.name} (v${draft.template.version_number}). It gets its warning reference when you issue it.` : 'Loading…'}
       onClose={p.onClose}
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
@@ -571,12 +568,7 @@ function PrintDialog(p: Props & { stepId: number }) {
               </>
             ) : null}
             {storedAttachmentUrl ? (
-              <a
-                href={storedAttachmentUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="sa-btn sa-btn--sm sa-btn--ghost inline-flex items-center gap-1.5"
-              >
+              <a href={storedAttachmentUrl} target="_blank" rel="noopener noreferrer" className="sa-btn sa-btn--sm sa-btn--ghost inline-flex items-center gap-1.5">
                 <FileText size={14} aria-hidden="true" />
                 {storedAttachmentName}
               </a>
@@ -584,28 +576,55 @@ function PrintDialog(p: Props & { stepId: number }) {
           </div>
           <div className="flex gap-2">
             <Button onClick={p.onClose}>Close</Button>
-            <Button variant="primary" onClick={() => { if (letter) printLetter(letter); }}>Print</Button>
+            <Button variant="primary" onClick={print} disabled={!ready}>{isDraft ? 'Print draft' : 'Print'}</Button>
           </div>
         </div>
       }>
-      {stored ? (
-        <WarningLetterDocument
-          subdivisionName={stored.subdivision_name || stored.placeholders?.subdivision_name}
-          subdivisionAddress={stored.subdivision_address || stored.placeholders?.subdivision_address}
-          subdivisionPhone={stored.subdivision_phone || stored.placeholders?.subdivision_phone}
-          subdivisionEmail={stored.subdivision_email || stored.placeholders?.subdivision_email}
-          warningLevel={stored.warning_level}
-          warningReference={stored.warning_reference}
-          caseReference={stored.case_reference}
-          issueDate={stored.placeholders?.issue_date || (stored.issued_at ? fmt(stored.issued_at) : '')}
-          recipientName={stored.recipient_name}
-          recipientAddress={stored.recipient_address}
-          subject={stored.rendered_subject}
-          body={stored.rendered_body}
-          issuerName={stored.issuer_name || stored.placeholders?.issuer_name || stored.issued_by_name}
-          issuerRole={stored.issuer_role || stored.placeholders?.issuer_role}
-        />
-      ) : letter ? <LetterView letter={letter} /> : null}
+      {loadError ? <FormError message={loadError} /> : null}
+      {isDraft && draft && !draft.can_issue ? (
+        <Callout tone="amber" title="This draft cannot be issued as it is">
+          {draft.missing_fields.map((m) => m.message).join(' ')} Prepare the letter again to fix it.
+        </Callout>
+      ) : null}
+      <div ref={paperBox}>
+        {stored ? (
+          <WarningLetterDocument
+            legacyLayout={stored.legacy_layout}
+            subdivisionName={stored.subdivision_name || stored.placeholders?.subdivision_name}
+            subdivisionAddress={stored.subdivision_address || stored.placeholders?.subdivision_address}
+            subdivisionPhone={stored.subdivision_phone || stored.placeholders?.subdivision_phone}
+            subdivisionEmail={stored.subdivision_email || stored.placeholders?.subdivision_email}
+            warningLevel={stored.warning_level}
+            warningReference={stored.warning_reference}
+            caseReference={stored.case_reference}
+            issueDate={stored.placeholders?.issue_date || (stored.issued_at ? fmt(stored.issued_at) : '')}
+            recipientName={stored.recipient_name}
+            recipientAddress={stored.recipient_address}
+            subject={stored.rendered_subject}
+            body={stored.rendered_body}
+            issuerName={stored.issuer_name || stored.placeholders?.issuer_name || stored.issued_by_name}
+            issuerRole={stored.issuer_role || stored.placeholders?.issuer_role}
+          />
+        ) : draft ? (
+          <WarningLetterDocument
+            draft
+            subdivisionName={draft.placeholders?.subdivision_name}
+            subdivisionAddress={draft.placeholders?.subdivision_address}
+            subdivisionPhone={draft.placeholders?.subdivision_phone}
+            subdivisionEmail={draft.placeholders?.subdivision_email}
+            warningLevel={draft.placeholders?.warning_level || (kind === 'letter_2' ? '2nd Warning' : '1st Warning')}
+            warningReference=""
+            caseReference={draft.placeholders?.case_reference || p.c.id}
+            issueDate={draft.placeholders?.issue_date || ''}
+            recipientName={draft.placeholders?.resident_name || ''}
+            recipientAddress={draft.placeholders?.resident_address}
+            subject={draft.subject}
+            body={draft.body}
+            issuerName={draft.placeholders?.issuer_name || draft.placeholders?.issued_by || ''}
+            issuerRole={draft.placeholders?.issuer_role}
+          />
+        ) : null}
+      </div>
       <p className="sa-hint">The letter never names the complainant.</p>
     </Dialog>
   );
@@ -639,43 +658,40 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
   const s = (k: string) => String(f[k] ?? '');
   const kind = step?.kind ?? 'letter_1';
   const letterKind = kind === 'letter_2' ? 'letter_2' : 'letter_1';
-  const letter = useLetter(p, letterKind, s('letter_date') || today(), s('summons_at') || null, s('place'));
+  const draftBox = useRef<HTMLDivElement>(null);
+  const toast = useToast();
   const existingStepDet = (step?.details ?? {}) as Record<string, unknown>;
   const existingAttachmentUrl = typeof existingStepDet.attachment_url === 'string' ? existingStepDet.attachment_url : null;
   const existingAttachmentName = typeof existingStepDet.attachment_name === 'string' ? existingStepDet.attachment_name : 'Attached warning letter';
   const [letterSource, setLetterSource] = useState<'generated' | 'import'>(() => (existingAttachmentUrl ? 'import' : 'generated'));
   const label = {
-    prepare: letterSource === 'import' ? 'Save warning letter' : 'Save and print',
+    prepare: letterSource === 'import' ? 'Save draft' : 'Save and print draft',
     issue: 'Mark as issued', deliver: 'Save', attendance: 'Save', reschedule: 'Save', impose: 'Impose', pay: 'Save', arrange: 'Save', meeting: 'Save',
   }[p.action];
   const { pending, error, save } = useSave(p, 'Saved');
 
+  const [templates, setTemplates] = useState<ApiWarningTemplate[]>([]);
   const [templateId, setTemplateId] = useState<string>('');
   const [tplPreview, setTplPreview] = useState<ApiTemplatePreviewResult | null>(null);
+  const wlevel = letterKind === 'letter_2' ? '2nd Warning' : '1st Warning';
+  const fitting = templatesForLevel(templates, wlevel);
+  // The Leader chooses the template; nothing is selected for them. A choice that does not fit this letter's level counts as none.
+  const chosenTemplateId = fitting.some((t) => String(t.template_id) === templateId) ? templateId : '';
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (p.action !== 'prepare') return;
     let live = true;
-    const wlevel = letterKind === 'letter_2' ? '2nd Warning' : '1st Warning';
-    adminApi.warningTemplates('active').then((res) => {
-      if (!live) return;
-      const def = res.items.find((t) => t.is_default && t.warning_level === wlevel)
-        || res.items.find((t) => t.is_default && !t.warning_level)
-        || res.items.find((t) => t.warning_level === wlevel)
-        || res.items[0];
-      if (def) setTemplateId(String(def.template_id));
-    }).catch(() => undefined);
+    adminApi.warningTemplates('active').then((res) => { if (live) setTemplates(res.items); }).catch(() => undefined);
     return () => { live = false; };
-  }, [p.action, letterKind]);
+  }, [p.action]);
 
   useEffect(() => {
-    if (p.action !== 'prepare' || !p.d.respondent || !p.d.rule) return;
+    if (p.action !== 'prepare' || !p.d.respondent || !p.d.rule || !chosenTemplateId) return;
     let live = true;
-    const wlevel = letterKind === 'letter_2' ? '2nd Warning' : '1st Warning';
     adminApi.previewWarningTemplate({
-      ...(templateId ? { template_id: Number(templateId) } : {}),
+      template_id: Number(chosenTemplateId),
       report_id: rid(p.c),
       ...(p.d.respondent.user_id ? { user_id: p.d.respondent.user_id } : {}),
       recipient_name: p.d.respondent.name,
@@ -690,7 +706,7 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
       field_overrides: overrides,
     }).then((res) => { if (live) setTplPreview(res); }, () => undefined);
     return () => { live = false; };
-  }, [p.action, p.c, p.d.respondent, p.d.rule, templateId, letterKind, f.letter_date, f.summons_at, f.place, f.required_action, overrides]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [p.action, p.c, p.d.respondent, p.d.rule, chosenTemplateId, letterKind, f.letter_date, f.summons_at, f.place, f.required_action, overrides]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!step) return null;
   const title = STEP_TITLE[step.kind];
@@ -704,6 +720,7 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
       switch (p.action) {
         case 'prepare':
           need('letter_date', 'Choose the date on the letter.');
+          if (!chosenTemplateId) throw new Error('Choose the letter template.');
           if (step.kind === 'letter_2') need('summons_at', 'Choose the date and time of the summons.');
           if (letterSource === 'import' && !attachedFile && !existingAttachmentUrl) {
             throw new Error('Choose a PDF, Word document, or image file to import.');
@@ -712,7 +729,7 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
             action: 'prepare',
             letter_date: s('letter_date'),
             ...(step.kind === 'letter_2' ? { summons_at: localToServer(s('summons_at')), place: s('place') } : {}),
-            ...(templateId ? { template_id: Number(templateId) } : {}),
+            template_id: Number(chosenTemplateId),
             ...(s('required_action').trim() ? { required_action: s('required_action').trim() } : {}),
             ...(Object.keys(overrides).length ? { field_overrides: overrides } : {}),
             ...(letterSource === 'import' && !attachedFile && existingAttachmentUrl
@@ -769,7 +786,9 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
         body.attachment_name = attachedFile.name;
       }
       return complaintsApi.step(rid(p.c), step.step_id, body);
-    }, p.action === 'prepare' && letterSource === 'generated' && letter ? () => printLetter(letter) : undefined);
+    }, p.action === 'prepare' && letterSource === 'generated' && chosenTemplateId && tplPreview
+      ? () => { if (!printWarningLetter(draftBox.current, `DRAFT · ${title}`)) toast.error('The print window was blocked. Allow pop-ups for this site, then print the draft from the step.'); }
+      : undefined);
   };
 
   const heading: Record<StepAction, string> = { prepare: `Prepare the ${title.toLowerCase()}`, issue: 'Issue the letter for delivery', deliver: 'Record the delivery', attendance: 'Record the summons attendance',
@@ -796,11 +815,25 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
               onChange={(v) => setLetterSource(v)}
               cols={2}
               options={[
-                { value: 'generated', label: 'Use StraySafe standard letter', description: 'Automatically filled from the subdivision’s fixed letter.' },
+                { value: 'generated', label: 'Use a letter template', description: 'Filled in from the template you choose below.' },
                 { value: 'import', label: 'Import your own file', description: 'Upload a PDF, Word document (.doc, .docx), or image.' },
               ]}
             />
           </FieldGroup>
+          <Field
+            label="Letter template"
+            required
+            hint={fitting.length === 0
+              ? `No active template fits a ${wlevel}. Add one under Warning templates.`
+              : letterSource === 'import'
+                ? `The resident's in-app copy uses this template's text, with your file attached. Templates for ${wlevel} and for all levels.`
+                : `Templates for ${wlevel} and for all levels.`}
+          >
+            <Select value={chosenTemplateId} onChange={(e) => setTemplateId(e.target.value)}>
+              <option value="">Choose a template</option>
+              {fitting.map((t) => <option key={t.template_id} value={String(t.template_id)}>{templateOptionLabel(t)}</option>)}
+            </Select>
+          </Field>
           {letterSource === 'import' ? (
             <FieldGroup
               label="Import warning letter file"
@@ -851,10 +884,12 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
             </FieldGroup>
           ) : (
             <>
-              {tplPreview && tplPreview.missing_fields.length > 0 ? (
+              {chosenTemplateId && tplPreview && tplPreview.missing_fields.length > 0 ? (
                 <Callout tone="amber" title="Complete missing template fields">
                   <div className="flex flex-col gap-2 mt-1">
-                    {tplPreview.missing_fields.map((m) => (
+                    {tplPreview.missing_fields.map((m) => m.unknown ? (
+                      <p key={m.key} className="sa-small m-0"><strong>{m.message}</strong></p>
+                    ) : (
                       <div key={m.key} className="flex flex-wrap items-center gap-2">
                         <label className="sa-small font-medium w-36">{m.label}</label>
                         <Input className="flex-1" value={overrides[m.key] ?? ''} onChange={(e) => setOverrides((x) => ({ ...x, [m.key]: e.target.value }))} placeholder={`Enter ${m.label.toLowerCase()}`} />
@@ -863,8 +898,10 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
                   </div>
                 </Callout>
               ) : null}
-              {tplPreview ? (
+              {chosenTemplateId && tplPreview ? (
+                <div ref={draftBox}>
                 <WarningLetterDocument
+                  draft
                   subdivisionName={tplPreview.placeholders?.subdivision_name}
                   subdivisionAddress={tplPreview.placeholders?.subdivision_address}
                   subdivisionPhone={tplPreview.placeholders?.subdivision_phone}
@@ -880,11 +917,12 @@ function StepDialog(p: Props & { stepId: number; action: StepAction }) {
                   issuerName={tplPreview.placeholders?.issuer_name || tplPreview.placeholders?.issued_by || state.admin.name}
                   issuerRole={tplPreview.placeholders?.issuer_role}
                 />
-              ) : (letter ? <LetterView letter={letter} /> : null)}
+                </div>
+              ) : null}
             </>
           )}
           <p className="sa-hint">The letter never names the complainant.</p>
-          <Callout tone="amber">Printing the letter does not mean it was delivered. You record the delivery after it happens. Marking as issued will also notify the resident automatically if they have a StraySafe account.</Callout>
+          <Callout tone="amber">Saving keeps a <strong>draft</strong>: it has no warning reference, the resident is not told, and a printed draft says DRAFT on every page. The official letter, with its reference, is made when you mark it as <strong>issued</strong>, which also notifies the resident if they have a StraySafe account.</Callout>
         </>
       ) : null}
       {p.action === 'issue' ? (

@@ -26,9 +26,9 @@ from app.models.report import Report, ReportStatus, ReportCategory
 from app.models.pet import Pet
 from app.models.warning import OwnerWarning
 from app.models.owner_followup import OwnerFollowUp
-from app.routes import owner_followups, warnings
+from app.routes import owner_followups, warning_letters, warnings
 from app.utils.auth import create_access_token
-from _case_helpers import make_warning_ready  # what an owner warning now requires
+from _case_helpers import make_warning_ready, template_id_for  # what an owner warning now requires
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 Session = sessionmaker(bind=engine)
@@ -37,6 +37,7 @@ Base.metadata.create_all(engine)
 api = FastAPI()
 api.include_router(owner_followups.router)
 api.include_router(warnings.router)
+api.include_router(warning_letters.templates_router)   # the Leader picks a letter template
 
 def test_db():
     with Session() as session:
@@ -138,7 +139,8 @@ with patch("app.utils.notification_dispatcher.dispatch_notification"):
             "warning_level": "1st Warning",
             "violation_type": "Free-Roaming Unleashed",
             "description": "Pet seen unattended outside property line.",
-            "fine_amount": 0.0
+            "fine_amount": 0.0,
+            "template_id": template_id_for(client, leader_hdr, "1st Warning", session_factory=Session),
         }, headers=leader_hdr)
 
 check(res_warn.status_code == 200, "First Warning successfully issued (200)")
@@ -210,7 +212,8 @@ with patch("app.utils.notification_dispatcher.dispatch_notification"):
             "warning_level": "1st Warning",
             "violation_type": "Free-Roaming Unleashed",
             "description": "Keep dog leashed inside compound.",
-            "fine_amount": 0.0
+            "fine_amount": 0.0,
+            "template_id": template_id_for(client, leader_hdr, "1st Warning", session_factory=Session),
         }, headers=leader_hdr)
         print("W3 response:", res_w3.status_code, res_w3.text)
 

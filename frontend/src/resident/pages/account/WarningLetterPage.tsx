@@ -107,6 +107,7 @@ export default function WarningLetterPage() {
 
       <Section title="Official warning letter">
         <WarningLetterDocument
+          legacyLayout={letter.legacy_layout}
           subdivisionName={letter.subdivision_name || letter.placeholders?.subdivision_name}
           subdivisionAddress={letter.subdivision_address || letter.placeholders?.subdivision_address}
           subdivisionPhone={letter.subdivision_phone || letter.placeholders?.subdivision_phone}

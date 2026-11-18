@@ -7,6 +7,8 @@ import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
 import { Checkbox, Field, FieldGroup, Input, Select } from '../components/form';
+import { PlaceholderEditor, type PlaceholderEditorHandle } from '../components/PlaceholderEditor';
+import { startPlaceholderDrag } from '../lib/placeholders';
 import { Block, Callout, EmptyState, ErrorState, FormError, PageHeader, PageSkeleton, Panel } from '../components/layout';
 import { useToast } from '../components/toast';
 import { useAdminData } from '../data/context';
@@ -18,7 +20,7 @@ import {
   type ApiWarningTemplateVersion,
 } from '../live/api';
 import { usePageTitle } from '../lib/hooks';
-import { fmtDateTime } from '../../preview/lib/format';
+import { fmtDate, fmtDateTime } from '../../preview/lib/format';
 import { errorMessage } from '../../preview/lib/errors';
 
 const LEVELS = [
@@ -45,6 +47,7 @@ export default function WarningTemplatesPage() {
   const [previewTarget, setPreviewTarget] = useState<{ template: ApiWarningTemplate; version?: ApiWarningTemplateVersion } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<ApiWarningTemplate | null>(null);
   const [importing, setImporting] = useState(false);
+  const [importNotes, setImportNotes] = useState<{ name: string; notes: string[] } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -75,6 +78,7 @@ export default function WarningTemplatesPage() {
       const form = new FormData();
       form.append('file', file);
       const created = await adminApi.importWarningTemplateDocx(form);
+      setImportNotes(created.import_notes?.length ? { name: created.name, notes: created.import_notes } : null);
       toast.success(`Imported "${created.name}" (${created.current_version?.placeholders_used?.length ?? 0} placeholders detected)`);
       await load();
       setEditing(created);
@@ -119,7 +123,9 @@ export default function WarningTemplatesPage() {
   if (loading && templates.length === 0) return <PageSkeleton />;
   if (loadErr && templates.length === 0) return <ErrorState message={loadErr} onRetry={() => void load()} />;
 
-  const shown = templates.filter((t) => filter === 'all' || t.status === filter);
+  // Archived templates appear only under Archived; All and Active list the ones in use.
+  const shown = templates.filter((t) => (filter === 'archived' ? t.status === 'archived' : t.status !== 'archived'));
+  const inUse = templates.filter((t) => t.status !== 'archived').length;
 
   return (
     <div>
@@ -148,15 +154,22 @@ export default function WarningTemplatesPage() {
         )}
       />
 
+      {importNotes ? (
+        <Callout className="mb-4" title={`Notes on the imported Word file: ${importNotes.name}`}>
+          <ul className="m-0 list-disc pl-5">{importNotes.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+          <Button size="sm" variant="ghost" className="mt-2" onClick={() => setImportNotes(null)}>Dismiss</Button>
+        </Callout>
+      ) : null}
+
       <Panel>
         <Block
           title="Templates"
-          description="Previously issued warning letters keep an immutable snapshot of the exact version used when they were issued."
+          description="Each template keeps its earlier versions under History. Letters already issued keep the exact version they were issued with."
           action={(
             <div className="flex gap-1.5">
               {(['all', 'active', 'archived'] as const).map((k) => (
                 <Button key={k} size="sm" variant={filter === k ? 'primary' : 'ghost'} onClick={() => setFilter(k)}>
-                  {k === 'all' ? `All (${templates.length})` : k === 'active' ? `Active (${templates.filter((x) => x.status === 'active').length})` : `Archived (${templates.filter((x) => x.status === 'archived').length})`}
+                  {k === 'all' ? `All (${inUse})` : k === 'active' ? `Active (${inUse})` : `Archived (${templates.length - inUse})`}
                 </Button>
               ))}
             </div>
@@ -165,79 +178,80 @@ export default function WarningTemplatesPage() {
           {shown.length === 0 ? (
             <EmptyState
               icon={FileText}
-              title={filter === 'archived' ? 'No archived templates' : 'No warning letter templates yet'}
-              action={<Button variant="primary" icon={Plus} onClick={() => setEditing('new')}>Create template</Button>}
+              title={filter === 'archived' ? 'No archived templates' : templates.length > 0 ? 'No active templates' : 'No warning letter templates yet'}
+              action={filter === 'archived' ? undefined : <Button variant="primary" icon={Plus} onClick={() => setEditing('new')}>Create template</Button>}
             >
-              Create a template in the editor or import an existing Word (.docx) document with placeholders.
+              {filter === 'archived'
+                ? 'Templates you archive are kept here, with their history. Activate one to use it again.'
+                : templates.length > 0
+                  ? 'Every template is archived. Open Archived to activate one, or create a new template.'
+                  : 'Create a template in the editor or import an existing Word (.docx) document with placeholders.'}
             </EmptyState>
           ) : (
-            <ul className="m-0 flex list-none flex-col gap-3 p-0">
-              {shown.map((t) => (
-                <li key={t.template_id} className="sa-record">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="flex flex-wrap items-center gap-2">
-                        <span className="sa-semibold text-[15px]">{t.name}</span>
+            <ul className="m-0 grid list-none gap-3 p-0 lg:grid-cols-2">
+              {shown.map((t) => {
+                const active = t.status === 'active';
+                const sameName = templates.some((o) => o.template_id !== t.template_id && o.name.trim().toLowerCase() === t.name.trim().toLowerCase());
+                const used = t.current_version?.placeholders_used?.length ?? 0;
+                return (
+                  <li key={t.template_id} className={`sa-record flex flex-col gap-2 ${active ? '' : 'opacity-80'}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <h3 className="m-0 min-w-0 truncate text-[15px] font-semibold" title={t.name}>{t.name}</h3>
+                      <div className="flex shrink-0 items-center gap-1.5">
                         {t.is_default ? <Badge tone="brand" dot>Default</Badge> : null}
-                        <Badge tone={t.status === 'active' ? 'sage' : 'neutral'}>{t.status === 'active' ? 'Active' : 'Archived'}</Badge>
-                        <Badge>{t.warning_level || 'All levels'}</Badge>
-                        <Badge tone="neutral">v{t.current_version_number}</Badge>
-                        <Badge tone="neutral">{t.source_type === 'docx_import' ? 'DOCX import' : 'Editor'}</Badge>
-                      </p>
-                      {t.description ? <p className="sa-small sa-text-2 mt-1">{t.description}</p> : null}
-                      <p className="sa-meta mt-1.5">
-                        Subject: <code className="text-xs">{t.current_version?.subject_template || '—'}</code>
-                        {t.updated_at ? ` · Updated ${fmtDateTime(t.updated_at)}` : ''}
-                        {t.updated_by_name ? ` by ${t.updated_by_name}` : ''}
-                      </p>
-                      {t.current_version?.placeholders_used?.length ? (
-                        <p className="sa-meta mt-1">
-                          Placeholders ({t.current_version.placeholders_used.length}):{' '}
-                          {t.current_version.placeholders_used.map((k) => `{{${k}}}`).join(', ')}
-                        </p>
-                      ) : null}
+                        <Badge tone={active ? 'sage' : 'neutral'}>{active ? 'Active' : 'Archived'}</Badge>
+                      </div>
                     </div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Button size="sm" icon={Pencil} onClick={() => setEditing(t)}>Edit</Button>
-                    <Button size="sm" icon={Eye} onClick={() => setPreviewTarget({ template: t })}>Preview</Button>
-                    <Button size="sm" icon={History} onClick={() => void openHistory(t)}>
-                      History ({t.version_count})
-                    </Button>
-                    {t.status === 'active' && !t.is_default ? (
-                      <Button size="sm" icon={Star} onClick={() => void setDefault(t)}>Set as default</Button>
+                    <p className="sa-meta m-0">
+                      {t.warning_level || 'All levels'} · v{t.current_version_number}{used ? ` · ${used} placeholder${used === 1 ? '' : 's'}` : ''}
+                      {sameName ? ` · #${t.template_id}${t.created_at ? `, created ${fmtDate(t.created_at)}` : ''}` : ''}
+                    </p>
+                    {t.description ? <p className="sa-small sa-text-2 m-0 line-clamp-2">{t.description}</p> : null}
+                    {t.updated_at ? (
+                      <p className="sa-meta m-0">Updated {fmtDate(t.updated_at)}{t.updated_by_name ? ` by ${t.updated_by_name}` : ''}</p>
                     ) : null}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      icon={t.status === 'active' ? Archive : RotateCcw}
-                      onClick={() => void toggleArchive(t)}
-                    >
-                      {t.status === 'active' ? 'Archive' : 'Activate'}
-                    </Button>
-                  </div>
-                </li>
-              ))}
+                    <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
+                      {active ? <Button size="sm" icon={Pencil} onClick={() => setEditing(t)}>Edit</Button> : null}
+                      <Button size="sm" icon={Eye} onClick={() => setPreviewTarget({ template: t })}>Preview</Button>
+                      <Button size="sm" icon={History} onClick={() => void openHistory(t)}>History{t.version_count > 1 ? ` (${t.version_count})` : ''}</Button>
+                      {active && !t.is_default ? <Button size="sm" variant="ghost" icon={Star} onClick={() => void setDefault(t)}>Set as default</Button> : null}
+                      <Button size="sm" variant="ghost" icon={active ? Archive : RotateCcw} className="ml-auto" onClick={() => void toggleArchive(t)}>
+                        {active ? 'Archive' : 'Activate'}
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Block>
       </Panel>
 
       <Panel className="mt-5">
-        <Block title="Supported dynamic placeholders" description="Click any placeholder in the editor to insert it. StraySafe populates these fields automatically from case, pet, policy, and resident records.">
-          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 sm:px-5">
+            <span>
+              <span className="sa-semibold block text-[15px]">Supported placeholders ({placeholders.length})</span>
+              <span className="sa-meta">Filled in automatically from case, pet, policy and resident records. Drag them into a template in the editor.</span>
+            </span>
+            <span className="sa-meta shrink-0 group-open:hidden">Show</span>
+            <span className="sa-meta hidden shrink-0 group-open:inline">Hide</span>
+          </summary>
+          <div className="grid gap-2.5 px-4 pb-4 sm:grid-cols-2 sm:px-5 lg:grid-cols-3">
             {placeholders.map((p) => (
               <div key={p.key} className="rounded-lg border border-[var(--sa-line-soft)] bg-[var(--sa-surface-2)] p-2.5">
                 <p className="flex items-center justify-between gap-2">
-                  <code className="text-xs font-semibold text-[var(--sa-brand)]">{`{{${p.key}}}`}</code>
-                  {p.required ? <Badge tone="amber">Required</Badge> : <Badge>Optional</Badge>}
+                  <span className="sa-ph sa-ph--static">{p.label}</span>
+                  {p.requirement === 'required' ? <Badge tone="amber">Always needed</Badge>
+                    : p.requirement === 'conditional' ? <Badge tone="amber">Needed when used</Badge>
+                    : p.requirement === 'system' ? <Badge>Automatic</Badge>
+                    : <Badge>Optional</Badge>}
                 </p>
-                <p className="sa-small font-medium mt-1">{p.label}</p>
-                <p className="sa-meta mt-0.5">{p.description}</p>
+                <p className="sa-meta mt-1.5">{p.description}</p>
               </div>
             ))}
           </div>
-        </Block>
+        </details>
       </Panel>
 
       {editing ? (
@@ -246,6 +260,7 @@ export default function WarningTemplatesPage() {
           placeholders={placeholders}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); void load(); }}
+          onImported={(name, notes) => setImportNotes(notes.length ? { name, notes } : null)}
         />
       ) : null}
 
@@ -277,14 +292,19 @@ function TemplateEditorDialog({
   placeholders,
   onClose,
   onSaved,
+  onImported,
 }: {
   template?: ApiWarningTemplate;
   placeholders: ApiPlaceholderDef[];
   onClose: () => void;
   onSaved: () => void;
+  /** A new version was imported from Word: its notes are shown on the page. */
+  onImported?: (name: string, notes: string[]) => void;
 }) {
   const toast = useToast();
-  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+  const subjectEd = useRef<PlaceholderEditorHandle>(null);
+  const bodyEd = useRef<PlaceholderEditorHandle>(null);
+  const lastField = useRef<'subject' | 'body'>('body');       // a clicked placeholder goes where the Leader was last typing
   const docxRef = useRef<HTMLInputElement | null>(null);
 
   const [name, setName] = useState(template?.name ?? '');
@@ -294,7 +314,8 @@ function TemplateEditorDialog({
   const [subject, setSubject] = useState(template?.current_version?.subject_template ?? '{{warning_level}} ({{warning_reference}}) — {{case_reference}}');
   const [body, setBody] = useState(
     template?.current_version?.body_template ??
-    `{{subdivision_name}} — Office of the Subdivision Leader\n\nDate Issued: {{issue_date}}\nWarning Reference: {{warning_reference}}\nCase Reference: {{case_reference}}\n\nTO: {{resident_name}}\nAddress: {{resident_address}}\n\nDear {{resident_name}},\n\nThis {{warning_level}} is issued regarding {{case_reference}} on {{incident_date}} involving {{pet_name}} ({{pet_type}}).\n\nViolation Details:\n{{violation_description}}\n\nApplicable Policy:\n{{policy_reference}}\n\nRequired Corrective Action:\n{{required_action}}\n\nIssued by:\n{{issued_by}}`
+    // The letter prints its own letterhead, references, "TO:"/address and signature: the body starts at the greeting.
+    `Dear {{resident_name}},\n\nThis {{warning_level}} is issued regarding {{case_reference}} on {{incident_date}} involving {{pet_name}} ({{pet_type}}).\n\nViolation Details\n{{violation_description}}\n\nSubdivision Policy\n{{policy_reference}}\n\nRequired Corrective Action\n{{required_action}}`
   );
   const [changeNote, setChangeNote] = useState(template ? '' : 'Initial template');
   const [tab, setTab] = useState<'edit' | 'preview'>('edit');
@@ -302,22 +323,7 @@ function TemplateEditorDialog({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const insertPlaceholder = (key: string) => {
-    const token = `{{${key}}}`;
-    const el = bodyRef.current;
-    if (!el) {
-      setBody((b) => `${b}${token}`);
-      return;
-    }
-    const start = el.selectionStart ?? body.length;
-    const end = el.selectionEnd ?? body.length;
-    const next = body.slice(0, start) + token + body.slice(end);
-    setBody(next);
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(start + token.length, start + token.length);
-    });
-  };
+  const insertPlaceholder = (key: string) => (lastField.current === 'subject' ? subjectEd : bodyEd).current?.insert(key);
 
   const runPreview = async () => {
     setErr(null);
@@ -350,6 +356,7 @@ function TemplateEditorDialog({
       form.append('template_id', String(template.template_id));
       const updated = await adminApi.importWarningTemplateDocx(form);
       toast.success(`Imported "${file.name}" as v${updated.current_version_number}`);
+      onImported?.(updated.name, updated.import_notes ?? []);
       onSaved();
     } catch (e) {
       setErr(errorMessage(e));
@@ -401,7 +408,7 @@ function TemplateEditorDialog({
     <Dialog
       size="lg"
       title={template ? `Edit template: ${template.name}` : 'Create warning letter template'}
-      description={template ? `Saving creates version v${template.current_version_number + 1}. Earlier issued warning letters remain unchanged.` : 'Use {{placeholders}} to populate resident, pet, case, and policy details automatically.'}
+      description={template ? `Saving creates version v${template.current_version_number + 1}. Earlier issued warning letters remain unchanged.` : 'Drag placeholders into the subject or letter to fill in resident, pet, case, and policy details automatically.'}
       onClose={onClose}
       onSubmit={submit}
       dirty
@@ -452,33 +459,37 @@ function TemplateEditorDialog({
             <Field label="Applies to warning level"><Select value={warningLevel} onChange={(e) => setWarningLevel(e.target.value)}>{LEVELS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}</Select></Field>
           </div>
           <Field label="Description" optional><Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="When should leaders use this template?" /></Field>
-          <Field label="Subject template" required><Input value={subject} onChange={(e) => setSubject(e.target.value)} /></Field>
-
-          <FieldGroup label="Insert dynamic placeholder" hint="Click a chip to insert at cursor position in the letter body.">
+          <FieldGroup label="Placeholders" hint="Drag a placeholder into the subject or the letter. You can also click one to insert it where the cursor is, drag boxes to move them, and press Backspace to remove one.">
             <div className="flex flex-wrap gap-1.5">
               {placeholders.map((p) => (
                 <button
                   key={p.key}
                   type="button"
+                  draggable
+                  onDragStart={(e) => startPlaceholderDrag(e, p.key)}
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() => insertPlaceholder(p.key)}
-                  className="rounded border border-[var(--sa-line)] bg-[var(--sa-surface-2)] px-2 py-0.5 text-xs font-mono text-[var(--sa-ink)] hover:border-[var(--sa-brand)] hover:text-[var(--sa-brand)] cursor-pointer"
+                  className="sa-ph"
                   title={p.description}
                 >
-                  {`{{${p.key}}}`}
+                  {p.label}
                 </button>
               ))}
             </div>
           </FieldGroup>
 
-          <Field label="Letter body template" required>
-            <textarea
-              ref={bodyRef}
-              className="sa-input min-h-[260px] w-full font-mono text-[13px] leading-relaxed"
-              rows={12}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-            />
+          <Field label="Subject template" required>
+            <PlaceholderEditor ref={subjectEd} single value={subject} onChange={setSubject} placeholders={placeholders} onFocus={() => { lastField.current = 'subject'; }} />
           </Field>
+
+          <Field label="Letter body template" required hint="The letter already prints the letterhead, the warning and case references, the date, “TO:” with the address, and the signature. Everything you write here is printed exactly as written.">
+            <PlaceholderEditor ref={bodyEd} value={body} onChange={setBody} placeholders={placeholders} onFocus={() => { lastField.current = 'body'; }} />
+          </Field>
+          {/^(TO|Address|Date Issued|Warning Reference|Case Reference|Issued by):/im.test(body) || /Office of the Subdivision Leader/.test(body) ? (
+            <Callout tone="amber" title="This text repeats part of the printed letter">
+              It has a “TO:”, “Address:”, date, reference, “Issued by:” or letterhead line. The letter prints those itself, so they will appear twice. Remove them unless you want them twice.
+            </Callout>
+          ) : null}
 
           <div className="sa-grid2">
             <Field label="Version change note" optional>
@@ -571,6 +582,7 @@ function TemplatePreviewDialog({
             </Callout>
           )}
           <WarningLetterDocument
+            draft
             subdivisionName={preview.placeholders?.subdivision_name}
             subdivisionAddress={preview.placeholders?.subdivision_address}
             subdivisionPhone={preview.placeholders?.subdivision_phone}

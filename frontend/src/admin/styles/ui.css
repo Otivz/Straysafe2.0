@@ -75,6 +75,22 @@
   .sa-input:focus { outline: none; border-color: var(--sa-brand); box-shadow: var(--sa-ring); }
   .sa-input[aria-invalid='true'] { border-color: var(--sa-red); }
   .sa-input:disabled { background: var(--sa-sand); color: var(--sa-ink-3); cursor: not-allowed; }
+
+  /* Warning-template editor: text with placeholders shown as labeled boxes (components/PlaceholderEditor.tsx). */
+  .sa-phedit { height: auto; min-height: 260px; padding: 10px 12px; line-height: 2; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
+  .sa-phedit--single { min-height: 36px; padding: 4px 12px; white-space: pre; overflow-x: auto; overflow-y: hidden; }
+  .sa-phedit--over { border-color: var(--sa-brand); box-shadow: var(--sa-ring); background: color-mix(in srgb, var(--sa-brand-soft) 35%, var(--sa-surface)); }
+  .sa-ph {
+    display: inline-flex; align-items: center; margin: 0 1px; padding: 0 8px; border: 1px solid var(--sa-brand-tint); border-radius: 6px;
+    background: var(--sa-brand-soft); color: var(--sa-brand-ink); font-size: 12.5px; font-weight: 600; line-height: 1.7;
+    white-space: nowrap; vertical-align: baseline; user-select: none; cursor: grab;
+  }
+  .sa-ph:active { cursor: grabbing; }
+  .sa-ph--static { cursor: default; }
+  .sa-ph--unknown { border-color: var(--sa-amber-tint); background: var(--sa-amber-soft); color: var(--sa-amber-ink); }
+  .sa-ph--dragging { opacity: 0.4; }
+  button.sa-ph:hover { border-color: var(--sa-brand); }
+  button.sa-ph:focus-visible { outline: none; box-shadow: var(--sa-ring); }
   .sa-input--sm { height: 32px; font-size: 13px; }
   .sa-search { position: relative; min-width: 0; }
   .sa-search > svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--sa-ink-3); pointer-events: none; }

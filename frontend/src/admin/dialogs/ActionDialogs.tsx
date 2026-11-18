@@ -17,6 +17,7 @@ import { reportIdOf } from '../../live/refs';
 import { errorMessage } from '../../preview/lib/errors';
 import { fmtDateTime, fromLocalInput, isValidLocalInput, toLocalInput } from '../../preview/lib/format';
 import { useSubmit } from '../lib/useSubmit';
+import { templateOptionLabel, templatesForLevel } from '../lib/warningTemplates';
 import { FormFooter, type CaseDialogProps } from './BasicDialogs';
 
 const tomorrowNine = () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return toLocalInput(d); };
@@ -156,6 +157,10 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
   const [start, setStart] = useState(() => toLocalInput(new Date()));
   const [followOverride, setFollowOverride] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const fitting = templatesForLevel(templates, warningLevel);
+  // A template that does not fit the current level (the level changed after it was chosen, by hand or by the suggested tier)
+  // counts as not chosen: the Leader must choose again. It is never swapped for another one.
+  const chosenTemplateId = fitting.some((t) => String(t.template_id) === templateId) ? templateId : '';
 
   // Step 2: letter preview & missing field completion
   const [step, setStep] = useState<'form' | 'preview'>('form');
@@ -170,14 +175,8 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
 
   useEffect(() => {
     let live = true;
-    adminApi.warningTemplates('active').then((res) => {
-      if (!live) return;
-      setTemplates(res.items);
-      const def = res.items.find((t) => t.is_default && t.warning_level === warningLevel)
-        || res.items.find((t) => t.is_default && !t.warning_level)
-        || res.items[0];
-      if (def) setTemplateId(String(def.template_id));
-    }).catch(() => undefined);
+    // The Leader chooses the template; nothing is selected for them (the default is only marked "Suggested").
+    adminApi.warningTemplates('active').then((res) => { if (live) setTemplates(res.items); }).catch(() => undefined);
     const rid = reportIdOf(c.id);
     if (rid && owner) {
       const viol = c.category === 'nuisance' || c.category === 'safety' ? 'Nuisance / Aggressive Behavior' : 'Other';
@@ -197,6 +196,7 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
     if (!policy || policy.status !== 'confirmed') next.policy = 'Choose a confirmed policy that applies.';
     if (details.trim().length < 20) next.details = 'Describe the violation (at least 20 characters).';
     if (requiredAction.trim().length < 5) next.requiredAction = 'Specify the required corrective action.';
+    if (!chosenTemplateId) next.template = 'Choose the letter template for this warning.';
     if (!established) next.established = 'Confirm that the violation is sufficiently established.';
     if (terms && policy && policy.observationDays === null && !noPeriod && !(Number(days) >= 1 && Number(days) <= 60)) next.days = 'Enter a period from 1 to 60 days, or tick “No observation period”.';
     if (terms && !isValidLocalInput(start)) next.start = 'Choose when the warning starts.';
@@ -210,7 +210,7 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
     try {
       const rid = reportIdOf(c.id);
       const res = await adminApi.previewWarningTemplate({
-        ...(templateId ? { template_id: Number(templateId) } : {}),
+        template_id: Number(chosenTemplateId),
         ...(rid ? { report_id: rid } : {}),
         ...(owner ? { user_id: Number(owner.id) } : {}),
         warning_level: warningLevel,
@@ -246,7 +246,7 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
       observationStart: observationDays ? fromLocalInput(start) : null,
       followUpAt: followLocal && isValidLocalInput(followLocal) ? fromLocalInput(followLocal) : null,
       warningLevel,
-      templateId: templateId ? Number(templateId) : undefined,
+      templateId: Number(chosenTemplateId),
       requiredAction: requiredAction.trim(),
       fieldOverrides: overrides,
     }));
@@ -291,14 +291,17 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
                 {WARNING_LEVELS.map((lvl) => <option key={lvl} value={lvl}>{lvl}</option>)}
               </Select>
             </Field>
-            <Field label="Warning letter template" hint={<Link to={adminPath('/warning-templates')} onClick={onClose}>Manage templates</Link>}>
-              <Select value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
-                {templates.length === 0 ? <option value="">Default subdivision template</option> : null}
-                {templates.map((t) => (
-                  <option key={t.template_id} value={String(t.template_id)}>
-                    {t.name} (v{t.current_version_number}){t.is_default ? ' · Default' : ''}
-                  </option>
-                ))}
+            <Field
+              label="Warning letter template"
+              required
+              error={errors.template}
+              hint={fitting.length === 0
+                ? <>No active template fits {warningLevel}. <Link to={adminPath('/warning-templates')} onClick={onClose}>Manage templates</Link></>
+                : <>Templates for {warningLevel} and for all levels. <Link to={adminPath('/warning-templates')} onClick={onClose}>Manage templates</Link></>}
+            >
+              <Select value={chosenTemplateId} onChange={(e) => { setTemplateId(e.target.value); setErrors((x) => ({ ...x, template: '' })); }}>
+                <option value="">Choose a template</option>
+                {fitting.map((t) => <option key={t.template_id} value={String(t.template_id)}>{templateOptionLabel(t)}</option>)}
               </Select>
             </Field>
           </div>
@@ -338,7 +341,9 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
             <Callout tone="amber" title="Missing information for template placeholders">
               <p className="sa-small mb-2">Fill in any missing fields below and click <strong>Refresh preview</strong> before issuing:</p>
               <div className="flex flex-col gap-2">
-                {preview.missing_fields.map((m) => (
+                {preview.missing_fields.map((m) => m.unknown ? (
+                  <p key={m.key} className="sa-small m-0"><strong>{m.message}</strong></p>
+                ) : (
                   <div key={m.key} className="flex flex-wrap items-center gap-2">
                     <label className="sa-small font-medium w-40">{m.label}{m.required ? ' *' : ''}</label>
                     <Input
@@ -361,6 +366,7 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
                 <strong>Template:</strong> {preview.template?.name ?? 'Default'} (v{preview.template?.version_number ?? 1})
               </p>
               <WarningLetterDocument
+                draft
                 subdivisionName={preview.placeholders?.subdivision_name}
                 subdivisionAddress={preview.placeholders?.subdivision_address}
                 subdivisionPhone={preview.placeholders?.subdivision_phone}

@@ -1404,6 +1404,25 @@ def ensure_animal_color_array_columns():
 
 ensure_animal_color_array_columns()
 
+
+def ensure_standard_warning_templates():
+    """
+    A subdivision with no warning letter template rows at all (created outside the app, for example by SQL) gets its own copy of the four
+    standard templates. A subdivision that has any template row, archived ones included, is left alone, so nothing that was removed or
+    archived on purpose is ever recreated. Subdivisions created through the app are seeded when they are inserted (services/warning_letters.py).
+    """
+    from app.services import warning_letters as WL
+    with engine.begin() as conn:
+        try:
+            seeded = WL.seed_new_subdivisions(conn)
+            if seeded:
+                print(f"Added the four standard warning letter templates to subdivision(s): {seeded}")
+        except Exception as e:
+            print(f"Notice in ensure_standard_warning_templates: {e}")
+
+
+ensure_standard_warning_templates()
+
 # Case workflow alignment (Subdivision Admin): new columns, tables, the six categories and the backfill. Idempotent, never
 # drops or rewrites existing data (app/db_migrations/case_alignment.py). strict=True: if the schema still cannot support the
 # case workflow code afterwards, this raises CaseAlignmentError and the application does NOT start, instead of running
