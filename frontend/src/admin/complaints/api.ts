@@ -109,4 +109,17 @@ export const complaintsApi = {
     httpPost<ApiComplaint>(`/complaints/${id}/same-occurrence`, body),
   step: (id: number, stepId: number, body: Record<string, unknown> & { action: StepAction }) =>
     httpPost<ApiComplaint>(`/complaints/${id}/steps/${stepId}`, body),
+  /** The DRAFT of a prepared letter (not issued: no warning reference, nothing sent), rendered from the saved draft. */
+  stepDraft: (id: number, stepId: number) => httpGet<ApiLetterDraft>(`/complaints/${id}/steps/${stepId}/draft`),
 };
+
+export interface ApiLetterDraft {
+  subject: string;
+  body: string;
+  placeholders: Record<string, string>;
+  missing_fields: { key: string; label: string; required: boolean; unknown?: boolean; message: string }[];
+  can_issue: boolean;
+  is_draft: true;
+  letter_date: string | null;
+  template: { template_id: number; name: string; version_number: number };
+}

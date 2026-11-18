@@ -15,9 +15,9 @@
 | 1. Template compatibility and explicit selection | F-01, F-04, D2 | **Done** 2026-11-18 ([change record](../../05-operations/agents/feature-updates/2026-11-18_1142_warning-templates-step1-explicit-selection.md)) |
 | 1b. Four standard templates per subdivision, cleanup of old seeded ones | seeding, duplicates, Barangay wording in the seed text (E9, part) | **Done** 2026-11-18 ([change record](../../05-operations/agents/feature-updates/2026-11-18_1221_warning-templates-four-standard-per-subdivision.md)) |
 | 2. Required information validation (one registry, all paths) | F-02, F-03, D1 | **Done** 2026-11-18 ([change record](../../05-operations/agents/feature-updates/2026-11-18_1233_warning-templates-step2-required-validation.md)) |
-| 3. Draft and issue separation (complaint and owner flows), letter date | prepare/issue, re-prepare, letter date | Not started |
-| 4. Rendering consistency | F-08, F-09 | Not started |
-| 5. DOCX output and input | F-05, E1, E2 | Not started |
+| 3. Draft and issue separation (complaint and owner flows), letter date | prepare/issue, re-prepare, letter date, printed letter | **Done** 2026-11-18 ([change record](../../05-operations/agents/feature-updates/2026-11-18_1319_warning-templates-step3-draft-and-issue.md)) |
+| 4. Rendering consistency | F-08, F-09 | **Done** 2026-11-18 ([change record](../../05-operations/agents/feature-updates/2026-11-18_1331_warning-templates-step4-rendering-consistency.md)) |
+| 5. DOCX output and input | F-05, E1, E2, and broken Word namespaces (found during the step) | **Done** 2026-11-18 ([change record](../../05-operations/agents/feature-updates/2026-11-18_1339_warning-templates-step5-docx.md)) |
 | 6. Version uniqueness, schema docs | D4, D8 | Not started |
 | 7. Barangay wording, remaining permissions, tests | E3 to E5, E9 | Not started |
 

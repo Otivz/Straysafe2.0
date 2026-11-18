@@ -122,7 +122,73 @@ _SECTION_TITLES = {
     "applicable policy",
     "required corrective action",
     "required action & summons schedule",
+    # the standard templates' headings (seed_data/warning_templates.json)
+    "what was reported",
+    "subdivision policy",
+    "what we ask you to do",
+    "office summons",
 }
+
+# Letters issued from this version on carry this marker in their snapshot (placeholders_json). A letter WITHOUT it was issued earlier,
+# from templates that wrote the header, "Date Issued", "TO:" and "Issued by:" into the text; only those letters have those lines hidden
+# (the letter prints its own), so they look exactly as they always did. Everything else is shown exactly as written.
+RENDER_LAYOUT_KEY = "render_layout"
+RENDER_LAYOUT = "2"
+
+
+def is_legacy_layout(letter: "GeneratedWarningLetter") -> bool:
+    """A letter issued before the layout marker existed (its own header/recipient/signature lines are hidden when shown)."""
+    return not (letter.placeholders_json or {}).get(RENDER_LAYOUT_KEY)
+
+
+_HEADING_WORDS = re.compile(r"^[A-Z][A-Za-z/&()' -]*$")
+
+
+def is_heading(first: str, line_count: int) -> bool:
+    """
+    The heading rule every view uses (screen, PDF, DOCX; the screen's copy is in frontend/src/components/warningLetterBlocks.ts):
+    a known section title; or, when more lines follow, a short line ending in ":"; or a short title-like line (letters only, at most
+    six words, no closing punctuation), such as "Office Summons".
+    """
+    if first.rstrip(":").strip().lower() in _SECTION_TITLES:
+        return True
+    if line_count < 2 or len(first) > 48:
+        return False
+    if first.endswith(":"):
+        return True
+    return bool(_HEADING_WORDS.match(first)) and len(first) <= 40 and len(first.split()) <= 6
+
+
+def _paragraphs(body: str) -> List[str]:
+    out: List[str] = []
+    for p in (body or "").replace("\r\n", "\n").split("\n\n"):
+        lines = [ln.strip() for ln in p.split("\n") if ln.strip()]
+        if lines:
+            out.append("\n".join(lines))
+    return out
+
+
+def body_blocks(body: str, legacy: bool = False) -> List[Dict[str, Any]]:
+    """
+    The letter text as blocks, the same for every view: {"kind": "subject", "text"}, {"kind": "section", "heading", "lines"} or
+    {"kind": "para", "lines"}. Every line the author wrote is kept, line breaks included; only a `legacy` letter has its old
+    header/recipient/signature lines hidden (see is_legacy_layout).
+    """
+    blocks: List[Dict[str, Any]] = []
+    for para in (_strip_legacy_chrome(body) if legacy else _paragraphs(body)):
+        lines = [ln.strip() for ln in para.split("\n") if ln.strip()]
+        if not lines:
+            continue
+        if lines[0].upper().startswith("SUBJECT:"):
+            blocks.append({"kind": "subject", "text": lines[0].split(":", 1)[1].strip()})
+            lines = lines[1:]
+            if not lines:
+                continue
+        if is_heading(lines[0], len(lines)):
+            blocks.append({"kind": "section", "heading": lines[0].rstrip(":").strip(), "lines": lines[1:]})
+        else:
+            blocks.append({"kind": "para", "lines": lines})
+    return blocks
 
 
 def _strip_legacy_chrome(body: str) -> List[str]:
@@ -157,7 +223,9 @@ def _office_contact_lines(db: Optional[Session], subdivision_id: Optional[int], 
             sub = db.get(Subdivision, subdivision_id)
             if sub:
                 sub_name = sub.subdivision_name
-        if not (sub_addr or sub_phone or sub_email):
+        # An issued letter keeps the office details it was issued with (blank stays blank). Only a very old letter that never stored
+        # them falls back to the office's current details.
+        if not any(k in ph for k in ("subdivision_address", "subdivision_phone", "subdivision_email")):
             office = case_policy.load_settings(db, subdivision_id).office
             sub_addr = (office.address or "").strip()
             sub_phone = (office.phone or "").strip()
@@ -172,17 +240,22 @@ def render_html_document(
     warning_reference: str,
     case_reference: str,
     subdivision_name: str = "StraySafe Subdivision",
+    legacy: bool = False,
 ) -> str:
     safe_sub = html.escape(subdivision_name or "StraySafe Subdivision")
     safe_subj = html.escape(subject or "Official Warning Letter")
     safe_wref = html.escape(warning_reference)
     safe_cref = html.escape(case_reference)
-    blocks = []
-    for para in _strip_legacy_chrome(body):
-        lines = [html.escape(line.rstrip()) for line in para.split("\n") if line.strip() != ""]
-        if lines:
-            blocks.append(f"<p>{'<br/>'.join(lines)}</p>")
-    body_html = "\n".join(blocks)
+    out = []
+    for b in body_blocks(body, legacy=legacy):
+        if b["kind"] == "subject":
+            out.append(f"<p class=\"ss-warning-letter__subject-line\"><strong>SUBJECT:</strong> {html.escape(b['text'])}</p>")
+        elif b["kind"] == "section":
+            lines = "<br/>".join(html.escape(ln) for ln in b["lines"])
+            out.append(f"<h3>{html.escape(b['heading'])}</h3>" + (f"<p>{lines}</p>" if lines else ""))
+        else:
+            out.append(f"<p>{'<br/>'.join(html.escape(ln) for ln in b['lines'])}</p>")
+    body_html = "\n".join(out)
     return f"""<div class="ss-warning-letter">
   <div class="ss-warning-letter__header">
     <div>
@@ -218,100 +291,231 @@ def _local_tag(tag: str) -> str:
     return tag.split("}", 1)[-1] if "}" in tag else tag
 
 
-def parse_docx_bytes(raw: bytes) -> Dict[str, Any]:
-    """Extract readable paragraphs, basic HTML, and {{placeholders}} from an uploaded .docx file."""
+# Limits for an uploaded Word file (it is also re-checked before a letter is made from a stored one).
+DOCX_MAX_ENTRIES = 2000
+DOCX_MAX_PART_BYTES = 20 * 1024 * 1024          # one decompressed part
+DOCX_MAX_TOTAL_BYTES = 60 * 1024 * 1024         # everything, decompressed
+_UNSAFE_XML = re.compile(rb"<!\s*(DOCTYPE|ENTITY)", re.I)
+
+
+def _read_docx_parts(raw: bytes) -> Dict[str, bytes]:
+    """
+    The XML parts of a .docx, read safely: a real ZIP, a bounded number of entries, every part read with a hard size limit (so a
+    "zip bomb" cannot exhaust memory), and no DOCTYPE or ENTITY declarations anywhere (they have no place in a Word file and are how
+    XML expansion attacks work). Refuses with 400/413 and a plain message.
+    """
     if not raw or not raw.startswith(b"PK"):
         raise HTTPException(status_code=400, detail="Invalid DOCX file. Please upload a valid Microsoft Word (.docx) document.")
     try:
         zf = zipfile.ZipFile(io.BytesIO(raw))
     except zipfile.BadZipFile as exc:
         raise HTTPException(status_code=400, detail="Could not read DOCX archive. Ensure the file is a valid .docx.") from exc
-
+    parts: Dict[str, bytes] = {}
     with zf:
-        if "word/document.xml" not in zf.namelist():
-            raise HTTPException(status_code=400, detail="The uploaded DOCX file does not contain word/document.xml.")
-        xml_parts: List[bytes] = []
-        for name in sorted(zf.namelist()):
-            if name.startswith("word/header") and name.endswith(".xml"):
-                xml_parts.append(zf.read(name))
-        xml_parts.append(zf.read("word/document.xml"))
-        for name in sorted(zf.namelist()):
-            if name.startswith("word/footer") and name.endswith(".xml"):
-                xml_parts.append(zf.read(name))
-
-    paragraphs: List[str] = []
-    html_parts: List[str] = []
-    for part in xml_parts:
-        try:
-            root = ET.fromstring(part)
-        except ET.ParseError as exc:
-            raise HTTPException(status_code=400, detail="Malformed XML inside the uploaded DOCX file.") from exc
-        for p in root.iter():
-            if _local_tag(p.tag) != "p":
+        infos = zf.infolist()
+        if len(infos) > DOCX_MAX_ENTRIES:
+            raise HTTPException(status_code=413, detail="This Word file has too many parts to be a letter template.")
+        total = 0
+        for info in infos:
+            if not info.filename.endswith((".xml", ".rels")):
                 continue
-            buf: List[str] = []
-            is_bold = False
-            for node in p.iter():
-                lt = _local_tag(node.tag)
-                if lt == "t" and node.text:
-                    buf.append(node.text)
-                elif lt == "tab":
-                    buf.append("    ")
-                elif lt in ("br", "cr"):
-                    buf.append("\n")
-                elif lt == "b":
-                    val = node.attrib.get(f"{{{W_NS}}}val", "true").lower()
-                    if val not in ("0", "false", "off"):
-                        is_bold = True
-            line = "".join(buf).strip()
-            if not line:
-                continue
-            paragraphs.append(line)
-            escaped = html.escape(line).replace("\n", "<br/>")
-            html_parts.append(f"<p><strong>{escaped}</strong></p>" if is_bold and len(line) < 120 else f"<p>{escaped}</p>")
+            with zf.open(info) as fh:
+                data = fh.read(DOCX_MAX_PART_BYTES + 1)
+            if len(data) > DOCX_MAX_PART_BYTES:
+                raise HTTPException(status_code=413, detail="This Word file is too large once unpacked to be a letter template.")
+            total += len(data)
+            if total > DOCX_MAX_TOTAL_BYTES:
+                raise HTTPException(status_code=413, detail="This Word file is too large once unpacked to be a letter template.")
+            if _UNSAFE_XML.search(data):
+                raise HTTPException(status_code=400, detail="This Word file contains XML declarations (DOCTYPE/ENTITY) that a Word document never needs, so it was refused. Save it again from Word and upload that copy.")
+            parts[info.filename] = data
+        media = [i.filename for i in infos if i.filename.startswith("word/media/")]
+    if "word/document.xml" not in parts:
+        raise HTTPException(status_code=400, detail="The uploaded DOCX file does not contain word/document.xml.")
+    parts["__media__"] = "\n".join(media).encode()
+    return parts
 
+
+def _xml_root(data: bytes, name: str) -> ET.Element:
+    try:
+        return ET.fromstring(data)
+    except ET.ParseError as exc:
+        raise HTTPException(status_code=400, detail=f"The Word file has a damaged part ({name}).") from exc
+
+
+def _para_text(p: ET.Element) -> str:
+    buf: List[str] = []
+    for node in p.iter():
+        lt = _local_tag(node.tag)
+        if lt == "t" and node.text:
+            buf.append(node.text)
+        elif lt == "tab":
+            buf.append("    ")
+        elif lt in ("br", "cr"):
+            buf.append("\n")
+    return "".join(buf).strip()
+
+
+def _blocks_of(container: ET.Element, notes: Dict[str, int]) -> List[str]:
+    """The text of a body (or header/footer) in reading order: one entry per paragraph; a table as one line per row ("cell | cell")."""
+    out: List[str] = []
+    for child in container:
+        lt = _local_tag(child.tag)
+        if lt == "p":
+            text = _para_text(child)
+            if text:
+                out.append(text)
+        elif lt == "tbl":
+            notes["tables"] = notes.get("tables", 0) + 1
+            rows: List[str] = []
+            for tr in child.iter():
+                if _local_tag(tr.tag) != "tr":
+                    continue
+                cells = [" ".join(t for t in (_para_text(p) for p in tc.iter() if _local_tag(p.tag) == "p") if t)
+                         for tc in tr if _local_tag(tc.tag) == "tc"]
+                line = " | ".join(c for c in cells if c)
+                if line:
+                    rows.append(line)
+            if rows:
+                out.append("\n".join(rows))
+        elif lt in ("sdt", "sdtContent", "customXml", "smartTag"):
+            out.extend(_blocks_of(child, notes))
+    return out
+
+
+def parse_docx_bytes(raw: bytes) -> Dict[str, Any]:
+    """
+    Read an uploaded .docx as a template: the body text in reading order (tables as "cell | cell" lines), the header and footer
+    kept apart (the Word download keeps them where they are; the screen and PDF use the standard letterhead), the placeholders it
+    uses, and plain notes about what the preview cannot show. The original file is stored as is for the Word download.
+    """
+    parts = _read_docx_parts(raw)
+    notes_count: Dict[str, int] = {}
+    doc = _xml_root(parts["word/document.xml"], "document")
+    body = next((c for c in doc if _local_tag(c.tag) == "body"), doc)
+    paragraphs = _blocks_of(body, notes_count)
+    header_footer: List[str] = []
+    for name in sorted(parts):
+        if name.startswith(("word/header", "word/footer")) and name.endswith(".xml"):
+            header_footer.extend(_blocks_of(_xml_root(parts[name], name), notes_count))
     if not paragraphs:
         raise HTTPException(status_code=400, detail="The uploaded DOCX file appears to be empty.")
 
+    subject_guess = paragraphs[0][:255]
+    for cand in paragraphs[:5]:
+        if "subject" in cand.lower() or "warning" in cand.lower() or "notice" in cand.lower():
+            subject_guess = cand.split("\n")[0][:255]
+            break
     body_text = "\n\n".join(paragraphs)
-    subject_guess = paragraphs[0][:255] if paragraphs else "{{warning_level}} ({{warning_reference}})"
-    if len(paragraphs) > 1:
-        for cand in paragraphs[:5]:
-            if "subject" in cand.lower() or "warning" in cand.lower() or "notice" in cand.lower():
-                subject_guess = cand[:255]
-                break
-    placeholders = extract_placeholders(subject_guess, body_text)
+    other_text = "\n\n".join(header_footer)
+
+    notes: List[str] = [f"The subject was taken from the line \u201c{subject_guess[:80]}\u201d. Change it in the editor if it is not right."]
+    if notes_count.get("tables"):
+        notes.append(f"It has {notes_count['tables']} table(s). The on-screen preview and the PDF show each row as a line of text; the Word download keeps the table.")
+    media = [m for m in parts["__media__"].decode().split("\n") if m]
+    if media:
+        notes.append(f"It has {len(media)} picture(s), such as a logo or a signature. They are kept in the Word download but not shown in the on-screen preview or the PDF.")
+    if header_footer:
+        notes.append("Its header and footer text is kept in the Word download. The on-screen preview and the PDF use the standard letterhead instead.")
     return {
         "subject_template": subject_guess,
         "body_template": body_text,
-        "html_template": "\n".join(html_parts),
-        "placeholders_used": placeholders,
+        "other_text": other_text,
+        "html_template": render_html_document(subject_guess, body_text, "{{warning_reference}}", "{{case_reference}}"),
+        "placeholders_used": extract_placeholders(subject_guess, body_text + "\n\n" + other_text),
+        "notes": notes,
     }
 
 
-def _replace_placeholders_in_xml_bytes(xml_bytes: bytes, values: Dict[str, str]) -> bytes:
+_DOCX_TAG = re.compile(r"<(/?)w:(p|t)\b([^>]*)>")
+
+
+def _xml_text_escape(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _replace_placeholders_in_xml_bytes(xml_bytes: bytes, values: Dict[str, str]) -> Tuple[bytes, List[str]]:
     """
-    Replace {{placeholder}} tokens inside a DOCX XML part, handling cases where Microsoft Word
-    splits a single {{placeholder}} across multiple consecutive <w:r><w:t> runs.
+    Fill the {{placeholders}} of one Word XML part (body, header or footer) by editing ONLY the text inside its <w:t> elements, in
+    place; every other byte of the file stays exactly as Word wrote it (namespaces, styles, tables, pictures). The XML is never
+    re-serialised, which is what used to make Word report "unreadable content".
+      * A placeholder Word split over several runs is joined; its value goes into the run where it starts, so that run's formatting
+        is kept and the formatting of the text around it (a bold "Dear ", say) is untouched.
+      * A value with line breaks becomes real Word line breaks.
+      * A key with no value is left as it is, and reported.
+    Returns (the new part, the placeholders still in it).
     """
-    ET.register_namespace("w", W_NS)
-    root = ET.fromstring(xml_bytes)
-    for p in root.iter():
-        if _local_tag(p.tag) != "p":
+    xml = xml_bytes.decode("utf-8")
+    paras: List[List[Dict[str, Any]]] = []
+    stack: List[int] = []
+    for m in _DOCX_TAG.finditer(xml):
+        closing, name, rest = m.group(1), m.group(2), m.group(3)
+        if rest.rstrip().endswith("/"):
+            continue                                           # <w:p/> or <w:t/>: nothing inside
+        if name == "p":
+            if closing:
+                if stack:
+                    stack.pop()
+            else:
+                paras.append([])
+                stack.append(len(paras) - 1)
+        elif not closing and stack:
+            end = xml.find("</w:t>", m.end())
+            if end < 0:
+                raise ValueError("unterminated <w:t>")
+            paras[stack[-1]].append({"tag_start": m.start(), "tag": m.group(0), "text_start": m.end(), "text_end": end,
+                                     "text": html.unescape(xml[m.end():end]), "changed": False})
+
+    leftovers: List[str] = []
+    for nodes in paras:
+        if not nodes:
             continue
-        t_nodes = [n for n in p.iter() if _local_tag(n.tag) == "t"]
-        if not t_nodes:
-            continue
-        joined = "".join(n.text or "" for n in t_nodes)
+        joined = "".join(n["text"] for n in nodes)
         if "{{" not in joined:
             continue
-        replaced = substitute_placeholders(joined, values)
-        if replaced != joined:
-            t_nodes[0].text = replaced
-            t_nodes[0].set(f"{{{XML_NS}}}space", "preserve")
-            for extra in t_nodes[1:]:
-                extra.text = ""
-    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+        starts, lengths, pos = [], [], 0                       # where each node's ORIGINAL text sits in `joined`
+        for n in nodes:
+            starts.append(pos)
+            lengths.append(len(n["text"]))
+            pos += len(n["text"])
+
+        def holder(char_index: int) -> int:
+            """The node whose original text contains this character of `joined`."""
+            return next(k for k in range(len(nodes)) if starts[k] <= char_index < starts[k] + lengths[k])
+
+        # Right to left: an edit only ever changes text to the right of the matches still to come, so their offsets stay valid.
+        for match in reversed(list(PLACEHOLDER_PATTERN.finditer(joined))):
+            key = match.group(1)
+            if values.get(key) is None:
+                continue
+            i = holder(match.start())
+            j = holder(match.end() - 1)
+            off_i = match.start() - starts[i]
+            off_j = match.end() - starts[j]
+            if i == j:
+                t = nodes[i]["text"]
+                nodes[i]["text"] = t[:off_i] + values[key] + t[off_j:]
+            else:
+                nodes[i]["text"] = nodes[i]["text"][:off_i] + values[key]
+                for k in range(i + 1, j):
+                    nodes[k]["text"] = ""
+                    nodes[k]["changed"] = True
+                nodes[j]["text"] = nodes[j]["text"][off_j:]
+                nodes[j]["changed"] = True
+            nodes[i]["changed"] = True
+        leftovers.extend(PLACEHOLDER_PATTERN.findall("".join(n["text"] for n in nodes)))
+
+    edits = []
+    for nodes in paras:
+        for n in nodes:
+            if not n["changed"]:
+                continue
+            tag = n["tag"] if "xml:space" in n["tag"] else n["tag"][:-1] + ' xml:space="preserve">'
+            text = '</w:t><w:br/><w:t xml:space="preserve">'.join(_xml_text_escape(seg) for seg in n["text"].split("\n"))
+            edits.append((n["tag_start"], n["text_end"], tag + text))
+    for start, end, new in sorted(edits, reverse=True):
+        xml = xml[:start] + new + xml[end:]
+    return xml.encode("utf-8"), leftovers
 
 
 def _issuer_lines(letter: GeneratedWarningLetter, sub_name: str) -> Tuple[str, str, str]:
@@ -395,31 +599,18 @@ def _build_minimal_docx(letter: GeneratedWarningLetter, db: Optional[Session] = 
     if letter.recipient_address:
         paras.append(_label_p("Address:", letter.recipient_address, space_after=180))
 
-    body_paras = _strip_legacy_chrome(letter.rendered_body)
-    has_subject_in_body = any(p.upper().startswith("SUBJECT:") for p in body_paras[:2])
-    if not has_subject_in_body and letter.rendered_subject:
+    blocks = body_blocks(letter.rendered_body, legacy=is_legacy_layout(letter))
+    if not any(b["kind"] == "subject" for b in blocks[:2]) and letter.rendered_subject:
         paras.append(_label_p("SUBJECT:", letter.rendered_subject, space_after=160))
-
-    for block in body_paras:
-        lines = [ln.strip() for ln in block.split("\n") if ln.strip()]
-        if not lines:
-            continue
-        first = lines[0]
-        if first.upper().startswith("SUBJECT:"):
-            subj_val = first.split(":", 1)[1].strip()
-            paras.append(_label_p("SUBJECT:", subj_val, space_after=160))
-            if len(lines) > 1:
-                paras.append(_p_xml("\n".join(lines[1:]), space_after=140))
-            continue
-        heading_key = first.rstrip(":").strip().lower()
-        if heading_key in _SECTION_TITLES or (first.endswith(":") and len(first) <= 48 and len(lines) > 1):
-            paras.append(_p_xml(first.rstrip(":"), bold=True, size_half_pt=21, space_before=100, space_after=60, color="0F172A"))
-            if len(lines) > 1:
-                paras.append(_p_xml("\n".join(lines[1:]), space_after=140))
-        elif heading_key in _SECTION_TITLES or (len(lines) == 1 and first.endswith(":") and len(first) <= 48):
-            paras.append(_p_xml(first.rstrip(":"), bold=True, size_half_pt=21, space_before=100, space_after=60, color="0F172A"))
+    for b in blocks:
+        if b["kind"] == "subject":
+            paras.append(_label_p("SUBJECT:", b["text"], space_after=160))
+        elif b["kind"] == "section":
+            paras.append(_p_xml(b["heading"], bold=True, size_half_pt=21, space_before=100, space_after=60, color="0F172A"))
+            if b["lines"]:
+                paras.append(_p_xml("\n".join(b["lines"]), space_after=140))
         else:
-            paras.append(_p_xml("\n".join(lines), space_after=140))
+            paras.append(_p_xml("\n".join(b["lines"]), space_after=140))
 
     paras.append(_p_xml("Issued by:", bold=True, size_half_pt=20, space_before=240, space_after=480, color="334155"))
     paras.append(_p_xml(f"{issuer_name}\n{issuer_role}\n{sub_name}", bold=False, size_half_pt=21, space_after=120, color="0F172A"))
@@ -439,24 +630,35 @@ def _build_minimal_docx(letter: GeneratedWarningLetter, db: Optional[Session] = 
     return out.getvalue()
 
 
+_DOCX_TEXT_PARTS = ("word/document.xml", "word/footnotes.xml", "word/endnotes.xml")
+
+
 def render_letter_docx(letter: GeneratedWarningLetter, db: Session) -> bytes:
+    """
+    The letter as a Word file. A letter whose template version was imported from Word is that file with its placeholders filled in
+    (see _replace_placeholders_in_xml_bytes); any other letter gets the standard generated layout. Nothing is hidden: a part that
+    cannot be filled gives an error, and a file that would still contain an unfilled {{placeholder}} is refused (422).
+    """
     values: Dict[str, str] = {k: str(v or "") for k, v in (letter.placeholders_json or {}).items()}
     if letter.template_version_id:
         ver = db.get(WarningLetterTemplateVersion, letter.template_version_id)
         if ver is not None and ver.source_docx_bytes:
-            src = io.BytesIO(ver.source_docx_bytes)
+            _read_docx_parts(ver.source_docx_bytes)                # the stored file is checked again (older uploads predate the checks)
+            leftovers: List[str] = []
             dst = io.BytesIO()
-            with zipfile.ZipFile(src, "r") as zin, zipfile.ZipFile(dst, "w", compression=zipfile.ZIP_DEFLATED) as zout:
+            with zipfile.ZipFile(io.BytesIO(ver.source_docx_bytes), "r") as zin, zipfile.ZipFile(dst, "w", compression=zipfile.ZIP_DEFLATED) as zout:
                 for item in zin.infolist():
                     data = zin.read(item.filename)
-                    if item.filename == "word/document.xml" or (
-                        item.filename.startswith(("word/header", "word/footer")) and item.filename.endswith(".xml")
-                    ):
+                    if item.filename in _DOCX_TEXT_PARTS or (item.filename.startswith(("word/header", "word/footer")) and item.filename.endswith(".xml")):
                         try:
-                            data = _replace_placeholders_in_xml_bytes(data, values)
-                        except Exception:
-                            pass
+                            data, left = _replace_placeholders_in_xml_bytes(data, values)
+                        except Exception as exc:  # noqa: BLE001
+                            raise HTTPException(status_code=500, detail=f"The Word file for {letter.warning_reference} could not be made ({item.filename}: {exc}). Download the PDF instead.") from exc
+                        leftovers.extend(left)
                     zout.writestr(item, data)
+            if leftovers:
+                shown = ", ".join(sorted({"{{" + k + "}}" for k in leftovers}))
+                raise HTTPException(status_code=422, detail=f"The Word file for {letter.warning_reference} would still contain unfilled placeholders ({shown}), so it was not made. Download the PDF instead.")
             return dst.getvalue()
     return _build_minimal_docx(letter, db)
 
@@ -527,42 +729,26 @@ def render_letter_pdf(letter: GeneratedWarningLetter, db: Optional[Session] = No
     else:
         ops.append(("gap", "", "", 0, 8, ""))
 
-    # Letter body sections
-    body_paras = _strip_legacy_chrome(letter.rendered_body)
-    has_subject_in_body = any(p.upper().startswith("SUBJECT:") for p in body_paras[:2])
-    if not has_subject_in_body and letter.rendered_subject:
+    # Letter body sections (the same blocks as the screen and the DOCX; every line kept, line breaks included)
+    blocks = body_blocks(letter.rendered_body, legacy=is_legacy_layout(letter))
+    if not any(b["kind"] == "subject" for b in blocks[:2]) and letter.rendered_subject:
         for wline in textwrap.wrap(f"SUBJECT: {letter.rendered_subject}", width=max_chars - 4) or [""]:
             ops.append(("text", "/F2", wline, 10, 15, "left"))
         ops.append(("gap", "", "", 0, 8, ""))
 
-    for para in body_paras:
-        lines = [ln.strip() for ln in para.split("\n") if ln.strip()]
-        if not lines:
-            continue
-        first = lines[0]
-        if first.upper().startswith("SUBJECT:"):
-            for wline in textwrap.wrap(first, width=max_chars - 4) or [""]:
+    for b in blocks:
+        if b["kind"] == "subject":
+            for wline in textwrap.wrap(f"SUBJECT: {b['text']}", width=max_chars - 4) or [""]:
                 ops.append(("text", "/F2", wline, 10, 15, "left"))
             ops.append(("gap", "", "", 0, 6, ""))
-            lines = lines[1:]
-            if not lines:
-                continue
-        heading_key = first.rstrip(":").strip().lower()
-        if heading_key in _SECTION_TITLES or (first.endswith(":") and len(first) <= 48 and len(lines) > 1):
+            continue
+        if b["kind"] == "section":
             ops.append(("gap", "", "", 0, 4, ""))
-            ops.append(("text", "/F2", first.rstrip(":"), 10, 15, "left"))
-            for body_ln in lines[1:]:
-                for wline in textwrap.wrap(body_ln, width=max_chars) or [""]:
-                    ops.append(("text", "/F1", wline, 10, 15, "left"))
-            ops.append(("gap", "", "", 0, 6, ""))
-        elif len(lines) == 1 and first.endswith(":") and len(first) <= 48:
-            ops.append(("gap", "", "", 0, 4, ""))
-            ops.append(("text", "/F2", first.rstrip(":"), 10, 15, "left"))
-        else:
-            joined = " ".join(lines)
-            for wline in textwrap.wrap(joined, width=max_chars) or [""]:
+            ops.append(("text", "/F2", b["heading"], 10, 15, "left"))
+        for body_ln in b["lines"]:
+            for wline in textwrap.wrap(body_ln, width=max_chars) or [""]:
                 ops.append(("text", "/F1", wline, 10, 15, "left"))
-            ops.append(("gap", "", "", 0, 7, ""))
+        ops.append(("gap", "", "", 0, 6 if b["kind"] == "section" else 7, ""))
 
     # Issuing Authority / Signature block (kept together)
     sig_ops: List[Tuple[str, str, str, int, int, str]] = [
@@ -1172,6 +1358,7 @@ def create_generated_letter(
     overrides: Optional[Dict[str, str]] = None,
     attachment_url: Optional[str] = None,
     attachment_name: Optional[str] = None,
+    letter_date: Optional[datetime] = None,
 ) -> GeneratedWarningLetter:
     now = datetime.now()
     # Every issuing path goes through this check, whichever service called it (a caller may also run it earlier, before it writes).
@@ -1179,7 +1366,7 @@ def create_generated_letter(
         db=db, subdivision_id=subdivision_id, report=report, owner=owner, recipient_name=recipient_name, recipient_address=recipient_address,
         pet=pet, issuer=issuer, warning_level=warning_level, policy_reference=policy_reference, violation_description=violation_description,
         required_action=required_action, template_id=template_id, observation_days=observation_days, summons_at=summons_at,
-        summons_place=summons_place, overrides=overrides, issue_date=now,
+        summons_place=summons_place, overrides=overrides, issue_date=letter_date or now,   # "Date issued": the date the Leader put on the letter
     )
     if attachment_url:
         ctx["attachment_url"] = attachment_url
@@ -1233,7 +1420,7 @@ def create_generated_letter(
     letter.rendered_subject = rendered_subject
     letter.rendered_body = rendered_body
     letter.rendered_html = rendered_html
-    letter.placeholders_json = ctx
+    letter.placeholders_json = {**ctx, RENDER_LAYOUT_KEY: RENDER_LAYOUT}   # shown exactly as written (see is_legacy_layout)
     db.flush()
     return letter
 
@@ -1266,21 +1453,29 @@ def mark_letter_viewed(db: Session, letter: GeneratedWarningLetter, viewer: User
     return changed
 
 
+def _office_part(db: Session, letter: GeneratedWarningLetter, part: str) -> Optional[str]:
+    """For a very old letter that never stored its office details: the office's current one."""
+    if not letter.subdivision_id:
+        return None
+    return (getattr(case_policy.load_settings(db, letter.subdivision_id).office, part, "") or "").strip() or None
+
+
 def serialize_letter(letter: GeneratedWarningLetter, db: Session) -> Dict[str, Any]:
     notif = db.get(Notification, letter.notification_id) if letter.notification_id else None
     warn = db.get(OwnerWarning, letter.warning_id) if letter.warning_id else None
     ph = letter.placeholders_json or {}
     sub_name, sub_addr, _ = _office_contact_lines(db, letter.subdivision_id, ph)
-    office = case_policy.load_settings(db, letter.subdivision_id).office if letter.subdivision_id else None
     issuer_name, issuer_role, _ = _issuer_lines(letter, sub_name)
     return {
         "letter_id": letter.letter_id,
         "warning_reference": letter.warning_reference,
         "subdivision_id": letter.subdivision_id,
         "subdivision_name": sub_name,
-        "subdivision_address": sub_addr or ((office.address or "").strip() if office else "") or None,
-        "subdivision_phone": (str(ph.get("subdivision_phone") or "").strip() or ((office.phone or "").strip() if office else "")) or None,
-        "subdivision_email": (str(ph.get("subdivision_email") or "").strip() or ((office.email or "").strip() if office else "")) or None,
+        # the office details the letter was issued with (a later change to the office's details never alters an issued letter)
+        "subdivision_address": sub_addr,
+        "subdivision_phone": (str(ph.get("subdivision_phone") or "").strip() or None) if "subdivision_phone" in ph else _office_part(db, letter, "phone"),
+        "subdivision_email": (str(ph.get("subdivision_email") or "").strip() or None) if "subdivision_email" in ph else _office_part(db, letter, "email"),
+        "legacy_layout": is_legacy_layout(letter),
         "warning_id": letter.warning_id,
         "complaint_step_id": letter.complaint_step_id,
         "report_id": letter.report_id,

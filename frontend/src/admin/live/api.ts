@@ -296,6 +296,8 @@ export interface ApiWarningTemplate {
   current_version_id: number | null; current_version_number: number; version_count: number;
   current_version: ApiWarningTemplateVersion | null; created_by_name: string | null; updated_by_name: string | null;
   created_at: string | null; updated_at: string | null; versions?: ApiWarningTemplateVersion[];
+  /** Only on a DOCX import: what the on-screen preview and the PDF cannot show (tables, pictures, header/footer), and where the subject came from. */
+  import_notes?: string[];
 }
 export interface ApiTemplatePreviewResult {
   subject: string; body: string; html: string; placeholders: Record<string, string>;
@@ -312,6 +314,8 @@ export interface ApiGeneratedWarningLetter {
   warning_level: string; policy_id: string | null; policy_reference: string | null;
   template_id: number | null; template_name: string; template_version_id: number | null; template_version_number: number;
   rendered_subject: string; rendered_body: string; rendered_html: string; placeholders: Record<string, string>;
+  /** Issued before the layout marker existed: its old header/recipient/signature lines are hidden when shown (as before). */
+  legacy_layout?: boolean;
   issued_by: number | null; issued_by_name: string; issuer_name?: string | null; issuer_role?: string | null; issued_at: string | null;
   warning_status: string | null; acknowledged_at: string | null;
   notification_id: number | null; notification_status: string; notification_error: string | null;

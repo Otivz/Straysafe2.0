@@ -492,7 +492,7 @@ function Enforcement({ d, closed, now, onOpen }: { d: ApiComplaint; closed: bool
                   {nx && !closed ? <Button size="sm" onClick={() => onOpen({ kind: 'step', stepId: s.step_id, action: nx.action })}>{nx.label}</Button> : null}
                   {(s.kind === 'letter_1' || s.kind === 'letter_2') && s.state !== 'to_prepare' ? (
                     <Button size="sm" variant="ghost" icon={Printer} onClick={() => onOpen({ kind: 'print', stepId: s.step_id })}>
-                      {typeof (s.details as Record<string, unknown> | undefined)?.letter_id === 'number' ? 'View / Download' : 'Print again'}
+                      {s.state === 'prepared' ? 'View / print draft' : typeof (s.details as Record<string, unknown> | undefined)?.letter_id === 'number' ? 'View / Download' : 'Print again'}
                     </Button>
                   ) : null}
                 </div>

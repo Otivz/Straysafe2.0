@@ -92,6 +92,93 @@ def _letter_address(resp_row, resp_user) -> Optional[str]:
     return None if (not address or address == NO_ADDRESS_TEXT) else address
 
 
+# The Leader's choices for a letter, saved on its step when it is prepared (the draft). The letter record itself is made only when the
+# letter is issued, from these.
+DRAFT_KEYS = ("template_id", "required_action", "field_overrides", "letter_date", "summons_at", "summons_place", "attachment_url", "attachment_name")
+
+
+def _draft_of(details: Dict[str, Any], data: Optional[StepActionIn] = None) -> Dict[str, Any]:
+    """The saved draft of a letter step (what the Leader chose when preparing it)."""
+    return {
+        "template_id": (data.template_id if data is not None and data.template_id is not None else None) or details.get("template_id"),
+        "required_action": details.get("required_action"),
+        "field_overrides": (data.field_overrides if data is not None and data.field_overrides else None) or details.get("field_overrides"),
+        "letter_date": details.get("letter_date"),
+        "summons_at": details.get("summons_at"),
+        "summons_place": details.get("summons_place"),
+    }
+
+
+def _letter_datetime(value: Any) -> Optional[datetime]:
+    """The letter date the Leader chose (stored as YYYY-MM-DD), as a datetime for the letter's "Date issued"."""
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def _letter_args(db: Session, report: Report, actor: User, off: ComplaintOffense, kind: str, draft: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Everything a complaint's warning letter is made from, read the same way when it is prepared (checked), shown as a draft, and issued
+    (made). The summons comes from the draft, or from the scheduled summons step for a draft saved before the summons was kept there.
+    """
+    resp_row = db.get(ComplaintRespondent, off.respondent_id)
+    resp_user = db.get(User, resp_row.user_id) if (resp_row and resp_row.user_id) else None
+    pol = _policy(db, report.subdivision_id, off.policy_id)
+    pol_ref = f"{off.policy_reference} — {off.policy_title}" if off.policy_reference else off.policy_title
+    req_act = (draft.get("required_action") or "").strip() or (pol.summary if pol and pol.summary else "Comply with subdivision rules and prevent recurrence.")
+    summons_at, place = None, None
+    if kind == R.LETTER_2:
+        summons_at = datetime.fromisoformat(str(draft["summons_at"])) if draft.get("summons_at") else None   # saved as a full ISO datetime
+        place = draft.get("summons_place")
+        if summons_at is None:
+            summons = next((s for s in R.step_rows(db, off.offense_id) if s.kind == R.SUMMONS), None)
+            if summons is not None:
+                summons_at, place = summons.due_at, place or (summons.details or {}).get("place")
+    return dict(
+        db=db, subdivision_id=report.subdivision_id, report=report, owner=resp_user,
+        recipient_name=resp_row.name if resp_row else (resp_user.name if resp_user else "Resident"),
+        recipient_address=_letter_address(resp_row, resp_user),
+        pet=db.get(Pet, report.pet_id) if report.pet_id else None, issuer=actor,
+        warning_level="2nd Warning" if kind == R.LETTER_2 else "1st Warning", policy_reference=pol_ref,
+        violation_description=report.description or f"Verified violation of {off.policy_title}.",
+        required_action=req_act, template_id=draft.get("template_id"), summons_at=summons_at, summons_place=place,
+        overrides=draft.get("field_overrides"),
+    )
+
+
+def draft_letter(db: Session, report: Report, actor: User, step_id: int) -> Dict[str, Any]:
+    """
+    The DRAFT of a prepared (not yet issued) letter, rendered from the saved draft with the template's current version, for the
+    Leader to read or print. It has no warning reference, sends nothing, writes nothing and is not part of any warning history.
+    A needed value that went missing since it was prepared shows as "[missing: ...]" and `can_issue` is false.
+    """
+    from app.services import warning_letters as WL
+    step = db.get(EnforcementStep, step_id)
+    if step is None or step.report_id != report.report_id or step.kind not in (R.LETTER_1, R.LETTER_2):
+        raise HTTPException(status_code=404, detail="Letter step not found on this complaint.")
+    if step.state != "prepared":
+        raise HTTPException(status_code=409, detail="Only a prepared letter that is not yet issued has a draft. An issued letter is opened from its warning reference.")
+    off = db.get(ComplaintOffense, step.offense_id)
+    draft = _draft_of(step.details or {})
+    args = _letter_args(db, report, actor, off, step.kind, draft)
+    tpl, ver = WL.resolve_template_for_issuance(db, report.subdivision_id, draft.get("template_id"), args["warning_level"])
+    ctx = WL.build_letter_context(
+        **{k: args[k] for k in ("db", "subdivision_id", "report", "owner", "recipient_name", "recipient_address", "issuer", "warning_level",
+                                 "policy_reference", "violation_description", "required_action", "summons_at", "overrides")},
+        pet=WL._resolve_pet(db, args["pet"], args["owner"], report), summons_place=args["summons_place"],
+        warning_reference="DRAFT - NOT ISSUED", issue_date=_letter_datetime(draft.get("letter_date")) or datetime.now(),
+    )
+    out = WL.render_preview(ver.subject_template, ver.body_template, ctx)
+    out.update(is_draft=True, step_id=step.step_id, letter_date=draft.get("letter_date"),
+               template={"template_id": tpl.template_id, "name": tpl.name, "version_number": ver.version_number})
+    return out
+
+
 def _policy(db: Session, subdivision_id: int, policy_id: Optional[str]) -> Optional[PolicyIn]:
     if not policy_id:
         return None
@@ -739,34 +826,29 @@ def step_action(db: Session, report: Report, actor: User, step_id: int, data: St
         raise HTTPException(status_code=409, detail=message)
 
     if a == "prepare" and letter:
+        # PREPARE = save a DRAFT. The Leader's choices are kept on the step (details) and checked, but no warning letter record, no
+        # official warning reference and no notice exist until the letter is ISSUED. Preparing again replaces the draft.
         if step.state not in ("to_prepare", "prepared"):
             wrong("This letter was already issued for delivery. Print it again from the step if you need a copy.")
         letter_date = need(data.letter_date, "Choose the date on the letter.")
-        from app.services import warning_letters as WL
-        info: Dict[str, Any] = {"letter_date": letter_date.isoformat()}
         summons_at = None
         place = None
         if kind == R.LETTER_2:
             summons_at = need(data.summons_at, "Choose the date and time of the summons.").replace(tzinfo=None)
             place = (data.place or "").strip() or "Subdivision office"
-        # What the letter needs, read first, and the letter checked BEFORE anything is changed: the chosen template (active, fits this
-        # level), only supported placeholders, and every needed detail. A refusal leaves the step and the summons as they were.
-        resp_row = db.get(ComplaintRespondent, off.respondent_id)
-        resp_user = db.get(User, resp_row.user_id) if (resp_row and resp_row.user_id) else None
-        pet_obj = db.get(Pet, report.pet_id) if report.pet_id else None
-        pol = _policy(db, report.subdivision_id, off.policy_id)
-        pol_ref = f"{off.policy_reference} — {off.policy_title}" if off.policy_reference else off.policy_title
-        req_act = (data.required_action or "").strip() or (pol.summary if pol and pol.summary else "Comply with subdivision rules and prevent recurrence.")
-        wlevel = "2nd Warning" if kind == R.LETTER_2 else "1st Warning"
-        letter_args = dict(
-            db=db, subdivision_id=report.subdivision_id, report=report, owner=resp_user,
-            recipient_name=resp_row.name if resp_row else (resp_user.name if resp_user else "Resident"),
-            recipient_address=_letter_address(resp_row, resp_user),
-            pet=pet_obj, issuer=actor, warning_level=wlevel, policy_reference=pol_ref,
-            violation_description=report.description or f"Verified violation of {off.policy_title}.",
-            required_action=req_act, template_id=data.template_id, summons_at=summons_at, summons_place=place, overrides=data.field_overrides,
-        )
-        WL.validate_letter_ready(**letter_args)
+        draft = {
+            "template_id": data.template_id,
+            "required_action": (data.required_action or "").strip() or None,
+            "field_overrides": data.field_overrides or None,
+            "letter_date": letter_date.isoformat(),
+            "summons_at": summons_at.isoformat() if summons_at else None,
+            "summons_place": place,
+        }
+        # The draft must be issuable as it stands (template active and for this level, supported placeholders, every needed detail),
+        # checked BEFORE anything changes: a refusal leaves the step and the summons as they were.
+        from app.services import warning_letters as WL
+        WL.validate_letter_ready(**_letter_args(db, report, actor, off, kind, draft))
+        info: Dict[str, Any] = {"letter_date": letter_date.isoformat()}
         if kind == R.LETTER_2:
             info.update(summons_at=summons_at.isoformat(), place=place)
             summons = next((s for s in R.step_rows(db, off.offense_id) if s.kind == R.SUMMONS), None)
@@ -774,78 +856,34 @@ def step_action(db: Session, report: Report, actor: User, step_id: int, data: St
                 summons.state, summons.due_at = "scheduled", summons_at
                 summons.details = {**(summons.details or {}), "place": place}
                 _event(db, summons, actor, "scheduled", now, {"at": summons_at.isoformat(), "place": place})
-        details.update(letter_date=letter_date.isoformat(), prepared_at=now.isoformat(timespec="seconds"))
-        if data.template_id is not None:
-            details["template_id"] = data.template_id
-        if data.required_action:
-            details["required_action"] = data.required_action
-        if data.field_overrides:
-            details["field_overrides"] = data.field_overrides
+        for key in DRAFT_KEYS:                      # a new draft replaces the old one entirely (nothing stale is carried over)
+            details.pop(key, None)
+        details.update({k: v for k, v in draft.items() if v is not None}, prepared_at=now.isoformat(timespec="seconds"))
         if data.attachment_url:
             details["attachment_url"] = data.attachment_url
             details["attachment_name"] = data.attachment_name or "Warning letter attachment"
-        # Generate/store an immutable warning letter snapshot from the subdivision's dynamic template
-        existing_letter = db.query(WL.GeneratedWarningLetter).filter(
-            WL.GeneratedWarningLetter.complaint_step_id == step.step_id
-        ).first()
-        if existing_letter is None:
-            gen = WL.create_generated_letter(
-                **letter_args,
-                policy_id=off.policy_id,
-                complaint_step_id=step.step_id,
-                attachment_url=data.attachment_url,
-                attachment_name=data.attachment_name,
-            )
-            details["letter_id"] = gen.letter_id
-            details["warning_reference"] = gen.warning_reference
-        elif data.attachment_url:
-            existing_letter.placeholders_json = {
-                **(existing_letter.placeholders_json or {}),
-                "attachment_url": data.attachment_url,
-                "attachment_name": data.attachment_name or "Warning letter attachment",
-            }
         step.state = "prepared"
         _event(db, step, actor, "prepared", now, info, rid)
     elif a == "issue" and letter:
+        # ISSUE = the official letter. Only now is the warning letter record made, from the saved draft, with its official
+        # reference and frozen snapshot, dated with the letter date the Leader chose; then the resident is notified.
         if step.state != "prepared":
             wrong("Prepare the letter first." if step.state == "to_prepare" else "This letter was already issued.")
         via = need(data.via, "Say who delivers it.")
-        details.update(issued_at=now.isoformat(timespec="seconds"), issued_via=via)
-        # Notify the responsible resident automatically if they have a StraySafe account
         from app.services import warning_letters as WL
-        gen = db.query(WL.GeneratedWarningLetter).filter(
-            WL.GeneratedWarningLetter.complaint_step_id == step.step_id
-        ).first()
+        gen = db.query(WL.GeneratedWarningLetter).filter(WL.GeneratedWarningLetter.complaint_step_id == step.step_id).first()
         if gen is None:
-            resp_row = db.get(ComplaintRespondent, off.respondent_id)
-            resp_user = db.get(User, resp_row.user_id) if (resp_row and resp_row.user_id) else None
-            pet_obj = db.get(Pet, report.pet_id) if report.pet_id else None
-            pol = _policy(db, report.subdivision_id, off.policy_id)
-            pol_ref = f"{off.policy_reference} — {off.policy_title}" if off.policy_reference else off.policy_title
-            req_act = details.get("required_action") or (pol.summary if pol and pol.summary else "Comply with subdivision rules and prevent recurrence.")
-            summons = next((s for s in R.step_rows(db, off.offense_id) if s.kind == R.SUMMONS), None) if kind == R.LETTER_2 else None
+            draft = _draft_of(details, data)
             gen = WL.create_generated_letter(
-                db=db,
-                subdivision_id=report.subdivision_id,
-                report=report,
-                owner=resp_user,
-                recipient_name=resp_row.name if resp_row else (resp_user.name if resp_user else "Resident"),
-                recipient_address=_letter_address(resp_row, resp_user),
-                pet=pet_obj,
-                issuer=actor,
-                warning_level="2nd Warning" if kind == R.LETTER_2 else "1st Warning",
+                **_letter_args(db, report, actor, off, kind, draft),
                 policy_id=off.policy_id,
-                policy_reference=pol_ref,
-                violation_description=report.description or f"Verified violation of {off.policy_title}.",
-                required_action=req_act,
-                template_id=data.template_id or details.get("template_id"),
                 complaint_step_id=step.step_id,
-                summons_at=summons.due_at if summons else None,
-                summons_place=(summons.details or {}).get("place") if summons else None,
-                overrides=data.field_overrides or details.get("field_overrides"),
+                letter_date=_letter_datetime(draft.get("letter_date")),
+                attachment_url=details.get("attachment_url"),
+                attachment_name=details.get("attachment_name"),
             )
-            details["letter_id"] = gen.letter_id
-            details["warning_reference"] = gen.warning_reference
+        # (A letter record that already exists was made when this step was prepared under the earlier rules; it is issued as it is.)
+        details.update(issued_at=now.isoformat(timespec="seconds"), issued_via=via, letter_id=gen.letter_id, warning_reference=gen.warning_reference)
         if gen.recipient_user_id and gen.notification_status == "pending":
             resp_user = db.get(User, gen.recipient_user_id)
             pet_obj = db.get(Pet, gen.pet_id) if gen.pet_id else None

@@ -47,6 +47,7 @@ export default function WarningTemplatesPage() {
   const [previewTarget, setPreviewTarget] = useState<{ template: ApiWarningTemplate; version?: ApiWarningTemplateVersion } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<ApiWarningTemplate | null>(null);
   const [importing, setImporting] = useState(false);
+  const [importNotes, setImportNotes] = useState<{ name: string; notes: string[] } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -77,6 +78,7 @@ export default function WarningTemplatesPage() {
       const form = new FormData();
       form.append('file', file);
       const created = await adminApi.importWarningTemplateDocx(form);
+      setImportNotes(created.import_notes?.length ? { name: created.name, notes: created.import_notes } : null);
       toast.success(`Imported "${created.name}" (${created.current_version?.placeholders_used?.length ?? 0} placeholders detected)`);
       await load();
       setEditing(created);
@@ -151,6 +153,13 @@ export default function WarningTemplatesPage() {
           </div>
         )}
       />
+
+      {importNotes ? (
+        <Callout className="mb-4" title={`Notes on the imported Word file: ${importNotes.name}`}>
+          <ul className="m-0 list-disc pl-5">{importNotes.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+          <Button size="sm" variant="ghost" className="mt-2" onClick={() => setImportNotes(null)}>Dismiss</Button>
+        </Callout>
+      ) : null}
 
       <Panel>
         <Block
@@ -251,6 +260,7 @@ export default function WarningTemplatesPage() {
           placeholders={placeholders}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); void load(); }}
+          onImported={(name, notes) => setImportNotes(notes.length ? { name, notes } : null)}
         />
       ) : null}
 
@@ -282,11 +292,14 @@ function TemplateEditorDialog({
   placeholders,
   onClose,
   onSaved,
+  onImported,
 }: {
   template?: ApiWarningTemplate;
   placeholders: ApiPlaceholderDef[];
   onClose: () => void;
   onSaved: () => void;
+  /** A new version was imported from Word: its notes are shown on the page. */
+  onImported?: (name: string, notes: string[]) => void;
 }) {
   const toast = useToast();
   const subjectEd = useRef<PlaceholderEditorHandle>(null);
@@ -301,7 +314,8 @@ function TemplateEditorDialog({
   const [subject, setSubject] = useState(template?.current_version?.subject_template ?? '{{warning_level}} ({{warning_reference}}) — {{case_reference}}');
   const [body, setBody] = useState(
     template?.current_version?.body_template ??
-    `{{subdivision_name}} — Office of the Subdivision Leader\n\nDate Issued: {{issue_date}}\nWarning Reference: {{warning_reference}}\nCase Reference: {{case_reference}}\n\nTO: {{resident_name}}\nAddress: {{resident_address}}\n\nDear {{resident_name}},\n\nThis {{warning_level}} is issued regarding {{case_reference}} on {{incident_date}} involving {{pet_name}} ({{pet_type}}).\n\nViolation Details:\n{{violation_description}}\n\nApplicable Policy:\n{{policy_reference}}\n\nRequired Corrective Action:\n{{required_action}}\n\nIssued by:\n{{issued_by}}`
+    // The letter prints its own letterhead, references, "TO:"/address and signature: the body starts at the greeting.
+    `Dear {{resident_name}},\n\nThis {{warning_level}} is issued regarding {{case_reference}} on {{incident_date}} involving {{pet_name}} ({{pet_type}}).\n\nViolation Details\n{{violation_description}}\n\nSubdivision Policy\n{{policy_reference}}\n\nRequired Corrective Action\n{{required_action}}`
   );
   const [changeNote, setChangeNote] = useState(template ? '' : 'Initial template');
   const [tab, setTab] = useState<'edit' | 'preview'>('edit');
@@ -342,6 +356,7 @@ function TemplateEditorDialog({
       form.append('template_id', String(template.template_id));
       const updated = await adminApi.importWarningTemplateDocx(form);
       toast.success(`Imported "${file.name}" as v${updated.current_version_number}`);
+      onImported?.(updated.name, updated.import_notes ?? []);
       onSaved();
     } catch (e) {
       setErr(errorMessage(e));
@@ -467,9 +482,14 @@ function TemplateEditorDialog({
             <PlaceholderEditor ref={subjectEd} single value={subject} onChange={setSubject} placeholders={placeholders} onFocus={() => { lastField.current = 'subject'; }} />
           </Field>
 
-          <Field label="Letter body template" required>
+          <Field label="Letter body template" required hint="The letter already prints the letterhead, the warning and case references, the date, “TO:” with the address, and the signature. Everything you write here is printed exactly as written.">
             <PlaceholderEditor ref={bodyEd} value={body} onChange={setBody} placeholders={placeholders} onFocus={() => { lastField.current = 'body'; }} />
           </Field>
+          {/^(TO|Address|Date Issued|Warning Reference|Case Reference|Issued by):/im.test(body) || /Office of the Subdivision Leader/.test(body) ? (
+            <Callout tone="amber" title="This text repeats part of the printed letter">
+              It has a “TO:”, “Address:”, date, reference, “Issued by:” or letterhead line. The letter prints those itself, so they will appear twice. Remove them unless you want them twice.
+            </Callout>
+          ) : null}
 
           <div className="sa-grid2">
             <Field label="Version change note" optional>
@@ -562,6 +582,7 @@ function TemplatePreviewDialog({
             </Callout>
           )}
           <WarningLetterDocument
+            draft
             subdivisionName={preview.placeholders?.subdivision_name}
             subdivisionAddress={preview.placeholders?.subdivision_address}
             subdivisionPhone={preview.placeholders?.subdivision_phone}

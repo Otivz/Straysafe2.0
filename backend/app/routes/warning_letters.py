@@ -233,7 +233,8 @@ async def import_docx_template(
         raise HTTPException(status_code=413, detail="DOCX file is too large (max 5 MB).")
 
     parsed = WL.parse_docx_bytes(raw)
-    WL.validate_template_text(parsed["subject_template"], parsed["body_template"])   # an unsupported {{key}} in the Word file is refused, by name
+    # an unsupported {{key}} anywhere in the Word file (body, header or footer) is refused, by name
+    WL.validate_template_text(parsed["subject_template"], f'{parsed["body_template"]}\n\n{parsed.get("other_text", "")}')
     fname = (file.filename or "warning_template.docx").strip()
 
     if template_id is not None:
@@ -297,7 +298,8 @@ async def import_docx_template(
         commit=False,
     )
     db.commit()
-    return WL.serialize_template(tpl, db, include_versions=True)
+    # plain notes on what the on-screen preview and PDF cannot show (tables, pictures, header/footer) and where the subject came from
+    return {**WL.serialize_template(tpl, db, include_versions=True), "import_notes": parsed.get("notes", [])}
 
 
 @templates_router.put("/{template_id}")

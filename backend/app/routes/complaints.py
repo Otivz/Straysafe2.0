@@ -9,6 +9,7 @@ Complaint management and progressive enforcement (docs/01-system/COMPLAINT_MANAG
   POST /complaints/{report_id}/responsible      who is responsible (or: still checking; or a correction)
   POST /complaints/{report_id}/offense          confirm the suggested offense number, or record why it does not count
   POST /complaints/{report_id}/same-occurrence  the same occurrence as an earlier complaint (counted once), or a separate incident
+  GET  /complaints/{report_id}/steps/{step_id}/draft  the DRAFT of a prepared letter (not issued: no reference, no notice)
   POST /complaints/{report_id}/steps/{step_id}  something that happened on a letter, the summons, the fine or the Barangay meeting
 
 Reading: the Subdivision Leader (their subdivision) and the Administrator. Every write: the Subdivision Leader handling the case.
@@ -81,6 +82,12 @@ def same_occurrence(report_id: int, body: SameOccurrenceIn, db: Session = Depend
                     user: User = Depends(get_current_user)) -> Dict[str, Any]:
     C.same_occurrence(db, C.complaint_for(db, report_id, user, write=True), user, body)
     return _done(db, report_id, user)
+
+
+@router.get("/{report_id}/steps/{step_id}/draft")
+def step_draft(report_id: int, step_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """The DRAFT of a prepared letter (not issued): to read or print, marked as a draft. No reference, no notice, nothing written."""
+    return C.draft_letter(db, C.complaint_for(db, report_id, user, write=True), user, step_id)
 
 
 @router.post("/{report_id}/steps/{step_id}")

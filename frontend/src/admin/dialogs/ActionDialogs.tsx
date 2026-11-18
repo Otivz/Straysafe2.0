@@ -366,6 +366,7 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
                 <strong>Template:</strong> {preview.template?.name ?? 'Default'} (v{preview.template?.version_number ?? 1})
               </p>
               <WarningLetterDocument
+                draft
                 subdivisionName={preview.placeholders?.subdivision_name}
                 subdivisionAddress={preview.placeholders?.subdivision_address}
                 subdivisionPhone={preview.placeholders?.subdivision_phone}
