@@ -27,7 +27,7 @@ _TYPE_CATEGORY = {
     "lost_found_review": PET_MATCHES, "lost_found_linked": PET_MATCHES, "lost_found_bridge": PET_MATCHES, "lost_found_unlinked": PET_MATCHES,
     "potential_match": PET_MATCHES, "pet_owner_confirmation": PET_MATCHES, "pet_owner_confirmation_result": PET_MATCHES,
     "pet_match_confirmation": PET_MATCHES, "pet_match_confirmation_result": PET_MATCHES, "leader_identity_verified": PET_MATCHES,
-    "wrong_identity": PET_MATCHES, "reunion_photo_requested": PET_MATCHES,
+    "wrong_identity": PET_MATCHES, "reunion_photo_requested": PET_MATCHES, "pet_tag_found": PET_MATCHES,
     # Claims
     "claim": CLAIMS,
     # Messages
@@ -99,6 +99,8 @@ def notification_link(role_id: int, ntype: Optional[str], related_id: Optional[i
     if role_id == 1:  # Resident app
         if t in ("pet_owner_confirmation", "pet_match_confirmation"):
             return f"{RESIDENT_APP}/pets"
+        if t == "pet_tag_found":              # someone scanned the pet's QR tag: open the dedicated scan-message page
+            return f"{RESIDENT_APP}/pets/{rid}/scans" if rid else f"{RESIDENT_APP}/pets"
         if t in ("warning", "warning_letter"):
             return f"{RESIDENT_APP}/warnings"
         if t == "lost_found_linked":

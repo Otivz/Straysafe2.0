@@ -35,6 +35,9 @@ import SightingHistoryPage from './pages/community/SightingHistoryPage';
 import SightingPage from './pages/community/SightingPage';
 import { EditPetPage, RegisterPetPage } from './pages/pets/PetFormPage';
 import PetDetailsPage from './pages/pets/PetDetailsPage';
+import PetTagPage from './pages/pets/PetTagPage';
+import PetTagScansPage from './pages/pets/PetTagScansPage';
+import ScanTagPage from './pages/tag/ScanTagPage';
 import PetsPage from './pages/pets/PetsPage';
 import CategoryPage from './pages/report/CategoryPage';
 import DetailsPage from './pages/report/DetailsPage';
@@ -102,6 +105,7 @@ export default function ResidentApp({ mode }: { mode: ResidentMode }) {
                 <Route path="conversations/:conversationId" element={<ConversationPage />} />
 
                 <Route path="community" element={<CommunityPage />} />
+                <Route path="scan" element={<ScanTagPage />} />
                 <Route path="community/lost" element={<NoticeDirectoryPage key="lost" kind="lost_pet" />} />
                 <Route path="community/found" element={<NoticeDirectoryPage key="found" kind="found_animal" />} />
                 <Route path="community/:noticeId" element={<NoticePage />} />
@@ -115,6 +119,9 @@ export default function ResidentApp({ mode }: { mode: ResidentMode }) {
                 <Route path="pets/new" element={<RegisterPetPage />} />
                 <Route path="pets/:petId" element={<PetDetailsPage />} />
                 <Route path="pets/:petId/edit" element={<EditPetPage />} />
+                <Route path="pets/:petId/tag" element={<PetTagPage />} />
+                <Route path="pets/:petId/scans" element={<PetTagScansPage />} />
+                <Route path="pets/:petId/scans/:scanId" element={<PetTagScansPage />} />
 
                 <Route path="notifications" element={<NotificationsPage />} />
                 <Route path="warnings" element={<WarningsPage />} />

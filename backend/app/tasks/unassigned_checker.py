@@ -12,6 +12,16 @@ from app.services import email_templates
 
 logger = logging.getLogger("stray_safe.unassigned_checker")
 
+
+def _pet_tag_cleanup() -> None:
+    try:
+        from app.services.pet_tags import run_cleanup
+        result = run_cleanup()
+        if any(result.values()):
+            logger.info(f"Pet QR tag cleanup: {result}")
+    except Exception as e:  # a missing table (before the first start-up migration) must not stop the watcher
+        logger.warning(f"Pet QR tag cleanup skipped: {e}")
+
 def check_and_notify_unassigned_reports(threshold_minutes: int = 30) -> int:
     """
     Checks for reports that:
@@ -196,6 +206,10 @@ async def start_unassigned_reports_watcher(interval_seconds: int = 60, threshold
             # Run notification pruning roughly once per 24 hours (1440 iterations at 60s)
             if iteration % 1440 == 0:
                 await asyncio.to_thread(prune_old_notifications, 30)
+            # Pet QR tags: page views older than 90 days, and phone numbers on resolved messages (services/pet_tags.py).
+            # Shortly after start-up, then once a day.
+            if iteration % 1440 == 1:
+                await asyncio.to_thread(_pet_tag_cleanup)
 
         except asyncio.CancelledError:
             logger.info("Operations Watcher stopped.")

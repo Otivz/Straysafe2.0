@@ -310,7 +310,7 @@ Be ready to show any of these within 30 seconds:
 ## 10. Day-of checklist
 
 - [ ] Laptop and backup laptop charged; chargers; HDMI and USB-C adapters
-- [ ] Phone charged, hotspot tested, QR card printed
+- [ ] Phone charged, hotspot tested, QR card printed (set `PUBLIC_TAG_BASE_URL` in the root `.env` to the tunnel address, restart the backend, then print from the pet's page: a card printed for another address will not open)
 - [ ] System started 30 minutes before; all four accounts signed in
 - [ ] Demo video on the desktop and on a USB drive
 - [ ] Slides on the laptop, USB drive and cloud

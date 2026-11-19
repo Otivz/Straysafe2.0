@@ -53,7 +53,7 @@ export function LostReport({ report, detail }: { report: Report; detail: { statu
       subtitle={`${report.id} · your report`}
       back="/reports"
       footer={closed ? (
-        <LinkButton variant="primary" block to={residentPath('/report')}>Report something new</LinkButton>
+        <LinkButton variant="primary" block to={residentPath('/home')}>Return to Home</LinkButton>
       ) : (
         <>
           <LinkButton variant="primary" block icon={House} to={residentPath(`/reports/${report.id}/recovered`)}>My pet is home</LinkButton>

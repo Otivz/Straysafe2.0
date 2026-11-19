@@ -1,6 +1,6 @@
 # Pet QR Tags: Implementation Plan
 
-- **Status:** Proposal, nothing built.
+- **Status:** Phase 1 built on 2026-11-18 ([change record](../05-operations/agents/feature-updates/2026-11-18_1428_pet-qr-tags-phase1.md)); Phase 2 built on 2026-11-18 ([change record](../05-operations/agents/feature-updates/2026-11-18_1440_pet-qr-tags-phase2.md)), except task 2.5 (no conversation type exists for a pet without a report; see the record), with a 10/hour per-tag limit and `ENABLE_PET_TAGS` on by default; Phase 3 built on 2026-11-18 ([change record](../05-operations/agents/feature-updates/2026-11-18_1449_pet-qr-tags-phase3.md)): tag messages are filed under the open alert and listed on the Leader's case, not turned into sightings or map pins; Phase 4 built on 2026-11-18 ([change record](../05-operations/agents/feature-updates/2026-11-18_1453_pet-qr-tags-phase4.md)): the in-app scanner reads a photo of the tag in the Android app, so no CAMERA permission was added, and scans live in a phone's browser; daily cleanup of old page views. All four phases are built.
 - **Date:** 2026-11-17
 - **Decision it reverses:** pet QR tags and their scan history were retired on 2026-11-09 ([legacy cleanup, batch 1](../05-operations/agents/feature-updates/2026-11-09_1831_legacy-cleanup-batch-1.md); [PENDING_AND_FUTURE_FEATURES.md](PENDING_AND_FUTURE_FEATURES.md), "Physical Pet QR Tags: Retired"). The developer asked on 2026-11-17 to bring them back. When this is built, those two documents and [overview.md](../01-system/overview.md) must be updated in the same change.
 
@@ -139,10 +139,10 @@ Four phases, each shippable on its own and ending with a change record (`docs/05
 
 ### Phase 0: Decisions and groundwork (about 0.5 day)
 
-- [ ] Answer the three decisions in §11 (QR image package, guest messages, fixed address).
-- [ ] Approve the dependency change (`qrcode` back into `backend/requirements.txt`, if chosen).
-- [ ] Pick the public address for tags (`PUBLIC_TAG_BASE_URL`) and add it to `.env` yourself (agents may not edit `.env*`).
-- [ ] Re-read `AGENTS.md`: if FREEZE is ON, each file needs approval and this counts as a new feature outside the documented scope.
+- [x] Answer the three decisions in §11 (answered 2026-11-18, see §11).
+- [x] Approve the dependency change (`qrcode` back into `backend/requirements.txt`): approved 2026-11-18.
+- [ ] Pick the public address for tags (`PUBLIC_TAG_BASE_URL`) and add it to `.env` yourself (agents may not edit `.env*`). Until it is set, the link falls back to `FRONTEND_URL`, then `http://localhost:5173`, and the pet page warns that the tag is not public.
+- [x] Re-read `AGENTS.md`: FREEZE is OFF.
 
 **Done when:** every open question in §11 has an answer written in this plan.
 
@@ -232,6 +232,6 @@ Total: about 8 to 9 working days for Phases 1 to 3. The defense demo needs only 
 
 ## 11. Decisions needed before building
 
-1. **QR image:** add the Python `qrcode` package back (recommended), or the npm one?
-2. **Guests:** may people without an account send "tell the owner" messages (recommended, since that is the point of a tag), or signed-in residents only?
-3. **Stable address:** a named tunnel or fixed domain for the defense, or re-print cards per demo?
+1. **QR image:** add the Python `qrcode` package back (recommended), or the npm one? **Answered 2026-11-18: Python `qrcode`.**
+2. **Guests:** may people without an account send "tell the owner" messages (recommended, since that is the point of a tag), or signed-in residents only? **Answered 2026-11-18: guests allowed.**
+3. **Stable address:** a named tunnel or fixed domain for the defense, or re-print cards per demo? **Answered 2026-11-18: re-print per demo** (set `PUBLIC_TAG_BASE_URL` to the tunnel address, restart the backend, then print again from the pet page; the token does not change).

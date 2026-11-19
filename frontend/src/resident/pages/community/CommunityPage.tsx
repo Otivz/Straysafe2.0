@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Megaphone, PawPrint, ShieldAlert } from 'lucide-react';
+import { Megaphone, PawPrint, ScanLine, ShieldAlert } from 'lucide-react';
 import { NoticeCard } from '../../components/Cards';
 import { SearchInput } from '../../components/form';
 import { PrimaryScreen } from '../../components/Screen';
@@ -70,6 +70,8 @@ export default function CommunityPage() {
       {tab !== 'advisories' && (more || q) && totals[tab] > 0 ? (
         <LinkButton block to={directory}>{q ? `Search all ${totals[tab]} ${what}` : `See all ${totals[tab]} ${what}`}</LinkButton>
       ) : null}
+
+      <LinkButton block icon={ScanLine} to={residentPath('/scan')}>Scan a pet tag</LinkButton>
 
       <p className="rs-hint">Only animals the subdivision shares appear here, and a notice never shows who sent it.</p>
     </PrimaryScreen>

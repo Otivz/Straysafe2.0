@@ -1423,6 +1423,22 @@ def ensure_standard_warning_templates():
 
 ensure_standard_warning_templates()
 
+
+def ensure_pet_tag_tables():
+    """Pet QR tags (pet_tags, pet_tag_scans): created if missing; nothing existing is altered."""
+    from app.models.pet_tag import PetTag, PetTagScan
+    try:
+        Base.metadata.create_all(
+            bind=engine,
+            tables=[cast(Any, PetTag.__table__), cast(Any, PetTagScan.__table__)],
+            checkfirst=True,
+        )
+    except Exception as e:
+        print(f"Notice in ensure_pet_tag_tables: {e}")
+
+
+ensure_pet_tag_tables()
+
 # Case workflow alignment (Subdivision Admin): new columns, tables, the six categories and the backfill. Idempotent, never
 # drops or rewrites existing data (app/db_migrations/case_alignment.py). strict=True: if the schema still cannot support the
 # case workflow code afterwards, this raises CaseAlignmentError and the application does NOT start, instead of running
@@ -1622,6 +1638,10 @@ app.include_router(manual_matching_routes.router)
 app.include_router(pet_match_confirmation_routes.router)
 app.include_router(leader_identity_routes.router)
 app.include_router(lost_pet_alert_routes.router)
+from app.routes import pet_tags as pet_tag_routes  # noqa: E402  (pet QR tags: owner side and the public /t/{token} page)
+app.include_router(pet_tag_routes.router)
+app.include_router(pet_tag_routes.public_router)
+app.include_router(pet_tag_routes.leader_router)
 from app.routes import barangay_referrals as barangay_referral_routes  # noqa: E402  (Subdivision-only referral log; registers its tables)
 app.include_router(barangay_referral_routes.router)
 app.include_router(case_routes.router)

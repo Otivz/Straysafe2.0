@@ -8,6 +8,7 @@ import { heroOf, monitoringLine, needsYou, peopleOf, situationTiles } from '../.
 import type { Case } from '../../data/types';
 import { usePageTitle } from '../../lib/hooks';
 import { useNow } from '../../../preview/lib/hooks';
+import { AlertTagMessages } from '../../components/PetTagBlocks';
 import { CaseDialogs } from './CaseDialogs';
 import type { CaseDialog } from './dialogState';
 import { Activity, Resolve } from './monitored/Activity';
@@ -66,6 +67,7 @@ export default function MonitoredCasePage({ c, detail }: { c: Case; detail: { st
               <Lane c={c} needs={needs} tiles={tiles} line={monitoringLine(c, now)} now={now} openDialog={open} />
               <Alerts c={c} now={now} openDialog={open} />
               <Sightings c={c} now={now} openDialog={open} />
+              {c.lostPet?.alertId ? <AlertTagMessages alertId={c.lostPet.alertId} /> : null}
               <LinkedReports c={c} now={now} openDialog={open} />
               <BarangayHelp c={c} openDialog={open} />
               {found ? <Ownership c={c} openDialog={open} /> : null}

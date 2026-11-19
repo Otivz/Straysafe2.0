@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowRight, PawPrint, SearchX } from 'lucide-react';
+import { ArrowRight, PawPrint, QrCode, SearchX } from 'lucide-react';
+import { Badge } from '../components/Badge';
+import { adminApi } from '../live/api';
 import { adminPath } from '../config';
 import { Button, LinkButton } from '../components/Button';
 import { Callout, EmptyState, PageHeader, Panel } from '../components/layout';
@@ -18,6 +21,13 @@ export default function PetsPage() {
   const { state } = useAdminData();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
+  // Which pets have an active QR tag (the pet QR tags plan, Phase 3). A failed read only hides the mark.
+  const [tagged, setTagged] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    let live = true;
+    adminApi.taggedPetIds().then((r) => { if (live) setTagged(new Set(r.pet_ids.map(String))); }, () => undefined);
+    return () => { live = false; };
+  }, []);
 
   const q = params.get('q') ?? '';
   const typesPresent = (Object.keys(ANIMAL_TYPES) as AnimalType[]).filter((t) => state.pets.some((p) => p.type === t));
@@ -74,7 +84,7 @@ export default function PetsPage() {
                         <td>
                           <div className="flex items-center gap-3">
                             <PetAvatar type={p.type} photoUrl={p.photoUrls?.[0]} />
-                            <div className="min-w-0"><p className="sa-rowtitle"><Link to={adminPath(`/pets/${p.id}`)} onClick={(e) => e.stopPropagation()}>{p.name}</Link></p><p className="sa-meta">{ANIMAL_TYPES[p.type]} · {p.breed}</p></div>
+                            <div className="min-w-0"><p className="sa-rowtitle"><Link to={adminPath(`/pets/${p.id}`)} onClick={(e) => e.stopPropagation()}>{p.name}</Link></p><p className="sa-meta">{ANIMAL_TYPES[p.type]} · {p.breed}</p>{tagged.has(p.id) ? <p className="mt-1"><Badge icon={QrCode}>QR tag</Badge></p> : null}</div>
                           </div>
                         </td>
                         <td className="hidden md:table-cell"><p className="sa-small">{p.color}</p><p className="sa-meta">{SIZE_LABEL[p.size]} · {p.ageText}</p></td>

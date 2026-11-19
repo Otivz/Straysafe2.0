@@ -71,7 +71,7 @@ export default function ReportDetailsPage() {
       subtitle={report.id}
       back="/reports"
       footer={closed ? (
-        <LinkButton variant="primary" block to={residentPath('/report')}>Report something new</LinkButton>
+        <LinkButton variant="primary" block to={residentPath('/home')}>Return to Home</LinkButton>
       ) : (
         <>
           <LinkButton variant="primary" block icon={PlusCircle} to={residentPath(`/reports/${report.id}/update`)}>Add information</LinkButton>

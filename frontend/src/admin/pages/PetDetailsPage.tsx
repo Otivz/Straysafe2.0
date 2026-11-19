@@ -6,6 +6,7 @@ import { Badge, CaseStatusBadge } from '../components/Badge';
 import { Button, LinkButton } from '../components/Button';
 import { Block, Callout, EmptyState, Kv, Panel } from '../components/layout';
 import { PetAvatar } from '../components/PetAvatar';
+import { PetTagPanel } from '../components/PetTagBlocks';
 import { ANIMAL_TYPES, CATEGORIES, LINKED_BY_REPORTER, SIZE_LABEL, VACCINATION } from '../data/constants';
 import { useAdminData } from '../data/context';
 import { petById, petCases, residentById } from '../data/selectors';
@@ -110,6 +111,7 @@ export default function PetDetailsPage() {
               )}
             </Block>
           </Panel>
+          <PetTagPanel petId={pet.id} petName={pet.name} />
           <Panel>
             <Block tight title="Related cases" description="Cases where this pet was compared with a reported animal.">
               {cases.length === 0 ? <p className="sa-small sa-text-2">This pet has not appeared in any case.</p> : (

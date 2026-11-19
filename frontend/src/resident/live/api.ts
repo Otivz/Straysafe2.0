@@ -3,7 +3,7 @@
  * is one the backend already serves (reports, lost-pet-alerts, announcements, ownership-claims, pets, users, notifications,
  * chat, landmarks, cases/categories). Types only describe what the screens read.
  */
-import { httpDownloadBlob, httpGet, httpGetPage, httpPost, httpPut, httpPatch, httpUpload } from '../../live/http';
+import { httpDownloadBlob, httpGet, httpGetBlob, httpGetPage, httpPost, httpPut, httpPatch, httpUpload } from '../../live/http';
 import type { ApiAnnouncement, ApiGeneratedWarningLetter, ApiNotification, ApiNotificationPrefs, ApiPet, ApiUser } from '../../admin/live/api';
 
 export type { ApiAnnouncement, ApiGeneratedWarningLetter, ApiNotification, ApiNotificationPrefs, ApiPet, ApiUser };
@@ -106,6 +106,20 @@ export interface ApiResidentClaim {
   claim_id: number; report_id: number; alert_id: number | null; status: 'submitted' | 'under_review' | 'needs_info' | 'accepted' | 'rejected' | 'withdrawn';
   statement: string; evidence: string[]; submitted_at: string | null; reviewed_at: string | null; review_note: string | null; claimed_pet_id: number | null;
 }
+
+/** A pet's QR tag (GET/POST /pets/{id}/tag). `link` is what the QR holds; `link_is_public` is false when the server has no public address set. */
+export interface ApiPetTag {
+  pet_id: number; has_tag: boolean; tag_id: number | null; token: string | null; link: string | null; created_at: string | null;
+  link_is_public: boolean; can_manage: boolean; can_disable: boolean;
+}
+
+/** One "tell the owner" message from someone who scanned the tag. `finder_phone` only for the owner, only when the finder chose to share it. */
+export interface ApiPetTagFoundReport {
+  scan_id: number; status: 'new' | 'seen_by_owner' | 'resolved'; created_at: string; location_label: string | null;
+  latitude: number | null; longitude: number | null; note: string | null; photo_url: string | null;
+  from_signed_in_resident: boolean; finder_phone: string | null; phone_shared: boolean;
+}
+export interface ApiPetTagScans { found_reports: ApiPetTagFoundReport[]; views: { count: number; last_at: string | null } }
 
 const PAGE = 100;
 const MAX_REPORTS = 500;       // a safety stop: a resident's own reports are read in pages until the server says there is no more
@@ -211,6 +225,15 @@ export const residentApi = {
   createPet: (body: Record<string, unknown>) => httpPost<ApiPet>('/pets/', body),
   updatePet: (id: number, body: Record<string, unknown>) => httpPut<ApiPet>(`/pets/${id}`, body),
   uploadPetPhoto: (id: number, file: File) => { const form = new FormData(); form.append('file', file); return httpUpload<{ photo_url: string }>(`/pets/${id}/photo`, form); },
+  petTag: (id: number) => httpGet<ApiPetTag>(`/pets/${id}/tag`),
+  /** Create a tag, or replace the current one (the old tag stops working at once). */
+  createPetTag: (id: number) => httpPost<ApiPetTag>(`/pets/${id}/tag`),
+  disablePetTag: (id: number) => httpPost<ApiPetTag>(`/pets/${id}/tag/disable`),
+  petTagQr: (id: number) => httpGetBlob(`/pets/${id}/tag/qr.png`),
+  petTagScans: (id: number) => httpGet<ApiPetTagScans>(`/pets/${id}/tag/scans`),
+  resolvePetTagScan: (id: number, scanId: number) => httpPost<{ resolved: number }>(`/pets/${id}/tag/scans/${scanId}/resolve`),
+  /** "Pet is back home": every open message resolved (and any shared phone number deleted). */
+  resolveAllPetTagScans: (id: number) => httpPost<{ resolved: number }>(`/pets/${id}/tag/scans/resolve`),
   ownershipRequests: () => httpGet<ApiOwnershipRequest[]>('/pet-ownership/mine'),
   answerOwnership: (id: number, accept: boolean, reason?: string) => httpPost(`/pet-ownership/${id}/${accept ? 'accept' : 'reject'}`, accept ? {} : { reason: reason ?? null }),
 

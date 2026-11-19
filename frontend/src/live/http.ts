@@ -91,6 +91,16 @@ export async function httpUpload<T>(url: string, form: FormData, options: CallOp
 }
 
 /** Download a binary file (PDF/DOCX) through the authenticated API client. */
+/** A signed-in GET that answers with a file (an image, for example) as a Blob. */
+export async function httpGetBlob(url: string, params?: Query): Promise<Blob> {
+  try {
+    const res = await api.request<Blob>({ method: 'get', url, params, responseType: 'blob', timeout: 60_000 });
+    return res.data;
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
+
 export async function httpDownloadBlob(url: string, filename: string, params?: Query): Promise<void> {
   try {
     const res = await api.request<Blob>({ method: 'get', url, params, responseType: 'blob', timeout: 60_000 });

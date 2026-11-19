@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bell, ClipboardList, Dog, MessageSquare, PawPrint, Pencil, Search, ShieldAlert, UserCheck, type LucideIcon } from 'lucide-react';
+import { Bell, ClipboardList, Dog, MessageSquare, PawPrint, Pencil, ScanLine, Search, ShieldAlert, UserCheck, type LucideIcon } from 'lucide-react';
 import { greeting, relative } from '../../preview/lib/format';
 import { MissingPetCard, NoticeCard } from '../components/Cards';
 import { PrimaryScreen } from '../components/Screen';
@@ -78,10 +78,16 @@ export default function HomePage() {
       docTitle="Home"
       lead={subdivision}
       actions={(
-        <Link to={residentPath('/notifications')} className="rs-iconbtn rs-bell" aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'} title="Notifications">
-          <Bell size={21} strokeWidth={1.9} aria-hidden="true" />
-          {unread > 0 ? <span className="rs-bell__count" aria-hidden="true">{unread}</span> : null}
-        </Link>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Found a pet with a StraySafe QR tag: the in-app scanner (also on Community). */}
+          <Link to={residentPath('/scan')} className="rs-iconbtn rs-headbtn" aria-label="Scan a pet tag" title="Scan a pet tag">
+            <ScanLine size={21} strokeWidth={1.9} aria-hidden="true" />
+          </Link>
+          <Link to={residentPath('/notifications')} className="rs-iconbtn rs-bell" aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'} title="Notifications">
+            <Bell size={21} strokeWidth={1.9} aria-hidden="true" />
+            {unread > 0 ? <span className="rs-bell__count" aria-hidden="true">{unread}</span> : null}
+          </Link>
+        </div>
       )}
     >
       {missing.length > 0 ? (

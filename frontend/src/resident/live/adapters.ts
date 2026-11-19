@@ -337,6 +337,10 @@ export function notificationFromApi(n: ApiNotification, ctx: Pick<ResidentLookup
     to = /^\/warnings(\/\d+)?$/i.test(link) ? link : '/warnings';
   } else if (type === 'case_message' || type === 'lost_found_bridge' || type === 'lost_found_unlinked') {
     to = id === null ? '/home' : `/conversations/${id}`;
+  } else if (type === 'pet_tag_found') {
+    kind = 'sighting';                                   // someone scanned the pet's QR tag: open the separate tag-scan page
+    const link = (n.link ?? '').trim().replace(/^\/resident-app(?=\/)/, '');
+    to = /^\/pets\/\d+\/scans(\/\d+)?$/i.test(link) ? link : id === null ? '/pets' : `/pets/${id}/scans`;
   } else if (type.includes('pet_owner_confirmation')) {
     to = '/pets';                                       // "is this your pet?": its related id is the pet, not a report
   } else if (type.includes('lost_pet_alert')) {

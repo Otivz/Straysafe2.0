@@ -324,6 +324,15 @@ export interface ApiGeneratedWarningLetter {
   attachment_url?: string | null; attachment_name?: string | null;
 }
 
+/** A pet's QR tag as the Leader sees it (GET /pets/{id}/tag). The Leader can turn a tag off, never create or print one. */
+export interface ApiPetTagInfo { pet_id: number; has_tag: boolean; tag_id: number | null; created_at: string | null; can_disable: boolean }
+/** One "tell the owner" message from a tag scan. The Leader never gets the finder's phone number, only whether one was shared. */
+export interface ApiTagFoundReport {
+  scan_id: number; status: 'new' | 'seen_by_owner' | 'resolved'; created_at: string; location_label: string | null;
+  latitude: number | null; longitude: number | null; note: string | null; photo_url: string | null;
+  from_signed_in_resident: boolean; phone_shared: boolean; alert_id: number | null;
+}
+
 // ------------------------------------------------------------------------------------------------------------ calls
 const PAGE = 200;
 const MAX_CASES = 2000;       // a safety stop, not a business rule: the list is read in pages of 200 until the server says there is no more
@@ -393,6 +402,12 @@ export const adminApi = {
   /** Ask a resident to confirm that a pet record is theirs. Nothing moves until they say yes; the Leader must say how they checked (at least 10 characters). */
   assignPetOwner: (petId: number, ownerId: number, evidenceNote: string) => httpPost<ApiPet>(`/pets/${petId}/assign-owner?owner_id=${ownerId}`, { evidence_note: evidenceNote }),
 
+  // Pet QR tags (Phase 3 of the pet QR tags plan)
+  taggedPetIds: () => httpGet<{ pet_ids: number[] }>('/pet-tags/active'),
+  petTag: (petId: number) => httpGet<ApiPetTagInfo>(`/pets/${petId}/tag`),
+  disablePetTag: (petId: number) => httpPost<ApiPetTagInfo>(`/pets/${petId}/tag/disable`),
+  petTagScans: (petId: number) => httpGet<{ found_reports: ApiTagFoundReport[]; views: { count: number; last_at: string | null } }>(`/pets/${petId}/tag/scans`),
+  alertTagScans: (alertId: number) => httpGet<{ alert_id: number; found_reports: ApiTagFoundReport[] }>(`/pet-tags/alerts/${alertId}/scans`),
   alerts: () => httpGet<{ total: number; results: ApiAlert[] }>('/lost-pet-alerts/all', { limit: PAGE }),
   requestAlert: (reportId: number, body: Record<string, unknown>) => httpPost<ApiAlert>(`/lost-pet-alerts/reports/${reportId}/request`, body),
   activateAlert: (alertId: number, body: Record<string, unknown>) => httpPost<ApiAlert>(`/lost-pet-alerts/${alertId}/activate`, body),

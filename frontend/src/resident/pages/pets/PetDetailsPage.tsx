@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Pencil, Search, ShieldAlert } from 'lucide-react';
-import { fmtDate } from '../../../preview/lib/format';
+import { Pencil, QrCode, Search, ShieldAlert } from 'lucide-react';
+import { fromServer } from '../../../live/dates';
+import { fmtDate, fmtDateTime } from '../../../preview/lib/format';
 import { ANIMAL_ICON } from '../../components/icons';
 import { Screen } from '../../components/Screen';
 import { Button, Callout, IconButton, LinkButton, NotFoundState, Pill, Row, Section, Skeleton, StatusPill } from '../../components/ui';
@@ -12,7 +13,8 @@ import { useResidentData } from '../../data/context';
 import { accepts } from '../../data/entries';
 import { activeLostReport, petById, petLostReports } from '../../data/selectors';
 import { useStartReport } from '../../lib/flow';
-import { residentApi, type ApiGeneratedWarningLetter, type ApiPetConfirmedIncident } from '../../live/api';
+import { PetTagSection } from './PetTagSection';
+import { residentApi, type ApiGeneratedWarningLetter, type ApiPetConfirmedIncident, type ApiPetTagFoundReport, type ApiPetTagScans } from '../../live/api';
 
 /** R31 — One registered pet, with the shortcut to report them lost. */
 export default function PetDetailsPage() {
@@ -20,6 +22,16 @@ export default function PetDetailsPage() {
   const navigate = useNavigate();
   const start = useStartReport();
   const pet = petById(state, useParams().petId);
+  const [doneScans, setDoneScans] = useState<ApiPetTagFoundReport[] | null>(null);
+  useEffect(() => {
+    setDoneScans(null);
+  }, [pet?.id]);
+  const handleScansLoaded = useCallback((scans: ApiPetTagScans) => {
+    setDoneScans(scans.found_reports.filter((r) => r.status === 'resolved'));
+  }, []);
+  const handleScansUnavailable = useCallback(() => {
+    setDoneScans([]);
+  }, []);
   if (!pet) return <Screen title="Pet" back="/pets"><NotFoundState what="pet" to="/pets" label="Go to My pets" /></Screen>;
 
   const Icon = ANIMAL_ICON[pet.type];
@@ -69,14 +81,22 @@ export default function PetDetailsPage() {
         ) : null}
       </Section>
 
-      <PetHistorySection petId={pet.id} petName={pet.name} />
+      <PetTagSection
+        petId={pet.id}
+        petName={pet.name}
+        inactive={['Archived', 'Deceased', 'Inactive'].includes(pet.status ?? '')}
+        onScansLoaded={handleScansLoaded}
+        onScansUnavailable={handleScansUnavailable}
+      />
+
+      <PetHistorySection petId={pet.id} petName={pet.name} doneScans={doneScans} />
 
       <Callout tone="info">This profile is private. It is shared only if you report {pet.name} lost, or make an ownership claim. A registration is what you declare, not proof of ownership.</Callout>
     </Screen>
   );
 }
 
-function PetHistorySection({ petId, petName }: { petId: string; petName: string }) {
+function PetHistorySection({ petId, petName, doneScans }: { petId: string; petName: string; doneScans: ApiPetTagFoundReport[] | null }) {
   const { state } = useResidentData();
   const lostReports = petLostReports(state, petId);
   const numericPetId = Number(petId);
@@ -122,6 +142,28 @@ function PetHistorySection({ petId, petName }: { petId: string; petName: string 
   return (
     <Section title="History">
       <div className="rs-stack">
+        <div className="rs-stack-sm">
+          <h3 className="rs-label">QR tag scans ({doneScans === null ? '…' : doneScans.length})</h3>
+          {doneScans === null ? (
+            <Skeleton h={44} />
+          ) : doneScans.length === 0 ? (
+            <p className="rs-meta">No completed QR tag scans for {petName}.</p>
+          ) : (
+            <div className="rs-stack-sm">
+              {doneScans.map((s) => (
+                <Row
+                  key={s.scan_id}
+                  to={residentPath(`/pets/${petId}/scans/${s.scan_id}`)}
+                  icon={QrCode}
+                  title={s.location_label ? `Tag scanned · ${s.location_label}` : 'Tag scanned'}
+                  meta={`${fmtDateTime(fromServer(s.created_at))}${s.note ? ` · “${s.note}”` : ''}`}
+                  trailing={<Pill tone="sage">Done</Pill>}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="rs-stack-sm">
           <h3 className="rs-label">Lost-pet reports ({lostReports.length})</h3>
           {lostReports.length === 0 ? (

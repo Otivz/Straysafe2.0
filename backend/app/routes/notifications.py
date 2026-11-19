@@ -78,6 +78,8 @@ def _with_links(db: Session, rows: List[Notification]) -> List[NotificationRespo
         elif (n.type or "").lower() in ("warning", "warning_letter"):
             lid = letters_by_nid.get(n.notification_id)
             item.link = f"/resident-app/warnings/{lid}" if lid else "/resident-app/warnings"
+        elif (n.type or "").lower() == "pet_tag_found":
+            item.link = f"/resident-app/pets/{n.related_id}/scans" if n.related_id else "/resident-app/pets"
         out.append(item)
     return out
 
