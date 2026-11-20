@@ -304,3 +304,101 @@ def notify_leader_new_report(
         related_id=report_id,
         email_data=email_data,
     )
+
+
+def notify_leader_urgent_injured(
+    db: Session,
+    leader: User,
+    report_id: int,
+    animal_type: str,
+    landmark: Optional[str],
+    subdivision_name: Optional[str],
+    reference: str,
+    can_move: str = "No",
+) -> None:
+    """High-priority alert to subdivision leader when an injured/sick animal cannot move."""
+    subject, text_b, html_b = email_templates.render_leader_new_report_email(
+        leader_name=leader.name,
+        report_id=report_id,
+        animal_type=animal_type,
+        landmark=landmark,
+        subdivision_name=subdivision_name,
+        priority="URGENT",
+    )
+    email_data = {
+        "recipient_email": leader.email,
+        "subject": f"[URGENT] {subject}",
+        "text_body": text_b,
+        "html_body": html_b,
+        "category": "reports",
+        "template_key": "leader_urgent_injured",
+        "idempotency_key": f"leader_{leader.user_id}_urgent_injured_{report_id}",
+        "related_entity_type": "report",
+        "related_entity_id": report_id,
+    }
+    dispatch_notification(
+        db=db,
+        user_id=leader.user_id,
+        title=f"URGENT: Injured Animal Report ({reference})",
+        message=(
+            f"URGENT: An injured {animal_type or 'animal'} has been reported and is unable to move "
+            f"(Mobility: {can_move}, Priority: Urgent). Immediate assessment is recommended. "
+            f"Location: {landmark or 'Designated location'}."
+        ),
+        notification_type="urgent",
+        related_id=report_id,
+        email_data=email_data,
+    )
+
+
+def notify_leader_dangerous_animal(
+    db: Session,
+    leader: User,
+    report_id: int,
+    animal_type: str,
+    landmark: Optional[str],
+    subdivision_name: Optional[str],
+    reference: str,
+    priority: str,
+    behaviors_summary: str,
+    has_bite: bool = False,
+) -> None:
+    """Alert subdivision leader when a Dangerous Animal report is submitted (URGENT or HIGH)."""
+    is_urgent = priority.lower() == "urgent"
+    subject, text_b, html_b = email_templates.render_leader_new_report_email(
+        leader_name=leader.name,
+        report_id=report_id,
+        animal_type=animal_type,
+        landmark=landmark,
+        subdivision_name=subdivision_name,
+        priority=priority.upper(),
+    )
+    email_data = {
+        "recipient_email": leader.email,
+        "subject": f"{'[URGENT SAFETY ALERT]' if is_urgent else '[HIGH PRIORITY]'} {subject}",
+        "text_body": text_b,
+        "html_body": html_b,
+        "category": "reports",
+        "template_key": "leader_dangerous_animal",
+        "idempotency_key": f"leader_{leader.user_id}_dangerous_{report_id}",
+        "related_entity_type": "report",
+        "related_entity_id": report_id,
+    }
+    bite_note = " Bite/attack incident reported." if has_bite else ""
+    msg = (
+        f"URGENT SAFETY ALERT: A dangerous animal incident has been reported ({reference}). "
+        f"Immediate safety assessment and appropriate security coordination are recommended.{bite_note} "
+        f"Behaviors: {behaviors_summary or 'Aggressive/threatening behavior'}. Location: {landmark or 'Designated location'}."
+        if is_urgent
+        else f"HIGH PRIORITY SAFETY REPORT ({reference}): A potentially dangerous {animal_type or 'animal'} was reported "
+             f"near {landmark or 'designated location'}. Behaviors: {behaviors_summary or 'Aggressive/threatening behavior'}."
+    )
+    dispatch_notification(
+        db=db,
+        user_id=leader.user_id,
+        title=f"{'URGENT SAFETY ALERT' if is_urgent else 'Dangerous Animal Report'}: {reference}",
+        message=msg,
+        notification_type="urgent" if is_urgent else "alert",
+        related_id=report_id,
+        email_data=email_data,
+    )

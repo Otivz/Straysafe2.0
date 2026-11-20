@@ -5,6 +5,7 @@ from app.models.ai_job import AiJob  # noqa: F401
 from app.models.ai_vision_comparison import AiVisionComparison  # noqa: F401
 from app.models.pet_history import PetHistory
 from app.models.pet_tag import PetTag, PetTagScan  # noqa: F401  (pet QR tags)
+from app.models.qr_collar_request import QrCollarRequest  # noqa: F401  (resident QR collar requests)
 from app.models.pet_owner_confirmation import PetOwnerConfirmation  # noqa: F401
 from app.models.report import ReportCategory, ReportStatus, Report, ReportMedia, StatusHistory, ReportReturn  # noqa: F401
 from app.models.lost_pet_alert import LostPetAlert, LostPetCoordination, LostPetCoordinationMessage, LostPetSighting  # noqa: F401

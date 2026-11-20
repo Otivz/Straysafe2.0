@@ -26,11 +26,12 @@ class PetTag(Base):
     __tablename__ = "pet_tags"
 
     tag_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    pet_id: Mapped[int] = mapped_column(Integer, ForeignKey("pets.pet_id", ondelete="CASCADE"), nullable=False, index=True)
+    pet_id: Mapped[int] = mapped_column(Integer, ForeignKey("pets.pet_id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
     token: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active", server_default="active")
     created_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    last_scanned_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     disabled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     disabled_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
 

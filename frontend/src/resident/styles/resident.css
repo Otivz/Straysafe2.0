@@ -349,6 +349,45 @@
     background: var(--sa-brand-soft); border-color: var(--sa-brand); color: var(--sa-brand-ink);
   }
 
+  /* Breed Combobox / Searchable Dropdown */
+  .rs-breed-combobox { position: relative; width: 100%; }
+  .rs-breed-combobox__control { position: relative; width: 100%; }
+  .rs-breed-combobox__control .rs-input { padding-right: 44px; }
+  .rs-breed-combobox__toggle {
+    position: absolute; top: 3px; right: 3px; display: grid; place-items: center; width: 42px; height: 42px;
+    border: 0; border-radius: 9px; background: transparent; color: var(--sa-ink-2); cursor: pointer;
+    transition: background-color 0.12s, color 0.12s;
+  }
+  .rs-breed-combobox__toggle:hover { background: var(--sa-sand); color: var(--sa-ink); }
+  .rs-breed-combobox__menu {
+    position: absolute; top: calc(100% + 5px); left: 0; right: 0; z-index: 60;
+    max-height: 250px; overflow-y: auto; padding: 6px; border: 1px solid var(--sa-line);
+    border-radius: 12px; background: var(--sa-surface); box-shadow: 0 10px 25px rgb(0 0 0 / 0.1);
+  }
+  .rs-breed-combobox__header {
+    padding: 6px 10px 4px; color: var(--sa-ink-3); font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .rs-breed-combobox__item {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
+    min-height: 38px; padding: 8px 12px; border: 0; border-radius: 8px; background: transparent;
+    color: var(--sa-ink); font: inherit; font-size: 14.5px; text-align: left; cursor: pointer;
+    transition: background-color 0.1s, color 0.1s;
+  }
+  .rs-breed-combobox__item:hover, .rs-breed-combobox__item.is-active {
+    background: var(--sa-brand-soft); color: var(--sa-brand-ink); font-weight: 550;
+  }
+  .rs-breed-combobox__item.is-selected {
+    background: var(--sa-sand); font-weight: 600;
+  }
+  .rs-breed-combobox__custom {
+    display: flex; align-items: center; gap: 6px; margin-top: 4px; padding: 8px 12px;
+    border-top: 1px dashed var(--sa-line); color: var(--sa-ink-2); font-size: 13px;
+  }
+  .rs-breed-combobox__empty {
+    padding: 12px; color: var(--sa-ink-2); font-size: 13.5px; text-align: center;
+  }
+
   .rs-options { display: grid; gap: 10px; }
   .rs-option {
     position: relative; display: flex; align-items: flex-start; gap: 12px; min-height: 60px; padding: 14px; border: 1px solid var(--sa-line); border-radius: var(--rs-radius);
@@ -595,6 +634,14 @@
   @keyframes rs-shimmer { to { background-position: -200% 0; } }
   @keyframes rs-pop { from { opacity: 0; transform: translateY(6px) scale(0.985); } }
   @keyframes rs-rise { from { opacity: 0.6; transform: translateY(28px); } }
+
+  /* Resident-to-Administration messaging (2026-11-19): the read-only panel of a closed conversation and the Messages list rows */
+  .rs-closedconv { display: flex; flex-direction: column; gap: 8px; padding: 14px; border: 1px solid var(--sa-line); border-radius: var(--rs-radius); background: var(--sa-sand); color: var(--sa-ink-2); font-size: 14.5px; line-height: 21px; }
+  .rs-closedconv__title { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; color: var(--sa-ink); }
+  .rs-convrow { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .rs-convrow__preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rs-convrow__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .rs-msg-unread { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--sa-brand); vertical-align: middle; }
 
   @media (min-width: 560px) {
     .rs-title { font-size: 28px; line-height: 34px; }

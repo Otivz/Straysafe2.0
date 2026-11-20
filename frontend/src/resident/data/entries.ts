@@ -24,7 +24,6 @@ export const SITUATIONS: { family: CategoryId; title: string }[] = [
   { family: 'found_animal', title: 'It looks lost or has no owner nearby' },
   { family: 'injured', title: 'It is hurt or needs help' },
   { family: 'safety', title: 'It may be dangerous' },
-  { family: 'other', title: 'Something else, or I’m not sure' },
 ];
 
 /** The first Report screen. `filter` is the wording of the same group in the My reports filter. */

@@ -56,6 +56,15 @@ A **logged repeat incident** is a different report, so it can receive its own wa
 | Barangay staff | Warnings in their barangay |
 | Admin | All |
 
+## Delivery with a link to the letter
+
+When a warning is issued (not a draft), the owner gets the warning letter itself, not only a text summary:
+
+- **The notification:** type `warning_letter`, related id = the generated letter. It opens `/resident-app/warnings/{letter_id}`, where the owner reads the complete letter, downloads it (PDF or DOCX) and acknowledges receipt.
+- **The conversation message:** the case conversation message ends with the same link, shown as "Open the warning letter". One message per letter: it is sent with `client_request_id` `warning-letter-{letter_id}`, so a repeat finds the same message.
+- **Who can open it:** only the recipient (`GET /warning-letters/{id}` and `/download` refuse other residents) and staff with scope over the letter's subdivision.
+- **Records:** the issued letter is an immutable snapshot (case, pet, category, date issued, issuing administrator, content). Its `notification_status` records the delivery. A failed post to the conversation is logged as `WARNING_INBOX_DELIVERY_FAILED`, and the warning and letter are kept.
+
 ## Acknowledgement
 
 `PATCH /warnings/{id}/acknowledge` with `{"confirmed": true}`. Only the warned owner can acknowledge; staff can't do it for them. It is refused (`400`) unless the acknowledgement checkbox was ticked. Acknowledging again changes nothing. The owner sees their notices for a report on its page (`ReportWarningNotices`) and in the warning modals on My Pets and the home page. Each acknowledge button is disabled until the checkbox is ticked.

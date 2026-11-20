@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ANIMAL_ICON } from '../../components/icons';
 import { ColorTagInput } from '../../components/ColorTagInput';
+import { BreedInput } from '../../components/BreedInput';
 import { ChoiceChips, Field, FieldGroup, Input, Textarea } from '../../components/form';
 import { MediaPicker } from '../../components/MediaPicker';
 import { Screen } from '../../components/Screen';
@@ -19,7 +20,7 @@ import { useFormFocus, useLeaveGuard, useSubmit } from '../../lib/hooks';
 import { ApiDetailError, errorCodeOf } from '../../../live/http';
 
 interface Values { name: string; type: AnimalType | ''; sex: PetSex; breed: string; colors: string[]; ageText: string; markings: string; description: string }
-type Errors = Partial<Record<'name' | 'type' | 'color', string>>;
+type Errors = Partial<Record<'name' | 'type' | 'color' | 'photo', string>>;
 /** A record the subdivision office already holds that looks like the pet being registered (the server stops and asks). */
 type HeldRecord = { id: string; name: string; kind: string };
 
@@ -85,6 +86,9 @@ function PetForm({ pet }: { pet?: Pet }) {
     if (v.name.trim().length < 1) found.name = 'Enter your pet’s name.';
     if (!v.type) found.type = 'Choose whether it is a dog or a cat.';
     if (v.colors.length === 0) found.color = 'Add at least one colour, for example “White” or “Brown”.';
+    if (!media.some((m) => m.kind === 'photo' && Boolean(m.file || m.url))) {
+      found.photo = 'Please upload a photo of your pet to complete the registration.';
+    }
     setErrors(found);
     if (Object.keys(found).length > 0) { invalid(); return; }
     if (pet && !dirty) { navigate(residentPath(`/pets/${pet.id}`), { replace: true }); return; }
@@ -126,7 +130,13 @@ function PetForm({ pet }: { pet?: Pet }) {
             <ChoiceChips label="Sex" value={v.sex} onChange={(s) => set('sex', s)} options={(['male', 'female'] as const).map((id) => ({ value: id, label: SEX_LABEL[id] }))} />
           </FieldGroup>
           <Field label="Breed" optional>
-            <Input value={v.breed} onChange={(e) => set('breed', e.target.value)} maxLength={60} placeholder="Shih Tzu" />
+            <BreedInput
+              value={v.breed}
+              onChange={(b) => set('breed', b)}
+              animalType={v.type}
+              maxLength={60}
+              placeholder="e.g. Shih Tzu, Aspin"
+            />
           </Field>
           <FieldGroup label="Colour or coat" required error={errors.color} hint="Type a colour and press Enter or pick a suggestion to add separate tags.">
             <ColorTagInput value={v.colors} onChange={(colors) => { set('colors', colors); setErrors((p) => ({ ...p, color: undefined })); }} invalid={Boolean(errors.color)} />
@@ -140,8 +150,19 @@ function PetForm({ pet }: { pet?: Pet }) {
           <Field label="About your pet" optional hint="How they act around strangers, whether they answer to their name.">
             <Textarea value={v.description} onChange={(e) => set('description', e.target.value)} rows={3} maxLength={300} />
           </Field>
-          <FieldGroup label="Photo" hint="A clear photo helps neighbours recognise your pet if they go missing. You can add one later.">
-            <MediaPicker value={media} onChange={setMedia} accept="photo" max={1} />
+          <FieldGroup
+            label="Photo"
+            required
+            error={errors.photo}
+            hint="For accurate animal identification and verification, please upload a clear photo of the animal."
+          >
+            <MediaPicker
+              value={media}
+              onChange={(next) => { setMedia(next); setErrors((p) => ({ ...p, photo: undefined })); }}
+              accept="photo"
+              max={1}
+              invalid={Boolean(errors.photo)}
+            />
           </FieldGroup>
         </div>
       </form>

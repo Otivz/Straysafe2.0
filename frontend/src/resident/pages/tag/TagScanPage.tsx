@@ -1,10 +1,10 @@
 import '../../../preview/styles/tokens.css';
 import '../../styles/resident.css';
-import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
-import { Camera, CircleCheck, Eye, HeartHandshake, LocateFixed, MapPin, Maximize2, PawPrint, Send, TriangleAlert } from 'lucide-react';
+import { Camera, CircleCheck, Clock, Eye, HeartHandshake, LocateFixed, MapPin, Maximize2, PawPrint, RefreshCw, Send, TriangleAlert } from 'lucide-react';
 import { MediaLightbox } from '../../../admin/components/MediaLightbox';
-import { httpGet, httpPost } from '../../../live/http';
+import { ApiDetailError, httpGet, httpPost } from '../../../live/http';
 import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
 import { Checkbox, Field, Input, Textarea } from '../../components/form';
 import { Button, Callout, Skeleton } from '../../components/ui';
@@ -33,21 +33,44 @@ const errorText = (err: unknown, fallback: string) => {
  * pet's photo, name, type and subdivision, a safety note, and a "tell the owner" form. The finder never sees the owner's
  * details; the owner gets a notification. Phase 2 of docs/06-future-proposals/PET_QR_TAGS_PLAN_2026-11-17.md.
  */
+function formatCountdown(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const mins = Math.floor(s / 60);
+  const secs = s % 60;
+  if (mins > 0) return `${mins}m ${String(secs).padStart(2, '0')}s`;
+  return `${secs}s`;
+}
+
 export default function TagScanPage() {
   const token = useParams().token ?? '';
   const [tag, setTag] = useState<PublicTag | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [cooldownSeconds, setCooldownSeconds] = useState<number | null>(null);
+  const [cooldownMessage, setCooldownMessage] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const [sentCoords, setSentCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
-  useEffect(() => {
-    document.title = 'Found a pet? · StraySafe';
+  const loadTag = useCallback(() => {
+    setTag(null);
+    setLoadError(null);
+    setCooldownSeconds(null);
+    setCooldownMessage(null);
     let live = true;
     httpGet<PublicTag>(`/t/${encodeURIComponent(token)}`).then(
       (t) => { if (live) setTag(t); },
       (err: unknown) => {
         if (!live) return;
+        if (err instanceof ApiDetailError && err.data.code === 'QR_SCAN_COOLDOWN') {
+          const rem = typeof err.data.remaining_seconds === 'number' ? err.data.remaining_seconds : 3600;
+          setCooldownMessage(
+            typeof err.data.message === 'string'
+              ? err.data.message
+              : 'QR Code Already Scanned. Please try again after the 1-hour cooldown period.',
+          );
+          setCooldownSeconds(rem);
+          return;
+        }
         const status = (err as { status?: number })?.status;
         setLoadError(status === 404 ? 'This tag is no longer active.' : errorText(err, 'This tag could not be opened right now.'));
       },
@@ -55,13 +78,43 @@ export default function TagScanPage() {
     return () => { live = false; };
   }, [token]);
 
+  useEffect(() => {
+    document.title = 'Found a pet? · StraySafe';
+    return loadTag();
+  }, [loadTag]);
+
+  useEffect(() => {
+    if (cooldownSeconds === null || cooldownSeconds <= 0) return;
+    const timer = window.setInterval(() => {
+      setCooldownSeconds((prev) => (prev !== null && prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldownSeconds]);
+
   return (
     <div className="sa-root rs-root">
       <div className="rs-frame">
         <main id="main" className="rs-main rs-content">
           <div className="rs-stack">
             <p className="rs-meta" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><PawPrint size={16} aria-hidden="true" /> StraySafe pet tag</p>
-            {loadError ? (
+            {cooldownMessage ? (
+              <Callout tone="amber" icon={Clock} title={cooldownMessage}>
+                <div className="rs-stack-sm">
+                  {cooldownSeconds !== null && cooldownSeconds > 0 ? (
+                    <p className="m-0 font-medium">
+                      Remaining cooldown time: <strong>{formatCountdown(cooldownSeconds)}</strong>
+                    </p>
+                  ) : (
+                    <p className="m-0 font-medium">The 1-hour cooldown period has ended. You can scan this QR code again now.</p>
+                  )}
+                  {cooldownSeconds === 0 ? (
+                    <Button size="sm" variant="primary" icon={RefreshCw} onClick={() => { loadTag(); }}>
+                      Scan QR code again
+                    </Button>
+                  ) : null}
+                </div>
+              </Callout>
+            ) : loadError ? (
               <Callout tone="amber" title={loadError}>
                 The owner may have replaced or turned off this tag. If the animal seems lost, tell the subdivision guardhouse.
               </Callout>
@@ -69,6 +122,9 @@ export default function TagScanPage() {
               <Skeleton h={240} />
             ) : (
               <>
+                <Callout tone="sage" icon={CircleCheck} title="QR code scanned successfully">
+                  Scan recorded. This QR tag is now in a 1-hour scan cooldown.
+                </Callout>
                 <div className="rs-pethero rs-pethero--center">
                   {tag.photo_url ? (
                     <div className="rs-tag-avatar__wrap">

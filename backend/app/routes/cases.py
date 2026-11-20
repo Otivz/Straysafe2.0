@@ -21,7 +21,7 @@ No endpoint needs a registered animal.
 """
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -30,7 +30,7 @@ from app.models.case_records import CaseContactLog, CaseFollowUp, OwnershipClaim
 from app.models.barangay_referral import BarangayReferral
 from app.models.report import ReportCategory
 from app.models.user import Barangay, Subdivision, User
-from app.schemas.case import (AssessmentIn, CaseSettings, CloseIn, ComplianceIn, ContactIn, ClaimReviewIn, FollowUpCancel, FollowUpDone,
+from app.schemas.case import (AssessmentIn, CaseSettings, CloseIn, ComplianceIn, ContactIn, ClaimReviewIn, DuplicateDecisionIn, FollowUpCancel, FollowUpDone,
                               FollowUpIn, LinkIn, NoteIn, PriorityChange, ReferralIn, ReferralUpdateIn, ReopenIn, StatusMove,
                               UnlinkIn)
 from app.services import case_claims, case_compliance, case_lifecycle as L, case_notes, case_summaries, case_view, case_work
@@ -207,8 +207,43 @@ def reopen(report_id: int, body: ReopenIn, request: Request, db: Session = Depen
 def list_referrals(report_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     report = L.case_for_staff(db, report_id, user)
     rows = db.query(BarangayReferral).filter(BarangayReferral.report_id == report.report_id).order_by(BarangayReferral.referral_id.desc()).all()
-    names = case_view._names(db, [r.referred_by for r in rows] + [u.recorded_by for r in rows for u in r.updates])
+    names = case_view._names(
+        db,
+        [r.referred_by for r in rows]
+        + [r.status_updated_by for r in rows]
+        + [r.outcome_recorded_by for r in rows]
+        + [u.recorded_by for r in rows for u in r.updates],
+    )
     return [case_view.referral_view(r, names) for r in rows]
+
+
+@router.post("/{report_id}/referrals/upload")
+async def upload_referral_document(
+    report_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from datetime import datetime
+    from app.utils.cloudinary_config import upload_to_cloudinary
+    from app.utils.uploads import read_and_validate_upload
+
+    L.case_for_staff(db, report_id, user)
+    content, unique_filename, media_type, resource_type = await read_and_validate_upload(
+        file, allowed={"Image", "Document"}
+    )
+    file_url = upload_to_cloudinary(
+        content,
+        folder="straysafe/referrals",
+        resource_type=resource_type,
+        filename=unique_filename,
+    )
+    return {
+        "name": file.filename or unique_filename,
+        "url": file_url,
+        "type": media_type.lower(),
+        "uploaded_at": datetime.utcnow().isoformat(),
+    }
 
 
 @router.post("/{report_id}/referrals", status_code=201)
@@ -217,7 +252,12 @@ def create_referral(report_id: int, body: ReferralIn, db: Session = Depends(get_
     referral = case_work.create_referral(db, report, user, body)
     db.commit()
     db.refresh(referral)
-    return case_view.referral_view(referral, case_view._names(db, [referral.referred_by] + [u.recorded_by for u in referral.updates]))
+    names = case_view._names(
+        db,
+        [referral.referred_by, referral.status_updated_by, referral.outcome_recorded_by]
+        + [u.recorded_by for u in referral.updates],
+    )
+    return case_view.referral_view(referral, names)
 
 
 @router.post("/{report_id}/referrals/{referral_id}/updates")
@@ -227,7 +267,12 @@ def update_referral(report_id: int, referral_id: int, body: ReferralUpdateIn, db
     referral = case_work.update_referral(db, report, user, case_work.referral_for_case(db, report, referral_id), body)
     db.commit()
     db.refresh(referral)
-    return case_view.referral_view(referral, case_view._names(db, [referral.referred_by] + [u.recorded_by for u in referral.updates]))
+    names = case_view._names(
+        db,
+        [referral.referred_by, referral.status_updated_by, referral.outcome_recorded_by]
+        + [u.recorded_by for u in referral.updates],
+    )
+    return case_view.referral_view(referral, names)
 
 
 # ---------------------------------------------------------------------------------------------------- follow-ups
@@ -348,3 +393,83 @@ def review_claim(report_id: int, claim_id: int, body: ClaimReviewIn, db: Session
     db.commit()
     db.refresh(claim)
     return case_claims.claim_view(db, claim, True)
+
+
+@router.get("/{report_id}/duplicates")
+def list_duplicate_candidates(report_id: int, request: Request, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Attribute-based potentially related report candidates for staff review (never auto-linked)."""
+    from app.utils import duplicate_detection
+    report = L.case_for_staff(db, report_id, user, write=False)
+    candidates = duplicate_detection.find_duplicate_candidates(db, report)
+    L.audit(
+        db,
+        user,
+        "RELATED_REPORT_DETECTION_RUN",
+        report,
+        f"{user.name} checked potentially related reports for report #{report.report_id} ({len(candidates)} candidate(s)).",
+        new={"candidate_ids": [c["report_id"] for c in candidates], "scores": {str(c["report_id"]): c["combined_score"] for c in candidates}},
+        **_meta(request),
+    )
+    db.commit()
+    return {"report_id": report.report_id, "candidates": candidates}
+
+
+@router.post("/{report_id}/duplicates/decision")
+def decide_duplicate_candidate(
+    report_id: int,
+    body: DuplicateDecisionIn,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Record an authorized reviewer's decision to mark a candidate as Not a Duplicate or Defer review."""
+    from datetime import datetime
+    from sqlalchemy import and_, or_
+    from app.models.report import Report
+    from app.models.report_match import ReportMatch
+
+    report = L.case_for_staff(db, report_id, user, write=True)
+    other = db.get(Report, body.other_report_id)
+    if other is None:
+        raise HTTPException(status_code=404, detail="Other report not found.")
+    verify_subdivision_scope(user, other.subdivision_id, db=db)
+
+    reason = (body.reason or "").strip()
+    if body.decision == "not_duplicate":
+        if len(reason) < 5:
+            raise HTTPException(status_code=422, detail="Please provide a reason (at least 5 characters) when marking reports as Not Related.")
+        existing_match = db.query(ReportMatch).filter(
+            ReportMatch.matched_report_id.isnot(None),
+            or_(
+                and_(ReportMatch.source_report_id == report.report_id, ReportMatch.matched_report_id == other.report_id),
+                and_(ReportMatch.source_report_id == other.report_id, ReportMatch.matched_report_id == report.report_id),
+            ),
+        ).first()
+        if existing_match:
+            existing_match.status = "REJECTED_MATCH"
+            existing_match.reviewed_by = user.user_id
+            existing_match.reviewer_role = "Subdivision Leader"
+            existing_match.verification_notes = reason
+            existing_match.verified_at = datetime.now()
+        L.audit(
+            db, user, "DUPLICATE_MARKED_NOT_DUPLICATE", report,
+            f"{user.name} marked report #{other.report_id} as Not Related to #{report.report_id}: {reason}",
+            new={"other_report_id": other.report_id, "decision": "not_related", "reason": reason},
+            **_meta(request),
+        )
+        L.audit(
+            db, user, "DUPLICATE_MARKED_NOT_DUPLICATE", other,
+            f"{user.name} marked report #{report.report_id} as Not Related to #{other.report_id}: {reason}",
+            new={"other_report_id": report.report_id, "decision": "not_related", "reason": reason},
+            **_meta(request),
+        )
+        L.history(db, report, user, f"Reviewed potentially related report #{other.report_id}: Marked as Not Related.")
+    else:
+        L.audit(
+            db, user, "DUPLICATE_REVIEW_DEFERRED", report,
+            f"{user.name} deferred duplicate review for report #{other.report_id} on #{report.report_id}.",
+            new={"other_report_id": other.report_id, "decision": "defer", "reason": reason or None},
+            **_meta(request),
+        )
+    db.commit()
+    return {"ok": True, "decision": body.decision, "other_report_id": other.report_id}

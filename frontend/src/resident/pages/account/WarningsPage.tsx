@@ -64,14 +64,14 @@ export default function WarningsPage() {
           <Section title={`Warning history (${items.length})`}>
             <div className="rs-stack-sm">
               {items.map((w) => {
-                const summary = w.placeholders?.violation_description || w.rendered_subject;
+                const summary = w.warning_subject || w.rendered_subject || w.placeholders?.violation_description;
                 return (
                   <div key={w.letter_id} className="rs-card rs-stack-sm">
                     <Row
                       to={`/warnings/${w.letter_id}`}
                       icon={ShieldAlert}
                       title={`${w.warning_level} · ${w.warning_reference}`}
-                      meta={`${w.case_reference} · Issued ${w.issued_at ? fmtDateTime(w.issued_at) : ''}`}
+                      meta={`${w.warning_category ? `${w.warning_category} · ` : ''}${w.case_reference}${w.pet_name ? ` · ${w.pet_name}` : ''} · Issued ${w.issued_at ? fmtDateTime(w.issued_at) : ''}`}
                       trailing={!w.viewed_at ? <span className="rs-pill rs-pill--brand">New</span> : w.warning_status === 'Acknowledged' ? <span className="rs-meta">Acknowledged</span> : undefined}
                     />
                     <p className="rs-sub" style={{ paddingLeft: 4 }}>{summary}</p>

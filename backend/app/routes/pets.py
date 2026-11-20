@@ -905,6 +905,13 @@ def create_pet(
         # only a pet this person registered, or one they own, can be the source photo of the next registration
         if not sibling or (sibling.registered_by_user_id != current_user.user_id and sibling.owner_id != current_user.user_id):
             from_photo_of = None
+    if not any((pet_dict.get(f) or "").strip() for f in PHOTO_FIELDS):
+        raise HTTPException(
+            status_code=422,
+            detail="Please upload a photo of your pet to complete the registration.",
+        )
+    _check_resident_photo_urls(pet_dict)
+
     held_for_resident = []
     if current_user.role_id == 1:
         # A pet the subdivision registered for this resident before they had an account (same number, same type):
@@ -1048,8 +1055,23 @@ def create_pet(
         for other in held_for_resident:
             pet_duplicates.record_not_same_pet(db, db_pet.pet_id, other.pet_id, current_user,
                                                "The owner registered a new pet instead of claiming this record.", req)
+    db.flush()
+    from app.services import pet_tags as pet_tag_service
+    auto_tag = pet_tag_service.ensure_active_tag(db, db_pet, current_user.user_id)
     db.commit()
     db.refresh(db_pet)
+    if auto_tag is not None:
+        log_activity(
+            db=db,
+            action="PET_TAG_CREATED",
+            target_table="pets",
+            target_id=db_pet.pet_id,
+            description=f"Automatically generated QR tag for {db_pet.pet_name}",
+            log_type="operation",
+            user_id=current_user.user_id,
+            new_values={"tag_id": auto_tag.tag_id},
+            request=req,
+        )
     if link_report is not None:
         log_activity(db=db, action="LINK_PET_REPORT", target_table="reports", target_id=link_report.report_id,
                      description=f"Linked Report #{link_report.report_id} to new Registered Pet #{db_pet.pet_id} ('{db_pet.pet_name}')",

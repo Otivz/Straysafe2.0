@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Send } from 'lucide-react';
 import { reportIdOf } from '../../live/refs';
 import { errorMessage } from '../../preview/lib/errors';
-import { fmtDateTime } from '../../preview/lib/format';
 import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
+import { MessageThread } from '../components/MessageThread';
 import { Field, Textarea } from '../components/form';
 import { Callout, FormError } from '../components/layout';
 import { useAdminData } from '../data/context';
@@ -104,13 +104,19 @@ export function CaseMessagesDialog({ c, target, onClose }: { c: Case; target: Th
       {loadError ? <><FormError message={loadError} /><Button size="sm" onClick={() => setAttempt((n) => n + 1)}>Refresh conversation</Button></> : null}
       {view ? <>
         <Callout>Only this resident and the authorized Leader can read this conversation. Your messages are recorded in the case Activity automatically.</Callout>
-        <ol className="m-0 flex max-h-80 list-none flex-col gap-3 overflow-y-auto p-0" aria-label="Conversation messages" aria-live="polite">
-          {view.messages.map((m) => <li key={m.id} className={m.kind === 'system' ? 'sa-small sa-text-3' : 'sa-record'}>
-            {m.kind !== 'system' ? <p className="sa-meta">{m.mine ? 'You' : m.senderName ?? m.label} · {m.label} · {fmtDateTime(m.at)}</p> : null}
-            <p className="whitespace-pre-wrap break-words">{m.body}</p>
-          </li>)}
-        </ol>
-        {view.messages.every((m) => m.kind === 'system') ? <p className="sa-text-2">No messages yet. Write the first message below.</p> : null}
+        <MessageThread
+          maxHeightClass="max-h-80"
+          emptyText="No messages yet. Write the first message below."
+          messages={view.messages.map((m) => ({
+            id: m.id,
+            kind: m.kind,
+            mine: m.mine,
+            senderName: m.senderName,
+            label: m.label,
+            at: m.at,
+            body: m.body,
+          }))}
+        />
         {!view.canReply ? <Callout>{view.endedReason || 'This conversation is closed. Earlier messages remain available.'}</Callout> : <Field label="Message" required hint="Write what you want to say. Your phone number and address are never added automatically."><Textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={2000} rows={3} /></Field>}
       </> : null}
       {error ? <FormError message={error} /> : null}

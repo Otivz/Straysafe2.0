@@ -82,15 +82,6 @@ function descriptionOf(draft: Draft): string {
   return `${base}\n\n(Seen ${when}.)`;
 }
 
-async function uploadReportPhotos(reportId: number, media: Media[]): Promise<string[]> {
-  const warnings: string[] = [];
-  for (const m of media) {
-    if (!m.file) continue;
-    try { await residentApi.uploadReportMedia(reportId, m.file); } catch (err) { warnings.push(`“${m.name}” could not be added: ${errorMessage(err)}`); }
-  }
-  return warnings;
-}
-
 /**
  * One retry key per draft. A missing-pet report that was filed (perhaps with the answer lost on the way) and is sent again by the same person
  * from the same, unchanged draft carries the same key, so the server answers with the report it already filed instead of refusing a second one.
@@ -111,6 +102,17 @@ async function submitReport(ctx: ResidentActionContext): Promise<ResidentActionR
   if (lost && !pet) return fail('Register your pet first to report it missing.', 422);
   const animal = pet ? pet.type : draft.animalType;
   if (!lost && (!animal || draft.description.trim().length < 10)) return fail('Add the animal and a description first.', 422);
+  const customAnimal = !lost && draft.animalType === 'other' ? (draft.customAnimalType ?? '').trim() : '';
+  if (!lost && draft.animalType === 'other' && !customAnimal) return fail('Please enter the name or type of the animal.', 422);
+  const hasPhoto = lost
+    ? Boolean(pet?.photoUrl || draft.media.some((m) => m.kind === 'photo' && Boolean(m.file || m.url)))
+    : draft.media.some((m) => m.kind === 'photo' && Boolean(m.file || m.url));
+  if (!hasPhoto) return fail('Please upload at least one photo of the animal before submitting your report.', 422);
+  if (draft.category === 'injured' && (!draft.extra || !draft.extra.trim())) return fail('Please answer whether the animal can move.', 422);
+  if (draft.category === 'safety') {
+    if (!draft.dangerousBehaviors?.length) return fail('Select at least one observed dangerous behavior.', 422);
+    if (!draft.currentDanger || !draft.stillInLocation) return fail('Please answer whether the animal is currently aggressive and still in the location.', 422);
+  }
   if (!animal) return fail('Add the animal first.', 422);
   const loc = draft.location ?? fail('Choose where the animal was.', 422);
   if (loc.lat === null || loc.lng === null) return fail('Pin the spot on the map or use your location. The subdivision needs a position to follow up.', 422);
@@ -130,10 +132,53 @@ async function submitReport(ctx: ResidentActionContext): Promise<ResidentActionR
   const looksExtra = (draft.looks ?? '').split(',').map((s) => s.trim()).filter((s) => s && !colorSet.has(s.toLowerCase())).join(', ');
   const nuisanceColorText = [colorTags.join(', '), looksExtra].filter(Boolean).join(' · ') || null;
 
+  // Upload all selected media files FIRST so failed uploads never create an incomplete report record
+  const uploadedMediaUrls: string[] = [];
+  for (const m of draft.media) {
+    if (m.file) {
+      uploadedMediaUrls.push(await uploadFile(m.file));
+    } else if (m.url && /^https?:\/\//i.test(m.url)) {
+      uploadedMediaUrls.push(m.url);
+    }
+  }
+
   const created = await residentApi.createReport({
-    category_id: category, animal_type: ANIMAL_LABEL[animal], description: descriptionOf(draft), condition: extraLabel && draft.extra ? joinExtra(extraLabel, draft.extra) : null,
+    category_id: category,
+    animal_type: customAnimal || ANIMAL_LABEL[animal],
+    description: descriptionOf(draft),
+    condition: extraLabel && draft.extra ? joinExtra(extraLabel, draft.extra) : null,
     latitude: loc.lat, longitude: loc.lng, landmark: label, animal_count: 1,
     client_request_id: retryKeyOf(draft),
+    media_urls: uploadedMediaUrls,
+    ...(draft.category === 'injured' ? {
+      injured_conditions: draft.injuredConditions ?? [],
+      injured_other_detail: (draft.injuredOtherDetail ?? '').trim() || null,
+      can_move: draft.extra || null,
+    } : {}),
+    ...(draft.category === 'safety' ? {
+      dangerous_behaviors: draft.dangerousBehaviors ?? [],
+      dangerous_other_detail: (draft.dangerousOtherDetail ?? '').trim() || null,
+      current_danger: draft.currentDanger || null,
+      still_in_location: draft.stillInLocation || null,
+      rabies_symptoms: draft.rabiesSymptoms ?? [],
+      movement_direction: (draft.movementDirection ?? '').trim() || null,
+      ...(draft.dangerousBehaviors?.includes('Actual bite incident') && draft.biteDetails ? {
+        bite_details: {
+          person_bitten: draft.biteDetails.personBitten,
+          animal_bitten: draft.biteDetails.animalBitten,
+          affected_count: draft.biteDetails.affectedCount.trim() || null,
+          incident_time: draft.biteDetails.incidentTime.trim() || null,
+          incident_location: draft.biteDetails.incidentLocation.trim() || null,
+          what_happened: draft.biteDetails.whatHappened.trim() || null,
+          still_nearby: draft.biteDetails.stillNearby,
+        },
+      } : {}),
+      ...(draft.looks?.trim() || draft.suspectName?.trim() || draft.suspectAddress?.trim() || draft.suspectDetails?.trim() ? {
+        suspected_owner_name: (draft.suspectName ?? '').trim() || null,
+        suspected_owner_address: (draft.suspectAddress ?? '').trim() || null,
+        suspected_owner_details: [draft.looks?.trim(), draft.suspectDetails?.trim()].filter(Boolean).join(' · ') || null,
+      } : {}),
+    } : {}),
     // A lost report names the resident's own registered pet and says when it was last seen; the server builds what the report says
     // about the animal from the pet record, and refuses a pet that is not theirs or that already has an active lost report
     ...(pet ? { pet_id: numeric(pet.id, 'pet'), last_seen_at: toServer(draft.observedAt) } : {
@@ -153,10 +198,7 @@ async function submitReport(ctx: ResidentActionContext): Promise<ResidentActionR
     } : {}),
   });
 
-  // The report is filed. Its photos come next, and a problem with them never undoes it. A missing pet's notice is published by the server in
-  // the same step that files the report (nothing is asked for afterwards); only a found animal asks for its notice, which the subdivision's
-  // publication setting then decides on.
-  const warnings = await uploadReportPhotos(created.report_id, draft.media);
+  const warnings: string[] = [];
   if (draft.kind === 'found') {
     try {
       await residentApi.requestAlert(created.report_id, {
@@ -245,13 +287,17 @@ export async function runAction(a: ResidentAction, ctx: ResidentActionContext): 
 
     case 'pet/save': {
       const exists = ctx.state().pets.some((p) => p.id === a.pet.id);
-      const saved = exists ? await residentApi.updatePet(numeric(a.pet.id, 'pet'), petToApi(a.pet))
-        : await residentApi.createPet({ ...petToApi(a.pet), ...(a.confirmNew ? { confirm_new_pet: true } : {}) });
-      const warnings: string[] = [];
-      if (a.photo) {
-        try { await residentApi.uploadPetPhoto(saved.pet_id, a.photo); } catch (err) { warnings.push(`The photo could not be added: ${errorMessage(err)}`); }
+      const photoUrl = a.photo
+        ? await uploadFile(a.photo)
+        : (a.pet.photoUrl && /^https?:\/\//i.test(a.pet.photoUrl) ? a.pet.photoUrl : null);
+      if (!photoUrl) {
+        return fail('Please upload a photo of your pet to complete the registration.', 422);
       }
-      return done({ pets: true, petId: String(saved.pet_id), warnings });
+      const payload = { ...petToApi(a.pet), photo_url: photoUrl };
+      const saved = exists
+        ? await residentApi.updatePet(numeric(a.pet.id, 'pet'), payload)
+        : await residentApi.createPet({ ...payload, ...(a.confirmNew ? { confirm_new_pet: true } : {}) });
+      return done({ pets: true, petId: String(saved.pet_id), warnings: [] });
     }
 
     case 'ownership/answer': {

@@ -108,7 +108,6 @@ export default function PetTagPage() {
           <Button block icon={Download} disabled={!qrBlob} onClick={download}>Download QR image</Button>
           <p className="rs-meta">
             The tag shows only {pet.name}’s photo, name and type, and your subdivision. Your name, address and phone number are not on it.
-            If the tag is lost, replace it on the pet page: the old one then stops working.
           </p>
           {!tag.link_is_public ? (
             <Callout tone="amber">The app’s public address is not set yet, so this tag only opens on this network.</Callout>

@@ -67,34 +67,49 @@ def require_taggable(pet: Pet) -> None:
         raise HTTPException(status_code=409, detail="This pet record is not active, so it cannot have a QR tag.")
 
 
-def create_or_replace(db: Session, pet: Pet, actor: User) -> Tuple[PetTag, Optional[PetTag]]:
-    """Make a new active tag; any active one becomes `replaced`. Returns (new tag, replaced tag or None). Does not commit."""
-    require_taggable(pet)
-    # Lock the pet row (MySQL SELECT ... FOR UPDATE; ignored by SQLite) so concurrent requests run one after the other.
+def ensure_active_tag(db: Session, pet: Pet, actor_id: Optional[int] = None) -> Optional[PetTag]:
+    """
+    Ensure the pet has its one permanent, unique QR tag.
+    If a tag record already exists for this pet, always reuse it (reactivating if needed) instead of creating another.
+    Does not commit.
+    """
+    if pet.owner_id is None or pet.merged_into_pet_id or (pet.status or "") in NOT_TAGGABLE_STATUSES:
+        return None
     db.query(Pet).filter(Pet.pet_id == pet.pet_id).with_for_update().first()
-    now = datetime.utcnow()
-    previous = None
-    for old in db.query(PetTag).filter(PetTag.pet_id == pet.pet_id, PetTag.status == "active").all():
-        old.status = "replaced"
-        old.disabled_at = now
-        old.disabled_by = actor.user_id
-        previous = old
-    tag = PetTag(pet_id=pet.pet_id, token=new_token(db), status="active", created_by=actor.user_id)
+    existing = db.query(PetTag).filter(PetTag.pet_id == pet.pet_id).order_by(PetTag.tag_id.asc()).first()
+    if existing:
+        if existing.status != "active":
+            existing.status = "active"
+            existing.disabled_at = None
+            existing.disabled_by = None
+            db.flush()
+        return existing
+    tag = PetTag(
+        pet_id=pet.pet_id,
+        token=new_token(db),
+        status="active",
+        created_by=actor_id or pet.owner_id,
+    )
     db.add(tag)
     db.flush()
-    return tag, previous
+    return tag
+
+
+def create_or_replace(db: Session, pet: Pet, actor: User) -> Tuple[PetTag, Optional[PetTag]]:
+    """
+    Idempotently return the pet's single permanent QR tag (or create it once if missing).
+    Never replaces or invalidates an existing pet QR tag. Does not commit.
+    """
+    require_taggable(pet)
+    tag = ensure_active_tag(db, pet, actor.user_id)
+    if not tag:
+        raise HTTPException(status_code=409, detail="This pet record cannot have a QR tag.")
+    return tag, None
 
 
 def disable(db: Session, pet: Pet, actor: User) -> Optional[PetTag]:
-    """Turn off the active tag, if any. Does not commit."""
-    db.query(Pet).filter(Pet.pet_id == pet.pet_id).with_for_update().first()
-    tag = active_tag(db, pet.pet_id)
-    if tag:
-        tag.status = "disabled"
-        tag.disabled_at = datetime.utcnow()
-        tag.disabled_by = actor.user_id
-        db.flush()
-    return tag
+    """Pet QR tags are permanent and cannot be deactivated."""
+    raise HTTPException(status_code=405, detail="Pet QR tags are permanent and cannot be turned off or replaced.")
 
 
 def qr_png(data: str) -> bytes:
@@ -122,7 +137,8 @@ from app.models.user import Subdivision  # noqa: E402
 
 NOT_ACTIVE = "This tag is no longer active."
 FOUND_PER_TOKEN_PER_HOUR = 10       # across every visitor; each visitor is also limited to 3 per hour (routes/pet_tags.py)
-VIEW_DEDUPE_MINUTES = 10            # one "view" row per tag per 10 minutes, so reloading a page does not flood the history
+SCAN_COOLDOWN_MINUTES = max(1, int(os.getenv("PET_TAG_SCAN_COOLDOWN_MINUTES", "60")))  # authoritative 1-hour cooldown per QR tag
+COOLDOWN_MESSAGE = "QR Code Already Scanned. Please try again after the 1-hour cooldown period."
 NOTE_MAX = 500
 LABEL_MAX = 255
 _PHONE_FIELD = re.compile(r"^(?:\+?63|0)9\d{9}$")
@@ -195,16 +211,99 @@ def public_card(db: Session, pet: Pet, viewer: Optional[User]) -> dict:
     }
 
 
-def record_view(db: Session, tag: PetTag, pet: Pet, viewer: Optional[User]) -> None:
-    """A page view, at most one per tag per VIEW_DEDUPE_MINUTES; the owner's own views are not recorded. Does not commit."""
-    if viewer is not None and viewer.user_id == pet.owner_id:
-        return
-    since = datetime.utcnow() - timedelta(minutes=VIEW_DEDUPE_MINUTES)
-    if db.query(PetTagScan.scan_id).filter(PetTagScan.tag_id == tag.tag_id, PetTagScan.kind == "view",
-                                           PetTagScan.created_at >= since).first():
-        return
-    db.add(PetTagScan(tag_id=tag.tag_id, pet_id=pet.pet_id, kind="view", status="seen_by_owner",
-                      scanner_user_id=viewer.user_id if viewer else None, created_at=datetime.utcnow()))
+def cooldown_remaining_seconds(tag: Optional[PetTag], now: Optional[datetime] = None) -> int:
+    """Remaining seconds in the 1-hour scan cooldown for this tag, or 0 if scannable."""
+    if not tag or not tag.last_scanned_at:
+        return 0
+    current = now or datetime.utcnow()
+    retry_at = tag.last_scanned_at + timedelta(minutes=SCAN_COOLDOWN_MINUTES)
+    if current >= retry_at:
+        return 0
+    return max(1, int((retry_at - current).total_seconds()))
+
+
+def record_view(db: Session, tag: PetTag, pet: Pet, viewer: Optional[User], now: Optional[datetime] = None) -> PetTagScan:
+    """
+    Record a successful QR code scan (`kind="view"`) and enforce the 1-hour per-tag cooldown.
+    Locks the PetTag row (`FOR UPDATE`) so concurrent scan requests cannot bypass the cooldown.
+    Repeated attempts within the cooldown never reset or extend `last_scanned_at`. Does not commit.
+    """
+    current = now or datetime.utcnow()
+    locked_tag = db.query(PetTag).filter(PetTag.tag_id == tag.tag_id).with_for_update().first()
+    if not locked_tag or locked_tag.status != "active":
+        raise HTTPException(status_code=404, detail=NOT_ACTIVE)
+
+    last_at = locked_tag.last_scanned_at
+    if last_at is None:
+        latest = (
+            db.query(PetTagScan.created_at)
+            .filter(PetTagScan.tag_id == locked_tag.tag_id, PetTagScan.kind == "view")
+            .order_by(PetTagScan.created_at.desc(), PetTagScan.scan_id.desc())
+            .first()
+        )
+        if latest:
+            last_at = latest[0]
+
+    cooldown_delta = timedelta(minutes=SCAN_COOLDOWN_MINUTES)
+    cutoff = current - cooldown_delta
+    if last_at is not None and current < last_at + cooldown_delta:
+        retry_at = last_at + cooldown_delta
+        remaining_seconds = max(1, int((retry_at - current).total_seconds()))
+        remaining_minutes = max(1, (remaining_seconds + 59) // 60)
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "QR_SCAN_COOLDOWN",
+                "message": COOLDOWN_MESSAGE,
+                "cooldown_minutes": SCAN_COOLDOWN_MINUTES,
+                "remaining_seconds": remaining_seconds,
+                "remaining_minutes": remaining_minutes,
+                "retry_after_at": retry_at.isoformat() + "Z",
+            },
+        )
+
+    # Atomic conditional update prevents concurrent requests from bypassing the cooldown even if FOR UPDATE is a no-op.
+    from sqlalchemy import or_
+    updated_rows = (
+        db.query(PetTag)
+        .filter(
+            PetTag.tag_id == locked_tag.tag_id,
+            PetTag.status == "active",
+            or_(PetTag.last_scanned_at.is_(None), PetTag.last_scanned_at <= cutoff),
+        )
+        .update({"last_scanned_at": current}, synchronize_session=False)
+    )
+    if updated_rows == 0:
+        db.expire(locked_tag)
+        refreshed = db.query(PetTag).filter(PetTag.tag_id == locked_tag.tag_id).first()
+        ref_last = refreshed.last_scanned_at if refreshed and refreshed.last_scanned_at else current
+        retry_at = ref_last + cooldown_delta
+        remaining_seconds = max(1, int((retry_at - current).total_seconds()))
+        remaining_minutes = max(1, (remaining_seconds + 59) // 60)
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "QR_SCAN_COOLDOWN",
+                "message": COOLDOWN_MESSAGE,
+                "cooldown_minutes": SCAN_COOLDOWN_MINUTES,
+                "remaining_seconds": remaining_seconds,
+                "remaining_minutes": remaining_minutes,
+                "retry_after_at": retry_at.isoformat() + "Z",
+            },
+        )
+
+    locked_tag.last_scanned_at = current
+    scan = PetTagScan(
+        tag_id=locked_tag.tag_id,
+        pet_id=pet.pet_id,
+        kind="view",
+        status="seen_by_owner",
+        scanner_user_id=viewer.user_id if viewer else None,
+        created_at=current,
+    )
+    db.add(scan)
+    db.flush()
+    return scan
 
 
 def _clean(text: Optional[str], limit: int, one_line: bool) -> Optional[str]:

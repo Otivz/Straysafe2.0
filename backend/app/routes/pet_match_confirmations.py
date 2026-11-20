@@ -135,6 +135,17 @@ def my_request(request_id: int, db: Session = Depends(get_db), current_user: Use
     return owner_view(r)
 
 
+@router.get("/{request_id}/verification")
+def my_verification(request_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """The verification page (linked from the request message and notification): only the pet's registered owner may open it."""
+    r = _mine(db, current_user).filter(PetMatchConfirmationRequest.request_id == request_id).first()
+    from app.services import owner_verification
+    out = owner_verification.owner_payload(db, r, current_user) if r is not None else None
+    if out is None:
+        raise HTTPException(status_code=404, detail="Verification request not found.")
+    return out
+
+
 class OwnerAnswer(BaseModel):
     answer: str = Field(..., pattern="^(YES|NO)$")
     note: Optional[str] = Field(None, max_length=1000)
@@ -173,8 +184,7 @@ def respond(request_id: int, payload: OwnerAnswer, req: Request, db: Session = D
         match.owner_verification_answer = "YES" if yes else "NO"
         match.owner_verification_answer_note = r.owner_note
         match.owner_verification_answered_at = r.owner_response_at
-        if not yes and match.status in ("AI_SUGGESTED", "PENDING_VERIFICATION"):
-            match.status = "NOT_A_MATCH"
+        # The owner's NO is evidence only: the match stays open for the Subdivision Administration's final decision
 
         # Also post message back in chat thread
         from app.routes.chat import find_match_thread
@@ -192,13 +202,17 @@ def respond(request_id: int, payload: OwnerAnswer, req: Request, db: Session = D
             ))
 
     report = db.query(Report).filter(Report.report_id == r.report_id).first()
-    staff_ids = {i for i in (r.requested_by, report.assigned_leader_id if report else None) if i}
+    # A request made from the case screen (Possible Pet Owner Verification): the answer goes into its conversation and the Leader is told
+    # there; older requests keep the notifications below.
+    from app.services import owner_verification
+    in_conversation = owner_verification.after_owner_answer(db, r, current_user, yes)
+    staff_ids = set() if in_conversation else {i for i in (r.requested_by, report.assigned_leader_id if report else None) if i}
     title = (f"Owner Confirmed: Report #{r.report_id} is {pet.pet_name}" if yes
-             else f"Owner Rejected: Report #{r.report_id} is not {pet.pet_name}")
+             else f"Owner Declined: Report #{r.report_id} is not {pet.pet_name}")
     message = (f"{current_user.name} said the animal in Report #{r.report_id} IS their pet '{pet.pet_name}'. "
                f"Review it and make the final verification in Manual Matching." if yes else
                f"{current_user.name} said the animal in Report #{r.report_id} is NOT their pet '{pet.pet_name}'. "
-               f"It can't be confirmed for this report; search for another registered pet.")
+               f"Review the response and make the final verification decision.")
     if r.owner_note:
         message += f" Owner's note: {r.owner_note}"
     for uid in staff_ids:

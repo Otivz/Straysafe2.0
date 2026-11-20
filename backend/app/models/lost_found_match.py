@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -30,8 +30,16 @@ class LostFoundMatch(Base):
     score: Mapped[int] = mapped_column(Integer, nullable=False)
     level: Mapped[str] = mapped_column(String(10), nullable=False)               # strong | possible
     reasons: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)           # the sentences that spoke in favour, strongest first
-    # pending -> confirmed | rejected (rejected -> pending again on "review again") | moot
+    # pending -> under_review -> confirmed | rejected (rejected -> pending again on "review again") | moot
     status: Mapped[str] = mapped_column(String(12), nullable=False, default="pending", server_default="pending", index=True)
+    # Multi-attribute matching (2026-11-19, docs/01-system/MULTI_ATTRIBUTE_MATCHING.md): the full breakdown of the current score (each attribute's
+    # score, how much information was available, classification, explanations), the algorithm that made it, the earlier results it replaced
+    # (never silently overwritten), the stored AI photo comparison, and the reviewer's notes.
+    analysis: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
+    algorithm: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    history: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
+    visual: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
+    review_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     decided_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
     decided_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

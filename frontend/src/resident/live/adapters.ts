@@ -50,7 +50,7 @@ export function splitExtra(condition: string | null | undefined): string | undef
   const text = (condition ?? '').trim();
   if (!text) return undefined;
   const i = text.indexOf('?: ');
-  return i >= 0 ? text.slice(i + 3).trim() || undefined : text;
+  return i >= 0 ? text.slice(i + 3).split('\n')[0].trim() || undefined : text;
 }
 export const joinExtra = (label: string, answer: string): string => `${label}: ${answer}`;
 
@@ -78,6 +78,11 @@ export function updateFromHistory(h: { history_id: number; remarks: string | nul
   if (status) return { id: `h${h.history_id}`, at, kind: 'status', title: status[2] };
   if (/^case closed/i.test(text)) return { id: `h${h.history_id}`, at, kind: 'outcome', title: 'Closed', body: text.replace(/^case closed:?\s*/i, '').replace(/\.$/, '') || undefined };
   if (/^case reopened/i.test(text)) return { id: `h${h.history_id}`, at, kind: 'status', title: 'Reopened' };
+  if (/^automatic urgent priority assigned/i.test(text)) return { id: `h${h.history_id}`, at, kind: 'status', title: 'Marked Urgent (unable to move)' };
+  if (/^automatic safety priority assigned/i.test(text)) return { id: `h${h.history_id}`, at, kind: 'status', title: 'Safety priority assigned' };
+  if (/^subdivision leader notified/i.test(text)) return { id: `h${h.history_id}`, at, kind: 'info', title: 'Subdivision Leader notified' };
+  if (/^(urgency|priority) adjusted/i.test(text)) return { id: `h${h.history_id}`, at, kind: 'status', title: 'Case priority updated' };
+  if (/^assessment (submitted|updated)/i.test(text) || /^case assessed/i.test(text)) return { id: `h${h.history_id}`, at, kind: 'status', title: 'Case assessed by administrator' };
   // Any other line was written by the system (a notice went out, a neighbour reported a sighting). It is never a message from a person:
   // only the case chat carries those (updateFromChat).
   // how many residents were told is for the Subdivision Leader only (older lines carry the number: it is not shown)
@@ -115,11 +120,14 @@ export function reportFromApi(r: ApiResidentReport, ctx: ResidentLookup, extra: 
   const family = ctx.familyOf(r.category_id);
   const kind = reportKindOf(family);
   const animalType = animalTypeOf(r.animal_type);
+  const rawAnimal = (r.animal_type ?? '').trim();
+  const customAnimalType = rawAnimal && !['dog', 'cat', 'unknown', 'other', 'others'].includes(rawAnimal.toLowerCase()) ? rawAnimal : undefined;
   const split = splitPetName(r.description);
   const description = split.description;
   const submittedAt = fromServer(r.created_at);
   const petName = r.pet_name?.trim() || split.petName || undefined;
-  const title = kind === 'lost' ? `Lost pet: ${petName || `my ${WORD[animalType]}`}` : kind === 'found' ? `Found: ${WORD[animalType]}` : clip(firstSentence(description), 70) || 'Animal concern';
+  const animalWord = customAnimalType ? customAnimalType.toLowerCase() : WORD[animalType];
+  const title = kind === 'lost' ? `Lost pet: ${petName || `my ${animalWord}`}` : kind === 'found' ? `Found: ${animalWord}` : clip(firstSentence(description), 70) || 'Animal concern';
   const history = [...(r.history ?? [])];
   const updates: ReportUpdate[] = [
     ...history.map(updateFromHistory),
@@ -134,7 +142,7 @@ export function reportFromApi(r: ApiResidentReport, ctx: ResidentLookup, extra: 
   const colors = parseColorTags(r.animal_colors, r.animal_color);
   const breed = r.animal_breed?.trim() || undefined;
   return {
-    id: ctx.refOf(r.report_id), kind, category: family, status: r.case_status ?? 'reported', title, description, animalType, ...(breed ? { breed } : {}), ...(colors.length > 0 ? { colors } : {}), ...(petName ? { petName } : {}), petId: r.pet_id === null ? null : String(r.pet_id),
+    id: ctx.refOf(r.report_id), kind, category: family, status: r.case_status ?? 'reported', title, description, animalType, ...(customAnimalType ? { customAnimalType } : {}), ...(breed ? { breed } : {}), ...(colors.length > 0 ? { colors } : {}), ...(petName ? { petName } : {}), petId: r.pet_id === null ? null : String(r.pet_id),
     location: { label: r.landmark?.trim() || PINNED_LABEL, lat: hasPin ? (r.latitude as number) : null, lng: hasPin ? (r.longitude as number) : null, manual: !hasPin },
     observedAt: fromServer(alert?.last_seen.at) || fromServer(r.seen_at) || submittedAt, submittedAt, updatedAt: updates[0]?.at || submittedAt,
     media: mediaFromApi(r.media ?? []), visibility, noticeId: alert?.status === 'active' ? noticeId(alert.alert_id) : null,
@@ -334,13 +342,19 @@ export function notificationFromApi(n: ApiNotification, ctx: Pick<ResidentLookup
   } else if (type === 'warning' || type === 'warning_letter') {
     kind = 'warning';
     const link = (n.link ?? '').trim().replace(/^\/resident-app(?=\/)/, '');
-    to = /^\/warnings(\/\d+)?$/i.test(link) ? link : '/warnings';
+    to = /^\/warnings(\/\d+)?$/i.test(link) ? link : (type === 'warning_letter' && id !== null ? `/warnings/${id}` : '/warnings');
   } else if (type === 'case_message' || type === 'lost_found_bridge' || type === 'lost_found_unlinked') {
     to = id === null ? '/home' : `/conversations/${id}`;
+  } else if (type === 'ownership_verification') {
+    // "Is this your pet?": opens the verification page (reported animal beside the registered pet, Confirm / Decline Ownership)
+    const link = (n.link ?? '').trim().replace(/^\/resident-app(?=\/)/, '');
+    to = /^\/ownership\/\d+$/i.test(link) ? link : id === null ? '/messages' : `/ownership/${id}`;
   } else if (type === 'pet_tag_found') {
     kind = 'sighting';                                   // someone scanned the pet's QR tag: open the separate tag-scan page
     const link = (n.link ?? '').trim().replace(/^\/resident-app(?=\/)/, '');
     to = /^\/pets\/\d+\/scans(\/\d+)?$/i.test(link) ? link : id === null ? '/pets' : `/pets/${id}/scans`;
+  } else if (type === 'qr_collar_status') {
+    to = id === null ? '/pets' : `/pets/${id}`;
   } else if (type.includes('pet_owner_confirmation')) {
     to = '/pets';                                       // "is this your pet?": its related id is the pet, not a report
   } else if (type.includes('lost_pet_alert')) {
@@ -370,6 +384,8 @@ export function conversationFromApi(c: ApiCaseConversation): CaseConversation {
     myReportNumber: c.my_report_id, title: c.title, subtitle: c.subtitle, unread: c.unread, messageCount: c.message_count,
     lastAt: fromServer(c.last_at) || fromServer(c.created_at), lastText: c.last_text,
     people: c.people.map((p) => ({ id: String(p.user_id), name: p.name, label: p.label, me: p.me })),
+    reportRef: c.report_ref ?? null, reportCategory: c.report_category ?? null, caseStatus: c.case_status ?? null,
+    closedAt: c.closed_at ? fromServer(c.closed_at) : null, closeTrigger: c.close_trigger ?? null,
   };
 }
 

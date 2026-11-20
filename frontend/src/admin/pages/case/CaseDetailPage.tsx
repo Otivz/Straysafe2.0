@@ -66,7 +66,8 @@ export default function CaseDetailPage() {
   if (c.category === 'nuisance') return detail.status === 'ready' ? <ComplaintPage c={c} /> : <PageSkeleton />;
   const full = detail.status === 'ready';
 
-  const requested = params.get('tab') as TabKey | null;
+  const rawRequested = params.get('tab');
+  const requested = (rawRequested === 'warnings' || rawRequested === 'referrals' ? 'actions' : rawRequested) as TabKey | null;
   const tab: TabKey = requested && TAB_KEYS.includes(requested) ? requested : 'overview';
   const setTab = (key: TabKey) => { const next = new URLSearchParams(params); if (key === 'overview') next.delete('tab'); else next.set('tab', key); setParams(next, { replace: true }); };
   const open = (d: CaseDialog) => setDialog(d);
@@ -105,6 +106,7 @@ export default function CaseDetailPage() {
               width={250}
               trigger={(p) => <Button variant="secondary" className="sa-btn--icon" aria-label="More case actions" {...p}><EllipsisVertical size={17} aria-hidden="true" /></Button>}
               items={[
+                { label: 'Create Referral', icon: RefreshCw, disabled: c.status === 'closed', onSelect: () => open({ kind: 'referral' }) },
                 { label: 'Change status', icon: RefreshCw, disabled: moves.length === 0, onSelect: () => open({ kind: 'status' }) },
                 { label: 'Change priority', icon: Flag, disabled: c.status === 'closed', onSelect: () => open({ kind: 'priority' }) },
                 { label: 'Add internal note', icon: NotebookPen, onSelect: () => open({ kind: 'note' }) },

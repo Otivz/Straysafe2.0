@@ -27,18 +27,43 @@ def _names(db: Session, ids) -> Dict[int, str]:
     return {u.user_id: u.name for u in db.query(User).filter(User.user_id.in_(ids)).all()} if ids else {}
 
 
+def _parse_docs(raw: Optional[str]) -> List[Dict[str, Any]]:
+    if not raw:
+        return []
+    import json
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, list) else []
+    except Exception:
+        return []
+
+
 def referral_view(r: BarangayReferral, names: Dict[int, str]) -> Dict[str, Any]:
+    status = r.referral_status or ("completed" if r.final_outcome else "sent")
     return {
         "referral_id": r.referral_id, "report_id": r.report_id, "org_type": r.org_type or ("barangay" if r.barangay_id else "other"),
-        "org_name": r.org_name, "status": r.referral_status or ("completed" if r.final_outcome else "sent"),
-        "is_open": (r.referral_status or ("completed" if r.final_outcome else "sent")) in V.OPEN_REFERRAL_STATUSES and not r.final_outcome,
-        "is_urgent": bool(r.is_urgent), "reason": r.reason, "reference_no": r.reference_no, "contact_method": r.contact_method,
+        "org_name": r.org_name, "status": status,
+        "is_open": status in V.OPEN_REFERRAL_STATUSES and not r.final_outcome,
+        "is_urgent": bool(r.is_urgent), "priority_level": r.priority_level or ("urgent" if r.is_urgent else "normal"),
+        "reason": r.reason, "reference_no": r.reference_no or (f"REF-{r.referred_at.year}-{r.referral_id:04d}" if r.referred_at else f"REF-{r.referral_id:04d}"),
+        "contact_method": r.contact_method,
         "contact_person": r.contact_person, "contact_detail": r.contact_detail, "referred_at": r.referred_at,
         "referred_by": r.referred_by, "referred_by_name": names.get(r.referred_by),
+        "status_updated_at": r.status_updated_at, "status_updated_by": r.status_updated_by, "status_updated_by_name": names.get(r.status_updated_by),
+        "supporting_documents": _parse_docs(r.supporting_documents),
+        "additional_notes": r.additional_notes,
+        "assistance_provided": r.assistance_provided,
+        "actions_completed": r.actions_completed,
         "external_outcome": r.external_outcome, "remaining_follow_up": r.remaining_follow_up, "follow_up_at": r.follow_up_at,
         "reported_outcome": r.final_outcome, "reported_outcome_date": r.outcome_date, "reported_outcome_note": r.outcome_note,
+        "outcome_date": r.outcome_date, "outcome_note": r.outcome_note,
+        "outcome_recorded_by": r.outcome_recorded_by, "outcome_recorded_by_name": names.get(r.outcome_recorded_by),
+        "outcome_recorded_at": r.outcome_recorded_at,
         "updates": [{"update_id": u.update_id, "update_type": u.update_type, "source": u.source, "update_date": u.update_date,
                      "note": u.note, "evidence_url": u.evidence_url, "status_after": u.status_after,
+                     "responder_name": u.responder_name, "assistance_provided": u.assistance_provided,
+                     "progress_notes": u.progress_notes, "follow_up_instructions": u.follow_up_instructions,
+                     "additional_notes": u.additional_notes, "supporting_documents": _parse_docs(u.supporting_documents),
                      "recorded_by": u.recorded_by, "recorded_by_name": names.get(u.recorded_by), "recorded_at": u.recorded_at}
                     for u in r.updates],
     }
@@ -56,21 +81,33 @@ def contact_view(c: CaseContactLog, names: Dict[int, str]) -> Dict[str, Any]:
 
 
 def warning_view(w: OwnerWarning, observations: Optional[List[Dict[str, Any]]] = None, names: Optional[Dict[int, str]] = None,
-                 letter: Optional[Any] = None) -> Dict[str, Any]:
+                 letter: Optional[Any] = None, pets: Optional[Dict[int, str]] = None) -> Dict[str, Any]:
     observations = observations or []
     ended = next((o for o in observations if o["concluded"]), None)
     return {"warning_id": w.warning_id, "warning_level": w.warning_level, "violation_type": w.violation_type, "status": w.status,
+            "workflow_status": w.workflow_status or ("Acknowledged" if w.status == "Acknowledged" else "Sent"),
+            "warning_category": w.warning_category or w.violation_type,
+            "warning_subject": w.warning_subject or (letter.rendered_subject if letter else f"{w.warning_level}: {w.violation_type}"),
             "owner_user_id": w.user_id, "owner_name": (names or {}).get(w.user_id), "description": w.description,
+            "additional_details": w.additional_details,
+            "supporting_documents": _parse_docs(w.supporting_documents),
+            "admin_notes": w.admin_notes,
+            "pet_id": w.pet_id, "pet_name": (pets or {}).get(w.pet_id) or (letter.pet_name if letter else None),
             "issued_by": w.issued_by, "issued_by_name": (names or {}).get(w.issued_by),
             "policy_id": w.policy_id, "policy_title": w.policy_title, "policy_reference": w.policy_reference,
             "observation_days": w.observation_days, "follow_up_at": w.follow_up_at, "fine_amount": float(w.fine_amount or 0),
-            "created_at": w.created_at, "observations": observations,
+            "created_at": w.created_at, "acknowledged_at": w.acknowledged_at,
+            "owner_response": w.owner_response, "owner_responded_at": w.owner_responded_at,
+            "thread_id": w.thread_id,
+            "observations": observations,
             "concluded": ended["concluded"] if ended else None, "concluded_at": ended["recorded_at"] if ended else None,
             "letter_id": letter.letter_id if letter else None,
-            "warning_reference": letter.warning_reference if letter else None,
+            "warning_reference": letter.warning_reference if letter else f"WARN-{w.warning_id:04d}",
             "template_name": letter.template_name if letter else None,
             "template_version_number": letter.template_version_number if letter else None,
-            "notification_status": letter.notification_status if letter else None,
+            "rendered_subject": letter.rendered_subject if letter else w.warning_subject,
+            "rendered_body": letter.rendered_body if letter else w.description,
+            "notification_status": letter.notification_status if letter else "delivered",
             "notification_error": letter.notification_error if letter else None,
             "viewed_at": letter.viewed_at.isoformat() if (letter and letter.viewed_at) else None}
 
@@ -174,8 +211,11 @@ def case_detail(db: Session, report: Report, viewer: User) -> Dict[str, Any]:
     warnings = db.query(OwnerWarning).filter(OwnerWarning.report_id == rid).order_by(OwnerWarning.warning_id.desc()).all()
     claims = case_claims.claims_of(db, report, viewer)
     links = case_work.active_links(db, rid)
+    merged_rows = db.query(Report).filter(Report.duplicate_of_report_id == rid).order_by(Report.report_id.asc()).all()
     names = _names(db, [report.user_id, report.assigned_leader_id, report.assessed_by, report.ownership_owner_id, report.closed_by,
-                        *[r.referred_by for r in referrals], *[u.recorded_by for r in referrals for u in r.updates],
+                        *[m.user_id for m in merged_rows], *[m.merged_by for m in merged_rows],
+                        *[r.referred_by for r in referrals], *[r.status_updated_by for r in referrals], *[r.outcome_recorded_by for r in referrals],
+                        *[u.recorded_by for r in referrals for u in r.updates],
                         *[f.created_by for f in followups], *[c.logged_by for c in contacts],
                         *[w.user_id for w in warnings], *[w.issued_by for w in warnings]])
     observations = case_compliance.observations_of(db, [w.warning_id for w in warnings])
@@ -185,6 +225,8 @@ def case_detail(db: Session, report: Report, viewer: User) -> Dict[str, Any]:
         l.warning_id: l
         for l in db.query(GeneratedWarningLetter).filter(GeneratedWarningLetter.warning_id.in_(wids)).all()
     } if wids else {}
+    wpids = {w.pet_id for w in warnings if w.pet_id}
+    pet_names = {p.pet_id: p.pet_name for p in db.query(Pet).filter(Pet.pet_id.in_(wpids)).all()} if wpids else {}
     return {
         "report_id": rid,
         "case_status": status, "status_label": V.STATUS_LABELS[status], "legacy_status_id": report.current_status_id,
@@ -215,12 +257,24 @@ def case_detail(db: Session, report: Report, viewer: User) -> Dict[str, Any]:
         "referrals": [referral_view(r, names) for r in referrals],
         "followups": [followup_view(f, names) for f in followups],
         "contacts": [contact_view(c, names) for c in contacts],
-        "warnings": [warning_view(w, observations.get(w.warning_id), names, letters_by_wid.get(w.warning_id)) for w in warnings],
+        "warnings": [warning_view(w, observations.get(w.warning_id), names, letters_by_wid.get(w.warning_id), pet_names) for w in warnings],
         "claims": [case_claims.claim_view(db, c, True) for c in claims],
         "links": [{"link_id": l.link_id, "report_id": l.related_report_id if l.report_id == rid else l.report_id,
                    "link_type": l.link_type, "note": l.note, "linked_at": l.linked_at} for l in links],
+        "duplicate_of_report_id": report.duplicate_of_report_id,
+        "merged_reports": [{
+            "report_id": m.report_id,
+            "reference": f"SS-{(m.created_at or report.created_at).year}-{m.report_id:04d}",
+            "reporter_name": names.get(m.user_id),
+            "created_at": m.created_at,
+            "merged_at": m.merged_at,
+            "merged_by_name": names.get(m.merged_by),
+            "merge_notes": m.merge_notes,
+            "description": m.description,
+            "photo_count": len(m.media or []),
+        } for m in merged_rows],
         # the Leader's conversations on this case (who is in each, how many messages, how many are new): what the Leader wrote is in "contacts" above
-        "threads": case_messaging.threads_for_report(db, report, viewer) if (V.is_lost_pet_report(report) or family == V.FOUND_ANIMAL) else [],
+        "threads": case_messaging.threads_for_report(db, report, viewer),
         # notification alerts sent or scheduled about this case (they never change its Community notice)
         "alerts": case_alerts.alerts_for_report(db, report) if (V.is_lost_pet_report(report) or family == V.FOUND_ANIMAL) else [],
         "open_items": L.open_items(db, report),

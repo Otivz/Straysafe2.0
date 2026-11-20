@@ -115,7 +115,7 @@ test('what needs the Leader is listed most pressing first, each with the one thi
   assert.deepEqual(needs[5].open, { kind: 'coordination', referralId: 'r1', contact: true }, 'a call that is only written down is asked about until the attempt is recorded');
   assert.match(needs[0].title, /Rita Reporter and Owen Owner asked you to help them get in touch/);
   assert.match(needs[2].title, /Found white dog near Gate 2 may be Luna/);
-  assert.match(needs[2].detail, /Strong match · Same colours: white/);
+  assert.match(needs[2].detail, /Strong possible match · Same colours: white/);
 });
 
 test('a match reads as one plain sentence, from either side', () => {

@@ -344,3 +344,10 @@ test('the server\'s lifecycle numbers become the shape the analytics page reads 
   const empty = analyticsFromApi({ case_lifecycle: { received: 0, closed: 0, resolved_share: null, median_days_to_close: null, timeline: [], categories: [], outcomes: [], referrals: { total: 0, by_org: [], by_status: [] } } });
   assert.deepEqual([empty.resolvedShare, empty.medianDays, empty.weekly], [null, null, []]);
 });
+
+test('a possible owner\'s answer to an ownership verification opens the case it is about', () => {
+  const n = notificationFromApi({ notification_id: 81, user_id: 2, type: 'owner_verification', related_id: 17, title: 'Owner confirmed ownership: Report SS-2026-0017',
+    message: 'Olive Owner said the reported animal is their registered pet Bantay.', is_read: false, created_at: '2026-11-20T09:00:00' });
+  assert.equal(n.caseId?.endsWith('-0017'), true);
+  assert.equal(n.title, 'Owner confirmed ownership: Report SS-2026-0017');
+});

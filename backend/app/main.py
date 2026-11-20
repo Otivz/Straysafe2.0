@@ -38,6 +38,7 @@ from app.routes import lost_found as lost_found_routes
 from app.routes import case_alerts as case_alert_routes
 from app.routes import complaints as complaint_routes
 from app.routes import case_messages as case_message_routes
+from app.routes import owner_verification as owner_verification_routes
 from app.routes import pet_match_confirmations as pet_match_confirmation_routes  # owner-first pet matching (owner side)
 from app.routes import leader_identity as leader_identity_routes  # Phase 6 leader identity verification
 from app.routes import lost_pet_alerts as lost_pet_alert_routes  # neighbor-to-neighbor lost pet sightings
@@ -1425,18 +1426,145 @@ ensure_standard_warning_templates()
 
 
 def ensure_pet_tag_tables():
-    """Pet QR tags (pet_tags, pet_tag_scans): created if missing; nothing existing is altered."""
+    """Pet QR tags (pet_tags, pet_tag_scans): ensures one permanent unique QR tag per registered pet."""
+    from sqlalchemy import inspect
     from app.models.pet_tag import PetTag, PetTagScan
+    from app.services import pet_tags as T
     try:
         Base.metadata.create_all(
             bind=engine,
             tables=[cast(Any, PetTag.__table__), cast(Any, PetTagScan.__table__)],
             checkfirst=True,
         )
+        insp = inspect(engine)
+        cols = {c["name"] for c in insp.get_columns("pet_tags")}
+        if "last_scanned_at" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE pet_tags ADD COLUMN last_scanned_at DATETIME NULL"))
+
+        with SessionLocal() as db:
+            # Consolidate any historical multiple tags per pet into one permanent active tag per pet
+            all_tags = db.query(PetTag).order_by(PetTag.pet_id.asc(), PetTag.tag_id.desc()).all()
+            kept_by_pet: dict[int, PetTag] = {}
+            to_delete: list[PetTag] = []
+            for t in all_tags:
+                if t.pet_id not in kept_by_pet:
+                    kept_by_pet[t.pet_id] = t
+                elif t.status == "active" and kept_by_pet[t.pet_id].status != "active":
+                    to_delete.append(kept_by_pet[t.pet_id])
+                    kept_by_pet[t.pet_id] = t
+                else:
+                    to_delete.append(t)
+            for t in kept_by_pet.values():
+                if t.status != "active":
+                    t.status = "active"
+                    t.disabled_at = None
+                    t.disabled_by = None
+            for old in to_delete:
+                kept = kept_by_pet[old.pet_id]
+                db.query(PetTagScan).filter(PetTagScan.tag_id == old.tag_id).update(
+                    {"tag_id": kept.tag_id}, synchronize_session=False
+                )
+                db.delete(old)
+            db.commit()
+
+            # Backfill one permanent QR tag for any existing owned active pet that doesn't have one yet
+            untagged_pets = (
+                db.query(Pet)
+                .outerjoin(PetTag, Pet.pet_id == PetTag.pet_id)
+                .filter(
+                    Pet.owner_id.isnot(None),
+                    Pet.merged_into_pet_id.is_(None),
+                    PetTag.tag_id.is_(None),
+                )
+                .all()
+            )
+            for p in untagged_pets:
+                T.ensure_active_tag(db, p, p.owner_id)
+            db.commit()
+
+        indexes = insp.get_indexes("pet_tags")
+        unique_constraints = insp.get_unique_constraints("pet_tags")
+        has_unique_pet_id = any(
+            idx.get("unique") and idx.get("column_names") == ["pet_id"] for idx in indexes
+        ) or any(uc.get("column_names") == ["pet_id"] for uc in unique_constraints)
+        if not has_unique_pet_id:
+            with engine.begin() as conn:
+                conn.execute(text("CREATE UNIQUE INDEX uq_pet_tags_pet_id ON pet_tags (pet_id)"))
     except Exception as e:
         print(f"Notice in ensure_pet_tag_tables: {e}")
 
 
+def ensure_external_referral_columns():
+    """Ensure columns for External Referral Management on barangay_referrals and barangay_referral_updates."""
+    try:
+        from sqlalchemy import inspect
+        insp = inspect(engine)
+        if insp.has_table("barangay_referrals"):
+            existing_ref = {col["name"] for col in insp.get_columns("barangay_referrals")}
+            ref_additions = [
+                ("priority_level", "VARCHAR(20) NULL DEFAULT 'normal'"),
+                ("supporting_documents", "TEXT NULL"),
+                ("additional_notes", "TEXT NULL"),
+                ("assistance_provided", "TEXT NULL"),
+                ("actions_completed", "TEXT NULL"),
+            ]
+            with engine.begin() as conn:
+                for col_name, col_def in ref_additions:
+                    if col_name not in existing_ref:
+                        conn.execute(text(f"ALTER TABLE barangay_referrals ADD COLUMN {col_name} {col_def}"))
+        if insp.has_table("barangay_referral_updates"):
+            existing_upd = {col["name"] for col in insp.get_columns("barangay_referral_updates")}
+            upd_additions = [
+                ("responder_name", "VARCHAR(150) NULL"),
+                ("assistance_provided", "TEXT NULL"),
+                ("progress_notes", "TEXT NULL"),
+                ("follow_up_instructions", "TEXT NULL"),
+                ("additional_notes", "TEXT NULL"),
+                ("supporting_documents", "TEXT NULL"),
+            ]
+            with engine.begin() as conn:
+                for col_name, col_def in upd_additions:
+                    if col_name not in existing_upd:
+                        conn.execute(text(f"ALTER TABLE barangay_referral_updates ADD COLUMN {col_name} {col_def}"))
+    except Exception as e:
+        print(f"Notice in ensure_external_referral_columns: {e}")
+
+
+def ensure_owner_communication_and_warning_columns():
+    """Ensure columns for message delivery tracking and enhanced Official Warning Management."""
+    try:
+        from sqlalchemy import inspect
+        insp = inspect(engine)
+        if insp.has_table("case_message_members"):
+            existing_mem = {col["name"] for col in insp.get_columns("case_message_members")}
+            if "last_delivered_message_id" not in existing_mem:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE case_message_members ADD COLUMN last_delivered_message_id INT NOT NULL DEFAULT 0"))
+        if insp.has_table("owner_warnings"):
+            existing_warn = {col["name"] for col in insp.get_columns("owner_warnings")}
+            warn_additions = [
+                ("warning_category", "VARCHAR(120) NULL"),
+                ("warning_subject", "VARCHAR(255) NULL"),
+                ("additional_details", "TEXT NULL"),
+                ("supporting_documents", "TEXT NULL"),
+                ("admin_notes", "TEXT NULL"),
+                ("workflow_status", "VARCHAR(40) NULL DEFAULT 'Sent'"),
+                ("owner_response", "TEXT NULL"),
+                ("owner_responded_at", "DATETIME NULL"),
+                ("thread_id", "INT NULL"),
+                ("client_request_id", "VARCHAR(64) NULL"),
+            ]
+            with engine.begin() as conn:
+                for col_name, col_def in warn_additions:
+                    if col_name not in existing_warn:
+                        conn.execute(text(f"ALTER TABLE owner_warnings ADD COLUMN {col_name} {col_def}"))
+    except Exception as e:
+        print(f"Notice in ensure_owner_communication_and_warning_columns: {e}")
+
+
+ensure_owner_communication_and_warning_columns()
+ensure_external_referral_columns()
 ensure_pet_tag_tables()
 
 # Case workflow alignment (Subdivision Admin): new columns, tables, the six categories and the backfill. Idempotent, never
@@ -1452,6 +1580,9 @@ require_lost_found_alert_schema(engine)
 # Complaint management (2026-11-13): applied by backend/migrations/2026-11-13_complaint_management.sql, never here. Same read-only check.
 from app.db_migrations.complaint_management import require as require_complaint_schema  # noqa: E402
 require_complaint_schema(engine)
+# Resident-to-Administration messaging (2026-11-19): applied by backend/migrations/2026-11-19_resident_messaging.sql, never here. Same read-only check.
+from app.db_migrations.resident_messaging import require as require_resident_messaging_schema  # noqa: E402
+require_resident_messaging_schema(engine)
 
 async def backfill_ai_suggestions_background():
     """Run in background after startup to backfill missing AI suggestions without blocking HTTP requests."""
@@ -1642,6 +1773,8 @@ from app.routes import pet_tags as pet_tag_routes  # noqa: E402  (pet QR tags: o
 app.include_router(pet_tag_routes.router)
 app.include_router(pet_tag_routes.public_router)
 app.include_router(pet_tag_routes.leader_router)
+from app.routes import qr_collar_requests as qr_collar_request_routes  # noqa: E402
+app.include_router(qr_collar_request_routes.router)
 from app.routes import barangay_referrals as barangay_referral_routes  # noqa: E402  (Subdivision-only referral log; registers its tables)
 app.include_router(barangay_referral_routes.router)
 app.include_router(case_routes.router)
@@ -1649,6 +1782,7 @@ app.include_router(lost_found_routes.router)
 app.include_router(case_alert_routes.router)
 app.include_router(complaint_routes.router)
 app.include_router(case_message_routes.router)
+app.include_router(owner_verification_routes.router)
 app.include_router(ownership_claim_routes.router)
 app.include_router(landmarks.router)
 app.include_router(admin.router)

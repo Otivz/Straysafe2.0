@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -25,7 +25,7 @@ class PetMatchConfirmationRequest(Base):
     requested_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     staff_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # AWAITING_OWNER_CONFIRMATION | OWNER_CONFIRMED | OWNER_REJECTED | CANCELLED |
-    # NEEDS_FURTHER_VERIFICATION | VERIFIED_MATCH | REJECTED_MATCH
+    # NEEDS_FURTHER_VERIFICATION | VERIFIED_MATCH | REJECTED_MATCH | UNABLE_TO_CONTACT
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="AWAITING_OWNER_CONFIRMATION", index=True)
     owner_response: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # YES | NO
     owner_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -38,6 +38,13 @@ class PetMatchConfirmationRequest(Base):
     final_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
     final_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     match_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("report_matches.match_id", ondelete="SET NULL"), nullable=True)
+    # Possible Pet Owner Verification (2026-11-20, docs/01-system/POSSIBLE_OWNER_VERIFICATION.md): the Leader contacts the possible
+    # owner through the existing case conversations (case_message_threads); follow-ups are counted; every status change is appended
+    # to `events` (who, when, what), which is never rewritten. UNABLE_TO_CONTACT is a status of its own (String column, no enum).
+    thread_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    follow_up_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    last_follow_up_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    events: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     report = relationship("Report", foreign_keys=[report_id])

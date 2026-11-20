@@ -152,6 +152,22 @@ def _redact_for_resident(resp: ReportMatchResponse, user: User, m: Optional[Repo
                 if hasattr(rep_obj, k):
                     setattr(rep_obj, k, None)
     pet = resp.matched_pet
+    if pet is not None and getattr(pet, "owner_id", None) != user.user_id and isinstance(getattr(resp, "ai_evidence", None), dict):
+        # How far a sighting was from a registered owner's home is staff-only: a resident sees only the proximity class
+        ev = dict(resp.ai_evidence)
+        for k in ("distance_km", "distance_meters"):
+            ev.pop(k, None)
+        ma = ev.get("multi_attribute")
+        if isinstance(ma, dict) and isinstance(ma.get("attributes"), dict) and isinstance(ma["attributes"].get("location"), dict):
+            ma = {**ma, "attributes": {**ma["attributes"]}}
+            loc = dict(ma["attributes"]["location"])
+            loc["distance_m"] = None
+            loc["explanation"] = f"{loc.get('proximity') or 'Location'}: the exact distance is shown to authorized staff only."
+            ma["attributes"]["location"] = loc
+            ma["explanations"] = [e for e in (ma.get("explanations") or []) if "home pin" not in e and "approximately" not in e]
+            ev["multi_attribute"] = ma
+        ev["closest_attributes"] = [a for a in (ev.get("closest_attributes") or []) if a.get("attribute") != "Distance"]
+        resp.ai_evidence = ev
     if pet is not None and getattr(pet, "owner_id", None) != user.user_id:
         for k in _PET_PRIVATE:
             if hasattr(pet, k):
@@ -450,6 +466,56 @@ from app.utils.ai_matching import (
 )
 
 
+def _report_profile(report: Report):
+    """A report as the multi-attribute engine reads it (utils/match_scoring.py)."""
+    from app.utils import match_scoring as MS
+    from app.utils.color_tags import parse_report_colors
+    kind = (report.animal_type or report.ai_animal_type or "").strip().lower()
+    colors = parse_report_colors(report) or ([report.ai_dominant_color] if _known(report.ai_dominant_color) else [])
+    return MS.Profile(species=kind if kind in ("dog", "cat") else None if kind in ("", "unknown") else "other",
+                      breed=_known(report.animal_breed) or None, colors=colors,
+                      size=_known(report.estimated_size or report.ai_estimated_size) or None,
+                      texts=[t for t in (report.description, report.condition, report.animal_color) if t],
+                      lat=report.latitude, lng=report.longitude, subdivision_id=report.subdivision_id, place=report.landmark or "")
+
+
+def _pet_profile(pet: Pet):
+    """A registered pet as the engine reads it. Its location is the registered home pin (never shown as an address)."""
+    from app.utils import match_scoring as MS
+    from app.utils.color_tags import parse_pet_colors
+    owner = getattr(pet, "owner", None)
+    kind = (pet.pet_type or "").strip().lower()
+    return MS.Profile(species=kind if kind in ("dog", "cat") else None if kind in ("", "unknown") else "other",
+                      breed=_known(pet.breed) or None, colors=parse_pet_colors(pet), size=_known(pet.size_category) or None,
+                      texts=[t for t in (pet.distinctive_markings, pet.color_markings, getattr(pet, "notes", None)) if t],
+                      lat=pet.registered_latitude, lng=pet.registered_longitude,
+                      subdivision_id=getattr(owner, "subdivision_id", None) if owner is not None else None)
+
+
+def _with_multi_attribute(res: Dict[str, Any], source_report: Report, pet: Pet, vision_result: Optional[Dict[str, Any]],
+                          db: Optional[Session]) -> Dict[str, Any]:
+    """
+    Multi-attribute matching (2026-11-19, docs/01-system/MULTI_ATTRIBUTE_MATCHING.md): a registered-pet candidate is scored on visual
+    similarity, location, breed, coat colour and physical description together, instead of the photo comparison alone (or the rules
+    alone when there is no photo comparison). The single-engine score is kept in the evidence for comparison.
+    """
+    from app.utils import match_scoring as MS
+    if res.get("score", 0) <= 0 and not res.get("evidence"):
+        return res                                    # hard gate already failed (deceased, different species)
+    analysis = MS.analyze(_report_profile(source_report), _pet_profile(pet), MS.load_config(db), vision=vision_result,
+                          b_label="the registered owner's home pin")
+    evidence = dict(res.get("evidence") or {})
+    evidence["single_engine_score"] = res.get("score")
+    evidence["multi_attribute"] = analysis
+    res = dict(res)
+    res["evidence"] = evidence
+    res["score"] = analysis["score"]
+    res["classification"] = analysis["classification"]
+    lead = f"{analysis['classification_label']}: {analysis['score']}% overall from {analysis['attributes_compared']} of {analysis['attributes_total']} attributes."
+    res["explanation"] = " ".join([lead, *analysis["explanations"][:3]])
+    return res
+
+
 def calculate_match_details(
     source_report: Report,
     candidate: Any,  # Either Report or Pet
@@ -542,6 +608,34 @@ def calculate_match_details(
         cand_pattern = _known(candidate.ai_coat_pattern)
         cand_size = _known(candidate.estimated_size or candidate.ai_estimated_size)
         cand_desc = (candidate.description or "").strip()
+
+    # Mandatory 3-step validation sequence: 1. Species, 2. Exact Breed, 3. Partial Colour Overlap (at least 1 common colour)
+    from app.utils.duplicate_detection import is_eligible_match
+    eligible, fail_cls, fail_reason = is_eligible_match(source_report, candidate)
+    if not eligible:
+        is_insuff = fail_cls == "Insufficient Information"
+        return {
+            "score": 0,
+            "classification": "insufficient" if is_insuff else "excluded",
+            "evidence": {
+                "species_match": "Species" not in fail_reason,
+                "classification": fail_cls,
+                "key_evidence_bullets": [fail_reason],
+            },
+            "explanation": fail_reason,
+            "visual_comparison": {
+                "face_structure": "Not Evaluated",
+                "ear_structure": "Not Evaluated",
+                "coat_pattern": "Different" if not is_insuff else "Insufficient Information",
+                "facial_markings": "Not Evaluated",
+                "body_structure": "Not Evaluated",
+                "distinctive_markings": "Not Evaluated",
+                "final_assessment": "INSUFFICIENT INFORMATION" if is_insuff else "NOT A MATCH",
+                "reason": fail_reason,
+                "visual_contradictions": [] if is_insuff else [fail_reason],
+                "visual_corroborations": [],
+            },
+        }
 
     # Geographic Proximity calculation
     s_lat = float(source_report.latitude) if source_report.latitude is not None else None
@@ -682,12 +776,13 @@ def calculate_match_details(
             "visual_comparison": visual_comparison_payload
         }
 
-        return {
+        vision_res = {
             "score": v_score,
             "visual_comparison": visual_comparison_payload,
             "evidence": ai_evidence_payload,
             "explanation": v_reason
         }
+        return _with_multi_attribute(vision_res, source_report, candidate, vision_result, db) if is_pet else vision_res
 
     # Fallback to calibrated rule-based analysis
     rule_res = compare_animals_rule_based(src_meta, cand_meta, is_pet=is_pet)
@@ -731,8 +826,24 @@ def calculate_match_details(
 
     rule_res["evidence"]["closest_attributes"] = closest_attributes
     rule_res["evidence"]["engine"] = "rules"
-    return rule_res
+    return _with_multi_attribute(rule_res, source_report, candidate, None, db) if is_pet else rule_res
 
+
+
+def _carry_history(match: ReportMatch, new_evidence: Dict[str, Any]) -> Dict[str, Any]:
+    """A recalculated suggestion keeps what it said before (score, classification, attribute scores), newest last, never silently lost."""
+    old = match.ai_evidence if isinstance(match.ai_evidence, dict) else {}
+    history = list(old.get("history") or [])
+    old_ma = old.get("multi_attribute") or {}
+    snapshot = {"at": (match.updated_at or match.created_at or datetime.now()).isoformat(), "score": match.similarity_score,
+                "algorithm": old_ma.get("algorithm") or old.get("engine") or "legacy", "classification": old_ma.get("classification"),
+                "attribute_scores": {k: v.get("score") for k, v in (old_ma.get("attributes") or {}).items()}}
+    new_ma = (new_evidence or {}).get("multi_attribute") or {}
+    if snapshot["score"] != new_ma.get("score", snapshot["score"]) or snapshot["algorithm"] != new_ma.get("algorithm", snapshot["algorithm"]):
+        history.append(snapshot)
+    out = dict(new_evidence or {})
+    out["history"] = history[-20:]
+    return out
 
 
 def is_pet_eligible_for_matching(pet: Pet) -> tuple[bool, str]:
@@ -908,13 +1019,17 @@ def _scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[R
         v_assessment = match_calc.get("visual_comparison", {}).get("final_assessment", "POTENTIAL MATCH")
         
         # Only suggest if score >= 50 AND assessment is NOT a contradiction / NOT A MATCH
-        if match_calc["score"] >= PET_MATCH_MIN_SCORE and v_assessment not in ["NOT A MATCH", "LOW CONFIDENCE"] and match_calc.get("evidence"):
+        # Multi-attribute: a candidate with Insufficient Information or Low Similarity is not suggested, whatever one attribute says
+        classification = match_calc.get("classification", "potential")
+        if match_calc["score"] >= PET_MATCH_MIN_SCORE and classification in ("strong", "potential") \
+                and v_assessment not in ["NOT A MATCH", "LOW CONFIDENCE"] and match_calc.get("evidence"):
             matched_pet_ids.add(pet.pet_id)
             if pet.pet_id in existing_by_pet:
                 new_match = existing_by_pet[pet.pet_id]
+                new_evidence = _carry_history(new_match, match_calc["evidence"])
                 new_match.similarity_score = match_calc["score"]
                 new_match.ai_explanation = match_calc["explanation"]
-                new_match.ai_evidence = match_calc["evidence"]
+                new_match.ai_evidence = new_evidence
                 new_match.updated_at = datetime.now()
             else:
                 new_match = ReportMatch(

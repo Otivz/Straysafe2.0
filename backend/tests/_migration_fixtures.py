@@ -91,8 +91,9 @@ class FakeMySQL:
                 return FakeResult(rows=[(c,) for c in t["columns"]])
             if "SELECT COLUMN_TYPE" in up:
                 return FakeResult(scalar=t["columns"]["animal_type"]["type"])
-            if "SELECT IS_NULLABLE" in up:
-                return FakeResult(scalar="YES" if t["columns"]["barangay_id"]["nullable"] else "NO")
+            if "SELECT IS_NULLABLE" in up:       # the column the query names (MySQL gives no row, so None, for a column that does not exist)
+                col = t["columns"].get(re.search(r"COLUMN_NAME = '(\w+)'", sql).group(1)) if t is not None else None
+                return FakeResult(scalar=None if col is None else ("YES" if col["nullable"] else "NO"))
         if "FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE" in up:       # a foreign key to users on this column, whatever it is called
             return FakeResult(scalar=1 if p["c"] in self.tables[p["t"]]["fk_cols"] else 0)
         if "FROM INFORMATION_SCHEMA.STATISTICS" in up:
@@ -123,8 +124,9 @@ class FakeMySQL:
             mm = re.match(r"MODIFY COLUMN animal_type (ENUM\(.*\)) NULL DEFAULT 'Unknown'", rest)
             if mm:
                 t["columns"]["animal_type"]["type"] = "enum(" + mm.group(1)[5:]   # MySQL lower-cases the keyword, keeps the members
-            if rest.startswith("MODIFY COLUMN barangay_id INT NULL"):
-                t["columns"]["barangay_id"]["nullable"] = True
+            mn = re.match(r"MODIFY COLUMN (\w+) INT NULL$", rest)
+            if mn:
+                t["columns"][mn.group(1)]["nullable"] = True
             md = re.match(r"DROP INDEX (\w+)", rest)
             if md:
                 del t["indexes"][md.group(1)]

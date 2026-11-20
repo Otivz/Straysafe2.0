@@ -159,6 +159,7 @@ Potential Match
                                   Request Further Verification → Needs Further Verification (final decision later)
   → owner: "No, this is not my pet"       → Owner Rejected (can't be confirmed; staff check another pet)
   → staff: Cancel request (unanswered only, reason required) → Cancelled (a new request may be sent)
+  → staff: Unable to contact (unanswered only, reason required) → Unable to Contact (2026-11-20; counts as no request, a new one may be sent)
 ```
 
 **Staff (Send Confirmation).** `POST /manual-matching/pet-confirmations` with `report_id`, `pet_id` and an optional `message`. It requires the same review permission as any match decision. The report must be open and not already tied to a pet, the pet must be eligible and not impounded, and it must have an active registered owner. The request is saved as Awaiting Owner Confirmation, the owner gets a `pet_match_confirmation` notification, and the report's status history gets a note without the pet's or owner's name. Nothing is matched or linked yet.
@@ -204,6 +205,6 @@ AI rescans keep human decisions: they only update or remove `AI_SUGGESTED` rows 
 ## Code and tests
 
 - Backend: `backend/app/routes/manual_matching.py`, `backend/app/utils/matching_scope.py` (data scope), `backend/app/routes/pet_match_confirmations.py` (owner side), `backend/app/models/manual_match.py`, `backend/app/models/pet_match_confirmation.py`, `backend/app/utils/pet_match_confirmation.py` (owner-first rules), `gemini_status()` in `backend/app/utils/ai_suggestions.py`
-- Frontend: none at present. The legacy workspace, page, entry buttons and the owner panel on My Pets were removed on 2026-11-10 together with the legacy portals (recover them from Git history if a 2.0 screen is built).
+- Frontend: the legacy workspace, page, entry buttons and the owner panel on My Pets were removed on 2026-11-10 together with the legacy portals. Since 2026-11-20 the owner-first request has a 2.0 screen through [POSSIBLE_OWNER_VERIFICATION.md](POSSIBLE_OWNER_VERIFICATION.md): the Leader's Possible Pet Owners section on the case, a case conversation with the owner, and the owner's Yes/No card in that conversation. Send Confirmation (`POST /manual-matching/pet-confirmations`) and the new contact share `create_confirmation_request`. Requests now keep `events` (status history), `thread_id`, `follow_up_count` and `last_follow_up_at`.
 - Tests: `python tests/test_manual_matching.py` from `backend/` (isolated SQLite); `node --test frontend/tests/manualMatchFields.test.mjs`
 - Table: `manual_match_decisions` is created at startup by `Base.metadata.create_all`. If an earlier version of the table already exists, `ensure_manual_match_pet_column()` in `main.py` adds `pet_id` and makes `report_b_id` nullable. `pet_match_confirmation_requests` (report, pet, owner, requesting staff and time, owner response and time, cancellation, final decision, staff and time, match) is also created by `create_all`. Rows are never deleted. All are non-destructive, with no manual migration step.

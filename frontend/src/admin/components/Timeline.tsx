@@ -41,7 +41,7 @@ export function EventTimeline({ events, now, label = 'Case history' }: { events:
         return {
           id: e.id, icon, tone, title: e.title,
           meta: <>{e.actor} · <time dateTime={e.at} title={fmtDateTime(e.at)}>{relative(e.at, now)}</time></>,
-          body: e.detail ? <p className="sa-small sa-text-2">{e.detail}</p> : undefined,
+          body: e.detail ? <p className="sa-small sa-text-2 whitespace-pre-line">{e.detail}</p> : undefined,
         };
       })}
     />

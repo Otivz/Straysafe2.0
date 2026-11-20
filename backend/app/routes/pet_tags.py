@@ -67,9 +67,12 @@ def _response(db: Session, pet: Pet, user: User) -> PetTagResponse:
         token=tag.token if tag else None,
         link=T.tag_link(tag.token) if tag else None,
         created_at=tag.created_at if tag else None,
+        last_scanned_at=tag.last_scanned_at if tag else None,
+        cooldown_minutes=T.SCAN_COOLDOWN_MINUTES,
+        cooldown_remaining_seconds=T.cooldown_remaining_seconds(tag),
         link_is_public=configured,
         can_manage=T.is_owner(user, pet),
-        can_disable=tag is not None,
+        can_disable=False,
     )
 
 

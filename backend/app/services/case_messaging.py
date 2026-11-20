@@ -8,7 +8,17 @@ Messages on a lost-pet or found-animal report (docs/01-system/LOST_FOUND_MATCHIN
 What the Leader writes in a direct conversation writes itself into the case's contact log (method "message"), so it appears in the Leader's Activity
 without anyone typing it again. A resident sees the Leader as "Subdivision Leader" and the other resident by first name and role only; phone numbers
 and addresses are never added by the system (a resident may write their own). The lock screen never shows contact details (utils/push_categories).
+
+Resident-to-Administration messaging (2026-11-19, docs/01-system/RESIDENT_MESSAGING.md):
+  - a resident opens a `direct` conversation from their own report ("Message Subdivision Administration"); one OPEN conversation per resident and
+    report, so asking again returns the same one
+  - a resident opens a `general` conversation (no report) with a subject and a first message
+  - the Subdivision Leaders of the subdivision (and the Administrator) read and answer them from the Messages inbox
+  - a conversation tied to a report closes by itself, in the same transaction, when the report is resolved or closed (close_for_report, called by
+    the before_flush hook in utils/case_closure.py and by the closing services). The closure is audited once, with what triggered it. A closed
+    conversation is never reopened (not even when its case is reopened): the resident starts a new one. Staff may close a conversation by hand.
 """
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
@@ -17,21 +27,34 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.case_messaging import CaseMessage, CaseMessageMember, CaseMessageThread
+from app.models.audit_log import AuditLog
 from app.models.case_records import CaseContactLog
 from app.models.notification import Notification
 from app.models.pet import Pet
-from app.models.report import Report
+from app.models.report import Report, ReportMedia
 from app.models.user import User
 from app.services import case_lifecycle as L
 from app.services import lost_pet_lifecycle as LP
 from app.utils import case_state
 from app.utils import case_vocab as V
+from app.utils import report_visibility
 from app.utils.db_clock import db_now
 
 MAX_BODY = 2000
-LEADER, OWNER, FINDER, REPORTER = "leader", "owner", "finder", "reporter"
-ROLE_LABEL = {LEADER: "Subdivision Leader", OWNER: "Owner", FINDER: "Finder", REPORTER: "Reporter"}
+MAX_SUBJECT = 160
+MAX_OPEN_GENERAL = 5          # open general conversations one resident may have at a time
+LEADER, OWNER, FINDER, REPORTER, RESIDENT = "leader", "owner", "finder", "reporter", "resident"
+# A registered pet's owner asked whether a reported animal is theirs (Possible Pet Owner Verification, services/owner_verification.py).
+# Not a party of the report: the conversation never gives them the report, its reporter or its exact place.
+PET_OWNER = "pet_owner"
+ROLE_LABEL = {LEADER: "Subdivision Leader", OWNER: "Owner", FINDER: "Finder", REPORTER: "Reporter", RESIDENT: "Resident",
+              PET_OWNER: "Possible owner"}
 PARTIES = ("owner", "reporter")
+STAFF_KINDS = ("direct", "general")       # the conversations a Leader of the subdivision reads and answers
+RESIDENT_MESSAGE = "resident_message"     # the Leader's notification: its related id is the THREAD's (opens the Messages inbox)
+CLOSED_BY_CASE = "case_closed"
+CLOSED_BY_UNLINK = "link_removed"
+CLOSED_BY_STAFF = "manual"
 
 
 # ------------------------------------------------------------------------------------------------------------ small things
@@ -54,16 +77,56 @@ def _preview(text: str, n: int = 140) -> str:
 
 
 def reports_of(db: Session, t: CaseMessageThread) -> List[Report]:
-    ids = [t.report_id] + ([t.related_report_id] if t.related_report_id else [])
+    ids = [i for i in (t.report_id, t.related_report_id) if i]
     return [r for r in (db.get(Report, i) for i in ids) if r is not None]
+
+
+def report_ref(report: Optional[Report]) -> Optional[str]:
+    """The reference residents and staff see (frontend live/refs.ts caseRef): SS-<year>-<report id padded to 4>."""
+    if report is None:
+        return None
+    year = report.created_at.year if report.created_at is not None else datetime.now().year
+    return f"SS-{year}-{report.report_id:04d}"
+
+
+def _category(report: Optional[Report]) -> Optional[str]:
+    cat = getattr(report, "category", None) if report is not None else None
+    return getattr(cat, "category_name", None)
+
+
+def case_status_label(report: Optional[Report]) -> Optional[str]:
+    """The case's status in words. A closed case says how it ended: Resolved, or Closed."""
+    if report is None:
+        return None
+    status = case_state.case_status_of(report)
+    if status != V.CLOSED:
+        return V.STATUS_LABELS.get(status, status.replace("_", " ").capitalize())
+    disposition, _ = V.effective_disposition(report.closure_disposition, report.current_status_id)
+    return "Resolved" if V.disposition_group(disposition) == "resolved" else "Closed"
+
+
+def case_closed_reason(report: Optional[Report]) -> str:
+    """What a resident reads when a conversation closed with its case. Never the Leader's private closure notes."""
+    word = "resolved" if case_status_label(report) == "Resolved" else "closed"
+    return f"This conversation has been closed because the associated case has been {word}. You can still view your previous messages."
+
+
+def _audit(db: Session, actor_id: Optional[int], action: str, t: CaseMessageThread, description: str,
+           old: Optional[Dict[str, Any]] = None, new: Optional[Dict[str, Any]] = None, table: str = "case_message_threads",
+           target_id: Optional[int] = None) -> None:
+    """An audit row for a conversation event. Never the message text: the audit log is read more widely than the conversation."""
+    db.add(AuditLog(user_id=actor_id, action=action, target_table=table, target_id=target_id if target_id is not None else t.thread_id,
+                    description=description, log_type="operation", old_values=old,
+                    new_values={"thread_id": t.thread_id, "report_id": t.report_id, **(new or {})}))
 
 
 def ended_reason(db: Session, t: CaseMessageThread) -> Optional[str]:
     """Why nobody can write in this thread any more, or None while it is open. A thread ends when it is closed or when a report of it is."""
     if t.status == "closed":
         return t.close_reason or "This conversation is closed."
-    if any(case_state.is_closed(r) for r in reports_of(db, t)):
-        return "The report is closed, so this conversation has ended."
+    closed = [r for r in reports_of(db, t) if case_state.is_closed(r)]
+    if closed:
+        return case_closed_reason(closed[0])
     return None
 
 
@@ -99,7 +162,7 @@ def access(db: Session, t: CaseMessageThread, user: User) -> str:
     'staff' (a Leader of the thread's subdivision, or the Administrator, on a Leader-to-resident direct thread)
     or 'member' (a resident participant in a direct or resident-to-resident bridge thread). Anybody else is told it does not exist.
     """
-    if t.kind == "direct" and LP.is_leader_of(user, t.subdivision_id):
+    if t.kind in STAFF_KINDS and LP.is_leader_of(user, t.subdivision_id):
         return "staff"
     member = _member(db, t, user.user_id)
     if member is not None and member.role != LEADER and user.role_id == 1:
@@ -169,6 +232,101 @@ def open_direct(db: Session, report: Report, actor: User, party: str) -> CaseMes
     return t
 
 
+def _resident_role(db: Session, report: Report, resident: User) -> Optional[str]:
+    """The resident's part in their own report (owner, reporter or finder), or None when the report is not theirs."""
+    lost = _is_lost(report)
+    if lost:
+        try:
+            owner, _ = resident_of(db, report, "owner")
+            if owner.user_id == resident.user_id:
+                return OWNER
+        except HTTPException:
+            pass
+    if report.user_id == resident.user_id:
+        return REPORTER if lost else (FINDER if V.category_family(_category(report)) == V.FOUND_ANIMAL else REPORTER)
+    return None
+
+
+def _report_subject(report: Report) -> str:
+    cat = _category(report)
+    return (f"Report {report_ref(report)}" + (f": {cat}" if cat else ""))[:MAX_SUBJECT]
+
+
+def open_for_resident(db: Session, report_id: int, resident: User) -> CaseMessageThread:
+    """
+    "Message Subdivision Administration" from the resident's own report. One OPEN conversation per resident and report: asking again
+    (or after the Leader already opened one with them) returns the same one. Refused for a closed report, whose conversations are
+    read-only; the resident starts a general conversation or a new report instead.
+    """
+    if resident.role_id != 1:
+        raise HTTPException(status_code=403, detail="Only residents start a conversation from their report.")
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    role = _resident_role(db, report, resident) if report is not None else None
+    if report is None or role is None:
+        raise HTTPException(status_code=404, detail="Report not found.")
+    if not report.subdivision_id:
+        raise HTTPException(status_code=422, detail="This report has no subdivision, so there is no Subdivision Administration to message.")
+    report = LP.lock_case(db, report.report_id)      # serializes two taps on the button: one conversation, not two
+    if report.duplicate_of_report_id:
+        raise HTTPException(status_code=409, detail="This report was merged into another report. Message the administration from that report instead.")
+    if case_state.is_closed(report):
+        raise HTTPException(status_code=409, detail="This report is closed, so its conversation is read-only. "
+                                                    "If you have a new concern, start a new conversation or file a new report.")
+    t = (db.query(CaseMessageThread).join(CaseMessageMember, CaseMessageMember.thread_id == CaseMessageThread.thread_id)
+         .filter(CaseMessageThread.kind == "direct", CaseMessageThread.report_id == report.report_id, CaseMessageThread.status == "open",
+                 CaseMessageMember.user_id == resident.user_id).order_by(CaseMessageThread.thread_id).first())
+    if t is not None:
+        if not t.subject:
+            t.subject = _report_subject(report)
+        return t
+    t = CaseMessageThread(subdivision_id=report.subdivision_id, kind="direct", report_id=report.report_id, subject=_report_subject(report),
+                          created_by=resident.user_id)
+    db.add(t)
+    db.flush()
+    _add_member(db, t, resident.user_id, role, report.report_id)
+    L.history(db, report, None, "The resident started a conversation with the Subdivision Administration.")
+    _audit(db, resident.user_id, "CONVERSATION_CREATED", t, f"Resident started a conversation about report #{report.report_id}.",
+           new={"kind": "direct", "status": "open", "associated_report": report_ref(report)})
+    return t
+
+
+def open_general(db: Session, resident: User, subject: str, body: str, client_request_id: Optional[str] = None) -> CaseMessageThread:
+    """A resident's conversation with the Subdivision Administration about no particular report. It opens with its first message."""
+    if resident.role_id != 1:
+        raise HTTPException(status_code=403, detail="Only residents start a conversation with the Subdivision Administration.")
+    if not resident.subdivision_id:
+        raise HTTPException(status_code=422, detail="Your account is not linked to a subdivision yet, so there is no administration to message.")
+    title = " ".join((subject or "").split())
+    if not title:
+        raise HTTPException(status_code=422, detail="Add a subject for the conversation.")
+    if len(title) > MAX_SUBJECT:
+        raise HTTPException(status_code=422, detail=f"A subject can be at most {MAX_SUBJECT} characters.")
+    if not (body or "").strip():
+        raise HTTPException(status_code=422, detail="Write a message first.")
+    if client_request_id:
+        existing = db.query(CaseMessage).filter(CaseMessage.client_request_id == client_request_id).first()
+        if existing is not None:
+            t = db.get(CaseMessageThread, existing.thread_id)
+            if t is None or existing.sender_id != resident.user_id or t.kind != "general":
+                raise HTTPException(status_code=409, detail="This submission id was already used for another message.")
+            return t
+    open_count = (db.query(func.count(CaseMessageThread.thread_id))
+                  .join(CaseMessageMember, CaseMessageMember.thread_id == CaseMessageThread.thread_id)
+                  .filter(CaseMessageThread.kind == "general", CaseMessageThread.status == "open", CaseMessageMember.user_id == resident.user_id)
+                  .scalar() or 0)
+    if open_count >= MAX_OPEN_GENERAL:
+        raise HTTPException(status_code=409, detail=f"You already have {MAX_OPEN_GENERAL} open general conversations. "
+                                                    "Continue one of them, or wait until the administration closes one.")
+    t = CaseMessageThread(subdivision_id=resident.subdivision_id, kind="general", report_id=None, subject=title, created_by=resident.user_id)
+    db.add(t)
+    db.flush()
+    _add_member(db, t, resident.user_id, RESIDENT)
+    _audit(db, resident.user_id, "CONVERSATION_CREATED", t, "Resident started a general conversation with the Subdivision Administration.",
+           new={"kind": "general", "status": "open"})
+    send(db, t, resident, body, client_request_id)
+    return t
+
+
 def _bridge_text(owner: User, finder: User, pet: Optional[str]) -> str:
     return (f"The Subdivision Leader linked two reports that may be the same animal: {_first(owner)}'s missing pet{f' ({pet})' if pet else ''} and {_first(finder)}'s "
             f"found animal. {_first(owner)} and {_first(finder)} can message each other directly here. Phone numbers and addresses stay private unless you choose to share them. "
@@ -214,8 +372,10 @@ def close_bridges(db: Session, match_id: int, actor: User, text: str, announce: 
     closed = 0
     for t in db.query(CaseMessageThread).filter(CaseMessageThread.kind == "bridge", CaseMessageThread.match_id == match_id,
                                                CaseMessageThread.status == "open").populate_existing().with_for_update().all():
-        t.status, t.closed_at, t.closed_by, t.close_reason = "closed", db_now(db), actor.user_id, text
+        t.status, t.closed_at, t.closed_by, t.close_reason, t.close_trigger = "closed", db_now(db), actor.user_id, text, CLOSED_BY_UNLINK
         _system(db, t, text)
+        _audit(db, actor.user_id, "CONVERSATION_CLOSED", t, "A lost/found conversation closed because the link between its reports was removed.",
+               old={"status": "open"}, new={"status": "closed", "trigger": CLOSED_BY_UNLINK, "reason": text})
         closed += 1
         if announce:
             residents = [m.user_id for m in _members(db, t) if m.role != LEADER]
@@ -225,10 +385,15 @@ def close_bridges(db: Session, match_id: int, actor: User, text: str, announce: 
 
 def close_for_report(db: Session, report_id: int, actor_id: Optional[int] = None, reason: Optional[str] = None) -> int:
     """
-    Automatically close every open conversation (both Subdivision Leader-to-resident direct chats and resident-to-resident bridges)
-    involving a report when that report/case is closed.
+    Automatically close every open conversation (Leader/Administration-to-resident direct conversations, including those a resident started
+    from the report, and resident-to-resident bridges) involving a report when that report/case is resolved or closed. General conversations
+    have no report and are never touched. Runs inside the transaction that closes the case, so both commit together or not at all.
+
+    Idempotent: only OPEN rows change, so a repeated status update (Resolved, then Closed) records no second closure. Each closure leaves a
+    system line in the conversation (what both sides read) and one audit row (previous and new status, reason, trigger, who).
     """
-    text = (reason or "").strip() or "The report is closed, so this conversation has ended."
+    report = db.get(Report, report_id)
+    text = (reason or "").strip() or case_closed_reason(report)
     now = db_now(db)
     closed = 0
     with db.no_autoflush:
@@ -243,9 +408,40 @@ def close_for_report(db: Session, report_id: int, actor_id: Optional[int] = None
             t.closed_at = t.closed_at or now
             t.closed_by = t.closed_by or actor_id
             t.close_reason = t.close_reason or text
+            t.close_trigger = t.close_trigger or CLOSED_BY_CASE
             db.add(CaseMessage(thread_id=t.thread_id, sender_id=None, kind="system", body=t.close_reason, created_at=now))
+            label = case_status_label(report) or "Closed"
+            db.add(AuditLog(user_id=actor_id, action="CONVERSATION_AUTO_CLOSED", target_table="case_message_threads", target_id=t.thread_id,
+                            description=f"Conversation closed automatically because report #{report_id} was {label.lower()}.",
+                            log_type="operation", old_values={"status": "open"},
+                            new_values={"thread_id": t.thread_id, "report_id": report_id, "status": "closed", "reason": t.close_reason,
+                                        "trigger": CLOSED_BY_CASE, "triggering_event": f"report status changed to {label}",
+                                        "closed_by": actor_id if actor_id else "system"}))
             closed += 1
     return closed
+
+
+def close_by_staff(db: Session, t: CaseMessageThread, actor: User, reason: Optional[str] = None) -> CaseMessageThread:
+    """A Leader (or the Administrator) ends a conversation by hand: it becomes read-only for everyone, the messages stay. Residents cannot."""
+    t, mode = thread_for(db, t.thread_id, actor, write=True)
+    if mode != "staff":
+        raise HTTPException(status_code=403, detail="Only the Subdivision Administration can close a conversation.")
+    if t.status == "closed":
+        return t
+    if t.kind == "direct":
+        for r in reports_of(db, t):
+            L.require_case_handler(r, actor)
+    note = " ".join((reason or "").split())[:300]
+    text = "The Subdivision Administration closed this conversation." + (f" {note}" if note else "") + " You can still view your previous messages."
+    t.status, t.closed_at, t.closed_by, t.close_reason, t.close_trigger = "closed", db_now(db), actor.user_id, text, CLOSED_BY_STAFF
+    _system(db, t, text)
+    _audit(db, actor.user_id, "CONVERSATION_CLOSED", t, "The Subdivision Administration closed a conversation by hand.",
+           old={"status": "open"}, new={"status": "closed", "trigger": CLOSED_BY_STAFF, "reason": text})
+    for m in _members(db, t):
+        if m.role != LEADER:
+            _notify_once(db, m.user_id, "case_message", t.thread_id, "Your conversation was closed",
+                         "The Subdivision Administration closed the conversation. You can still read it.")
+    return t
 
 
 # ----------------------------------------------------------------------------------------------------------- sending
@@ -268,25 +464,126 @@ def _log_contact(db: Session, t: CaseMessageThread, leader: User, text: str) -> 
         L.history(db, r, leader, f"The Subdivision Leader sent a message to the {who_label}.")
 
 
+def _notify_once(db: Session, user_id: int, ntype: str, related_id: int, title: str, message: str) -> None:
+    """
+    One unread notification per person and conversation: a second message before the first notification is read refreshes it (newest
+    title, back on top) instead of stacking another. A read notification is left alone, and the next message makes a new one.
+    """
+    with db.no_autoflush:
+        pending = (db.query(Notification).filter(Notification.user_id == user_id, Notification.type == ntype, Notification.related_id == related_id,
+                                                 Notification.is_read.is_(False)).order_by(Notification.notification_id.desc()).first())
+    if pending is not None:
+        pending.title, pending.message, pending.created_at = title[:255], message[:1000], db_now(db)
+        return
+    db.add(Notification(user_id=user_id, type=ntype, related_id=related_id, title=title[:255], message=message[:1000]))
+
+
 def _notify_after(db: Session, t: CaseMessageThread, sender: User, text: str) -> None:
     staff = LP.is_leader_of(sender, t.subdivision_id)
     members = _members(db, t)
     # Notifications may appear outside the authenticated conversation (including device previews). A sender may choose to
     # write their own contact/care address, but it must stay in the participant-scoped message and summary endpoints.
     preview = "Open the conversation to read the new message."
-    if t.kind == "direct" and not staff:
+    report = db.get(Report, t.report_id) if t.report_id else None
+    regarding = f" regarding Report {report_ref(report)}" if report is not None else ""
+    if t.kind in STAFF_KINDS and not staff:
         leaders = [m.user_id for m in members if m.role == LEADER and m.user_id != sender.user_id]
-        if not leaders:
+        assigned = report.assigned_leader_id if report is not None else None
+        if assigned and assigned != sender.user_id:
+            leaders = [assigned]             # an assigned case is the assigned officer's to answer
+        elif not leaders:
             leaders = [u for u in LP.leader_ids(db, t.subdivision_id) if u != sender.user_id]
-        for uid in leaders:
-            # a Leader opens the case by its report id
-            db.add(Notification(user_id=uid, type="case_message", related_id=t.report_id, title=f"{_first(sender)} replied"[:255],
-                                message=preview))
+        for uid in dict.fromkeys(leaders):
+            # opens the conversation in the Messages inbox (its related id is the thread's), which links to the case
+            _notify_once(db, uid, RESIDENT_MESSAGE, t.thread_id, f"New message received from a resident{regarding}.", preview)
     for m in members:
         if m.role == LEADER or m.user_id == sender.user_id:
             continue
-        title = "Message from your Subdivision Leader" if staff else f"{_first(sender)} wrote in your conversation"
-        db.add(Notification(user_id=m.user_id, type="case_message", related_id=t.thread_id, title=title[:255], message=preview[:1000]))
+        if staff and t.created_by == m.user_id:
+            title = f"Subdivision Administration has replied to your message{regarding}."
+        elif staff:
+            title = "Message from your Subdivision Leader"
+        else:
+            title = f"{_first(sender)} wrote in your conversation"
+        _notify_once(db, m.user_id, "case_message", t.thread_id, title, preview)
+
+
+def _append_report_link(db: Session, t: CaseMessageThread, text: str) -> str:
+    """
+    When Subdivision Administration sends a message in a report-linked thread, include a direct link
+    to the corresponding report (only when the recipient is authorized to view it) or to the pending
+    ownership verification page, unless a link is already present.
+    """
+    if not t.report_id or t.kind == "general":
+        return text
+    if "/resident-app/reports/" in text or "/resident-app/ownership/" in text:
+        return text
+    report = db.get(Report, t.report_id)
+    if report is None:
+        return text
+
+    members = [m for m in _members(db, t) if m.role != LEADER]
+    link: Optional[str] = None
+    label = "View report details"
+
+    for m in members:
+        u = db.get(User, m.user_id)
+        if u is None:
+            continue
+        if report_visibility.viewer_access(db, u, report) != report_visibility.NONE:
+            ref = report_ref(report)
+            if ref:
+                link = f"/resident-app/reports/{ref}"
+                break
+        if m.report_id and m.report_id != report.report_id:
+            own = db.get(Report, m.report_id)
+            if own is not None and report_visibility.viewer_access(db, u, own) != report_visibility.NONE:
+                ref = report_ref(own)
+                if ref:
+                    link = f"/resident-app/reports/{ref}"
+                    break
+
+    if link is None:
+        from app.models.pet_match_confirmation import PetMatchConfirmationRequest
+        req = (
+            db.query(PetMatchConfirmationRequest)
+            .filter(PetMatchConfirmationRequest.thread_id == t.thread_id)
+            .order_by(PetMatchConfirmationRequest.request_id.desc())
+            .first()
+        )
+        if req is not None:
+            link = f"/resident-app/ownership/{req.request_id}"
+            label = "Review and respond"
+
+    if not link or link in text:
+        return text
+    tail = f"\n\n{label}: {link}"
+    return text[: max(0, MAX_BODY - len(tail))].rstrip() + tail
+
+
+def _thread_animal_photos(db: Session, t: CaseMessageThread) -> List[str]:
+    """Return up to 2 image URLs for the animal(s) associated with a report-linked thread."""
+    if not t.report_id or t.kind == "general":
+        return []
+    photos: List[str] = []
+    report_ids = [t.report_id]
+    if t.related_report_id and t.related_report_id != t.report_id:
+        report_ids.append(t.related_report_id)
+        per_report = 1
+    else:
+        per_report = 2
+    for rid in report_ids:
+        rows = (
+            db.query(ReportMedia.file_url)
+            .filter(ReportMedia.report_id == rid, ReportMedia.media_type == "Image")
+            .order_by(ReportMedia.media_id.asc())
+            .limit(per_report)
+            .all()
+        )
+        for (url,) in rows:
+            if url and url not in photos:
+                photos.append(url)
+    return photos[:2]
 
 
 def send(db: Session, t: CaseMessageThread, sender: User, body: str, client_request_id: Optional[str] = None) -> CaseMessage:
@@ -300,6 +597,7 @@ def send(db: Session, t: CaseMessageThread, sender: User, body: str, client_requ
         for r in reports_of(db, t):
             L.require_case_handler(r, sender)
             L.require_not_merged(r)
+        text = _append_report_link(db, t, text)
     if client_request_id:
         existing = db.query(CaseMessage).filter(CaseMessage.client_request_id == client_request_id).with_for_update().first()
         if existing is not None:
@@ -321,11 +619,15 @@ def send(db: Session, t: CaseMessageThread, sender: User, body: str, client_requ
             return existing
         raise HTTPException(status_code=409, detail="This submission id was already used for another message.")
     if member is not None:
+        member.last_delivered_message_id = msg.message_id
         member.last_read_message_id = msg.message_id
     if mode == "staff":
         _log_contact(db, t, sender, text)
-        L.audit(db, sender, "CASE_MESSAGE_SENT", reports_of(db, t)[0], "The Subdivision Leader sent a case message.",
-                table="case_messages", target_id=msg.message_id, new={"thread_id": t.thread_id})
+        _audit(db, sender.user_id, "CASE_MESSAGE_SENT", t, "The Subdivision Administration sent a message.", table="case_messages",
+               target_id=msg.message_id, new={"message_id": msg.message_id, "delivery_status": "sent"})
+    else:
+        _audit(db, sender.user_id, "CASE_MESSAGE_SENT", t, "A resident sent a message.", table="case_messages",
+               target_id=msg.message_id, new={"message_id": msg.message_id, "delivery_status": "sent"})
     _notify_after(db, t, sender, text)
     return msg
 
@@ -342,8 +644,14 @@ def mark_read(db: Session, t: CaseMessageThread, viewer: User, through_message_i
                                               CaseMessageMember.user_id == viewer.user_id).populate_existing().with_for_update().first()
     if member is None and mode == "staff":
         member = _add_member(db, t, viewer.user_id, LEADER)
-    if member is not None and member.last_read_message_id < last:
-        member.last_read_message_id = last
+    if member is not None:
+        if (member.last_delivered_message_id or 0) < last:
+            member.last_delivered_message_id = last
+        if member.last_read_message_id < last:
+            prev_read = member.last_read_message_id
+            member.last_read_message_id = last
+            _audit(db, viewer.user_id, "CASE_MESSAGE_READ", t, "Recipient opened and read conversation messages.",
+                   old={"last_read_message_id": prev_read}, new={"last_read_message_id": last, "delivery_status": "read"})
 
 
 # ---------------------------------------------------------------------------------------------------------------- views
@@ -371,8 +679,14 @@ def _titles(db: Session, t: CaseMessageThread, viewer: User) -> Tuple[str, str]:
     """What a resident reads as the name of a conversation: about THEIR report, never about the other resident's."""
     mine = _member(db, t, viewer.user_id)
     role = mine.role if mine is not None else REPORTER
-    lost = db.get(Report, t.report_id)
+    lost = db.get(Report, t.report_id) if t.report_id else None
     pet = _pet_name(lost) if lost is not None else None
+    if t.kind == "general":
+        return t.subject or "Conversation with the Subdivision Administration", "General conversation with the Subdivision Administration"
+    if role == PET_OWNER:
+        return t.subject or "Ownership verification", "Ownership verification with the Subdivision Administration"
+    if t.kind == "direct" and lost is not None and not _is_lost(lost) and V.category_family(_category(lost)) != V.FOUND_ANIMAL:
+        return t.subject or _report_subject(lost), "Conversation with the Subdivision Administration"
     if t.kind == "direct":
         about = (f"About {pet}" if pet else "About your missing pet") if role in (OWNER, REPORTER) and lost is not None and _is_lost(lost) else "About the animal you found"
         return "Message from your Subdivision Leader", about
@@ -390,15 +704,30 @@ def summary(db: Session, t: CaseMessageThread, viewer: User, mode: Optional[str]
     why = ended_reason(db, t)
     can_reply = why is None
     if staff:
-        can_reply = (t.kind == "direct"
+        can_reply = (t.kind in STAFF_KINDS
                      and can_reply
                      and all((viewer.role_id != 2 or not r.assigned_leader_id or r.assigned_leader_id == viewer.user_id)
                              and not r.duplicate_of_report_id for r in reports_of(db, t)))
     mine = next((m for m in members if m.user_id == viewer.user_id), None)
-    title, subtitle = _titles(db, t, viewer) if not staff else ("Owner and finder" if t.kind == "bridge" else "Message", "")
+    if mine is not None and last is not None and (getattr(mine, "last_delivered_message_id", 0) or 0) < last.message_id:
+        mine.last_delivered_message_id = last.message_id
+        db.flush()
+    report = db.get(Report, t.report_id) if t.report_id else None
+    if staff:
+        residents = [m for m in members if m.role != LEADER]
+        names = [(u.name if u is not None else "A resident") for u in (db.get(User, m.user_id) for m in residents)]
+        title = ("Owner and finder" if t.kind == "bridge"
+                 else t.subject or (_report_subject(report) if report is not None else "Message"))
+        subtitle = ", ".join(f"{n} ({ROLE_LABEL[m.role].lower()})" for n, m in zip(names, residents)) if t.kind != "bridge" else ""
+    else:
+        title, subtitle = _titles(db, t, viewer)
     is_private_bridge = staff and t.kind == "bridge"
     return {
         "thread_id": t.thread_id, "kind": t.kind, "status": "closed" if why else "open", "can_reply": can_reply, "ended_reason": why,
+        "subject": t.subject, "report_ref": report_ref(report), "report_category": _category(report),
+        "case_status": case_status_label(report), "closed_at": (t.closed_at or (report.closed_at if report is not None else None)) if why else None,
+        "close_trigger": (t.close_trigger or CLOSED_BY_CASE) if why else None,
+        "started_by_resident": bool(t.created_by and any(m.user_id == t.created_by and m.role != LEADER for m in members)),
         "report_id": t.report_id, "related_report_id": t.related_report_id, "match_id": t.match_id, "link_id": t.link_id,
         "my_report_id": mine.report_id if mine is not None else None,
         "title": title, "subtitle": why if (why and not staff and t.kind == "bridge") else subtitle,
@@ -413,7 +742,8 @@ def view(db: Session, t: CaseMessageThread, viewer: User, mode: Optional[str] = 
     mode = mode or access(db, t, viewer)
     staff = mode == "staff"
     out = summary(db, t, viewer, mode)
-    roles = {m.user_id: m for m in _members(db, t)}
+    all_members = _members(db, t)
+    roles = {m.user_id: m for m in all_members}
     rows = db.query(CaseMessage).filter(CaseMessage.thread_id == t.thread_id).order_by(CaseMessage.message_id.desc()).limit(limit).all()[::-1]
     senders = {u.user_id: u for u in db.query(User).filter(User.user_id.in_({r.sender_id for r in rows if r.sender_id})).all()} if rows else {}
     messages = []
@@ -427,9 +757,26 @@ def view(db: Session, t: CaseMessageThread, viewer: User, mode: Optional[str] = 
             name = "Subdivision Leader"
         else:
             name = (u.name if u is not None else "A resident") if staff else _first(u)
+        # Delivery status (Sent -> Delivered -> Read) based on recipient members' actual retrieval & read watermarks
+        recipients = [
+            m for m in all_members
+            if m.user_id != r.sender_id and ((m.role != LEADER) if role in (LEADER, "staff") else (m.role == LEADER or t.kind == "bridge"))
+        ]
+        if not recipients:
+            recipients = [m for m in all_members if m.user_id != r.sender_id]
+        if any((m.last_read_message_id or 0) >= r.message_id for m in recipients):
+            delivery_status = "read"
+        elif any((getattr(m, "last_delivered_message_id", 0) or 0) >= r.message_id for m in recipients):
+            delivery_status = "delivered"
+        else:
+            delivery_status = "sent"
         messages.append({"message_id": r.message_id, "kind": r.kind, "sender_id": r.sender_id, "sender_name": name, "sender_role": role,
-                         "label": ROLE_LABEL.get(role, ""), "mine": r.sender_id == viewer.user_id, "body": r.body, "at": r.created_at})
+                         "label": ROLE_LABEL.get(role, ""), "mine": r.sender_id == viewer.user_id, "body": r.body, "at": r.created_at,
+                         "delivery_status": delivery_status})
     out["messages"] = messages
+    out["report_photos"] = _thread_animal_photos(db, t)
+    from app.services import owner_verification
+    out["verification"] = owner_verification.for_thread(db, t, viewer, staff)
     return out
 
 
@@ -455,3 +802,57 @@ def threads_of_user(db: Session, user: User, limit: int = 50) -> List[Dict[str, 
         out.append(summary(db, t, user, mode))
     out.sort(key=lambda s: (str(s["last_at"]), s["thread_id"]), reverse=True)
     return out[:limit]
+
+
+# ------------------------------------------------------------------------------------------------- the staff inbox
+INBOX_FILTERS = ("all", "unread", "open", "closed")
+
+
+def _staff_scope(db: Session, viewer: User):
+    """The conversations a Leader answers: direct and general ones of their own subdivision (the Administrator: every subdivision)."""
+    if viewer.role_id not in (2, 4):
+        raise HTTPException(status_code=403, detail="Only the Subdivision Administration can open the Messages inbox.")
+    q = db.query(CaseMessageThread).filter(CaseMessageThread.kind.in_(STAFF_KINDS))
+    if viewer.role_id == 2:
+        if not viewer.subdivision_id:
+            return q.filter(CaseMessageThread.thread_id.is_(None))
+        q = q.filter(CaseMessageThread.subdivision_id == viewer.subdivision_id)
+    return q
+
+
+def inbox(db: Session, viewer: User, status: str = "all", search: Optional[str] = None, limit: int = 200) -> Dict[str, Any]:
+    """
+    The Messages inbox: every resident conversation of the Leader's subdivision, the most recent first, with counts for the filter chips.
+    `status` is all | unread | open | closed. `search` matches the subject, the report reference (SS-2026-0017 or 17) and the resident's name.
+    """
+    if status not in INBOX_FILTERS:
+        raise HTTPException(status_code=422, detail="Filter by all, unread, open or closed.")
+    rows = _staff_scope(db, viewer).order_by(CaseMessageThread.thread_id.desc()).limit(1000).all()
+    items = [summary(db, t, viewer, "staff") for t in rows]
+    counts = {"all": len(items), "unread": sum(1 for i in items if i["unread"] > 0),
+              "open": sum(1 for i in items if i["status"] == "open"), "closed": sum(1 for i in items if i["status"] == "closed")}
+    needle = " ".join((search or "").lower().split())
+    if needle:
+        digits = needle.rsplit("-", 1)[-1].lstrip("0") if needle.replace("-", "").replace("ss", "").isdigit() else None
+
+        def hit(i: Dict[str, Any]) -> bool:
+            hay = " ".join(str(x or "") for x in (i["title"], i["subject"], i["report_ref"], i["report_category"],
+                                                  *[p["name"] for p in i["people"]])).lower()
+            return needle in hay or (digits is not None and i["report_id"] is not None and str(i["report_id"]) == digits)
+        items = [i for i in items if hit(i)]
+    if status == "unread":
+        items = [i for i in items if i["unread"] > 0]
+    elif status in ("open", "closed"):
+        items = [i for i in items if i["status"] == status]
+    items.sort(key=lambda i: (str(i["last_at"]), i["thread_id"]), reverse=True)
+    return {"items": items[:limit], "counts": counts}
+
+
+def unread_total(db: Session, viewer: User) -> Dict[str, int]:
+    """How many conversations have unread messages, for the Messages badge (a resident: their own; staff: the inbox)."""
+    if viewer.role_id in (2, 4):
+        rows = _staff_scope(db, viewer).filter(CaseMessageThread.status == "open").all()
+        convs = [summary(db, t, viewer, "staff") for t in rows]
+    else:
+        convs = threads_of_user(db, viewer, limit=500)
+    return {"conversations": sum(1 for c in convs if c["unread"] > 0), "messages": sum(int(c["unread"]) for c in convs)}

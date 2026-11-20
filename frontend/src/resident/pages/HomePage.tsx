@@ -145,14 +145,17 @@ export default function HomePage() {
       </Section>
       )}
 
-      {recentConversations.length > 0 ? (
-        <Section title="Recent conversations">
+      <Section title="Recent conversations" action={<Link to={residentPath('/messages')} className="rs-seeall">All messages</Link>}>
+        {recentConversations.length > 0 ? (
           <div className="rs-list">
-            {recentConversations.map((c) => <Row key={c.id} to={residentPath(`/conversations/${c.id}`)} icon={MessageSquare} title={c.title} meta={`${c.status === 'closed' ? 'Conversation ended' : c.subtitle} · ${relative(c.lastAt, now)}`} />)}
+            {recentConversations.map((c) => <Row key={c.id} to={residentPath(`/conversations/${c.id}`)} icon={MessageSquare} title={c.title} meta={`${c.status === 'closed' ? 'Closed' : c.subtitle} · ${relative(c.lastAt, now)}`} />)}
           </div>
-          <p className="rs-hint">You can also reopen conversations from the report they belong to.</p>
-        </Section>
-      ) : null}
+        ) : (
+          <div className="rs-list">
+            <Row to={residentPath('/messages')} icon={MessageSquare} title="Message your Subdivision Administration" meta="Ask a question or follow up on one of your reports" />
+          </div>
+        )}
+      </Section>
 
       <Section title="In your community" action={<Link to={residentPath('/community')} className="rs-seeall">See all</Link>}>
         {community.length === 0 ? <p className="rs-sub">Nothing new from neighbours right now.</p> : community.map((n) => <NoticeCard key={n.id} notice={n} />)}

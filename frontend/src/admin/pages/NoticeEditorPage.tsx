@@ -36,10 +36,14 @@ function initialForm(existing: Notice | undefined, from: Case | undefined): Form
   if (from) {
     const type: NoticeType = from.category === 'found_animal' ? 'found_animal' : from.category === 'safety' ? 'safety_advisory' : 'lost_pet';
     const animal = ANIMAL_TYPES[from.animal.type].toLowerCase();
+    const area = from.location.area.split(' · ')[0];
     return {
-      type, caseId: from.id, media: [], description: '',
-      title: type === 'lost_pet' ? `Lost ${animal}` : type === 'found_animal' ? `Found ${animal}` : 'Safety reminder',
-      location: `Near ${from.location.area.split(' · ')[0]}`,
+      type, caseId: from.id, media: [],
+      description: type === 'safety_advisory'
+        ? `SAFETY ADVISORY: A potentially dangerous ${animal} has been reported near ${area}. Residents are advised to avoid approaching the animal, keep children and pets away from the area, and remain cautious. Subdivision security personnel have been notified for appropriate coordination.`
+        : '',
+      title: type === 'lost_pet' ? `Lost ${animal}` : type === 'found_animal' ? `Found ${animal}` : `Safety advisory: ${ANIMAL_TYPES[from.animal.type]}`,
+      location: `Near ${area}`,
     };
   }
   return { type: 'lost_pet', title: '', description: '', location: '', caseId: '', media: [] };

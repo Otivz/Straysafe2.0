@@ -207,9 +207,11 @@ check("a conversation that does not exist is 404", client.get("/case-messages/99
 # ---------------------------------------------------------------- the reply
 res = say(rita, tid, "She wears a green collar with a bell. Please call me on 0917 111 0001.")
 check("the resident replies (201); the Leader is the other side", res.status_code == 201 and [m["mine"] for m in res.json()["messages"]] == [False, True], res.text[:300])
-n = notes(leader.user_id, "case_message")
-check("the Leader is notified of the reply, and the notification opens the CASE (its related id is the report's)", len(n) == 1 and n[0].related_id == pepper_report
-      and n[0].title == "Rita replied" and n[0].message == "Open the conversation to read the new message.", str([(x.title, x.related_id, x.message) for x in n]))
+n = notes(leader.user_id, "resident_message")
+check("the Leader is notified of the reply, and the notification opens the CONVERSATION in the Messages inbox (its related id is the thread's)",
+      len(n) == 1 and n[0].related_id == tid and n[0].title.startswith("New message received from a resident regarding Report SS-")
+      and n[0].message == "Open the conversation to read the new message." and PC.notification_link(2, "resident_message", tid) == f"/messages/{tid}",
+      str([(x.title, x.related_id, x.message) for x in n]))
 check("the Leader's case record shows one new message", [t["unread"] for t in client.get(f"/cases/{pepper_report}", headers=H(leader)).json()["threads"]] == [1])
 check("a resident's own words are NOT added to the contact log (it is the Leader's record of what the Leader did)", len(contacts(pepper_report)) == 1)
 check("the lock screen never shows the phone number a resident typed", "0917" not in PC.push_text(n[0].title, "She wears a collar. Call 0917 111 0001")[1])
@@ -432,7 +434,7 @@ private_body = "Meet at Block 99 Lot 123 Acacia Street; call 0917 999 1234."
 check("participants may deliberately write private arrangements inside their authorized conversation", say(leader, fresh_thread, private_body, client_request_id="private-arrangements-1").status_code == 201)
 check("resident notification payload omits the message's phone and care/home address", notes(rita.user_id, "case_message")[-1].message == "Open the conversation to read the new message.")
 say(rita, fresh_thread, private_body, client_request_id="private-arrangements-2")
-check("Leader notification payload also omits private message text", notes(leader.user_id, "case_message")[-1].message == "Open the conversation to read the new message.")
+check("Leader notification payload also omits private message text", notes(leader.user_id, "resident_message")[-1].message == "Open the conversation to read the new message.")
 check("the participant-scoped conversation summary still carries the actual last message", next(t for t in client.get("/case-messages", headers=H(rita)).json() if t["thread_id"] == fresh_thread)["last_text"] == private_body)
 
 # ============================================================================ 8. multiple Found Animal reporters linked to one Lost Pet stay isolated

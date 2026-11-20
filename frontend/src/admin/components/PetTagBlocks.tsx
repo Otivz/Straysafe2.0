@@ -1,13 +1,10 @@
 import { useEffect, useState } from 'react';
-import { MapPin, Phone, PowerOff, QrCode } from 'lucide-react';
+import { MapPin, Phone, QrCode } from 'lucide-react';
 import { fmtDate, fmtDateTime } from '../../preview/lib/format';
 import { fromServer } from '../../live/dates';
 import { adminApi, type ApiPetTagInfo, type ApiTagFoundReport } from '../live/api';
 import { Badge } from './Badge';
-import { Button } from './Button';
-import { ConfirmDialog } from './Dialog';
 import { Block, Panel } from './layout';
-import { useToast } from './toast';
 
 /**
  * Pet QR tags in the Leader admin (Phase 3 of docs/06-future-proposals/PET_QR_TAGS_PLAN_2026-11-17.md). The Leader sees whether a
@@ -48,12 +45,10 @@ export function TagMessageList({ reports }: { reports: ApiTagFoundReport[] }) {
 
 /** The aside panel on the Leader's pet page. */
 export function PetTagPanel({ petId, petName }: { petId: string; petName: string }) {
-  const toast = useToast();
   const id = Number(petId);
   const [tag, setTag] = useState<ApiPetTagInfo | null>(null);
   const [reports, setReports] = useState<ApiTagFoundReport[]>([]);
   const [failed, setFailed] = useState(false);
-  const [confirm, setConfirm] = useState(false);
 
   useEffect(() => {
     if (!Number.isInteger(id) || id <= 0) return;
@@ -68,33 +63,17 @@ export function PetTagPanel({ petId, petName }: { petId: string; petName: string
   if (!Number.isInteger(id) || id <= 0) return null;
   return (
     <Panel>
-      <Block tight title={<span className="flex items-center gap-2"><QrCode size={14} aria-hidden="true" />QR tag</span>} description="A printed tag on the collar. Anyone who scans it can tell the owner, without seeing who the owner is.">
+      <Block tight title={<span className="flex items-center gap-2"><QrCode size={14} aria-hidden="true" />QR tag</span>} description="A permanent QR tag on the collar. Anyone who scans it can tell the owner, without seeing who the owner is.">
         {failed ? <p className="sa-small sa-text-2">The QR tag could not be loaded.</p> : !tag ? <p className="sa-small sa-text-2">Loading…</p> : (
           <>
             {tag.has_tag ? (
-              <>
-                <p className="flex items-center gap-2"><Badge tone="sage" dot>Has a QR tag</Badge>{tag.created_at ? <span className="sa-meta">since {fmtDate(fromServer(tag.created_at))}</span> : null}</p>
-                {tag.can_disable ? <Button className="mt-3" size="sm" variant="ghost" icon={PowerOff} onClick={() => setConfirm(true)}>Turn off tag</Button> : null}
-              </>
-            ) : <p className="sa-small sa-text-2">{petName} has no active QR tag. Only the owner can make one, from the resident app.</p>}
+              <p className="flex items-center gap-2"><Badge tone="sage" dot>Permanent QR tag active</Badge>{tag.created_at ? <span className="sa-meta">since {fmtDate(fromServer(tag.created_at))}</span> : null}</p>
+            ) : <p className="sa-small sa-text-2">{petName} has no active QR tag.</p>}
             <h3 className="sa-small mt-4 font-semibold">Messages from scans ({reports.length})</h3>
             {reports.length === 0 ? <p className="sa-small sa-text-2">Nobody has sent a message through this pet’s tag.</p> : <div className="mt-2"><TagMessageList reports={reports} /></div>}
           </>
         )}
       </Block>
-      {confirm ? (
-        <ConfirmDialog
-          title={`Turn off ${petName}’s QR tag?`}
-          message="Scanning the printed tag will show “This tag is no longer active”. Use this when a tag is being misused. The owner can make a new tag."
-          confirmLabel="Turn off tag"
-          tone="danger"
-          onConfirm={async () => {
-            setTag(await adminApi.disablePetTag(id));
-            toast.success('QR tag turned off');
-          }}
-          onClose={() => setConfirm(false)}
-        />
-      ) : null}
     </Panel>
   );
 }

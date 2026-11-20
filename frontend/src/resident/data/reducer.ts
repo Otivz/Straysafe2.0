@@ -31,7 +31,8 @@ export type Stamped = ResidentAction & { now: string };
 export const refId = (n: number) => `SS-2026-${String(n).padStart(4, '0')}`;
 
 export const emptyDraft = (kind: ReportKind, category: CategoryId, now: string): Draft => ({
-  kind, category, animalType: '', breed: '', colors: [], petId: null, petName: '', description: '', observedAt: toLocalInput(now), location: null, media: [], extra: '',
+  kind, category, animalType: '', customAnimalType: '', breed: '', colors: [], petId: null, petName: '', description: '', observedAt: toLocalInput(now), location: null, media: [], extra: '', injuredConditions: [], injuredOtherDetail: '',
+  dangerousBehaviors: [], dangerousOtherDetail: '', currentDanger: '', stillInLocation: '', rabiesSymptoms: [], movementDirection: '',
 });
 
 /** Applies the local actions (the draft and the read marks). Every other action is handled by the server, never by this reducer. */

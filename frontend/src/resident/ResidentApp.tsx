@@ -19,6 +19,7 @@ import ProfilePage from './pages/account/ProfilePage';
 import SettingsPage from './pages/account/SettingsPage';
 import WarningsPage from './pages/account/WarningsPage';
 import WarningLetterPage from './pages/account/WarningLetterPage';
+import OwnershipVerificationPage from './pages/reports/OwnershipVerificationPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
@@ -51,6 +52,8 @@ import MyReportsPage from './pages/reports/MyReportsPage';
 import RecoveryPage from './pages/reports/RecoveryPage';
 import ReportDetailsPage from './pages/reports/ReportDetailsPage';
 import ConversationPage from './pages/reports/ConversationPage';
+import MessagesPage from './pages/messages/MessagesPage';
+import NewMessagePage from './pages/messages/NewMessagePage';
 
 /** Signed-in frame: data store + layout. Child routes render inside the layout's <Outlet />. */
 function SignedIn() {
@@ -102,7 +105,10 @@ export default function ResidentApp({ mode }: { mode: ResidentMode }) {
                 <Route path="reports/:reportId" element={<ReportDetailsPage />} />
                 <Route path="reports/:reportId/update" element={<AddUpdatePage />} />
                 <Route path="reports/:reportId/recovered" element={<RecoveryPage />} />
+                <Route path="messages" element={<MessagesPage />} />
+                <Route path="messages/new" element={<NewMessagePage />} />
                 <Route path="conversations/:conversationId" element={<ConversationPage />} />
+                <Route path="ownership/:requestId" element={<OwnershipVerificationPage />} />
 
                 <Route path="community" element={<CommunityPage />} />
                 <Route path="scan" element={<ScanTagPage />} />

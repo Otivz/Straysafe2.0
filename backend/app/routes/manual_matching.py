@@ -442,10 +442,17 @@ def _pet_shared_details(src: Report, pet: Pet, genders: Dict[int, str]) -> List[
     return out
 
 
-def _report_pet_block(db: Session, src: Report) -> Optional[str]:
-    """Why a report can't be matched to a registered pet (it, or its case, already has one), or None."""
+def _report_pet_block(db: Session, src: Report, target_pet_id: Optional[int] = None) -> Optional[str]:
+    """Why a report can't be matched to a registered pet (it, or its case, already has a verified one), or None."""
+    from app.utils import case_state, identity_decision
     if src.pet_id:
-        return f"Report #{src.report_id} is already linked to a registered pet."
+        if target_pet_id is not None and src.pet_id == target_pet_id and case_state.ownership_of(src) != "confirmed":
+            return None
+        if case_state.ownership_of(src) == "confirmed" and identity_decision.is_decided(db, src):
+            return f"Report #{src.report_id} is already verified as a registered pet."
+        if target_pet_id is not None and src.pet_id != target_pet_id and identity_decision.is_decided(db, src):
+            return f"Report #{src.report_id} is already linked to another registered pet."
+        return None
     if case_pet_claims(db, case_members(db, case_root(db, src))):
         return f"Report #{src.report_id}'s case is already tied to a registered pet."
     return None
@@ -743,33 +750,29 @@ class SendConfirmationRequest(BaseModel):
     message: Optional[str] = Field(None, max_length=1000)
 
 
-@router.post("/pet-confirmations")
-def send_pet_confirmation(
-    payload: SendConfirmationRequest,
-    req: Request,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_staff_or_admin),
-):
+def create_confirmation_request(db: Session, current_user: User, report_id: int, pet_id: int, message: Optional[str]):
     """
-    Send Confirmation: ask the registered owner whether the reported animal is their pet. Status becomes Awaiting
-    Owner Confirmation. Nothing is decided; staff can't make a final decision on this pair until the owner says YES.
+    The checks and rows of a new owner-first request, shared by Send Confirmation (below) and Possible Pet Owner Verification
+    (services/owner_verification.py): the report is open, in scope and not tied to a pet; the pet is eligible, in scope, not impounded
+    and has an active owner; no request for the pair is pending or decided. Creates the request (Awaiting Owner Confirmation) and
+    the pair's report_matches row when there is none. Flushes, never commits. Returns (report, pet, request, match).
     """
     from app.routes.matches import is_pet_eligible_for_matching
 
-    rep = db.query(Report).filter(Report.report_id == payload.report_id).with_for_update().first()
+    rep = db.query(Report).filter(Report.report_id == report_id).with_for_update().first()
     if rep is None:
-        raise HTTPException(status_code=404, detail=f"Report #{payload.report_id} not found.")
+        raise HTTPException(status_code=404, detail=f"Report #{report_id} not found.")
     verify_subdivision_scope(current_user, rep.subdivision_id, db=db)
     require_report_in_pool(db, current_user, rep)
     require_review_permission(current_user, rep, db)
     if (rep.current_status_id or 0) in CLOSED_STATUS_IDS or rep.duplicate_of_report_id:
         raise HTTPException(status_code=409, detail=f"Report #{rep.report_id} is closed or merged into another case.")
-    blocked = _report_pet_block(db, rep)
+    blocked = _report_pet_block(db, rep, target_pet_id=pet_id)
     if blocked:
         raise HTTPException(status_code=409, detail=blocked)
-    pet = db.query(Pet).options(joinedload(Pet.owner)).filter(Pet.pet_id == payload.pet_id).with_for_update().first()
+    pet = db.query(Pet).options(joinedload(Pet.owner)).filter(Pet.pet_id == pet_id).with_for_update().first()
     if pet is None:
-        raise HTTPException(status_code=404, detail=f"Registered pet #{payload.pet_id} not found.")
+        raise HTTPException(status_code=404, detail=f"Registered pet #{pet_id} not found.")
     require_pet_in_scope(db, current_user, pet)
     ok, reason = is_pet_eligible_for_matching(pet)
     if not ok:
@@ -784,7 +787,7 @@ def send_pet_confirmation(
     actor_role = ROLE_NAMES.get(current_user.role_id, "Staff Official")
     creq = PetMatchConfirmationRequest(
         report_id=rep.report_id, pet_id=pet.pet_id, owner_id=pet.owner_id, requested_by=current_user.user_id,
-        requested_at=datetime.now(), staff_message=(payload.message or "").strip() or None, status=owner_first.AWAITING,
+        requested_at=datetime.now(), staff_message=(message or "").strip() or None, status=owner_first.AWAITING,
     )
     db.add(creq)
     db.flush()
@@ -809,6 +812,23 @@ def send_pet_confirmation(
     match.owner_verification_requested_at = creq.requested_at
     match.owner_verification_requested_by = current_user.user_id
     match.owner_verification_note = creq.staff_message
+    owner_first.add_event(creq, "requested", current_user, note=creq.staff_message)
+    return rep, pet, creq, match
+
+
+@router.post("/pet-confirmations")
+def send_pet_confirmation(
+    payload: SendConfirmationRequest,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
+):
+    """
+    Send Confirmation: ask the registered owner whether the reported animal is their pet. Status becomes Awaiting
+    Owner Confirmation. Nothing is decided; staff can't make a final decision on this pair until the owner says YES.
+    """
+    rep, pet, creq, match = create_confirmation_request(db, current_user, payload.report_id, payload.pet_id, payload.message)
+    actor_role = ROLE_NAMES.get(current_user.role_id, "Staff Official")
 
     from app.routes.chat import find_match_thread, get_or_create_match_thread
     thread = find_match_thread(match, db) or get_or_create_match_thread(match.match_id, current_user, db)
@@ -909,6 +929,7 @@ def cancel_pet_confirmation(
     creq.cancelled_by = current_user.user_id
     creq.cancelled_at = datetime.now()
     creq.cancel_reason = payload.reason.strip()
+    owner_first.add_event(creq, "cancelled", current_user, note=creq.cancel_reason, previous=owner_first.AWAITING)
     log_activity(
         db=db, action="CANCEL_PET_MATCH_CONFIRMATION", target_table="pet_match_confirmation_requests", target_id=creq.request_id,
         description=f"{current_user.name} cancelled confirmation request #{creq.request_id}: {creq.cancel_reason}",
@@ -1106,20 +1127,19 @@ def _record_pet_decision(payload: ManualDecisionRequest, notes: str, req: Reques
     if pet is None:
         raise HTTPException(status_code=404, detail=f"Registered pet #{payload.pet_id} not found.")
     require_pet_in_scope(db, current_user, pet)
-    if rep.pet_id == pet.pet_id:
-        raise HTTPException(status_code=409, detail=f"Report #{rep.report_id} is already linked to {pet.pet_name}.")
+    from app.utils import case_state
+    if rep.pet_id == pet.pet_id and case_state.ownership_of(rep) == "confirmed":
+        raise HTTPException(status_code=409, detail=f"Report #{rep.report_id} is already verified and linked to {pet.pet_name}.")
     if pet.owner_id is not None:
         creq = owner_first.latest_request(db, rep.report_id, pet.pet_id)
-        if creq is None or creq.status == owner_first.CANCELLED:
+        if creq is None or creq.status in owner_first.ENDED_WITHOUT_ANSWER:
             raise HTTPException(status_code=409, detail=(
                 "Send Confirmation to the owner first. Staff can decide only after the owner confirms this is their pet."))
         if creq.status == owner_first.AWAITING:
             raise HTTPException(status_code=409, detail=(
                 "Awaiting Owner Confirmation: the final decision unlocks after the owner confirms this is their pet."))
-        if creq.status == owner_first.OWNER_REJECTED:
-            if payload.decision == "CONFIRMED_MATCH":
-                raise HTTPException(status_code=409, detail=(
-                    "Owner Rejected: the owner said this is not their pet, so it can't be confirmed. Search for another registered pet."))
+        if creq.status in owner_first.FINALIZABLE:
+            pass
         elif creq.status not in owner_first.FINALIZABLE:
             raise HTTPException(status_code=409, detail=(
                 f"This pair already has a final decision ({owner_first.STATUS_LABELS.get(creq.status, creq.status)})."))

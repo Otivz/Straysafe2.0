@@ -5,6 +5,7 @@ import { reportIdOf } from '../../../live/refs';
 import { fmtDateTime } from '../../../preview/lib/format';
 import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
 import { MapLegend } from '../../../preview/map/MapLegend';
+import { MessageAdminButton } from '../../components/MessageAdminButton';
 import { Screen } from '../../components/Screen';
 import { Callout, ErrorState, LinkButton, ListSkeleton, MediaThumbs, NotFoundState, Row, Section, StatusPill, UpdateTimeline } from '../../components/ui';
 import { CATEGORY_ICON } from '../../components/icons';
@@ -75,6 +76,7 @@ export default function ReportDetailsPage() {
       ) : (
         <>
           <LinkButton variant="primary" block icon={PlusCircle} to={residentPath(`/reports/${report.id}/update`)}>Add information</LinkButton>
+          <MessageAdminButton reportRef={report.id} />
         </>
       )}
     >
@@ -90,18 +92,18 @@ export default function ReportDetailsPage() {
         // a found animal has no review steps to climb: it is followed by the Subdivision Leader until its owner is found
         <div className="rs-row-actions"><span className="rs-pill rs-pill--brand"><span className="rs-pill__dot" aria-hidden="true" />Under monitoring</span><span className="rs-meta">Your Subdivision Leader is following it.</span></div>
       ) : (
-      <section className="rs-stack-sm" aria-label="Status">
-        <div className="rs-row-actions"><StatusPill status={report.status} /></div>
-        <ol className="rs-stepper" aria-label="Progress">
-          {ORDER.map((s, i) => (
-            <li key={s} className={i < rank ? 'is-done' : i === rank ? 'is-current' : undefined} aria-current={i === rank ? 'step' : undefined}>
-              <span className="rs-stepper__bar" aria-hidden="true" />
-              <span className="rs-stepper__label">{STATUS[s].label}</span>
-            </li>
-          ))}
-        </ol>
-        <p className="rs-sub">{STATUS[report.status].hint}</p>
-      </section>
+        <section className="rs-stack-sm" aria-label="Status">
+          <div className="rs-row-actions"><StatusPill status={report.status} /></div>
+          <ol className="rs-stepper" aria-label="Progress">
+            {ORDER.map((s, i) => (
+              <li key={s} className={i < rank ? 'is-done' : i === rank ? 'is-current' : undefined} aria-current={i === rank ? 'step' : undefined}>
+                <span className="rs-stepper__bar" aria-hidden="true" />
+                <span className="rs-stepper__label">{STATUS[s].label}</span>
+              </li>
+            ))}
+          </ol>
+          <p className="rs-sub">{STATUS[report.status].hint}</p>
+        </section>
       )}
 
       {report.complaintVerified && report.status !== 'closed' ? (
@@ -128,7 +130,7 @@ export default function ReportDetailsPage() {
 
       <Section title="Details">
         <dl className="rs-kv">
-          <div><dt>Animal</dt><dd>{ANIMAL_TYPES[report.animalType]}{report.petName ? ` · ${report.petName}` : ''}</dd></div>
+          <div><dt>Animal</dt><dd>{report.customAnimalType || ANIMAL_TYPES[report.animalType]}{report.petName ? ` · ${report.petName}` : ''}</dd></div>
           {report.breed ? <div><dt>Breed</dt><dd>{report.breed}</dd></div> : null}
           {report.colors && report.colors.length > 0 ? (
             <div><dt>Colour or coat</dt><dd><ul className="rs-tags">{report.colors.map((c) => <li key={c}>{c}</li>)}</ul></dd></div>

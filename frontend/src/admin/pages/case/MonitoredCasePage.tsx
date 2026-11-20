@@ -15,6 +15,7 @@ import { Activity, Resolve } from './monitored/Activity';
 import { Alerts } from './monitored/Alerts';
 import HeroBlock from './monitored/Hero';
 import Lane from './monitored/Lane';
+import PossibleOwnersBlock, { CaseWarningsSection } from './PossibleOwnersBlock';
 import { BarangayHelp, LinkedReports, Ownership, Sightings } from './monitored/Sections';
 
 /**
@@ -70,6 +71,10 @@ export default function MonitoredCasePage({ c, detail }: { c: Case; detail: { st
               {c.lostPet?.alertId ? <AlertTagMessages alertId={c.lostPet.alertId} /> : null}
               <LinkedReports c={c} now={now} openDialog={open} />
               <BarangayHelp c={c} openDialog={open} />
+              <PossibleOwnersBlock c={c} variant="section" />
+              <section className="sa-mc-sec" aria-label="Official Warnings">
+                <CaseWarningsSection c={c} />
+              </section>
               {found ? <Ownership c={c} openDialog={open} /> : null}
               <Activity c={c} now={now} />
               <Resolve c={c} openDialog={open} />

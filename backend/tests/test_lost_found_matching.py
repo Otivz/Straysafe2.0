@@ -152,18 +152,31 @@ def F(**kw):
 
 
 same = LFM.compare(F(), F(at=datetime(2026, 11, 10, 20, 0)))
-check("the same kind, colours, size, feature, place and time is a strong match with reasons", same["level"] == "strong" and same["score"] >= LFM.STRONG_FROM and len(same["reasons"]) >= 4, str(same["score"]))
+# Since 2026-11-19 the score is the multi-attribute engine's (utils/match_scoring.py): location, breed, coat, description and the AI photo
+# comparison, each only when both reports say enough. Kind of animal is still a hard rule; time is a check that can hold a pair at Low.
+check("the same kind, colours, size, feature and place is a strong match, with one reason per attribute compared",
+      same["level"] == "strong" and same["score"] >= LFM.STRONG_FROM and len(same["reasons"]) == same["analysis"]["attributes_compared"] >= 3, str(same["score"]))
+check("the breakdown says how much could be compared and what could not (no photo comparison, no breed)",
+      same["analysis"]["coverage"] == 50 and same["analysis"]["attributes"]["visual"]["available"] is False
+      and same["analysis"]["attributes"]["breed"]["available"] is False and len(same["analysis"]["unavailable"]) == 2)
 check("a different kind of animal can never match", LFM.compare(F(), F(species="dog"))["level"] == "none" and "kinds" in LFM.compare(F(), F(species="dog"))["excluded"])
 check("a report that does not say the kind is neither excluded nor credited", LFM.compare(F(species=None), F())["rows"][0]["verdict"] == "unknown")
-check("different colours count against it", LFM.compare(F(), F(colors=["black"]))["score"] < same["score"] - 30)
-check("an animal found BEFORE it was last seen missing is penalised (beyond the clock allowance)",
-      LFM.compare(F(), F(at=datetime(2026, 11, 9, 18, 0)))["score"] < LFM.POSSIBLE_FROM)
+check("different colours count against it (grey vs orange; grey vs black would be similar shades)", LFM.compare(F(), F(colors=["orange"]))["score"] <= same["score"] - 25)
+check("an animal found BEFORE it was last seen missing is never suggested (beyond the clock allowance)",
+      LFM.compare(F(), F(at=datetime(2026, 11, 9, 18, 0)))["level"] == "none"
+      and LFM.compare(F(), F(at=datetime(2026, 11, 9, 18, 0)))["analysis"]["classification"] == "low")
 check("a difference in the clocks of a few hours is not held against it", LFM.compare(F(), F(at=datetime(2026, 11, 10, 14, 0)))["level"] != "none")
 far = LFM.compare(F(), F(lat=14.9, lng=121.1, place="Far away"))
-check("places far apart count against it", far["rows"][5]["verdict"] == "differs" and far["score"] < same["score"])
-check("collar: the same collar helps, a different one counts little, none said is simply not known",
-      LFM.compare(F(collar="green collar"), F(collar="green collar"))["score"] > same["score"] and LFM.compare(F(collar="green collar"), F(collar="red collar"))["rows"][4]["verdict"] == "differs"
+check("places far apart count against it but never reject it on their own", far["rows"][5]["verdict"] == "differs" and far["score"] < same["score"]
+      and far["analysis"]["attributes"]["location"]["score"] > 0 and far["analysis"]["attributes"]["location"]["proximity"] == "Farther Away")
+check("collar: shown side by side; a different one is noted, none said is simply not known",
+      LFM.compare(F(collar="green collar"), F(collar="red collar"))["rows"][4]["verdict"] == "differs"
       and LFM.compare(F(collar="green collar"), F())["rows"][4]["verdict"] == "unknown")
+check("breed and the AI photo comparison have their own rows",
+      [r["key"] for r in same["rows"]][-2:] == ["breed", "visual"])
+with_photo = LFM.compare(F(), F(), visual={"individual_similarity_score": 20, "reason": "different face"})
+check("a weak AI photo comparison pulls the score down (the visual weight is the largest)", with_photo["score"] < same["score"] - 20
+      and with_photo["analysis"]["attributes"]["visual"]["score"] == 20)
 check("text is read into facts: colours, features, a collar, and 'no collar' means none",
       LFM._colors("Light brown and white") == ["tan", "white"] and "notched-ear" in LFM._features("has a notch in his left ear") and LFM._collar("wearing a green collar") == "green collar"
       and LFM._collar("no collar") is None and LFM._collar("wearing a collar") == "collar")
@@ -199,8 +212,14 @@ check("the work queue carries it as a task", [m["match_id"] for m in queue["poss
 detail = client.get(f"/lost-found/matches/{mid}", headers=H(leader)).json()
 check("the review shows both reports side by side with the reasons, who reported them, and the comparison rows",
       detail["lost"]["title"] == "Pepper" and detail["found"]["reporter"]["name"] == "Nina Cruz" and detail["lost"]["reporter"]["phone"] == "09171110001"
-      and [r["key"] for r in detail["rows"]] == ["species", "colors", "size", "features", "collar", "where", "when"] and detail["comparison_reasons"]
+      and [r["key"] for r in detail["rows"]] == ["species", "colors", "size", "features", "collar", "where", "when", "breed", "visual"] and detail["comparison_reasons"]
       and all(r["verdict"] in ("match", "similar", "differs", "unknown") for r in detail["rows"]))
+check("the stored breakdown: five attributes, each scored or marked not available, the coverage, the classification and the algorithm",
+      set(detail["analysis"]["attributes"]) == {"visual", "location", "breed", "coat", "description"} and detail["analysis"]["classification"] == "strong"
+      and detail["algorithm"] == "multi-attribute-v1" and detail["coverage"] == detail["analysis"]["coverage"] and detail["history"] == []
+      and "not a probability of ownership" in detail["analysis"]["disclaimer"] and detail["analysis"].get("computed_on_view") is None)
+check("the location explanation gives the distance, never an address", "approximately" in detail["analysis"]["attributes"]["location"]["explanation"]
+      and "Blk" not in str(detail["analysis"]))
 check("a pair is never suggested twice (scanning again finds nothing new)", client.post("/lost-found/scan", headers=H(leader)).json()["suggested"] == 0 and len(matches()) == 1)
 
 # ============================================================================ 3. confirming

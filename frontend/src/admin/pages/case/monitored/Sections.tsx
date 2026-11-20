@@ -5,11 +5,11 @@ import { adminPath } from '../../../config';
 import { Badge, CaseStatusBadge, OwnershipBadge } from '../../../components/Badge';
 import { Button } from '../../../components/Button';
 import { KindBadge, MatchPhoto } from '../../../components/MatchParts';
-import { REFERRAL_STATUS } from '../../../data/constants';
+import { CaseReferralsSection } from '../../../dialogs/CoordinationDialogs';
 import { useAdminData } from '../../../data/context';
 import { isLinkRecord } from '../../../data/monitored';
 import { caseById, matchesOf, partnerOf, sameReport } from '../../../data/selectors';
-import type { Case, LostPetSighting, PossibleMatch, Referral } from '../../../data/types';
+import type { Case, LostPetSighting, PossibleMatch } from '../../../data/types';
 import AssessmentTab from '../AssessmentTab';
 import type { OpenCaseDialog } from '../dialogState';
 import { useMediaViewer, type LightboxMediaItem } from '../../../components/MediaLightbox';
@@ -150,41 +150,11 @@ export function LinkedReports({ c, now, openDialog }: { c: Case; now: Date; open
   );
 }
 
-function ReferralRow({ r, closed, openDialog }: { r: Referral; closed: boolean; openDialog: OpenCaseDialog }) {
-  const s = REFERRAL_STATUS[r.status];
-  const unsent = r.status === 'to_contact';
-  const last = r.notes[0];
-  return (
-    <li className="sa-mc-row">
-      <div className="min-w-0">
-        <p className="flex flex-wrap items-center gap-2"><span className="sa-semibold">{r.orgName}</span><Badge tone={s.tone} dot>{s.label}</Badge></p>
-        <p className="sa-meta mt-0.5">{unsent ? `Written down ${fmtDateTime(r.referredAt)}` : `Contacted ${fmtDateTime(r.referredAt)}${r.contactPerson ? ` · ${r.contactPerson}` : ''}${r.contactChannel ? ` · ${r.contactChannel}` : ''}`}</p>
-        <p className="mt-1">{r.reason}</p>
-        {last && !unsent ? <p className="sa-small sa-text-2 mt-1"><span className="sa-text-3">{fmtDateTime(last.at)}</span> · {last.text}</p> : null}
-        {r.externalOutcome ? <p className="sa-small mt-1"><span className="sa-semibold">Their outcome:</span> {r.externalOutcome}</p> : null}
-        {r.remainingFollowUp ? <p className="sa-small mt-1"><span className="sa-semibold">Still to do:</span> {r.remainingFollowUp}</p> : null}
-      </div>
-      {/* a call that was only written down is asked about in "Needs you"; an update to one already made is a quiet action here */}
-      {!closed && !unsent && r.orgId === 'barangay' ? <Button size="sm" variant="ghost" onClick={() => openDialog({ kind: 'coordination', referralId: r.id })}>Record update</Button> : null}
-      {r.orgId !== 'barangay' ? <p className="sa-meta">Historical assistance record · read only</p> : null}
-    </li>
-  );
-}
-
-/** The help asked of the Barangay or another organisation, and what came of it. Shown only once someone has been asked; asking is where the situation says "not asked". */
+/** External referrals for this case (Barangay, Veterinary, Animal Control, Welfare Groups) and their status/outcomes. */
 export function BarangayHelp({ c, openDialog }: { c: Case; openDialog: OpenCaseDialog }) {
-  // a call that is only written down is asked about in "Needs you" and is listed here once someone has actually been contacted
-  const asked = c.referrals.filter((r) => r.status !== 'to_contact');
-  if (asked.length === 0) return null;
-  const closed = c.status === 'closed';
   return (
     <section className="sa-mc-sec" aria-labelledby="mc-barangay">
-      <div className="sa-mc-sec__head">
-        <h2 id="mc-barangay" className="sa-mc-sec__title">Help from the Barangay <span className="sa-text-3">{asked.filter((r) => r.orgId === 'barangay').length}</span></h2>
-        {!closed ? <Button variant="link" size="sm" onClick={() => openDialog({ kind: 'referral' })}>Ask for more help</Button> : null}
-      </div>
-      <p className="sa-hint mb-2">The Barangay has no account here, so only the contact you record counts.</p>
-      <ul className="sa-mc-list">{asked.map((r) => <ReferralRow key={r.id} r={r} closed={closed} openDialog={openDialog} />)}</ul>
+      <CaseReferralsSection c={c} openDialog={openDialog} />
     </section>
   );
 }

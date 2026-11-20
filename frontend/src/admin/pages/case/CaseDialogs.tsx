@@ -6,7 +6,7 @@ import { ComplianceDialog, CompleteFollowUpDialog, FollowUpDialog, WarningDialog
 import { AlertDialog, PublishCaseNoticeDialog, StopAlertDialog } from '../../dialogs/AlertDialogs';
 import { EvidenceDialog, NoteDialog, PriorityDialog, StatusDialog } from '../../dialogs/BasicDialogs';
 import { CloseCaseDialog, ReopenDialog } from '../../dialogs/ClosureDialogs';
-import { CoordinationDialog, ReferralDialog } from '../../dialogs/CoordinationDialogs';
+import { CoordinationDialog, ReferralDetailsDialog, ReferralDialog } from '../../dialogs/CoordinationDialogs';
 import { RecordRecoveryDialog, ResolveConversationDialog, ReviewSightingDialog } from '../../dialogs/LostPetDialogs';
 import { MatchCompareDialog } from '../../dialogs/MatchDialogs';
 import { CaseMessagesDialog } from '../../dialogs/CaseMessagesDialog';
@@ -28,7 +28,24 @@ export function CaseDialogs({ c, dialog, onClose }: { c: Case; dialog: CaseDialo
     case 'warning': return <WarningDialog c={c} onClose={onClose} />;
     case 'compliance': return <ComplianceDialog c={c} onClose={onClose} />;
     case 'referral': return <ReferralDialog c={c} onClose={onClose} />;
-    case 'coordination': return <CoordinationDialog c={c} referralId={dialog.referralId} contact={dialog.contact} onClose={onClose} />;
+    case 'referralDetail':
+      return (
+        <ReferralDetailsDialog
+          c={c}
+          referralId={dialog.referralId}
+          onClose={onClose}
+        />
+      );
+    case 'coordination':
+      return (
+        <CoordinationDialog
+          c={c}
+          referralId={dialog.referralId}
+          contact={dialog.contact}
+          initialMode={dialog.mode}
+          onClose={onClose}
+        />
+      );
     case 'recovery': return <RecordRecoveryDialog c={c} onClose={onClose} />;
     case 'reviewSighting': return <ReviewSightingDialog c={c} sightingId={dialog.sightingId} onClose={onClose} />;
     case 'resolveConversation': return <ResolveConversationDialog c={c} conversationId={dialog.conversationId} onClose={onClose} />;

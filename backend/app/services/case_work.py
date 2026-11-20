@@ -51,59 +51,82 @@ def _organisation(db: Session, report: Report, data: ReferralIn) -> Tuple[str, O
         if subdivision and subdivision.barangay_id:
             barangay_id = subdivision.barangay_id
             barangay = db.query(Barangay).filter(Barangay.barangay_id == barangay_id).first()
-            if barangay:
+            if barangay and not name:
                 name = f"Barangay {barangay.barangay_name}"
-            else:
-                raise HTTPException(status_code=422, detail="Configure this subdivision's Barangay before requesting assistance.")
-        else:
-            raise HTTPException(status_code=422, detail="Configure this subdivision's Barangay before requesting assistance.")
+        if not name:
+            name = "Barangay Hall — Peace & Order"
     if len(name) < 2:
         raise HTTPException(status_code=422, detail="Name the organisation the case is referred to.")
     return name, barangay_id
 
 
+def _serialize_docs(docs) -> Optional[str]:
+    if not docs:
+        return None
+    import json
+    items = [d.model_dump() if hasattr(d, "model_dump") else dict(d) for d in docs]
+    return json.dumps(items) if items else None
+
+
 def create_referral(db: Session, report: Report, actor: User, data: ReferralIn) -> BarangayReferral:
     """Refer the case to an outside organisation. No assessment and no registered animal is needed."""
     L.require_open(report, "refer it")
-    if data.org_type != "barangay":
-        raise HTTPException(status_code=422, detail="New animal assistance is coordinated with the Barangay. Existing external records are kept as history.")
     now = _now()
     name, barangay_id = _organisation(db, report, data)
-    duplicate = db.query(BarangayReferral).filter(
-        BarangayReferral.report_id == report.report_id, func.lower(BarangayReferral.org_name) == name.lower(),
-        _open_referral_filter()).first()
-    if duplicate is not None:
-        raise HTTPException(status_code=409, detail=f"An open referral to {name} already exists for this case. Update it instead.")
     referred_at = _naive(data.referred_at) if data.referred_at else now
     if referred_at > now + timedelta(days=1):
         raise HTTPException(status_code=422, detail="The referral date cannot be in the future.")
+    # Prevent accidental double-click duplicate submissions within 60 seconds for the exact same org and reason
+    recent_dup = db.query(BarangayReferral).filter(
+        BarangayReferral.report_id == report.report_id,
+        func.lower(BarangayReferral.org_name) == name.lower(),
+        func.lower(BarangayReferral.reason) == data.reason.strip().lower(),
+        BarangayReferral.status_updated_at >= now - timedelta(seconds=60),
+    ).first()
+    if recent_dup is not None:
+        raise HTTPException(status_code=409, detail=f"This referral to {name} was just submitted.")
+
+    priority_level = (data.priority_level or ("urgent" if data.is_urgent else "normal")).lower()
+    is_urgent = bool(data.is_urgent or priority_level == "urgent")
+    if data.initial_status:
+        initial_status = data.initial_status
+    else:
+        initial_status = "sent" if data.contacted else "pending"
+    contacted = initial_status not in ("to_contact", "pending")
+    additional_notes = (data.additional_notes or data.notes or "").strip() or None
+    docs_json = _serialize_docs(data.supporting_documents)
+
     referral = BarangayReferral(
         report_id=report.report_id, barangay_id=barangay_id, referred_by=actor.user_id, referred_at=referred_at,
         reason=data.reason.strip(), reference_no=(data.reference_no or "").strip() or None,
-        contact_method=V.UI_CONTACT_TO_STORED[data.contact_method], org_type=data.org_type, org_name=name,
+        contact_method=V.UI_CONTACT_TO_STORED.get(data.contact_method, "other"), org_type=data.org_type, org_name=name,
         contact_person=(data.contact_person or "").strip() or None, contact_detail=(data.contact_detail or "").strip() or None,
-        is_urgent=data.is_urgent, referral_status="sent" if data.contacted else "to_contact", status_updated_at=now, status_updated_by=actor.user_id)
-    if not data.contacted:
-        referral.contact_method = "other"        # nobody has been contacted yet: the contact is recorded when it happens
+        is_urgent=is_urgent, priority_level=priority_level, supporting_documents=docs_json, additional_notes=additional_notes,
+        referral_status=initial_status, status_updated_at=now, status_updated_by=actor.user_id)
     db.add(referral)
     db.flush()
-    if data.notes and data.notes.strip():
-        db.add(BarangayReferralUpdate(referral_id=referral.referral_id, update_type="other", source="straysafe_user",
-                                      update_date=referred_at.date(), note=data.notes.strip(), status_after=referral.referral_status,
-                                      recorded_by=actor.user_id))
-    L.advance_case(db, report, actor, V.IN_PROGRESS, "referral sent" if data.contacted else "assistance requested")
-    L.history(db, report, actor, f"Referred to {name}." if data.contacted else f"Assistance from {name} requested; not contacted yet.")
-    L.audit(db, actor, "CASE_REFERRAL_CREATED" if data.contacted else "CASE_ASSISTANCE_REQUESTED", report,
-            f"{actor.name} {'referred' if data.contacted else 'wrote down a request for assistance on'} report #{report.report_id} {'to' if data.contacted else 'from'} {name}.", table="barangay_referrals",
+    if not referral.reference_no:
+        referral.reference_no = f"REF-{referred_at.year}-{referral.referral_id:04d}"
+    init_note = additional_notes or f"Referral created ({priority_level.capitalize()} priority) for {name}."
+    db.add(BarangayReferralUpdate(
+        referral_id=referral.referral_id, update_type="created", source="straysafe_user",
+        update_date=referred_at.date(), note=init_note, status_after=referral.referral_status,
+        additional_notes=additional_notes, supporting_documents=docs_json,
+        evidence_url=data.supporting_documents[0].url if data.supporting_documents else None,
+        recorded_by=actor.user_id))
+    L.advance_case(db, report, actor, V.IN_PROGRESS, "referral sent" if contacted else "referral created")
+    L.history(db, report, actor, f"Referred to {name} ({referral.reference_no})." if contacted else f"Referral {referral.reference_no} for {name} created ({initial_status}).")
+    L.audit(db, actor, "CASE_REFERRAL_CREATED" if contacted else "CASE_ASSISTANCE_REQUESTED", report,
+            f"{actor.name} created referral {referral.reference_no} on report #{report.report_id} to {name}.", table="barangay_referrals",
             target_id=referral.referral_id,
-            new={"org_type": data.org_type, "org_name": name, "urgent": data.is_urgent, "contact_method": referral.contact_method,
-                 "reference_no": referral.reference_no})
+            new={"org_type": data.org_type, "org_name": name, "priority_level": priority_level, "urgent": is_urgent,
+                 "contact_method": referral.contact_method, "reference_no": referral.reference_no, "status": initial_status})
     return referral
 
 
 def update_referral(db: Session, report: Report, actor: User, referral: BarangayReferral, data: ReferralUpdateIn) -> BarangayReferral:
     """
-    Record what the organisation reported (or that it has not), and its status. The case's status does not change:
+    Record what the organisation reported (or that it has not), its status, or final outcome. The case's status does not change:
     an organisation finishing its part is not the case being finished. What is left for the subdivision becomes a
     follow-up when a date is given.
     """
@@ -114,24 +137,59 @@ def update_referral(db: Session, report: Report, actor: User, referral: Barangay
     if when > now + timedelta(days=1):
         raise HTTPException(status_code=422, detail="The update date cannot be in the future.")
     previous = referral.referral_status or "sent"
+    if previous in ("resolved", "completed", "declined", "cancelled") and data.update_type == "agency_response":
+        raise HTTPException(status_code=422, detail=f"This referral is already {previous} and cannot record new agency responses.")
     if data.status == "to_contact":
         raise HTTPException(status_code=422, detail="Record the contact when it happens instead.")
+    if data.status in ("declined", "cancelled") and len((data.note or "").strip()) < 3:
+        raise HTTPException(status_code=422, detail=f"Please provide a reason when marking a referral as {data.status}.")
+    if data.status in ("resolved", "completed"):
+        outcome_text = (data.external_outcome or "").strip() or (data.note or "").strip() or (referral.external_outcome or "").strip()
+        if len(outcome_text) < 3:
+            raise HTTPException(status_code=422, detail="Document the referral outcome before marking the referral as Resolved.")
+
     referral.referral_status, referral.status_updated_at, referral.status_updated_by = data.status, now, actor.user_id
     if data.contact_method:
-        referral.contact_method = V.UI_CONTACT_TO_STORED[data.contact_method]
+        referral.contact_method = V.UI_CONTACT_TO_STORED.get(data.contact_method, "other")
     if data.contact_person is not None:
         referral.contact_person = data.contact_person.strip() or referral.contact_person
     if data.contact_detail is not None:
         referral.contact_detail = data.contact_detail.strip() or referral.contact_detail
     if data.external_outcome is not None:
         referral.external_outcome = data.external_outcome.strip() or None
+    elif data.status in ("resolved", "completed") and not referral.external_outcome:
+        referral.external_outcome = data.note.strip()
+    if data.assistance_provided is not None:
+        referral.assistance_provided = data.assistance_provided.strip() or referral.assistance_provided
+    if data.actions_completed is not None:
+        referral.actions_completed = data.actions_completed.strip() or referral.actions_completed
     if data.remaining_follow_up is not None:
         referral.remaining_follow_up = data.remaining_follow_up.strip() or None
-    source = "straysafe_user" if data.status in ("sent", "no_response") else ("barangay_reported" if referral.org_type == "barangay" else "org_reported")
+    if data.additional_notes is not None and data.update_type == "outcome":
+        referral.outcome_note = data.additional_notes.strip() or data.note.strip()
+
+    if data.status in ("resolved", "completed") or data.update_type == "outcome":
+        comp_dt = _naive(data.completion_date) if data.completion_date else when
+        referral.outcome_date = comp_dt.date()
+        referral.outcome_note = (data.additional_notes or data.note or "").strip() or referral.outcome_note
+        referral.outcome_recorded_by = actor.user_id
+        referral.outcome_recorded_at = now
+
+    docs_json = _serialize_docs(data.supporting_documents)
+    evidence_url = data.evidence_url or (data.supporting_documents[0].url if data.supporting_documents else None)
+    source = "straysafe_user" if data.status in ("pending", "sent", "no_response", "cancelled") else (
+        "barangay_reported" if referral.org_type == "barangay" else "org_reported"
+    )
+    u_type = data.update_type or ("outcome" if data.status in ("resolved", "completed") else ("acknowledged" if data.status == "acknowledged" else "status_change"))
     db.add(BarangayReferralUpdate(
-        referral_id=referral.referral_id, update_type="acknowledged" if data.status == "acknowledged" else "other",
-        source=source, update_date=when.date(), note=data.note.strip(), evidence_url=data.evidence_url,
-        status_after=data.status, recorded_by=actor.user_id))
+        referral_id=referral.referral_id, update_type=u_type,
+        source=source, update_date=when.date(), note=data.note.strip(), evidence_url=evidence_url,
+        status_after=data.status, responder_name=(data.responder_name or "").strip() or None,
+        assistance_provided=(data.assistance_provided or "").strip() or None,
+        progress_notes=(data.progress_notes or "").strip() or None,
+        follow_up_instructions=(data.follow_up_instructions or "").strip() or None,
+        additional_notes=(data.additional_notes or "").strip() or None,
+        supporting_documents=docs_json, recorded_by=actor.user_id))
     scheduled = None
     if data.follow_up_at is not None:
         settings = case_policy.load_settings(db, report.subdivision_id)
@@ -141,14 +199,19 @@ def update_referral(db: Session, report: Report, actor: User, referral: Barangay
         scheduled = CaseFollowUp(report_id=report.report_id, subdivision_id=report.subdivision_id, kind="referral_check",
                                  title=title, due_at=due, status="pending", referral_id=referral.referral_id, created_by=actor.user_id)
         db.add(scheduled)
-    if previous == "to_contact":
-        L.history(db, report, actor, f"{referral.org_name} contacted: {data.status.replace('_', ' ')}.")
+    if previous in ("to_contact", "pending") and data.status == "sent":
+        L.history(db, report, actor, f"{referral.org_name} contacted ({referral.reference_no or f'#{referral.referral_id}'}): sent.")
+    elif u_type == "outcome":
+        L.history(db, report, actor, f"Outcome recorded for referral to {referral.org_name}: {data.status.replace('_', ' ')}.")
+    elif u_type == "agency_response":
+        L.history(db, report, actor, f"Agency response recorded from {referral.org_name} ({data.status.replace('_', ' ')}).")
     else:
         L.history(db, report, actor, f"Update from {referral.org_name}: {data.status.replace('_', ' ')}.")
-    L.audit(db, actor, "CASE_REFERRAL_UPDATED", report, f"{actor.name} recorded an update from {referral.org_name} on report #{report.report_id}.",
+    L.audit(db, actor, "CASE_REFERRAL_UPDATED", report, f"{actor.name} recorded an update ({u_type}) for {referral.org_name} on report #{report.report_id}.",
             table="barangay_referrals", target_id=referral.referral_id,
-            old={"referral_status": previous}, new={"referral_status": data.status, "case_status_unchanged": case_state.case_status_of(report),
-                                                     "follow_up_scheduled": scheduled is not None})
+            old={"referral_status": previous}, new={"referral_status": data.status, "update_type": u_type,
+                                                    "case_status_unchanged": case_state.case_status_of(report),
+                                                    "follow_up_scheduled": scheduled is not None})
     return referral
 
 

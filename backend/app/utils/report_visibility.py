@@ -449,6 +449,10 @@ def redact_response(rep_data, viewer: Optional[User], access: str, report: Repor
             if isinstance(r, dict)
         ]
     from app.utils.push_categories import scrub_contact
+    if access != STAFF:
+        for h in rep_data.history or []:
+            if h.remarks and re.match(r"^assessment\s+(submitted|updated)", h.remarks, re.IGNORECASE):
+                h.remarks = "Case assessed by administrator."
     for h in rep_data.history or []:
         h.remarks = scrub(h.remarks, names)
         if h.remarks:

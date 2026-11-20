@@ -33,7 +33,24 @@ const REFRESH_AFTER_MS = 60_000;
 const NOTIFICATION_POLL_MS = 60_000;
 
 const blankSettings = (): Settings => ({
-  subdivision: { name: '', city: '', address: '', officePhone: '', officeEmail: '', officeHours: '' },
+  subdivision: {
+    name: '',
+    city: '',
+    administrationName: '',
+    contactPerson: '',
+    address: '',
+    officePhone: '',
+    officeEmail: '',
+    officeHours: '',
+  },
+  externalCoordination: {
+    barangayName: '',
+    contactPerson: '',
+    phone: '',
+    email: '',
+    address: '',
+    agencies: [],
+  },
   notifications: { newReports: true, urgent: true, followUps: true, claims: true, caseActivity: true, channels: { inApp: true, email: true, push: true } },
   categories: { lost_pet: true, found_animal: true, nuisance: true, safety: true, injured: true, other: true },
   policies: [], privacy: { lostPetPublication: 'review', foundPublication: 'review' },

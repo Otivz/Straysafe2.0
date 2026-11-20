@@ -47,6 +47,17 @@ class OwnerWarning(Base):
     # and none is assumed.
     observation_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     follow_up_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Enhanced Official Warning Management fields (2026-11-20)
+    warning_category: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    warning_subject: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    additional_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    supporting_documents: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON list of {name, url, type, uploaded_at}
+    admin_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    workflow_status: Mapped[Optional[str]] = mapped_column(String(40), nullable=True, default="Sent")
+    owner_response: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    owner_responded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    thread_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    client_request_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP, server_default=func.current_timestamp())
     updated_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
 

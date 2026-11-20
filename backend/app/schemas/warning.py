@@ -1,21 +1,30 @@
 from pydantic import BaseModel
-from typing import Dict, Optional, Literal
+from typing import Any, Dict, List, Optional, Literal
 from datetime import datetime
 
 class WarningCreate(BaseModel):
     user_id: int
     pet_id: Optional[int] = None
     report_id: Optional[int] = None
-    warning_level: Literal['Notice', '1st Warning', '2nd Warning', 'Final Notice / Escalation']
-    violation_type: Literal['Free-Roaming Unleashed', 'Nuisance / Aggressive Behavior', 'Overdue Vaccination', 'Repeated Impoundment Retrieval', 'Other']
-    description: str
+    warning_level: Literal['Notice', '1st Warning', '2nd Warning', 'Final Notice / Escalation'] = '1st Warning'
+    violation_type: Optional[Literal['Free-Roaming Unleashed', 'Nuisance / Aggressive Behavior', 'Overdue Vaccination', 'Repeated Impoundment Retrieval', 'Other']] = None
+    description: Optional[str] = None
+    # Official Warning Management fields (2026-11-20)
+    warning_category: Optional[str] = None
+    warning_subject: Optional[str] = None
+    warning_message: Optional[str] = None
+    issue_date: Optional[datetime] = None
+    additional_details: Optional[str] = None
+    supporting_documents: Optional[List[Dict[str, Any]]] = None
+    admin_notes: Optional[str] = None
+    workflow_status: Optional[str] = "Sent"
+    client_request_id: Optional[str] = None
     # Never worked out by the system: whatever the issuer types, 0 otherwise
     fine_amount: Optional[float] = 0.0
     # The confirmed subdivision policy the warning is issued under. May be left out when exactly one confirmed
     # policy applies to the concern; required when several do.
     policy_id: Optional[str] = None
-    # The warning letter template the Leader chose. Required: the server refuses a missing one (422) or one for another level (409);
-    # it is typed Optional only so that refusal comes with a plain message.
+    # The warning letter template the Leader chose.
     template_id: Optional[int] = None
     required_action: Optional[str] = None
     field_overrides: Optional[Dict[str, str]] = None
@@ -29,8 +38,17 @@ class WarningResponse(BaseModel):
     warning_level: str
     violation_type: str
     warning_type: Optional[str] = None
+    warning_category: Optional[str] = None
+    warning_subject: Optional[str] = None
     description: str
     warning_reason: Optional[str] = None
+    additional_details: Optional[str] = None
+    supporting_documents: Optional[List[Dict[str, Any]]] = None
+    admin_notes: Optional[str] = None
+    workflow_status: Optional[str] = None
+    owner_response: Optional[str] = None
+    owner_responded_at: Optional[datetime] = None
+    thread_id: Optional[int] = None
     fine_amount: float
     status: str
     acknowledged_at: Optional[datetime] = None
@@ -61,6 +79,8 @@ class WarningResponse(BaseModel):
     template_id: Optional[int] = None
     template_name: Optional[str] = None
     template_version_number: Optional[int] = None
+    rendered_subject: Optional[str] = None
+    rendered_body: Optional[str] = None
     notification_status: Optional[str] = None
     notification_error: Optional[str] = None
     viewed_at: Optional[datetime] = None

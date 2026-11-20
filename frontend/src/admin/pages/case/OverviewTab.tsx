@@ -16,6 +16,7 @@ import { currentActivity, pendingFollowUpsOf } from '../../data/selectors';
 import type { Case } from '../../data/types';
 import { ago, dueInfo, fmtDateTime, plural } from '../../../preview/lib/format';
 import type { OpenCaseDialog } from './dialogState';
+import PossibleOwnersBlock from './PossibleOwnersBlock';
 import RegisteredPetPanel from './RegisteredPetPanel';
 import RelatedReportsBlock from './RelatedReportsBlock';
 
@@ -51,7 +52,7 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
             <div><dt>Observed</dt><dd>{fmtDateTime(c.observedAt)}</dd></div>
             <div><dt>Reported</dt><dd>{fmtDateTime(c.reportedAt)}{ago(c.reportedAt, now) ? <span className="sa-text-3"> · {ago(c.reportedAt, now)}</span> : null}</dd></div>
             <div><dt>Location</dt><dd>{c.location.area}<span className="sa-text-3 block">{c.location.detail}</span></dd></div>
-            <div><dt>Animal</dt><dd>{ANIMAL_TYPES[c.animal.type]}{c.animal.count > 1 ? ` × ${c.animal.count}` : ''}<span className="sa-text-3 block">{c.animal.description}</span></dd></div>
+            <div><dt>Animal</dt><dd>{c.animal.customType || ANIMAL_TYPES[c.animal.type]}{c.animal.count > 1 ? ` × ${c.animal.count}` : ''}<span className="sa-text-3 block">{c.animal.description}</span></dd></div>
           </dl>
           {pin ? (
             <figure className="mt-5 flex flex-col">
@@ -147,6 +148,8 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
         </Block>
 
         <RelatedReportsBlock c={c} openDialog={openDialog} />
+
+        {c.animal.type !== 'wildlife' && c.category !== 'lost_pet' ? <PossibleOwnersBlock c={c} /> : null}
 
         {c.closure ? (
           <Block title="Closure">

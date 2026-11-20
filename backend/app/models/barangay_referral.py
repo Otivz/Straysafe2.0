@@ -74,6 +74,12 @@ class BarangayReferral(Base):
     external_outcome: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     remaining_follow_up: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     follow_up_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # External Referral Management fields (2026-11-20)
+    priority_level: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default="normal")
+    supporting_documents: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON list of {name, url, type, uploaded_at}
+    additional_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    assistance_provided: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    actions_completed: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     updates: Mapped[List["BarangayReferralUpdate"]] = relationship(
         "BarangayReferralUpdate", back_populates="referral", cascade="all, delete-orphan",
@@ -93,6 +99,13 @@ class BarangayReferralUpdate(Base):
     evidence_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     # The referral's status once this note was recorded (NULL on notes that did not change it)
     status_after: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    # External Referral Management response fields (2026-11-20)
+    responder_name: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
+    assistance_provided: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    progress_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    follow_up_instructions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    additional_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    supporting_documents: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON list of {name, url, type, uploaded_at}
     recorded_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
     recorded_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 

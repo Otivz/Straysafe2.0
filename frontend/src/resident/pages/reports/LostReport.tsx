@@ -7,6 +7,7 @@ import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
 import { SightingCard } from '../../components/Cards';
 import { Screen } from '../../components/Screen';
 import { Callout, LinkButton, ListSkeleton, MediaThumbs, Row, Section, UpdateTimeline } from '../../components/ui';
+import { MessageAdminButton } from '../../components/MessageAdminButton';
 import { residentPath } from '../../config';
 import { ANIMAL_TYPES } from '../../data/constants';
 import { useResidentData } from '../../data/context';
@@ -58,6 +59,7 @@ export function LostReport({ report, detail }: { report: Report; detail: { statu
         <>
           <LinkButton variant="primary" block icon={House} to={residentPath(`/reports/${report.id}/recovered`)}>My pet is home</LinkButton>
           <LinkButton block icon={PlusCircle} to={residentPath(`/reports/${report.id}/update`)}>Add information</LinkButton>
+          <MessageAdminButton reportRef={report.id} />
         </>
       )}
     >

@@ -28,10 +28,14 @@ _TYPE_CATEGORY = {
     "potential_match": PET_MATCHES, "pet_owner_confirmation": PET_MATCHES, "pet_owner_confirmation_result": PET_MATCHES,
     "pet_match_confirmation": PET_MATCHES, "pet_match_confirmation_result": PET_MATCHES, "leader_identity_verified": PET_MATCHES,
     "wrong_identity": PET_MATCHES, "reunion_photo_requested": PET_MATCHES, "pet_tag_found": PET_MATCHES,
+    # Possible Pet Owner Verification: the possible owner answered (Leader; related id = the REPORT, opens the case screen)
+    "owner_verification": PET_MATCHES,
+    # ... and the request to the possible owner (Resident; related id = the REQUEST, opens the verification page)
+    "ownership_verification": PET_MATCHES,
     # Claims
     "claim": CLAIMS,
     # Messages
-    "message": MESSAGES, "match_message": MESSAGES, "case_message": MESSAGES,
+    "message": MESSAGES, "match_message": MESSAGES, "case_message": MESSAGES, "resident_message": MESSAGES,
     # Lost & found alerts the Subdivision Leader sends (services/case_alerts.py)
     "case_alert": ALERTS,
     # "Send test notification" (only the master switch applies)
@@ -99,9 +103,13 @@ def notification_link(role_id: int, ntype: Optional[str], related_id: Optional[i
     if role_id == 1:  # Resident app
         if t in ("pet_owner_confirmation", "pet_match_confirmation"):
             return f"{RESIDENT_APP}/pets"
+        if t == "ownership_verification":     # "is this your pet?": the verification page (photos side by side, Confirm / Decline)
+            return f"{RESIDENT_APP}/ownership/{rid}" if rid else f"{RESIDENT_APP}/messages"
         if t == "pet_tag_found":              # someone scanned the pet's QR tag: open the dedicated scan-message page
             return f"{RESIDENT_APP}/pets/{rid}/scans" if rid else f"{RESIDENT_APP}/pets"
-        if t in ("warning", "warning_letter"):
+        if t == "warning_letter":            # its related id is the generated letter: open the letter itself
+            return f"{RESIDENT_APP}/warnings/{rid}" if rid else f"{RESIDENT_APP}/warnings"
+        if t == "warning":
             return f"{RESIDENT_APP}/warnings"
         if t == "lost_found_linked":
             return f"{RESIDENT_APP}/reports"
@@ -119,6 +127,8 @@ def notification_link(role_id: int, ntype: Optional[str], related_id: Optional[i
             return f"{LEADER_APP}/pets"
         if t in ("lost_pet_alert", "lost_pet_sighting", "lost_pet_alert_request"):
             return f"{LEADER_APP}/community"
+        if t == "resident_message":          # a resident wrote to the administration: its related id is the THREAD's
+            return f"{LEADER_APP}/messages/{rid}" if rid else f"{LEADER_APP}/messages"
         # lost_pet_leader carries the REPORT id: the Leader's case screen (the default below)
         return f"{LEADER_APP}/cases/{rid}" if rid else f"{LEADER_APP}/cases"
     # No other role has an interface: retired Barangay accounts are never pushed to, and the Administrator has no screen yet.

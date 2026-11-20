@@ -34,7 +34,7 @@ export const isLostOrFound = (c: Case) => c.category === 'lost_pet' || c.categor
 export const sameReport = (a: string, b: string) => a === b || (caseNumber(a) !== '' && caseNumber(a) === caseNumber(b));
 
 /** A match a Leader can still decide: it is waiting, and both reports are still open. Strongest first. */
-export const isWaiting = (m: PossibleMatch) => m.status === 'pending' && m.lost.open && m.found.open;
+export const isWaiting = (m: PossibleMatch) => (m.status === 'pending' || m.status === 'under_review') && m.lost.open && m.found.open;
 export function matchesToReview(matches: PossibleMatch[]): PossibleMatch[] {
   return matches.filter(isWaiting).sort((a, b) => b.score - a.score || Number(b.id) - Number(a.id));
 }
@@ -50,7 +50,7 @@ export function matchesOf(matches: PossibleMatch[], caseId: string): CaseMatches
     ruledOut: mine.filter((m) => m.status === 'rejected').sort(byStrength),
   };
 }
-export const levelLabel = (level: PossibleMatch['level']) => (level === 'strong' ? 'Strong match' : 'Possible match');
+export const levelLabel = (level: PossibleMatch['level']) => (level === 'strong' ? 'Strong possible match' : level === 'low' ? 'Low similarity' : level === 'manual' ? 'Linked by hand' : 'Potential match');
 
 /**
  * One plain sentence for a possible match: "Found brown dog near Clubhouse may be Coco" on the dashboard and from the missing pet's side; "This animal may be
@@ -101,7 +101,22 @@ export function attentionItems(cases: Case[], now: Date): AttentionItem[] {
   for (const c of cases) {
     if (!isOpen(c)) continue;
     const reasons: AttentionReason[] = [];
-    if (c.priority === 'urgent') reasons.push({ kind: 'urgent', label: c.status === 'reported' ? 'Urgent · not yet assessed' : 'Urgent safety concern', tone: 'red' });
+    if (c.priority === 'urgent') {
+      const unableToMove = c.category === 'injured' && (
+        /unable to move/i.test(c.assessment.urgencyNote ?? '') ||
+        /Can the animal move\?:\s*No/i.test(c.animal.condition ?? '')
+      );
+      const safetyUrgent = c.category === 'safety' && /Automatic safety priority/i.test(c.assessment.urgencyNote ?? '');
+      reasons.push({
+        kind: 'urgent',
+        label: unableToMove
+          ? 'Urgent · Animal unable to move'
+          : safetyUrgent
+            ? (c.assessment.urgencyNote ?? '').replace(/^Automatic safety priority \(Urgent\):\s*/i, 'Urgent · ')
+            : (c.status === 'reported' ? 'Urgent · not yet assessed' : 'Urgent safety concern'),
+        tone: 'red',
+      });
+    }
     const asked = mediationOf(c);
     if (asked.length > 0) {
       const first = asked[0];
@@ -261,40 +276,77 @@ export function dispositionAvailability(c: Case, id: DispositionId): { ok: boole
 
 const areaKey = (c: Case) => { const [a, b] = c.location.area.split(' · '); return { block: a, street: b ?? '' }; };
 
+const UNKNOWN_VALUES = new Set(['', 'unknown', 'not sure', 'unsure', 'n/a', 'na', 'none', '-', 'not known', 'unspecified']);
+
+function normalizeBreedStrict(raw?: string | null): string {
+  const clean = (raw ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return UNKNOWN_VALUES.has(clean) ? '' : clean;
+}
+
+function normalizeColoursSet(raw?: string | null): Set<string> {
+  if (!raw) return new Set();
+  const parts = raw.split(/[,/&+·]+|\band\b|\bwith\b/i);
+  const out = new Set<string>();
+  for (const p of parts) {
+    const clean = p.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (clean && !UNKNOWN_VALUES.has(clean)) out.add(clean);
+  }
+  return out;
+}
+
+function hasCommonColour(a: Set<string>, b: Set<string>): boolean {
+  if (a.size === 0 || b.size === 0) return false;
+  for (const col of a) {
+    if (b.has(col)) return true;
+  }
+  return false;
+}
+
 /** Possibly-related reports. Suggestions only: linking is always an explicit choice and never merges anything. */
 export function relatedCandidates(cases: Case[], base: Case, limit = 5): { case: Case; reasons: string[] }[] {
   const b = areaKey(base);
+  const baseBreed = normalizeBreedStrict(base.animal.breed);
+  const baseColours = normalizeColoursSet(base.animal.color);
   const out: { case: Case; reasons: string[]; score: number }[] = [];
   for (const c of cases) {
     if (c.id === base.id || base.relatedCaseIds.includes(c.id)) continue;
-    // Reports about different animal types (e.g. Dog vs. Cat) are never related candidates
-    if (c.animal.type && base.animal.type && c.animal.type !== base.animal.type && c.animal.type !== 'other' && base.animal.type !== 'other') {
-      continue;
-    }
+    // 1. Mandatory species match
+    if (!c.animal.type || !base.animal.type || c.animal.type !== base.animal.type) continue;
+    // 2. Mandatory strict exact breed match
+    const candBreed = normalizeBreedStrict(c.animal.breed);
+    if (!baseBreed || !candBreed || baseBreed !== candBreed) continue;
+    // 3. Mandatory partial colour overlap (at least one common colour)
+    const candColours = normalizeColoursSet(c.animal.color);
+    if (!hasCommonColour(baseColours, candColours)) continue;
+
     const k = areaKey(c);
-    const reasons: string[] = [];
-    let score = 0;
+    const reasons: string[] = ['Exact breed match', 'Compatible coat colour'];
+    let score = 3;
     if (k.block === b.block) { reasons.push('Same area'); score += 3; } else if (k.street && k.street === b.street) { reasons.push('Same street'); score += 1; }
     if (c.category === base.category) { reasons.push('Same category'); score += 2; }
-    if (c.animal.type === base.animal.type) { reasons.push('Same animal type'); score += 1; }
     if (Math.abs(new Date(c.reportedAt).getTime() - new Date(base.reportedAt).getTime()) <= 14 * 86_400_000) { reasons.push('Within 14 days'); score += 1; }
     if (score >= 5) out.push({ case: c, reasons, score });
   }
   return out.sort((x, y) => y.score - x.score || y.case.reportedAt.localeCompare(x.case.reportedAt)).slice(0, limit);
 }
 
-const COLOR_WORDS = ['brown', 'white', 'black', 'gray', 'grey', 'tan', 'gold', 'golden', 'orange', 'tabby', 'yellow', 'red', 'cream', 'tri-colour', 'tricolor', 'tri-color'];
-
-/** Registered pets worth comparing. Similar looks are NOT identity, and registration is NOT ownership. */
+/** Registered pets worth comparing. Enforces mandatory species, strict breed, and partial colour overlap. */
 export function registryMatches(pets: Pet[], c: Case, limit = 4): Pet[] {
-  const text = `${c.animal.description} ${c.description}`.toLowerCase();
-  const words = COLOR_WORDS.filter((w) => text.includes(w));
+  const caseBreed = normalizeBreedStrict(c.animal.breed);
+  const caseColours = normalizeColoursSet(c.animal.color);
   const scored = pets.map((p) => {
-    const hay = `${p.color} ${p.markings.join(' ')}`.toLowerCase();
-    const shared = words.filter((w) => hay.includes(w)).length;
-    const sameType = p.type === c.animal.type;
     const decided = c.identity.matches[p.id] !== undefined;
-    return { p, score: decided ? 99 : sameType && shared > 0 ? shared + 1 : 0 };
+    if (decided) return { p, score: 99 };
+    if (!p.type || !c.animal.type || p.type !== c.animal.type) return { p, score: 0 };
+    const petBreed = normalizeBreedStrict(p.breed);
+    if (!caseBreed || !petBreed || caseBreed !== petBreed) return { p, score: 0 };
+    const petColours = normalizeColoursSet(p.color);
+    if (!hasCommonColour(caseColours, petColours)) return { p, score: 0 };
+    let sharedCount = 0;
+    for (const col of caseColours) {
+      if (petColours.has(col)) sharedCount += 1;
+    }
+    return { p, score: sharedCount + 1 };
   });
   return scored.filter((x) => x.score > 0).sort((a, b) => b.score - a.score).slice(0, limit).map((x) => x.p);
 }
