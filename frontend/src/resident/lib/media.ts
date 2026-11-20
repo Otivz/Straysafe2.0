@@ -22,6 +22,49 @@ export function takeFiles(files: File[], existing: number, opts: { accept: 'phot
   return { added, errors: Array.from(new Set(errors)) };
 }
 
+/**
+ * Validates and immediately copies picked files into memory so Android WebView cannot
+ * revoke temporary `content://` read permissions before the user submits the form.
+ */
+export async function takeFilesInMemory(
+  files: File[],
+  existing: number,
+  opts: { accept: 'photo' | 'both'; max: number },
+): Promise<{ added: Media[]; errors: string[] }> {
+  const { added: validated, errors } = takeFiles(files, existing, opts);
+  const materialized: Media[] = [];
+  for (const item of validated) {
+    const raw = item.file;
+    if (!raw) continue;
+    let buffered: File | null = null;
+    try {
+      const bytes = await raw.arrayBuffer();
+      buffered = new File([bytes], raw.name, { type: raw.type, lastModified: raw.lastModified });
+    } catch {
+      if (item.kind === 'photo') {
+        const jpeg = await redrawAsJpeg(raw);
+        if (jpeg) {
+          const base = (raw.name || 'upload').replace(/\.[a-z0-9]{2,5}$/i, '') || 'upload';
+          buffered = new File([jpeg], `${base}.jpg`, { type: 'image/jpeg', lastModified: raw.lastModified });
+        }
+      }
+    }
+    if (item.url) URL.revokeObjectURL(item.url);
+    if (!buffered) {
+      errors.push(`“${raw.name}” could not be read from your phone. Choose a local photo or take a new one.`);
+      continue;
+    }
+    materialized.push({
+      ...item,
+      name: buffered.name,
+      size: buffered.size,
+      url: URL.createObjectURL(buffered),
+      file: buffered,
+    });
+  }
+  return { added: materialized, errors: Array.from(new Set(errors)) };
+}
+
 export const revoke = (m: Media) => { if (m.url && m.file) URL.revokeObjectURL(m.url); };      // only an object URL made here, never a stored file's address
 
 /** What the backend accepts (backend/app/utils/uploads.py): JPG, PNG, WEBP up to 10 MB and MP4 up to 50 MB, named with the extension. */
