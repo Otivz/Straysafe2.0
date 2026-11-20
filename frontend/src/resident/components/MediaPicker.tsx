@@ -1,7 +1,7 @@
 import { useRef, useState, type DragEvent } from 'react';
 import { Camera, ChevronLeft, ChevronRight, Film, ImagePlus, RefreshCw, Video, X } from 'lucide-react';
 import type { Media } from '../data/types';
-import { revoke, takeFiles } from '../lib/media';
+import { revoke, takeFilesInMemory } from '../lib/media';
 import { Button } from './ui';
 
 /**
@@ -31,23 +31,25 @@ export function MediaPicker({
 
   const photoItems = value.filter((m) => m.url && m.kind === 'photo');
 
-  const pick = (files: FileList | null) => {
-    const { added, errors: problems } = takeFiles(Array.from(files ?? []), value.length, { accept, max });
+  const pick = async (files: FileList | null) => {
+    const picked = Array.from(files ?? []);
+    for (const el of [input.current, replaceInput.current, photoCam.current, videoCam.current]) if (el) el.value = '';
+    if (picked.length === 0) return;
+    const { added, errors: problems } = await takeFilesInMemory(picked, value.length, { accept, max });
     setErrors(problems);
     if (added.length) onChange([...value, ...added]);
-    for (const el of [input.current, replaceInput.current, photoCam.current, videoCam.current]) if (el) el.value = '';
   };
 
-  const replaceFirst = (files: FileList | null) => {
+  const replaceFirst = async (files: FileList | null) => {
     const list = Array.from(files ?? []);
+    if (replaceInput.current) replaceInput.current.value = '';
     if (list.length === 0) return;
-    const { added, errors: problems } = takeFiles(list.slice(0, 1), 0, { accept, max: 1 });
+    const { added, errors: problems } = await takeFilesInMemory(list.slice(0, 1), 0, { accept, max: 1 });
     setErrors(problems);
     if (added.length > 0) {
       if (value[0]) revoke(value[0]);
       onChange([added[0], ...value.slice(1)]);
     }
-    if (replaceInput.current) replaceInput.current.value = '';
   };
 
   const remove = (m: Media) => {

@@ -18,6 +18,21 @@
 --   See: audit report and remediation/ADOPTION_TASKS_CATALOG_CERTIFICATE_AUDIT.md
 -- =============================================================================
 -- =============================================================================
+-- REVISION 2026-11-20 (QR Tags, QR Collar Requests, Messaging, Matching, Warnings & Referrals)
+--   [SYNC]  Updated schema to match all backend models and migrations through 2026-11-20:
+--           + pets.colors (JSON), reports.animal_colors (JSON), reports.animal_type -> VARCHAR(100)
+--           + pet_tags.last_scanned_at + UNIQUE uq_pet_tags_pet_id (one permanent QR tag per pet)
+--           + pet_match_confirmation_requests: thread_id, follow_up_count, last_follow_up_at, events
+--           + owner_warnings: warning_category, warning_subject, additional_details, supporting_documents,
+--             admin_notes, workflow_status, owner_response, owner_responded_at, thread_id, client_request_id
+--           + barangay_referrals & barangay_referral_updates: priority_level, responder_name, assistance_provided,
+--             actions_completed, progress_notes, follow_up_instructions, additional_notes, supporting_documents
+--           + lost_found_matches: analysis, algorithm, history, visual, review_note
+--           + case_message_threads: nullable report_id, subject, close_trigger
+--           + case_message_members: last_delivered_message_id
+--           + New table: qr_collar_requests (Resident QR collar requests & Admin pickup workflow)
+-- =============================================================================
+-- =============================================================================
 -- REVISION 2026-11-06 (Database 3.4 - Subdivision-Only Deployment)
 --   [SYNC]  Brought fully in line with the Subdivision-only architecture:
 --           + Removed internal Barangay staff seed account (user_id 4) since
@@ -304,7 +319,11 @@ CREATE TABLE `users` (
   CONSTRAINT `fk_users_subdivision` FOREIGN KEY (`subdivision_id`) REFERENCES `subdivisions` (`subdivision_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- SEED DATA: users (none: this file creates no account; see REVISION 2026-11-10, clean initialization, at the top)
+-- SEED DATA: users (local setup/testing accounts)
+INSERT INTO `users` (`name`, `email`, `password`, `role_id`, `position_id`, `subdivision_id`, `barangay_id`, `is_head_officer`, `status`, `is_verified`) VALUES
+('Kyla Bianca S. Frias', 'kylabiancafrias@gmail.com', '$2b$12$t2Q/VB3zcpx09bjnA4vlfe6Or.pdjItx0UeF6uqF0n9hs8UywAGqG', 2, 7, 1, 1, 1, 'Active', 1),
+('Subdivision Leader', 'subleader@gmail.com', '$2b$12$8asEn48g/owHl0B170S0HOS.HHwvLOmeuvbxi3nRSg5X.VTuMUkK.', 2, 7, 1, 1, 1, 'Active', 1),
+('Emmanuel F. Vito Cruz', 'emmanuelvitocruz@gmail.com', '$2b$12$j9kIwtoFQxLR42u7tcNNyO28E.gcJVezYrkr8hWYa0fkhp82jagPW', 1, NULL, 1, 1, 0, 'Active', 1);
 
 -- =========================================
 -- TABLE: COVERAGE_SETTINGS (Geofence & Boundary Settings)
@@ -466,6 +485,7 @@ CREATE TABLE `pets` (
   `pet_type` enum('Dog','Cat') NOT NULL,
   `breed` varchar(100) DEFAULT NULL,
   `color_markings` varchar(255) DEFAULT NULL,
+  `colors` json DEFAULT NULL,
   `primary_color` varchar(100) DEFAULT NULL,
   `secondary_color` varchar(100) DEFAULT NULL,
   `tertiary_color` varchar(100) DEFAULT NULL,
@@ -550,8 +570,10 @@ CREATE TABLE `pet_history` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =========================================
--- TABLE: PET QR TAGS (2026-11-18; created at backend start by ensure_pet_tag_tables)
+-- TABLE: PET QR TAGS (2026-11-18; updated 2026-11-20 with last_scanned_at & one permanent tag per pet)
 -- =========================================
+DROP TABLE IF EXISTS `pet_tag_scans`;
+DROP TABLE IF EXISTS `pet_tags`;
 CREATE TABLE `pet_tags` (
   `tag_id` int NOT NULL AUTO_INCREMENT,
   `pet_id` int NOT NULL,
@@ -559,18 +581,19 @@ CREATE TABLE `pet_tags` (
   `status` varchar(20) NOT NULL DEFAULT 'active',
   `created_by` int DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `last_scanned_at` datetime DEFAULT NULL,
   `disabled_at` datetime DEFAULT NULL,
   `disabled_by` int DEFAULT NULL,
   PRIMARY KEY (`tag_id`),
   UNIQUE KEY `token` (`token`),
-  KEY `ix_pet_tags_pet_id` (`pet_id`),
+  UNIQUE KEY `uq_pet_tags_pet_id` (`pet_id`),
   KEY `ix_pet_tags_tag_id` (`tag_id`),
   KEY `created_by` (`created_by`),
   KEY `disabled_by` (`disabled_by`),
   CONSTRAINT `pet_tags_ibfk_1` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE CASCADE,
   CONSTRAINT `pet_tags_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `pet_tags_ibfk_3` FOREIGN KEY (`disabled_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `pet_tag_scans` (
   `scan_id` int NOT NULL AUTO_INCREMENT,
@@ -618,9 +641,10 @@ CREATE TABLE `reports` (
   `separate_incident_reason` text,                                    -- [NEW] staff override: separate incident, not the pet's active case
   `separate_incident_by` int DEFAULT NULL,                            -- [NEW] officer who marked it
   `separate_incident_at` datetime DEFAULT NULL,                       -- [NEW] when it was marked
-  `animal_type` enum('Dog','Cat','Unknown','Bird','Small mammal','Reptile','Livestock','Wildlife','Other') DEFAULT 'Unknown',   -- [NEW] members after 'Unknown' appended (any animal, no pet record needed)
+  `animal_type` varchar(100) DEFAULT 'Unknown',                         -- [CHANGED] widened from ENUM to VARCHAR(100) for Dog, Cat, and custom 'Others' animal types
   `animal_breed` varchar(100) DEFAULT NULL,
   `animal_color` varchar(255) DEFAULT NULL,
+  `animal_colors` json DEFAULT NULL,
   `estimated_size` enum('Small','Medium','Large') DEFAULT NULL,
   `description` text,
   `condition` text,
@@ -713,6 +737,10 @@ CREATE TABLE `reports` (
   `is_sensitive` tinyint(1) NOT NULL DEFAULT 0,                       -- [NEW] a private complaint about a neighbour: never made public, never offered as a notice
   `pet_snapshot` json DEFAULT NULL,                                   -- [NEW] 2026-11-11: a Lost Pet report: the pet as it was when filed + last-seen details, built by the server, never rewritten
   `client_request_id` varchar(64) DEFAULT NULL,                      -- [NEW] 2026-11-11: a Lost Pet submission's retry key (the same key again returns the first report)
+  `seen_at` datetime DEFAULT NULL,                                    -- [NEW] 2026-11-13: complaint management (when the resident saw it)
+  `suspected_owner_name` varchar(150) DEFAULT NULL,                   -- [NEW] 2026-11-13: complaint management lead
+  `suspected_owner_address` varchar(255) DEFAULT NULL,                -- [NEW] 2026-11-13: complaint management lead
+  `suspected_owner_details` text,                                     -- [NEW] 2026-11-13: complaint management lead
   PRIMARY KEY (`report_id`),
   KEY `fk_reports_subdivision` (`subdivision_id`),
   KEY `fk_reports_category` (`category_id`),
@@ -1074,6 +1102,10 @@ CREATE TABLE `pet_match_confirmation_requests` (
   `final_by` int DEFAULT NULL,
   `final_at` datetime DEFAULT NULL,
   `match_id` int DEFAULT NULL,
+  `thread_id` int DEFAULT NULL,
+  `follow_up_count` int NOT NULL DEFAULT '0',
+  `last_follow_up_at` datetime DEFAULT NULL,
+  `events` json DEFAULT NULL,
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`request_id`),
   KEY `ix_pet_match_confirmation_requests_owner_id` (`owner_id`),
@@ -1168,6 +1200,16 @@ CREATE TABLE `owner_warnings` (
   `policy_reference` varchar(200) DEFAULT NULL,
   `observation_days` int DEFAULT NULL,                                -- [NEW] the policy's observation period; NULL = the policy defines none, none is assumed
   `follow_up_at` datetime DEFAULT NULL,
+  `warning_category` varchar(120) DEFAULT NULL,
+  `warning_subject` varchar(255) DEFAULT NULL,
+  `additional_details` text,
+  `supporting_documents` text,
+  `admin_notes` text,
+  `workflow_status` varchar(40) DEFAULT 'Sent',
+  `owner_response` text,
+  `owner_responded_at` datetime DEFAULT NULL,
+  `thread_id` int DEFAULT NULL,
+  `client_request_id` varchar(64) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`warning_id`),
@@ -1737,6 +1779,11 @@ CREATE TABLE `barangay_referrals` (
   `external_outcome` text,
   `remaining_follow_up` text,
   `follow_up_at` datetime DEFAULT NULL,
+  `priority_level` varchar(20) DEFAULT 'normal',
+  `supporting_documents` text,
+  `additional_notes` text,
+  `assistance_provided` text,
+  `actions_completed` text,
   PRIMARY KEY (`referral_id`),
   KEY `ix_barangay_referrals_report_id` (`report_id`),                -- [CHANGED] was UNIQUE KEY uq_barangay_referrals_report_id (one referral per report)
   KEY `ix_barangay_referrals_referral_id` (`referral_id`),
@@ -1757,6 +1804,12 @@ CREATE TABLE `barangay_referral_updates` (
   `note` text,
   `evidence_url` varchar(500) DEFAULT NULL,
   `status_after` varchar(20) DEFAULT NULL,                            -- [NEW] the referral's status once this note was recorded
+  `responder_name` varchar(150) DEFAULT NULL,
+  `assistance_provided` text,
+  `progress_notes` text,
+  `follow_up_instructions` text,
+  `additional_notes` text,
+  `supporting_documents` text,
   `recorded_by` int DEFAULT NULL,
   `recorded_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`update_id`),
@@ -1906,6 +1959,11 @@ CREATE TABLE `lost_found_matches` (
 	decided_at DATETIME, 
 	link_id INTEGER, 
 	coordination_id INTEGER, 
+	analysis JSON, 
+	algorithm VARCHAR(40), 
+	history JSON, 
+	visual JSON, 
+	review_note TEXT, 
 	PRIMARY KEY (match_id), 
 	CONSTRAINT uq_lost_found_pair UNIQUE (lost_report_id, found_report_id), 
 	FOREIGN KEY(subdivision_id) REFERENCES subdivisions (subdivision_id), 
@@ -1925,14 +1983,16 @@ CREATE TABLE `case_message_threads` (
 	thread_id INTEGER NOT NULL AUTO_INCREMENT, 
 	subdivision_id INTEGER NOT NULL, 
 	kind VARCHAR(8) NOT NULL, 
-	report_id INTEGER NOT NULL, 
+	report_id INTEGER, 
 	related_report_id INTEGER, 
 	match_id INTEGER, 
 	link_id INTEGER, 
+	subject VARCHAR(160), 
 	status VARCHAR(8) NOT NULL DEFAULT 'open', 
 	closed_at DATETIME, 
 	closed_by INTEGER, 
 	close_reason TEXT, 
+	close_trigger VARCHAR(20), 
 	created_by INTEGER, 
 	created_at DATETIME NOT NULL DEFAULT (now()), 
 	PRIMARY KEY (thread_id), 
@@ -1958,6 +2018,7 @@ CREATE TABLE `case_message_members` (
 	`role` VARCHAR(10) NOT NULL, 
 	report_id INTEGER, 
 	last_read_message_id INTEGER NOT NULL DEFAULT '0', 
+	last_delivered_message_id INTEGER NOT NULL DEFAULT '0', 
 	joined_at DATETIME NOT NULL DEFAULT (now()), 
 	PRIMARY KEY (member_id), 
 	CONSTRAINT uq_case_message_member UNIQUE (thread_id, user_id), 
@@ -2044,6 +2105,314 @@ CREATE TABLE `case_alert_sends` (
   PRIMARY KEY (`send_id`),
   UNIQUE KEY `uq_case_alert_slot` (`alert_id`, `slot_at`),
   CONSTRAINT `fk_case_alert_sends_alert` FOREIGN KEY (`alert_id`) REFERENCES `case_alerts` (`alert_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- TABLE: QR_COLLAR_REQUESTS (Resident QR collar requests & Admin pickup workflow, 2026-11-20)   -- [NEW]
+-- =========================================
+DROP TABLE IF EXISTS `qr_collar_requests`;
+CREATE TABLE `qr_collar_requests` (
+  `request_id` int NOT NULL AUTO_INCREMENT,
+  `pet_id` int NOT NULL,
+  `resident_id` int NOT NULL,
+  `subdivision_id` int NOT NULL,
+  `status` varchar(30) NOT NULL DEFAULT 'pending',
+  `notes` varchar(500) DEFAULT NULL,
+  `admin_notes` varchar(500) DEFAULT NULL,
+  `thread_id` int DEFAULT NULL,
+  `history` json NOT NULL,
+  `requested_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `accepted_at` datetime DEFAULT NULL,
+  `accepted_by` int DEFAULT NULL,
+  `ready_at` datetime DEFAULT NULL,
+  `ready_by` int DEFAULT NULL,
+  `completed_at` datetime DEFAULT NULL,
+  `completed_by` int DEFAULT NULL,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`request_id`),
+  KEY `ix_qr_collar_requests_request_id` (`request_id`),
+  KEY `ix_qr_collar_requests_pet_id` (`pet_id`),
+  KEY `ix_qr_collar_requests_resident_id` (`resident_id`),
+  KEY `ix_qr_collar_requests_subdivision_id` (`subdivision_id`),
+  KEY `ix_qr_collar_requests_status` (`status`),
+  KEY `fk_qr_collar_requests_thread_id` (`thread_id`),
+  KEY `fk_qr_collar_requests_accepted_by` (`accepted_by`),
+  KEY `fk_qr_collar_requests_ready_by` (`ready_by`),
+  KEY `fk_qr_collar_requests_completed_by` (`completed_by`),
+  CONSTRAINT `fk_qr_collar_requests_pet_id` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_qr_collar_requests_resident_id` FOREIGN KEY (`resident_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_qr_collar_requests_subdivision_id` FOREIGN KEY (`subdivision_id`) REFERENCES `subdivisions` (`subdivision_id`),
+  CONSTRAINT `fk_qr_collar_requests_thread_id` FOREIGN KEY (`thread_id`) REFERENCES `case_message_threads` (`thread_id`),
+  CONSTRAINT `fk_qr_collar_requests_accepted_by` FOREIGN KEY (`accepted_by`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `fk_qr_collar_requests_ready_by` FOREIGN KEY (`ready_by`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `fk_qr_collar_requests_completed_by` FOREIGN KEY (`completed_by`) REFERENCES `users` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- TABLE: COMPLAINT_RESPONDENTS (Complaint respondents (2026-11-13))   -- [NEW]
+-- -----------------------------------------------------------------------------
+DROP TABLE IF EXISTS complaint_respondents;
+CREATE TABLE `complaint_respondents` (
+  `respondent_id` int NOT NULL AUTO_INCREMENT,
+  `subdivision_id` int NOT NULL,
+  `user_id` int DEFAULT NULL,
+  `name` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `address` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_by` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`respondent_id`),
+  UNIQUE KEY `uq_complaint_respondent_user` (`subdivision_id`,`user_id`),
+  KEY `ix_complaint_respondents_subdivision` (`subdivision_id`),
+  KEY `fk_complaint_respondents_user` (`user_id`),
+  KEY `fk_complaint_respondents_created_by` (`created_by`),
+  CONSTRAINT `fk_complaint_respondents_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_complaint_respondents_subdivision` FOREIGN KEY (`subdivision_id`) REFERENCES `subdivisions` (`subdivision_id`),
+  CONSTRAINT `fk_complaint_respondents_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- TABLE: COMPLAINT_FINDINGS (Complaint findings (2026-11-13))   -- [NEW]
+-- -----------------------------------------------------------------------------
+DROP TABLE IF EXISTS complaint_findings;
+CREATE TABLE `complaint_findings` (
+  `report_id` int NOT NULL,
+  `subdivision_id` int NOT NULL,
+  `policy_id` varchar(60) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `policy_title` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `policy_reference` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `no_rule` tinyint(1) NOT NULL DEFAULT '0',
+  `respondent_id` int DEFAULT NULL,
+  `respondent_evidence` json DEFAULT NULL,
+  `respondent_note` text COLLATE utf8mb4_unicode_ci,
+  `respondent_by` int DEFAULT NULL,
+  `respondent_at` datetime DEFAULT NULL,
+  `check_note` text COLLATE utf8mb4_unicode_ci,
+  `check_by` int DEFAULT NULL,
+  `check_at` datetime DEFAULT NULL,
+  `ruled_out` json DEFAULT NULL,
+  `separate_from_report_id` int DEFAULT NULL,
+  `separate_by` int DEFAULT NULL,
+  `separate_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`report_id`),
+  KEY `ix_complaint_findings_respondent` (`respondent_id`),
+  KEY `ix_complaint_findings_subdivision` (`subdivision_id`),
+  KEY `fk_complaint_findings_separate` (`separate_from_report_id`),
+  KEY `fk_complaint_findings_resp_by` (`respondent_by`),
+  KEY `fk_complaint_findings_check_by` (`check_by`),
+  KEY `fk_complaint_findings_sep_by` (`separate_by`),
+  CONSTRAINT `fk_complaint_findings_check_by` FOREIGN KEY (`check_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_complaint_findings_report` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_complaint_findings_resp_by` FOREIGN KEY (`respondent_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_complaint_findings_respondent` FOREIGN KEY (`respondent_id`) REFERENCES `complaint_respondents` (`respondent_id`),
+  CONSTRAINT `fk_complaint_findings_sep_by` FOREIGN KEY (`separate_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_complaint_findings_separate` FOREIGN KEY (`separate_from_report_id`) REFERENCES `reports` (`report_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_complaint_findings_subdivision` FOREIGN KEY (`subdivision_id`) REFERENCES `subdivisions` (`subdivision_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- TABLE: COMPLAINT_OFFENSES (Complaint offenses (2026-11-13))   -- [NEW]
+-- -----------------------------------------------------------------------------
+DROP TABLE IF EXISTS complaint_offenses;
+CREATE TABLE `complaint_offenses` (
+  `offense_id` int NOT NULL AUTO_INCREMENT,
+  `report_id` int NOT NULL,
+  `subdivision_id` int NOT NULL,
+  `respondent_id` int NOT NULL,
+  `policy_id` varchar(60) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `policy_title` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `policy_reference` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `counted` tinyint(1) NOT NULL DEFAULT '1',
+  `offense_number` int DEFAULT NULL,
+  `incident_at` datetime NOT NULL,
+  `note` text COLLATE utf8mb4_unicode_ci,
+  `confirmed_by` int DEFAULT NULL,
+  `confirmed_at` datetime NOT NULL,
+  `voided_at` datetime DEFAULT NULL,
+  `voided_by` int DEFAULT NULL,
+  `void_reason` text COLLATE utf8mb4_unicode_ci,
+  PRIMARY KEY (`offense_id`),
+  KEY `ix_complaint_offenses_history` (`respondent_id`,`policy_id`,`voided_at`),
+  KEY `ix_complaint_offenses_report` (`report_id`),
+  KEY `fk_complaint_offenses_subdivision` (`subdivision_id`),
+  KEY `fk_complaint_offenses_confirmed_by` (`confirmed_by`),
+  KEY `fk_complaint_offenses_voided_by` (`voided_by`),
+  CONSTRAINT `fk_complaint_offenses_confirmed_by` FOREIGN KEY (`confirmed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_complaint_offenses_report` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_complaint_offenses_respondent` FOREIGN KEY (`respondent_id`) REFERENCES `complaint_respondents` (`respondent_id`),
+  CONSTRAINT `fk_complaint_offenses_subdivision` FOREIGN KEY (`subdivision_id`) REFERENCES `subdivisions` (`subdivision_id`),
+  CONSTRAINT `fk_complaint_offenses_voided_by` FOREIGN KEY (`voided_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- TABLE: ENFORCEMENT_STEPS (Enforcement steps (2026-11-13))   -- [NEW]
+-- -----------------------------------------------------------------------------
+DROP TABLE IF EXISTS enforcement_steps;
+CREATE TABLE `enforcement_steps` (
+  `step_id` int NOT NULL AUTO_INCREMENT,
+  `offense_id` int NOT NULL,
+  `report_id` int NOT NULL,
+  `kind` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `state` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `due_at` datetime DEFAULT NULL,
+  `details` json DEFAULT NULL,
+  `referral_id` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`step_id`),
+  UNIQUE KEY `uq_enforcement_step` (`offense_id`,`kind`),
+  KEY `ix_enforcement_steps_report` (`report_id`),
+  KEY `fk_enforcement_steps_referral` (`referral_id`),
+  CONSTRAINT `fk_enforcement_steps_offense` FOREIGN KEY (`offense_id`) REFERENCES `complaint_offenses` (`offense_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_enforcement_steps_referral` FOREIGN KEY (`referral_id`) REFERENCES `barangay_referrals` (`referral_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_enforcement_steps_report` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- TABLE: ENFORCEMENT_STEP_EVENTS (Enforcement step events (2026-11-13))   -- [NEW]
+-- -----------------------------------------------------------------------------
+DROP TABLE IF EXISTS enforcement_step_events;
+CREATE TABLE `enforcement_step_events` (
+  `event_id` int NOT NULL AUTO_INCREMENT,
+  `step_id` int NOT NULL,
+  `report_id` int NOT NULL,
+  `kind` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `occurred_at` datetime NOT NULL,
+  `details` json DEFAULT NULL,
+  `recorded_by` int DEFAULT NULL,
+  `recorded_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `client_request_id` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`event_id`),
+  UNIQUE KEY `uq_enforcement_event_request` (`client_request_id`),
+  KEY `ix_enforcement_events_step` (`step_id`),
+  KEY `ix_enforcement_events_report` (`report_id`),
+  KEY `fk_enforcement_events_recorded_by` (`recorded_by`),
+  CONSTRAINT `fk_enforcement_events_recorded_by` FOREIGN KEY (`recorded_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_enforcement_events_report` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_enforcement_events_step` FOREIGN KEY (`step_id`) REFERENCES `enforcement_steps` (`step_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- TABLE: WARNING_LETTER_TEMPLATES (Warning letter templates)   -- [NEW]
+-- -----------------------------------------------------------------------------
+DROP TABLE IF EXISTS warning_letter_templates;
+CREATE TABLE `warning_letter_templates` (
+  `template_id` int NOT NULL AUTO_INCREMENT,
+  `subdivision_id` int DEFAULT NULL,
+  `name` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `description` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `warning_level` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `source_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `is_default` tinyint(1) NOT NULL,
+  `current_version_id` int DEFAULT NULL,
+  `created_by` int DEFAULT NULL,
+  `updated_by` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT (now()),
+  `updated_at` datetime NOT NULL DEFAULT (now()),
+  PRIMARY KEY (`template_id`),
+  KEY `created_by` (`created_by`),
+  KEY `updated_by` (`updated_by`),
+  KEY `ix_warning_letter_templates_status` (`status`),
+  KEY `ix_warning_letter_templates_template_id` (`template_id`),
+  KEY `ix_warning_letter_templates_subdivision_id` (`subdivision_id`),
+  KEY `ix_warning_letter_templates_warning_level` (`warning_level`),
+  CONSTRAINT `warning_letter_templates_ibfk_1` FOREIGN KEY (`subdivision_id`) REFERENCES `subdivisions` (`subdivision_id`) ON DELETE CASCADE,
+  CONSTRAINT `warning_letter_templates_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `warning_letter_templates_ibfk_3` FOREIGN KEY (`updated_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- TABLE: WARNING_LETTER_TEMPLATE_VERSIONS (Warning letter template versions)   -- [NEW]
+-- -----------------------------------------------------------------------------
+DROP TABLE IF EXISTS warning_letter_template_versions;
+CREATE TABLE `warning_letter_template_versions` (
+  `version_id` int NOT NULL AUTO_INCREMENT,
+  `template_id` int NOT NULL,
+  `version_number` int NOT NULL,
+  `subject_template` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `body_template` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `html_template` longtext COLLATE utf8mb4_unicode_ci,
+  `source_filename` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `source_docx_bytes` longblob,
+  `placeholders_used` json DEFAULT NULL,
+  `change_note` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_by` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT (now()),
+  PRIMARY KEY (`version_id`),
+  KEY `created_by` (`created_by`),
+  KEY `ix_warning_letter_template_versions_template_id` (`template_id`),
+  KEY `ix_warning_letter_template_versions_version_id` (`version_id`),
+  CONSTRAINT `warning_letter_template_versions_ibfk_1` FOREIGN KEY (`template_id`) REFERENCES `warning_letter_templates` (`template_id`) ON DELETE CASCADE,
+  CONSTRAINT `warning_letter_template_versions_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- TABLE: GENERATED_WARNING_LETTERS (Generated warning letters)   -- [NEW]
+-- -----------------------------------------------------------------------------
+DROP TABLE IF EXISTS generated_warning_letters;
+CREATE TABLE `generated_warning_letters` (
+  `letter_id` int NOT NULL AUTO_INCREMENT,
+  `warning_reference` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `subdivision_id` int DEFAULT NULL,
+  `warning_id` int DEFAULT NULL,
+  `complaint_step_id` int DEFAULT NULL,
+  `report_id` int DEFAULT NULL,
+  `case_reference` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `recipient_user_id` int DEFAULT NULL,
+  `recipient_name` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `recipient_address` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `pet_id` int DEFAULT NULL,
+  `pet_name` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `pet_type` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `warning_level` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `policy_id` varchar(60) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `policy_reference` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `template_id` int DEFAULT NULL,
+  `template_name` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `template_version_id` int DEFAULT NULL,
+  `template_version_number` int NOT NULL,
+  `rendered_subject` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `rendered_body` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `rendered_html` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `placeholders_json` json DEFAULT NULL,
+  `issued_by` int DEFAULT NULL,
+  `issued_by_name` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `issued_at` datetime NOT NULL DEFAULT (now()),
+  `notification_id` int DEFAULT NULL,
+  `notification_status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `notification_error` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `notification_created_at` datetime DEFAULT NULL,
+  `notification_sent_at` datetime DEFAULT NULL,
+  `viewed_at` datetime DEFAULT NULL,
+  `retry_count` int NOT NULL,
+  `last_retry_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT (now()),
+  `updated_at` datetime NOT NULL DEFAULT (now()),
+  PRIMARY KEY (`letter_id`),
+  UNIQUE KEY `ix_generated_warning_letters_warning_reference` (`warning_reference`),
+  KEY `pet_id` (`pet_id`),
+  KEY `template_id` (`template_id`),
+  KEY `template_version_id` (`template_version_id`),
+  KEY `issued_by` (`issued_by`),
+  KEY `ix_generated_warning_letters_warning_id` (`warning_id`),
+  KEY `ix_generated_warning_letters_complaint_step_id` (`complaint_step_id`),
+  KEY `ix_generated_warning_letters_letter_id` (`letter_id`),
+  KEY `ix_generated_warning_letters_subdivision_id` (`subdivision_id`),
+  KEY `ix_generated_warning_letters_report_id` (`report_id`),
+  KEY `ix_generated_warning_letters_notification_id` (`notification_id`),
+  KEY `ix_generated_warning_letters_recipient_user_id` (`recipient_user_id`),
+  CONSTRAINT `generated_warning_letters_ibfk_1` FOREIGN KEY (`subdivision_id`) REFERENCES `subdivisions` (`subdivision_id`) ON DELETE SET NULL,
+  CONSTRAINT `generated_warning_letters_ibfk_10` FOREIGN KEY (`notification_id`) REFERENCES `notifications` (`notification_id`) ON DELETE SET NULL,
+  CONSTRAINT `generated_warning_letters_ibfk_2` FOREIGN KEY (`warning_id`) REFERENCES `owner_warnings` (`warning_id`) ON DELETE SET NULL,
+  CONSTRAINT `generated_warning_letters_ibfk_3` FOREIGN KEY (`complaint_step_id`) REFERENCES `enforcement_steps` (`step_id`) ON DELETE SET NULL,
+  CONSTRAINT `generated_warning_letters_ibfk_4` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE SET NULL,
+  CONSTRAINT `generated_warning_letters_ibfk_5` FOREIGN KEY (`recipient_user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `generated_warning_letters_ibfk_6` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE SET NULL,
+  CONSTRAINT `generated_warning_letters_ibfk_7` FOREIGN KEY (`template_id`) REFERENCES `warning_letter_templates` (`template_id`) ON DELETE SET NULL,
+  CONSTRAINT `generated_warning_letters_ibfk_8` FOREIGN KEY (`template_version_id`) REFERENCES `warning_letter_template_versions` (`version_id`) ON DELETE SET NULL,
+  CONSTRAINT `generated_warning_letters_ibfk_9` FOREIGN KEY (`issued_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================================================
