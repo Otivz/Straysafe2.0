@@ -48,6 +48,7 @@ export interface Report {
   title: string;
   description: string;
   animalType: AnimalType;
+  customAnimalType?: string;
   breed?: string;
   colors?: string[];
   petName?: string;
@@ -210,7 +211,7 @@ export interface Notification {
 /** A case conversation the signed-in resident belongs to. It never grants access to another resident's report. */
 export interface CaseConversation {
   id: string;
-  kind: 'direct' | 'bridge';
+  kind: 'direct' | 'bridge' | 'general';
   status: 'open' | 'closed';
   canReply: boolean;
   endedReason: string | null;
@@ -222,6 +223,13 @@ export interface CaseConversation {
   lastAt: string;
   lastText: string;
   people: Array<{ id: string; name: string; label: string; me: boolean }>;
+  /** The report it is about ("SS-2026-0017"), its category and the case's status in words; null for a general conversation. */
+  reportRef?: string | null;
+  reportCategory?: string | null;
+  caseStatus?: string | null;
+  /** When and why it closed: with its case ("case_closed"), a removed lost/found link, or by the administration. */
+  closedAt?: string | null;
+  closeTrigger?: 'case_closed' | 'link_removed' | 'manual' | null;
 }
 
 export interface Profile { id: string; name: string; email: string; phone: string; unit: string; street: string; memberSince: string }
@@ -240,6 +248,7 @@ export interface Draft {
   kind: ReportKind;
   category: CategoryId;
   animalType: AnimalType | '';
+  customAnimalType?: string;
   breed?: string;
   colors?: string[];
   petId: string | null;
@@ -250,6 +259,25 @@ export interface Draft {
   location: GeoPoint | null;
   media: Media[];
   extra: string;
+  /** Injured / Sick animal multi-select observed conditions. */
+  injuredConditions?: string[];
+  injuredOtherDetail?: string;
+  /** Dangerous Animal specialized reporting fields. */
+  dangerousBehaviors?: string[];
+  dangerousOtherDetail?: string;
+  currentDanger?: string;
+  stillInLocation?: string;
+  biteDetails?: {
+    personBitten: string;
+    animalBitten: string;
+    affectedCount: string;
+    incidentTime: string;
+    incidentLocation: string;
+    whatHappened: string;
+    stillNearby: string;
+  };
+  rabiesSymptoms?: string[];
+  movementDirection?: string;
   /** An animal complaint only (optional): what the animal looked like, in the resident's words, and what they know about the owner.
    *  A lead for the Subdivision Leader, never an accusation; only the Leader sees it (docs/01-system/COMPLAINT_MANAGEMENT.md). */
   looks?: string;

@@ -45,9 +45,8 @@ class Report(Base):
     separate_incident_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     separate_incident_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
-    # Dog, Cat and Unknown are the original values; the others were appended (db_migrations/case_alignment.py).
-    # A report about any of them needs no pet registration.
-    animal_type: Mapped[Optional[str]] = mapped_column(Enum(*ANIMAL_TYPE_LABELS), nullable=True, default='Unknown')
+    # Dog, Cat, or a custom animal type entered when 'Others' is chosen (e.g. Rabbit, Bird, Turtle, Snake, Hamster).
+    animal_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, default='Unknown')
     animal_breed: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     animal_color: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     animal_colors: Mapped[Optional[List[str]]] = mapped_column(JSON, nullable=True)

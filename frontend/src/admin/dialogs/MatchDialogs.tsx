@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Equal, HelpCircle, X } from 'lucide-react';
+import { Check, Equal, HelpCircle, Images, RefreshCw, X } from 'lucide-react';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
+import { Field, Textarea } from '../components/form';
 import { Callout, FormError } from '../components/layout';
-import { KindBadge, MatchPhoto } from '../components/MatchParts';
+import { KindBadge, MatchBreakdown, MatchPhoto } from '../components/MatchParts';
 import { useToast } from '../components/toast';
 import { useAdminData } from '../data/context';
 import { levelLabel, matchesOf } from '../data/selectors';
@@ -51,6 +52,9 @@ export function MatchCompareDialog({ matchId, onClose }: { matchId: string; onCl
   const sent = useRef(false);
   const [now] = useState(() => new Date());
   const [remote, setRemote] = useState<{ id: string; match: PossibleMatch } | { id: string; error: string } | null>(null);
+  const [note, setNote] = useState('');
+  const [reloads, setReloads] = useState(0);
+  const tool = useSubmit();
 
   useEffect(() => {
     let cancelled = false;
@@ -58,7 +62,7 @@ export function MatchCompareDialog({ matchId, onClose }: { matchId: string; onCl
       .then((match) => { if (!cancelled) setRemote({ id: matchId, match }); })
       .catch((err: unknown) => { if (!cancelled) setRemote({ id: matchId, error: errorMessage(err) }); });
     return () => { cancelled = true; };
-  }, [matchDetail, matchId]);
+  }, [matchDetail, matchId, reloads]);
 
   const detail = remote && remote.id === matchId && 'match' in remote ? remote.match : null;
   const loadError = remote && remote.id === matchId && 'error' in remote ? remote.error : null;
@@ -72,23 +76,33 @@ export function MatchCompareDialog({ matchId, onClose }: { matchId: string; onCl
   }
 
   const status = opened ?? m.status;
-  const waiting = status === 'pending' && m.lost.open && m.found.open;
+  const waiting = (status === 'pending' || status === 'under_review') && m.lost.open && m.found.open;
+  const underReview = (detail?.status ?? status) === 'under_review';
   const ruledOut = status === 'rejected' && m.lost.open && m.found.open;
   const owner = firstName(m.lost.reporter?.name);
   const finder = firstName(m.found.reporter?.name);
   const alreadyLinked = matchesOf(state.matches, m.lost.caseId).linked.length;
 
-  const decide = async (decision: 'confirm' | 'reject' | 'reopen') => {
+  const decide = async (decision: 'under_review' | 'confirm' | 'reject' | 'reopen') => {
     if (sent.current) return;
-    const ok = await run(() => dispatch({ type: 'match/decide', matchId, decision }));
+    const ok = await run(() => dispatch({ type: 'match/decide', matchId, decision, note: note.trim() || undefined }));
     if (!ok) return;
     sent.current = true;
-    toast.success(decision === 'confirm' ? 'Linked. Both residents were told.' : decision === 'reject' ? 'Ruled out. Nobody was told.' : 'Back in your list to review.');
+    toast.success(decision === 'confirm' ? 'Verified and linked. Both residents were told.' : decision === 'reject' ? 'Marked as not a match. Nobody was told.'
+      : decision === 'under_review' ? 'Marked as Under review. Nobody was told.' : 'Back in your list to review.');
     onClose();
   };
 
+  // Recalculate / AI photo comparison: the server keeps the earlier result in the match's history; the dialog reads the match again.
+  const runTool = async (type: 'match/rescore' | 'match/comparePhotos') => {
+    const ok = await tool.run(() => dispatch({ type, matchId }));
+    if (!ok) return;
+    toast.success(type === 'match/rescore' ? 'Recalculated. The earlier result is kept in the history.' : 'Photos compared. The match was recalculated.');
+    setReloads((n) => n + 1);
+  };
+
   const title = waiting ? 'Do these reports describe the same animal?' : ruledOut ? 'Ruled out as the same animal' : status === 'confirmed' ? 'Linked as the same animal' : 'Possible match';
-  const description = waiting ? <>{levelLabel(m.level)}. Compare them, then decide. Nothing is linked until you do.</> : null;
+  const description = waiting ? <>{levelLabel(m.level)}{underReview ? ' · Under review' : ''}. Compare them, then decide. Nothing is linked until you do.</> : null;
   const reasons = detail?.reasons ?? m.reasons;
 
   return (
@@ -100,8 +114,9 @@ export function MatchCompareDialog({ matchId, onClose }: { matchId: string; onCl
       footer={({ requestClose }) => (waiting ? (
         <>
           <Button variant="ghost" onClick={requestClose} disabled={pending}>Decide later</Button>
-          <Button disabled={pending} onClick={() => { void decide('reject'); }}>Not the same animal</Button>
-          <Button variant="primary" loading={pending} onClick={() => { void decide('confirm'); }}>Same animal: link them</Button>
+          {!underReview ? <Button disabled={pending} onClick={() => { void decide('under_review'); }}>Mark as Under review</Button> : null}
+          <Button disabled={pending} onClick={() => { void decide('reject'); }}>Not a match</Button>
+          <Button variant="primary" loading={pending} onClick={() => { void decide('confirm'); }}>Confirm verified match: link them</Button>
         </>
       ) : ruledOut ? (
         <>
@@ -111,6 +126,19 @@ export function MatchCompareDialog({ matchId, onClose }: { matchId: string; onCl
       ) : <Button onClick={requestClose}>Close</Button>)}
     >
       <div className="sa-cmp__heads"><Head side={m.lost} now={now} /><Head side={m.found} now={now} /></div>
+
+      {detail?.analysis ? <MatchBreakdown analysis={detail.analysis} /> : null}
+      {detail && waiting ? (
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" icon={RefreshCw} loading={tool.pending} onClick={() => { void runTool('match/rescore'); }}>Recalculate</Button>
+          {detail.canComparePhotos ? (
+            <Button size="sm" icon={Images} disabled={tool.pending} onClick={() => { void runTool('match/comparePhotos'); }}>
+              {detail.hasPhotoComparison ? 'Compare photos again (AI)' : 'Compare photos (AI)'}
+            </Button>
+          ) : <span className="sa-small sa-text-3 self-center">AI photo comparison needs a photo on both reports.</span>}
+        </div>
+      ) : null}
+      {tool.error ? <FormError message={tool.error} /> : null}
 
       {reasons.length > 0 ? (
         <div className="sa-mwhy">
@@ -141,6 +169,27 @@ export function MatchCompareDialog({ matchId, onClose }: { matchId: string; onCl
         </table>
       ) : loadError ? <FormError message={`The comparison could not be loaded. ${loadError}`} /> : <p className="sa-small sa-text-2" role="status">Loading the comparison…</p>}
 
+      {detail?.reviewNote ? (
+        <div className="flex flex-col gap-1">
+          <p className="sa-label">Review notes</p>
+          <p className="sa-mscore__notes">{detail.reviewNote}</p>
+        </div>
+      ) : null}
+      {detail?.history && detail.history.length > 0 ? (
+        <details>
+          <summary className="sa-small sa-text-2 cursor-pointer">Earlier results ({detail.history.length})</summary>
+          <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0">
+            {detail.history.slice().reverse().map((h) => (
+              <li key={`${h.at}-${h.score}`} className="sa-small sa-text-2">{fmtDateTime(h.at)} · {h.score}%{h.classification ? ` · ${h.classification}` : ''} · {h.algorithm} — replaced because: {h.reason}</li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+      {waiting ? (
+        <Field label="Review notes" optional hint="Kept with your decision and in the audit log, with your name and the time. Residents never see them.">
+          <Textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} rows={2} disabled={pending} />
+        </Field>
+      ) : null}
       {waiting ? (
         <Callout tone="info" title="If you link them:">
           {owner} and {finder} are both told that you linked these reports. A direct conversation between the owner and the finder opens immediately in their Resident app. Phone numbers and addresses are not added automatically.
@@ -150,7 +199,7 @@ export function MatchCompareDialog({ matchId, onClose }: { matchId: string; onCl
       ) : null}
       {!waiting && !ruledOut && status === 'confirmed' ? <Callout tone="info">Both residents were told{m.decidedAt ? ` ${relative(m.decidedAt, now)}` : ''}. Linking is not proof of ownership and does not mark the pet recovered: only the owner’s confirmation does.</Callout> : null}
       {!waiting && !ruledOut && status === 'moot' ? <Callout tone="info">The found report was linked to another missing-pet report, so this one no longer applies.</Callout> : null}
-      {!waiting && !ruledOut && (status === 'pending' || status === 'rejected') ? <Callout tone="info">One of the reports is closed, so this match can no longer be decided.</Callout> : null}
+      {!waiting && !ruledOut && (status === 'pending' || status === 'under_review' || status === 'rejected') ? <Callout tone="info">One of the reports is closed, so this match can no longer be decided.</Callout> : null}
       {error ? <FormError message={error} /> : null}
     </Dialog>
   );

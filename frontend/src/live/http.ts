@@ -46,7 +46,11 @@ export function toApiError(err: unknown, options: Pick<CallOptions, 'unauthorize
     const status = err.response.status;
     const detail = detailOf(err.response.data);
     if (status === 401) return options.unauthorized === 'server' ? new AdminApiError('server', detail ?? 'The email or password is not correct.', 401) : new AdminApiError('session', undefined, 401);
-    if (status === 429) return new AdminApiError('server', TOO_MANY, 429);
+    if (status === 429) {
+      const structured = structuredDetailOf(err.response.data);
+      if (structured) return new ApiDetailError(detail ?? TOO_MANY, 429, structured);
+      return new AdminApiError('server', detail ?? TOO_MANY, 429);
+    }
     // A 5xx body can carry internals: show our own sentence, keep the status for whoever needs it.
     if (status >= 500) return new AdminApiError('server', undefined, status);
     const structured = structuredDetailOf(err.response.data);
@@ -91,6 +95,16 @@ export async function httpUpload<T>(url: string, form: FormData, options: CallOp
 }
 
 /** Download a binary file (PDF/DOCX) through the authenticated API client. */
+/** A signed-in GET that answers with a file (an image, for example) as a Blob. */
+export async function httpGetBlob(url: string, params?: Query): Promise<Blob> {
+  try {
+    const res = await api.request<Blob>({ method: 'get', url, params, responseType: 'blob', timeout: 60_000 });
+    return res.data;
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
+
 export async function httpDownloadBlob(url: string, filename: string, params?: Query): Promise<void> {
   try {
     const res = await api.request<Blob>({ method: 'get', url, params, responseType: 'blob', timeout: 60_000 });

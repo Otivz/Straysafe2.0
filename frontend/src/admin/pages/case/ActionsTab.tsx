@@ -1,23 +1,25 @@
-import { useState } from 'react';
-import { AlertTriangle, CalendarClock, CalendarPlus, Check, ClipboardCheck, Download, Eye, Handshake, Landmark, MessageSquare, NotebookPen, RefreshCw, ShieldCheck, X } from 'lucide-react';
+import { useState, type ElementType } from 'react';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, ArrowRight, CalendarPlus, Check, ClipboardCheck, Download, Eye, Landmark, Megaphone, MessageSquare, NotebookPen, RefreshCw, X } from 'lucide-react';
+import { adminPath } from '../../config';
 import { Badge } from '../../components/Badge';
-import { Button } from '../../components/Button';
+import { Button, LinkButton } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
-import { Block, Callout, Kv, Panel } from '../../components/layout';
-import { Timeline, type TimelineItem } from '../../components/Timeline';
+import { Block, Callout, Panel } from '../../components/layout';
 import { useToast } from '../../components/toast';
-import { CATEGORIES, COMPLIANCE_RESULTS, CONTACT_METHODS, CONTACT_OUTCOMES, FOLLOWUP_KINDS, REFERRAL_STATUS, WARNING_DELIVERY } from '../../data/constants';
+import { CATEGORIES, COMPLIANCE_RESULTS, FOLLOWUP_KINDS, WARNING_DELIVERY } from '../../data/constants';
 import { useAdminData } from '../../data/context';
 import { pendingFollowUpsOf, warningEligibility } from '../../data/selectors';
-import type { Case, Referral, Warning } from '../../data/types';
+import type { Case, Warning } from '../../data/types';
 import { adminApi, type ApiGeneratedWarningLetter } from '../../live/api';
 import { dueInfo, fmtDateTime, remaining } from '../../../preview/lib/format';
 import { errorMessage } from '../../../preview/lib/errors';
+import { CaseReferralsSection } from '../../dialogs/CoordinationDialogs';
 import type { OpenCaseDialog } from './dialogState';
 
 type Props = { c: Case; now: Date; openDialog: OpenCaseDialog };
 
-function WarningCard({ w, c, now, openDialog }: { w: Warning; c: Case; now: Date; openDialog: OpenCaseDialog }) {
+function WarningCard({ w, c, now, openDialog, delayMs = 0 }: { w: Warning; c: Case; now: Date; openDialog: OpenCaseDialog; delayMs?: number }) {
   const toast = useToast();
   const [letterModal, setLetterModal] = useState<ApiGeneratedWarningLetter | null>(null);
   const [busy, setBusy] = useState(false);
@@ -68,17 +70,29 @@ function WarningCard({ w, c, now, openDialog }: { w: Warning; c: Case; now: Date
     }
   };
 
+  const accentClass =
+    w.status === 'active'
+      ? 'border-l-[3.5px] border-l-[#b45309]'
+      : w.outcome === 'compliant'
+        ? 'border-l-[3.5px] border-l-emerald-600'
+        : w.outcome === 'non_compliant'
+          ? 'border-l-[3.5px] border-l-red-500'
+          : '';
+
   return (
-    <div className="sa-record">
+    <div
+      className={`sa-fade-up rounded-xl border border-[#e7e2da] bg-gradient-to-b from-white to-[#fcfaf6] p-4 shadow-xs transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-[#d6cfc7] hover:shadow-sm ${accentClass}`}
+      style={{ animationDelay: `${delayMs}ms` }}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="flex flex-wrap items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="m-0 flex flex-wrap items-center gap-2">
             {w.warningReference ? <span className="sa-ref">{w.warningReference}</span> : null}
             {w.warningLevel ? <Badge tone="amber">{w.warningLevel}</Badge> : null}
-            <span className="sa-semibold">{w.policyRef}</span>
+            <span className="sa-semibold text-[#1c1917]">{w.policyRef}</span>
             <span className="sa-text-2">{w.policyTitle}</span>
           </p>
-          <p className="sa-meta mt-0.5">
+          <p className="sa-meta mt-1">
             Issued {fmtDateTime(w.issuedAt)} · {WARNING_DELIVERY[w.delivery].toLowerCase()} · to {w.ownerName}
             {w.templateName ? ` · Template: ${w.templateName} (v${w.templateVersionNumber ?? 1})` : ''}
           </p>
@@ -90,41 +104,69 @@ function WarningCard({ w, c, now, openDialog }: { w: Warning; c: Case; now: Date
             </Badge>
           ) : null}
           {w.viewedAt ? <Badge tone="sage">Viewed {fmtDateTime(w.viewedAt).split(' · ')[0]}</Badge> : (w.letterId ? <Badge tone="neutral">Unread by resident</Badge> : null)}
+          <Badge tone={w.acknowledgedAt ? 'sage' : 'neutral'}>
+            {w.acknowledgedAt ? `Acknowledged ${fmtDateTime(w.acknowledgedAt).split(' · ')[0]}` : 'Awaiting Acknowledgment'}
+          </Badge>
           {w.status === 'active' ? <Badge tone="brand" dot>Active</Badge> : w.status === 'concluded' ? outcome : <Badge>Withdrawn</Badge>}
         </div>
       </div>
       {notifStatus === 'failed' && notifErr ? (
-        <Callout tone="amber" className="mt-2" title="Notification delivery failed">
+        <Callout tone="amber" className="mt-2.5" title="Notification delivery failed">
           {notifErr} — Warning record is preserved.
         </Callout>
       ) : null}
-      <p className="mt-3">{w.details}</p>
+      <div className="mt-3 rounded-lg border border-[#ede7de] bg-[#faf7f2] px-3 py-2 text-sm text-[#1c1917] whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+        {w.details}
+      </div>
 
-      {w.letterId ? (
+      {w.ownerResponse ? (
+        <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs space-y-0.5">
+          <div className="font-semibold text-[var(--sa-brand-ink)]">
+            Owner Response / Clarification{w.ownerRespondedAt ? ` (${fmtDateTime(w.ownerRespondedAt)})` : ''}:
+          </div>
+          <p className="m-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm text-[var(--sa-text-1)]">{w.ownerResponse}</p>
+        </div>
+      ) : null}
+
+      {w.letterId || w.threadId ? (
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button size="sm" icon={Eye} loading={busy} onClick={() => void viewLetter()}>View letter</Button>
-          <Button size="sm" variant="ghost" icon={Download} onClick={() => void download('pdf')}>Download PDF</Button>
-          <Button size="sm" variant="ghost" icon={Download} onClick={() => void download('docx')}>Download DOCX</Button>
-          {notifStatus === 'failed' ? (
-            <Button size="sm" icon={RefreshCw} loading={busy} onClick={() => void retryNotif()}>Retry notification</Button>
+          {w.letterId ? (
+            <>
+              <Button size="sm" icon={Eye} loading={busy} onClick={() => void viewLetter()}>View letter</Button>
+              <Button size="sm" variant="ghost" icon={Download} onClick={() => void download('pdf')}>Download PDF</Button>
+              <Button size="sm" variant="ghost" icon={Download} onClick={() => void download('docx')}>Download DOCX</Button>
+              {notifStatus === 'failed' ? (
+                <Button size="sm" icon={RefreshCw} loading={busy} onClick={() => void retryNotif()}>Retry notification</Button>
+              ) : null}
+            </>
+          ) : null}
+          {w.threadId ? (
+            <LinkButton size="sm" variant="ghost" icon={MessageSquare} to={adminPath(`/messages/${w.threadId}`)}>
+              Conversation
+            </LinkButton>
           ) : null}
         </div>
       ) : null}
 
       {w.observationEnd ? (
-        <div className="mt-4">
-          <div className="flex items-center justify-between sa-small"><span>{w.observationDays} {w.observationDays === 1 ? 'day' : 'days'} observation</span><span className={w.status === 'active' && end && end < now.getTime() ? 'sa-text-red sa-semibold' : 'sa-text-2'}>{w.status === 'active' ? remaining(w.observationEnd, now) : `ended ${fmtDateTime(w.observationEnd).split(' · ')[0]}`}</span></div>
-          <div className="sa-progress mt-1.5" role="progressbar" aria-label="Observation period elapsed" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct ?? 0)}><span style={{ width: `${pct ?? 0}%` }} /></div>
-          <p className="sa-meta mt-1">{fmtDateTime(w.observationStart!)} → {fmtDateTime(w.observationEnd)}</p>
+        <div className="mt-4 rounded-lg border border-[#ede7de] bg-white/80 p-3">
+          <div className="flex items-center justify-between sa-small">
+            <span className="font-medium text-[#292524]">{w.observationDays} {w.observationDays === 1 ? 'day' : 'days'} observation</span>
+            <span className={w.status === 'active' && end && end < now.getTime() ? 'sa-text-red sa-semibold' : 'sa-text-2 font-medium'}>{w.status === 'active' ? remaining(w.observationEnd, now) : `ended ${fmtDateTime(w.observationEnd).split(' · ')[0]}`}</span>
+          </div>
+          <div className="sa-progress mt-2 overflow-hidden" role="progressbar" aria-label="Observation period elapsed" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct ?? 0)}>
+            <span className="transition-[width] duration-700 ease-out" style={{ width: `${pct ?? 0}%` }} />
+          </div>
+          <p className="sa-meta mt-1.5">{fmtDateTime(w.observationStart!)} → {fmtDateTime(w.observationEnd)}</p>
         </div>
       ) : <p className="sa-meta mt-3">The policy defines no observation period, so none was assumed.</p>}
 
       {w.observations.length > 0 ? (
         <div className="mt-4">
           <p className="sa-label mb-1.5">Compliance observations</p>
-          <ul className="m-0 list-none p-0">
+          <ul className="m-0 list-none space-y-1 p-0">
             {w.observations.map((o) => (
-              <li key={o.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-1">
+              <li key={o.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 rounded-lg bg-[#faf7f2] px-2.5 py-1.5">
                 <Badge tone={COMPLIANCE_RESULTS[o.result].tone}>{COMPLIANCE_RESULTS[o.result].label}</Badge>
                 <span className="sa-small">{o.notes}</span>
                 <span className="sa-meta">{fmtDateTime(o.at)}</span>
@@ -135,7 +177,7 @@ function WarningCard({ w, c, now, openDialog }: { w: Warning; c: Case; now: Date
       ) : null}
 
       {w.status === 'concluded' && w.outcomeNote ? <p className="sa-small sa-text-2 mt-3"><span className="sa-semibold">Outcome:</span> {w.outcomeNote}</p> : null}
-      {w.status === 'active' && c.status !== 'closed' ? <div className="mt-4 flex flex-wrap items-center gap-3"><Button size="sm" icon={ClipboardCheck} onClick={() => openDialog({ kind: 'compliance' })}>Record compliance observation</Button><span className="sa-meta">No fine is assessed by the subdivision.</span></div> : null}
+      {w.status === 'active' && c.status !== 'closed' ? <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-[#ede7de] pt-3"><Button size="sm" icon={ClipboardCheck} onClick={() => openDialog({ kind: 'compliance' })}>Record compliance observation</Button><span className="sa-meta">No fine is assessed by the subdivision.</span></div> : null}
 
       {letterModal ? (
         <Dialog
@@ -163,54 +205,86 @@ function WarningCard({ w, c, now, openDialog }: { w: Warning; c: Case; now: Date
   );
 }
 
-function ReferralCard({ r, c, openDialog }: { r: Referral; c: Case; openDialog: OpenCaseDialog }) {
-  const s = REFERRAL_STATUS[r.status];
-  return (
-    <div className="sa-record">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="sa-semibold">{r.orgName}</p>
-          <p className="sa-meta mt-0.5">{r.status === 'to_contact' ? `Written down ${fmtDateTime(r.referredAt)} · nobody contacted yet` : `Referred ${fmtDateTime(r.referredAt)} · ${r.contactPerson} · ${r.contactChannel}`}</p>
-        </div>
-        <div className="flex items-center gap-2"><Badge tone={s.tone} dot>{s.label}</Badge>{c.status !== 'closed' && r.orgId === 'barangay' ? <Button size="sm" icon={Handshake} onClick={() => openDialog({ kind: 'coordination', referralId: r.id, ...(r.status === 'to_contact' ? { contact: true } : {}) })}>{r.status === 'to_contact' ? 'Record contact attempt' : 'Record update'}</Button> : null}</div>
-      </div>
-      <Kv wide rows={[
-        ['Reason', r.reason],
-        ...(r.externalOutcome ? [['External outcome', r.externalOutcome] as [string, string]] : []),
-        ...(r.remainingFollowUp ? [['Subdivision follow-up', r.remainingFollowUp] as [string, string]] : []),
-      ]} />
-      {r.notes.length > 0 ? (
-        <details className="mt-3">
-          <summary className="sa-small cursor-pointer font-semibold">Communication notes ({r.notes.length})</summary>
-          <ul className="m-0 mt-2 list-none p-0">
-            {r.notes.map((n) => <li key={n.id} className="sa-small py-1"><span className="sa-text-3">{fmtDateTime(n.at)}</span> · {n.text}</li>)}
-          </ul>
-        </details>
-      ) : null}
-      {r.status === 'completed' && c.status !== 'closed' ? <Callout className="mt-3" tone="sage">The external work is complete, but the case is still open. Record any remaining subdivision follow-up, or close the case with a documented outcome.</Callout> : null}
-    </div>
-  );
+interface ActionTileProps {
+  icon: ElementType;
+  title: string;
+  subtitle: string;
+  tone?: 'primary' | 'amber' | 'neutral';
+  disabled?: boolean;
+  onClick?: () => void;
+  to?: string;
+  delayMs?: number;
 }
 
-/** Everything that was done on the case, newest first. Status and assessment changes live in History. */
-function actionTimeline(c: Case): TimelineItem[] {
-  const items: (TimelineItem & { at: string })[] = [];
-  for (const f of c.followUps) {
-    if (f.status === 'done' && f.completedAt) items.push({ id: f.id, at: f.completedAt, icon: CalendarClock, tone: 'sage', title: `Follow-up done: ${f.title}`, meta: `${FOLLOWUP_KINDS[f.kind]} · ${fmtDateTime(f.completedAt)}`, body: f.completionNote ? <p className="sa-small sa-text-2">{f.completionNote}</p> : undefined });
-    if (f.status === 'cancelled') items.push({ id: f.id, at: f.createdAt, icon: CalendarClock, title: `Follow-up cancelled: ${f.title}`, meta: `${FOLLOWUP_KINDS[f.kind]} · ${fmtDateTime(f.createdAt)}` });
+function ActionTile({
+  icon: Icon,
+  title,
+  subtitle,
+  tone = 'neutral',
+  disabled = false,
+  onClick,
+  to,
+  delayMs = 0,
+}: ActionTileProps) {
+  const toneClasses =
+    tone === 'primary'
+      ? 'border-[#b45309]/35 bg-gradient-to-br from-[#fff7ed] to-[#ffedd5]/60 hover:border-[#b45309]/65'
+      : tone === 'amber'
+        ? 'border-[#d97706]/30 bg-[#fffbeb]/55 hover:border-[#d97706]/55'
+        : 'border-[var(--sa-line,#e7e2da)] bg-white hover:border-[#c7bfb5]';
+
+  const iconClasses =
+    tone === 'primary'
+      ? 'bg-[#b45309] text-white shadow-xs'
+      : tone === 'amber'
+        ? 'bg-[#fef3c7] text-[#b45309]'
+        : 'bg-[#f5f0e8] text-[#57534e]';
+
+  const baseClass = `group relative flex w-full items-start gap-3 rounded-xl border p-3.5 text-left transition-all duration-200 ease-out sa-fade-up ${disabled
+    ? 'cursor-not-allowed border-[var(--sa-line,#e7e2da)] bg-[#faf8f5] opacity-60'
+    : `${toneClasses} cursor-pointer hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0`
+    }`;
+
+  const inner = (
+    <>
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-transform duration-200 ${!disabled ? 'group-hover:scale-105' : ''} ${iconClasses}`}>
+        <Icon size={17} aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center justify-between gap-1.5">
+          <span className="text-sm font-semibold text-[#1c1917]">{title}</span>
+          {!disabled ? (
+            <ArrowRight size={14} className="shrink-0 text-[#78716c] opacity-60 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-[#b45309] group-hover:opacity-100" aria-hidden="true" />
+          ) : null}
+        </span>
+        <span className="mt-0.5 block text-xs leading-snug text-[#57534e]">{subtitle}</span>
+      </span>
+    </>
+  );
+
+  if (to && !disabled) {
+    return (
+      <Link
+        to={to}
+        className={`${baseClass} no-underline`}
+        style={{ animationDelay: `${delayMs}ms` }}
+      >
+        {inner}
+      </Link>
+    );
   }
-  for (const o of c.ownerContacts) items.push({ id: o.id, at: o.at, icon: MessageSquare, title: `Owner coordination · ${CONTACT_METHODS[o.method].toLowerCase()} with ${o.withWhom}`, meta: `${o.by} · ${fmtDateTime(o.at)} · ${CONTACT_OUTCOMES[o.outcome]}`, body: <p className="sa-small sa-text-2">{o.summary}</p> });
-  for (const n of c.notes) items.push({ id: n.id, at: n.at, icon: NotebookPen, title: 'Internal note', meta: `${n.by} · ${fmtDateTime(n.at)}`, body: <p className="sa-small sa-text-2">{n.text}</p> });
-  for (const w of c.warnings) {
-    items.push({ id: w.id, at: w.issuedAt, icon: AlertTriangle, tone: 'amber', title: `Warning issued under ${w.policyRef}`, meta: `${w.issuedBy} · ${fmtDateTime(w.issuedAt)}`, body: <p className="sa-small sa-text-2">{w.details}</p> });
-    for (const o of w.observations) items.push({ id: o.id, at: o.at, icon: ShieldCheck, tone: o.result === 'compliant' ? 'sage' : o.result === 'non_compliant' ? 'red' : undefined, title: `Compliance observation: ${COMPLIANCE_RESULTS[o.result].label.toLowerCase()}`, meta: `${o.by} · ${fmtDateTime(o.at)}`, body: <p className="sa-small sa-text-2">{o.notes}</p> });
-    if (w.concludedAt) items.push({ id: `${w.id}-end`, at: w.concludedAt, icon: ShieldCheck, tone: w.outcome === 'compliant' ? 'sage' : undefined, title: `Observation concluded${w.outcome === 'compliant' ? ': compliant' : w.outcome === 'non_compliant' ? ': not compliant' : ''}`, meta: fmtDateTime(w.concludedAt) });
-  }
-  for (const r of c.referrals) {
-    items.push({ id: r.id, at: r.referredAt, icon: Landmark, tone: 'brand', title: `Referred to ${r.orgName}`, meta: `${r.createdBy} · ${fmtDateTime(r.referredAt)}`, body: <p className="sa-small sa-text-2">{r.reason}</p> });
-    for (const n of r.notes) if (n.status) items.push({ id: n.id, at: n.at, icon: Handshake, title: `${r.orgName}: ${REFERRAL_STATUS[n.status].label.toLowerCase()}`, meta: `${n.by} · ${fmtDateTime(n.at)}`, body: <p className="sa-small sa-text-2">{n.text}</p> });
-  }
-  return items.sort((a, b) => b.at.localeCompare(a.at)).map((x) => ({ id: x.id, icon: x.icon, tone: x.tone, title: x.title, meta: x.meta, body: x.body }));
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={baseClass}
+      style={{ animationDelay: `${delayMs}ms` }}
+    >
+      {inner}
+    </button>
+  );
 }
 
 /** A08 Case actions & monitoring, A09 warning & compliance, A10 external coordination. */
@@ -224,35 +298,128 @@ export default function ActionsTab({ c, now, openDialog }: Props) {
   const ownerRelevant = c.animal.type !== 'wildlife';
   const pending = pendingFollowUpsOf(c).sort((a, b) => (a.dueAt ?? '9').localeCompare(b.dueAt ?? '9'));
   const warnings = [...c.warnings].sort((a, b) => (a.status === 'active' ? -1 : 0) - (b.status === 'active' ? -1 : 0) || b.issuedAt.localeCompare(a.issuedAt));
-  const items = actionTimeline(c);
+  const advisory = state.notices.find((n) => n.caseId === c.id && n.status !== 'archived');
 
   const cancel = (id: string) => { dispatch({ type: 'case/cancelFollowUp', id: c.id, followUpId: id }).then(() => toast.success('Follow-up cancelled')).catch((e: unknown) => toast.error(errorMessage(e))); };
 
-  return (
-    <div className="flex max-w-[900px] flex-col gap-5">
-      {closed ? <Callout>This case is closed. You can still add internal notes, or reopen the case to record new actions.</Callout> : null}
-      {c.priority === 'urgent' && !closed ? <Callout tone="red" title="Urgent safety concern.">Begin safety coordination now. Routine warnings and observation periods must not delay it.</Callout> : null}
+  const actionTiles: ActionTileProps[] = [];
+  if (!closed) {
+    actionTiles.push({
+      icon: CalendarPlus,
+      title: 'Record Follow-up',
+      subtitle: 'Document a completed follow-up activity on this case',
+      onClick: () => openDialog({ kind: 'followUp', mode: 'follow_up' }),
+    });
+  }
+  if (!closed && ownerRelevant) {
+    actionTiles.push({
+      icon: MessageSquare,
+      title: 'Record owner coordination',
+      subtitle: 'Log contact attempts or owner updates',
+      onClick: () => openDialog({ kind: 'followUp', mode: 'owner' }),
+    });
+  }
+  if (!closed && warningRelevant) {
+    actionTiles.push({
+      icon: AlertTriangle,
+      title: 'Issue warning',
+      subtitle: eligibility.ok ? 'Send formal policy warning to owner' : eligibility.reason || 'Complete ownership review first',
+      tone: 'amber',
+      disabled: !eligibility.ok,
+      onClick: () => openDialog({ kind: 'warning' }),
+    });
+  }
+  if (!closed && hasActive) {
+    actionTiles.push({
+      icon: ClipboardCheck,
+      title: 'Record compliance',
+      subtitle: 'Log observation for active warning',
+      tone: 'amber',
+      onClick: () => openDialog({ kind: 'compliance' }),
+    });
+  }
+  if (!closed) {
+    actionTiles.push({
+      icon: Landmark,
+      title: 'Create Referral',
+      subtitle: 'Refer case to Barangay, Vet Office, Animal Control, or Welfare Agency',
+      tone: c.priority === 'urgent' ? 'primary' : 'neutral',
+      onClick: () => openDialog({ kind: 'referral' }),
+    });
+  }
+  if (!closed && c.category === 'safety') {
+    actionTiles.push({
+      icon: Megaphone,
+      title: advisory ? 'View / edit Safety Advisory' : 'Publish Safety Advisory',
+      subtitle: advisory ? 'Update the active community notice' : 'Alert residents about this safety concern',
+      tone: 'amber',
+      to: advisory ? adminPath(`/community/${advisory.id}`) : adminPath(`/community/new?fromCase=${c.id}`),
+    });
+  }
+  actionTiles.push({
+    icon: NotebookPen,
+    title: 'Add internal note',
+    subtitle: 'Record private staff-only case notes',
+    onClick: () => openDialog({ kind: 'note' }),
+  });
 
-      <div>
-        <div className="flex flex-wrap gap-2">
-          {!closed ? <Button icon={CalendarPlus} onClick={() => openDialog({ kind: 'followUp', mode: 'follow_up' })}>Record follow-up</Button> : null}
-          {!closed && ownerRelevant ? <Button icon={MessageSquare} onClick={() => openDialog({ kind: 'followUp', mode: 'owner' })}>Record owner coordination</Button> : null}
-          {!closed && warningRelevant ? <Button icon={AlertTriangle} disabled={!eligibility.ok} onClick={() => openDialog({ kind: 'warning' })}>Issue warning</Button> : null}
-          {!closed && hasActive ? <Button icon={ClipboardCheck} onClick={() => openDialog({ kind: 'compliance' })}>Record compliance</Button> : null}
-          {!closed ? <Button variant={c.priority === 'urgent' ? 'primary' : 'secondary'} icon={Landmark} onClick={() => openDialog({ kind: 'referral' })}>Ask the Barangay for help</Button> : null}
-          <Button icon={NotebookPen} onClick={() => openDialog({ kind: 'note' })}>Add internal note</Button>
+  return (
+    <div className="flex max-w-[920px] flex-col gap-5">
+      <style>{`
+        @keyframes saFadeUp {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .sa-fade-up {
+          animation: saFadeUp 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+      `}</style>
+
+      {closed ? (
+        <div className="sa-fade-up">
+          <Callout>This case is closed. You can still add internal notes, or reopen the case to record new actions.</Callout>
         </div>
-        {!closed && warningRelevant && !eligibility.ok ? <p className="sa-hint mt-2">Issuing a warning is not available yet. {eligibility.reason}</p> : null}
-      </div>
+      ) : null}
+
+      {c.priority === 'urgent' && !closed ? (
+        <div className="sa-fade-up rounded-xl border border-[#ef4444]/30 bg-gradient-to-r from-[#fef2f2] to-[#fff5f5] p-3.5 shadow-xs">
+          <div className="flex items-start gap-3">
+            <span className="relative mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#fee2e2] text-[#b91c1c]">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#ef4444]/35" />
+              <AlertTriangle size={15} aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="m-0 text-sm font-semibold text-[#991b1b]">
+                {c.category === 'injured' ? 'Urgent injured / sick animal response' : 'Urgent safety concern'}
+              </p>
+              <p className="m-0 mt-0.5 text-xs leading-relaxed text-[#7f1d1d]">
+                {c.category === 'injured'
+                  ? 'Coordinate immediate on-site guardhouse check, veterinary care, or Barangay/animal welfare assistance.'
+                  : 'Begin safety coordination now. Routine warnings and observation periods must not delay it.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <Panel className="sa-fade-up" >
+        <Block title="Response actions" description="Choose an action to coordinate response, notify parties, or record progress.">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {actionTiles.map((tile, idx) => (
+              <ActionTile key={tile.title} {...tile} delayMs={idx * 35} />
+            ))}
+          </div>
+        </Block>
+      </Panel>
 
       {pending.length > 0 ? (
-        <Panel>
+        <Panel className="sa-fade-up">
           <Block title="Follow-ups" description="What is still to be done on this case.">
             <ul className="m-0 flex list-none flex-col p-0">
               {pending.map((f) => {
                 const due = dueInfo(f.dueAt, now);
                 return (
-                  <li key={f.id} className="flex flex-wrap items-center justify-between gap-3 border-t border-solid py-3 first:border-t-0 first:pt-0 last:pb-0" style={{ borderColor: 'var(--sa-line-soft)' }}>
+                  <li key={f.id} className="flex flex-wrap items-center justify-between gap-3 border-t border-solid py-3 transition-colors first:border-t-0 first:pt-0 last:pb-0" style={{ borderColor: 'var(--sa-line-soft)' }}>
                     <div className="min-w-0">
                       <p className="font-medium">{f.title}</p>
                       <p className="sa-meta mt-0.5">{FOLLOWUP_KINDS[f.kind]} · <span className={due.overdue ? 'sa-text-red sa-semibold' : due.today ? 'sa-text-amber sa-semibold' : ''}>{due.label}</span>{f.notes ? ` · ${f.notes}` : ''}</p>
@@ -267,26 +434,16 @@ export default function ActionsTab({ c, now, openDialog }: Props) {
       ) : null}
 
       {warnings.length > 0 ? (
-        <Panel>
-          <Block title="Warning & compliance" description="Issued under a confirmed policy. The observation period comes from that policy.">
-            <div className="flex flex-col gap-3">{warnings.map((w) => <WarningCard key={w.id} w={w} c={c} now={now} openDialog={openDialog} />)}</div>
+        <Panel className="sa-fade-up">
+          <Block title="Warning & compliance observations" description="Issued under a confirmed policy. The observation period comes from that policy.">
+            <div className="flex flex-col gap-3.5">{warnings.map((w, idx) => <WarningCard key={w.id} w={w} c={c} now={now} openDialog={openDialog} delayMs={idx * 55} />)}</div>
           </Block>
         </Panel>
       ) : null}
 
-      {c.referrals.length > 0 ? (
-        <Panel>
-          <Block title="External coordination" description="The subdivision keeps responsibility for the case while others help.">
-            <div className="flex flex-col gap-3">{c.referrals.map((r) => <ReferralCard key={r.id} r={r} c={c} openDialog={openDialog} />)}</div>
-          </Block>
-        </Panel>
-      ) : null}
-
-      <Panel>
-        <Block title="Activity timeline" description="What was done on this case, newest first. Status and assessment changes are in History.">
-          {items.length === 0 ? <p className="sa-small sa-text-2">Nothing has been recorded yet. Follow-ups, owner coordination, warnings, referrals and notes will appear here in order.</p> : <Timeline label="Activity timeline" items={items} />}
-        </Block>
-      </Panel>
+      <div className="sa-fade-up">
+        <CaseReferralsSection c={c} openDialog={openDialog} hideCreateButton />
+      </div>
     </div>
   );
 }

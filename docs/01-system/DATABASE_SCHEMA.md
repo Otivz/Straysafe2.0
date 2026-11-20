@@ -11,9 +11,10 @@
 - **Edited 2026-11-12 (case conversations and linked-report bridge):** `case_message_threads`, `case_message_members` and `case_messages` store participant-scoped Leader conversations and linked-report groups. Together with `lost_found_matches`, all four new tables are registered in the additive case-alignment checks and mirrored in both canonical SQL snapshots. Definitions were checked against the models without accessing the application database.
 - **Edited 2026-11-13 (complaint management):** five tables, `complaint_respondents`, `complaint_findings`, `complaint_offenses`, `enforcement_steps` and `enforcement_step_events`, and four `reports` columns, `seen_at`, `suspected_owner_name`, `suspected_owner_address`, `suspected_owner_details`, from `backend/migrations/2026-11-13_complaint_management.sql` and `backend/app/models/complaint.py`. Like the alerts below they come only from the SQL file, applied once; the backend refuses to start until they exist. The column-by-column definitions are in that SQL file; see [COMPLAINT_MANAGEMENT.md](COMPLAINT_MANAGEMENT.md).
 - **Edited 2026-11-13 (Lost & Found notification alerts):** two tables, `case_alerts` and `case_alert_sends`, and the column `user_notification_preferences.push_lost_found_alerts`, written by hand from `backend/migrations/2026-11-12_lost_found_alerts.sql` and the models `backend/app/models/case_alert.py` and `notification_preference.py`. Unlike the earlier additions they are **not** created at start-up: the SQL file is applied once by hand, and the backend refuses to start until they exist. Nothing was run against a database. See [LOST_FOUND_ALERTS.md](LOST_FOUND_ALERTS.md).
+- **Edited 2026-11-18 (pet QR tags, Phase 1):** two tables, `pet_tags` and `pet_tag_scans` (59 to 61 tables), by hand from `backend/app/models/pet_tag.py`, and mirrored in `Database3.4_subdivision.sql` and its `.txt`. The live database gets them at the next backend start (`ensure_pet_tag_tables`, create only); nothing was run against it. The three warning-letter tables are still missing from this file (Step 6 of the warning-template audit). See [PET_QR_TAGS_PLAN_2026-11-17.md](../06-future-proposals/PET_QR_TAGS_PLAN_2026-11-17.md).
 - **Regenerate** after any schema change; the SQLAlchemy models in `backend/app/models/` are the source of truth.
 
-59 tables.
+61 tables.
 
 ## Tables
 
@@ -56,6 +57,8 @@
 - `owner_warnings`
 - `ownership_claims`
 - `pet_history`
+- `pet_tag_scans`
+- `pet_tags`
 - `pet_match_confirmation_requests`
 - `pet_owner_confirmations`
 - `pets`
@@ -828,6 +831,51 @@ Foreign keys: `alert_id` → `lost_pet_alerts.alert_id`, `claimant_user_id` → 
 | created_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
 Foreign keys: `actor_id` → `users.user_id`, `pet_id` → `pets.pet_id`
+
+## pet_tags
+
+Pet QR tags (2026-11-18). A printed tag holds a link with `token`; at most one `active` tag per pet (checked in `services/pet_tags.py`).
+
+| Column | Type | Null | Key | Default | Extra |
+|---|---|---|---|---|---|
+| tag_id | int | NO | PRI |  | auto_increment |
+| pet_id | int | NO | MUL |  |  |
+| token | varchar(32) | NO | UNI |  |  |
+| status | varchar(20) | NO |  | active |  |
+| created_by | int | YES | MUL |  |  |
+| created_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| disabled_at | datetime | YES |  |  |  |
+| disabled_by | int | YES | MUL |  |  |
+
+`status`: `active`, `replaced`, `disabled`.
+
+Foreign keys: `pet_id` → `pets.pet_id` (cascade), `created_by` → `users.user_id`, `disabled_by` → `users.user_id`
+
+## pet_tag_scans
+
+One scan of a pet QR tag: a page view or a "tell the owner" message. Created now; filled from Phase 2 of the plan.
+
+| Column | Type | Null | Key | Default | Extra |
+|---|---|---|---|---|---|
+| scan_id | int | NO | PRI |  | auto_increment |
+| tag_id | int | NO | MUL |  |  |
+| pet_id | int | NO | MUL |  |  |
+| kind | varchar(20) | NO |  | view |  |
+| scanner_user_id | int | YES | MUL |  |  |
+| latitude | decimal(10,8) | YES |  |  |  |
+| longitude | decimal(11,8) | YES |  |  |  |
+| location_label | varchar(255) | YES |  |  |  |
+| note | varchar(500) | YES |  |  |  |
+| finder_phone | varchar(20) | YES |  |  |  |
+| share_contact | tinyint(1) | NO |  | 0 |  |
+| photo_url | varchar(500) | YES |  |  |  |
+| alert_id | int | YES | MUL |  |  |
+| status | varchar(20) | NO |  | new |  |
+| created_at | datetime | NO | MUL | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+
+`kind`: `view`, `found_report`. `status`: `new`, `seen_by_owner`, `resolved`. `finder_phone` is stored only when `share_contact` is true.
+
+Foreign keys: `tag_id` → `pet_tags.tag_id` (cascade), `pet_id` → `pets.pet_id` (cascade), `scanner_user_id` → `users.user_id`, `alert_id` → `lost_pet_alerts.alert_id`
 
 ## pet_match_confirmation_requests
 

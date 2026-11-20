@@ -91,6 +91,11 @@ def run_follow_up_now(report_id: int, hint: Optional[Dict[str, Any]] = None) -> 
                 logger.warning(f"AI suggestions failed for report #{report_id}: {e}")
         # A failed scan raises so the AI job is retried; a failed suggestion refresh above is not worth a retry.
         scan_and_generate_matches_for_report(report_id, db)
+        # Lost and found possible matches waiting for a Leader are recalculated with the new photo/details (the earlier result is kept
+        # in the match's history: services/lost_found_matching.rescore). Never raises.
+        from app.services import lost_found_matching as LFM
+        if LFM.rescore_for_report(db, report_id, "New photos or details were added to a report."):
+            db.commit()
     finally:
         db.close()
 

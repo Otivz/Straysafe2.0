@@ -182,10 +182,44 @@ def save_assessment(db: Session, report: Report, actor: User, data: AssessmentIn
     require_open(report, "assess it")
     now = _now()
     old = {"incident": case_state.incident_of(report), "evidence_sufficiency": case_state.sufficiency_of(report),
-           "urgency": case_state.urgency_of(report), "identity": case_state.identity_of(report),
-           "ownership": case_state.ownership_of(report), "is_sensitive": bool(report.is_sensitive)}
+           "urgency": case_state.urgency_of(report), "priority": case_state.priority_of(report),
+           "identity": case_state.identity_of(report),
+           "ownership": case_state.ownership_of(report), "is_sensitive": report.is_sensitive,
+           "incident_basis": report.incident_basis, "notes": report.assessment_notes,
+           "urgency_note": report.urgency_note}
     if data.ownership is not None:
         _validate_ownership(db, data.ownership)
+
+    from app.utils import dangerous_rules, injured_rules
+    from app.utils.warning_rules import report_family
+    family = report_family(report)
+    is_injured_case = family == V.INJURED
+    is_safety_case = family == V.SAFETY
+    was_auto_urgent = (
+        old["priority"] == "urgent"
+        and (
+            injured_rules.AUTO_URGENT_REASON in (report.urgency_note or "")
+            or injured_rules.is_unable_to_move(condition_text=report.condition)
+            or "Automatic safety priority" in (report.urgency_note or "")
+        )
+    )
+    if data.priority_override is not None and data.priority_override != old["priority"]:
+        if (was_auto_urgent and data.priority_override != "urgent") or is_safety_case:
+            adj_reason = (data.priority_change_reason or data.urgency_note or "").strip()
+            if len(adj_reason) < 5:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Please provide a reason (at least 5 characters) when adjusting the assigned priority.",
+                )
+    elif data.urgency is not None and data.urgency != "immediate" and was_auto_urgent and data.priority_override is None:
+        adj_reason = (data.priority_change_reason or data.urgency_note or "").strip()
+        if len(adj_reason) < 5:
+            raise HTTPException(
+                status_code=422,
+                detail="Please provide a reason (at least 5 characters) when lowering urgency on an automatically prioritized Urgent report.",
+            )
+
+    was_assessed_before = bool(report.assessed_at is not None or (old["incident"] and old["incident"] != "not_reviewed"))
 
     if data.incident is not None:
         report.incident_verification = data.incident
@@ -204,8 +238,20 @@ def save_assessment(db: Session, report: Report, actor: User, data: AssessmentIn
         report.urgency_level = data.urgency
         if data.urgency == "immediate":
             report.priority_level = "High"      # legacy sorts and badges read the stored level
+    if data.priority_override is not None:
+        report.priority_level = V.level_for_priority(data.priority_override)
+        if data.priority_override == "urgent":
+            report.urgency_level = "immediate"
+        elif data.urgency is None and report.urgency_level == "immediate":
+            report.urgency_level = "possible" if data.priority_override == "high" else "none"
     if data.urgency_note is not None:
-        report.urgency_note = data.urgency_note.strip() or None
+        note_text = data.urgency_note.strip() or None
+        old_urgency_note = report.urgency_note or ""
+        # Preserve original automatic urgent reason if present and not already included
+        if was_auto_urgent and note_text and injured_rules.AUTO_URGENT_REASON not in note_text and injured_rules.AUTO_URGENT_REASON in old_urgency_note:
+            report.urgency_note = f"{injured_rules.AUTO_URGENT_REASON} | Leader note: {note_text}"
+        else:
+            report.urgency_note = note_text
     if data.notes is not None:
         report.assessment_notes = data.notes.strip() or None
     if data.identity is not None:
@@ -222,7 +268,7 @@ def save_assessment(db: Session, report: Report, actor: User, data: AssessmentIn
         report.ownership_evidence = list(o.evidence)
         report.ownership_note = (o.note or "").strip() or None
         report.ownership_decided_by, report.ownership_decided_at = actor.user_id, now
-    if data.is_sensitive is not None and bool(report.is_sensitive) != data.is_sensitive:
+    if data.is_sensitive is not None and report.is_sensitive != data.is_sensitive:
         report.is_sensitive = data.is_sensitive
         if data.is_sensitive:
             # A private complaint about a neighbour is never public: if it was made public, it goes private now
@@ -233,9 +279,66 @@ def save_assessment(db: Session, report: Report, actor: User, data: AssessmentIn
     report.assessed_at, report.assessed_by = now, actor.user_id
 
     advance_case(db, report, actor, V.UNDER_REVIEW, "assessment started")
+
+    injured_summary = ""
+    if data.injured_assessment is not None:
+        injured_summary = injured_rules.format_injured_assessment_summary(data.injured_assessment.model_dump())
+
+    dangerous_summary = ""
+    if data.dangerous_assessment is not None:
+        dangerous_summary = dangerous_rules.format_dangerous_assessment_summary(data.dangerous_assessment.model_dump())
+
+    has_assessment_content = any([
+        data.incident is not None,
+        data.incident_basis is not None,
+        data.evidence_sufficiency is not None,
+        data.urgency is not None,
+        data.notes is not None,
+        bool(injured_summary),
+        bool(dangerous_summary),
+    ])
+    if has_assessment_content:
+        activity = "Assessment Updated" if was_assessed_before else "Assessment Submitted"
+        decision_label = V.INCIDENT_VERIFICATION_LABELS.get(
+            report.incident_verification or "not_reviewed",
+            (report.incident_verification or "not_reviewed").replace("_", " ").capitalize()
+        )
+        header = f"{activity}: {decision_label}."
+        detail_lines = []
+        explanation = (report.incident_basis or "").strip()
+        if explanation:
+            detail_lines.append(f"Explanation: {explanation}")
+        if injured_summary:
+            detail_lines.append(f"Condition assessment: {injured_summary}")
+        if dangerous_summary:
+            detail_lines.append(f"Safety risk assessment: {dangerous_summary}")
+        notes = (report.assessment_notes or "").strip()
+        if notes:
+            detail_lines.append(f"Notes: {notes}")
+        remarks = f"{header}\n" + "\n".join(detail_lines) if detail_lines else header
+        history(db, report, actor, remarks)
+
+    new_priority = case_state.priority_of(report)
+    if new_priority != old["priority"] and (data.priority_override is not None or (was_auto_urgent and new_priority != "urgent")):
+        adj_reason = (data.priority_change_reason or data.urgency_note or "").strip()
+        history(
+            db,
+            report,
+            actor,
+            f"Urgency adjusted from {old['priority'].capitalize()} to {new_priority.capitalize()}" + (f": {adj_reason}" if adj_reason else "."),
+        )
+
+    if data.identity is not None:
+        ident_label = V.IDENTITY_STATUS_LABELS.get(data.identity.status, data.identity.status.replace("_", " ").capitalize())
+        history(db, report, actor, f"Animal identity recorded: {ident_label}.")
+
+    if data.ownership is not None:
+        own_label = V.OWNERSHIP_STATUS_LABELS.get(data.ownership.status, data.ownership.status.replace("_", " ").capitalize())
+        history(db, report, actor, f"Ownership review recorded: {own_label}.")
+
     new = {"incident": case_state.incident_of(report), "evidence_sufficiency": case_state.sufficiency_of(report),
            "urgency": case_state.urgency_of(report), "identity": case_state.identity_of(report),
-           "ownership": case_state.ownership_of(report), "is_sensitive": bool(report.is_sensitive)}
+           "ownership": case_state.ownership_of(report), "is_sensitive": report.is_sensitive}
     audit(db, actor, "CASE_ASSESSMENT_SAVED", report, f"{actor.name} recorded the assessment of report #{report.report_id}.", old=old, new=new)
     return new
 
@@ -303,12 +406,45 @@ def close_case(db: Session, report: Report, actor: User, data: CloseIn, ip: Opti
     ok, why = disposition_availability(db, report, data.disposition)
     if not ok:
         raise HTTPException(status_code=409, detail=f"This outcome is not available: {why}")
+
+    from app.utils.warning_rules import report_family
+    family = report_family(report)
+    is_injured_case = family == V.INJURED
+    is_safety_case = family == V.SAFETY
+    welfare_outcome = (data.welfare_outcome or "").strip() or None
+    dangerous_outcome = (data.dangerous_outcome or "").strip() or None
+    if is_injured_case and data.disposition not in ("invalid_report", "duplicate_report", "withdrawn_by_reporter"):
+        if not welfare_outcome:
+            raise HTTPException(status_code=422, detail="Please document the Animal Welfare Outcome before closing an injured or sick animal case.")
+    if is_safety_case and data.disposition not in ("invalid_report", "duplicate_report", "withdrawn_by_reporter"):
+        if not dangerous_outcome:
+            raise HTTPException(status_code=422, detail="Please document the Dangerous Animal Incident Outcome before closing this case.")
+        if (data.threat_ongoing or "").strip().lower() == "yes" and data.disposition in ("resolved_intervention", "owner_compliance"):
+            raise HTTPException(status_code=422, detail="Cannot mark a Dangerous Animal case as resolved while the threat is still ongoing.")
+
     now = _now()
     left = open_items(db, report)
     group, _legacy, label = V.DISPOSITIONS[data.disposition]
     previous = case_state.case_status_of(report)
 
-    report.closure_disposition, report.closure_reason = data.disposition, reason
+    welfare_parts = []
+    if welfare_outcome:
+        welfare_parts.append(f"Welfare outcome: {welfare_outcome}")
+    if dangerous_outcome:
+        welfare_parts.append(f"Safety outcome: {dangerous_outcome}")
+    if (data.final_animal_condition or "").strip():
+        welfare_parts.append(f"Final condition: {(data.final_animal_condition or '').strip()}")
+    if (data.assistance_provided or "").strip():
+        welfare_parts.append(f"Assistance provided: {(data.assistance_provided or '').strip()}")
+    if (data.security_actions_performed or "").strip():
+        welfare_parts.append(f"Security actions: {(data.security_actions_performed or '').strip()}")
+    if (data.advisory_status or "").strip():
+        welfare_parts.append(f"Community advisory: {(data.advisory_status or '').strip()}")
+    if (data.referral_outcome or "").strip():
+        welfare_parts.append(f"Referral outcome: {(data.referral_outcome or '').strip()}")
+    full_reason = f"{reason}\n" + " | ".join(welfare_parts) if welfare_parts else reason
+
+    report.closure_disposition, report.closure_reason = data.disposition, full_reason
     report.closed_at, report.closed_by = now, actor.user_id
     _apply_status(report, V.CLOSED)
     from app.services import case_messaging
@@ -329,12 +465,24 @@ def close_case(db: Session, report: Report, actor: User, data: CloseIn, ip: Opti
                                  status="pending", created_by=actor.user_id)
         db.add(scheduled)
 
-    history(db, report, actor, f"Case closed: {label}.")
+    closure_line = (
+        f"Case closed: {label}."
+        + (f" Animal welfare outcome: {welfare_outcome}." if welfare_outcome else "")
+        + (f" Dangerous animal outcome: {dangerous_outcome}." if dangerous_outcome else "")
+    )
+    history(db, report, actor, closure_line)
     audit(db, actor, "CASE_CLOSED", report, f"{actor.name} closed report #{report.report_id}: {label}.",
           old={"case_status": previous},
-          new={"case_status": V.CLOSED, "disposition": data.disposition, "outcome": group, "reason": reason,
+          new={"case_status": V.CLOSED, "disposition": data.disposition, "outcome": group, "reason": full_reason,
+               "welfare_outcome": welfare_outcome,
+               "dangerous_outcome": dangerous_outcome,
+               "security_actions_performed": (data.security_actions_performed or "").strip() or None,
+               "advisory_status": (data.advisory_status or "").strip() or None,
+               "final_animal_condition": (data.final_animal_condition or "").strip() or None,
+               "assistance_provided": (data.assistance_provided or "").strip() or None,
+               "referral_outcome": (data.referral_outcome or "").strip() or None,
                "open_items_left_behind": left if not data.end_open_items else {**left, "followups": 0},
-               "followups_ended": ended, "post_closure_check_at": scheduled.due_at.isoformat() if scheduled else None},
+               "followups_ended": ended, "post_closure_check_at": scheduled.due_at.isoformat() if scheduled is not None and scheduled.due_at is not None else None},
           ip=ip, user_agent=user_agent)
     _notify_reporter(db, report, actor, f"Report #{report.report_id} closed",
                      f"Your report #{report.report_id} was closed by your Subdivision Admin. Outcome: {label}.")

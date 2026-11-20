@@ -1,12 +1,22 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Lock, PawPrint, Maximize2 } from 'lucide-react';
+import { Lock, PawPrint, Maximize2, MessageSquare, Send, ShieldAlert } from 'lucide-react';
 import { adminPath } from '../../config';
 import { Badge } from '../../components/Badge';
-import { Block, Callout, Kv, Panel } from '../../components/layout';
+import { Button } from '../../components/Button';
+import { Dialog } from '../../components/Dialog';
+import { Field, Select, Textarea } from '../../components/form';
+import { Block, Callout, FormError, Kv, Panel } from '../../components/layout';
+import { useToast } from '../../components/toast';
 import { identityDisplay } from '../../data/constants';
+import { useAdminData } from '../../data/context';
 import type { Case, PetFacts, RegisteredPet } from '../../data/types';
+import { adminApi } from '../../live/api';
+import { useSubmit } from '../../lib/useSubmit';
+import { reportIdOf } from '../../../live/refs';
 import { fmtDate, fmtDateTime } from '../../../preview/lib/format';
 import { useMediaViewer, type LightboxMediaItem } from '../../components/MediaLightbox';
+import { SendOwnerWarningDialog } from './PossibleOwnersBlock';
 
 const NOT_GIVEN = 'Not given';
 
@@ -74,11 +84,39 @@ function LastSeen({ pet }: { pet: RegisteredPet }) {
 
 function Available({ c, pet }: { c: Case; pet: RegisteredPet }) {
   const { openMedia } = useMediaViewer();
+  const { loadCase } = useAdminData();
+  const toast = useToast();
+  const { pending, error, run } = useSubmit();
+  const [msgModalOpen, setMsgModalOpen] = useState(false);
+  const [warnModalOpen, setWarnModalOpen] = useState(false);
+  const [msgType, setMsgType] = useState<'ownership_verification' | 'direct_message'>('ownership_verification');
+  const [msgText, setMsgText] = useState(
+    'Hello! The Subdivision Administration received a report involving an animal that may match your registered pet. We would like to verify whether this animal belongs to you. Please review the details and select Confirm Ownership or Decline Ownership.',
+  );
+
   const now = pet.current;
   if (!now) return null;
   const registration = pet.registration;
   const owner = pet.owner;
   const identity = identityDisplay(c.identity.status, c.identity.decided);
+  const rid = reportIdOf(c.id);
+
+  const handleSendOwnerMessage = async () => {
+    if (!rid || !pet.petId || !msgText.trim() || pending) return;
+    const reqKey = `rp-msg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    const ok = await run(async () => {
+      await adminApi.messagePossibleOwner(rid, Number(pet.petId), msgType, msgText.trim(), reqKey);
+      await loadCase(c.id);
+    });
+    if (ok) {
+      toast.success(
+        msgType === 'ownership_verification'
+          ? `Ownership Verification request sent to ${owner?.name ?? 'the owner'}.`
+          : `Message sent to ${owner?.name ?? 'the owner'}.`,
+      );
+      setMsgModalOpen(false);
+    }
+  };
 
   const petMediaItems: LightboxMediaItem[] = (now.photos || []).map((url, i) => ({
     url,
@@ -157,12 +195,112 @@ function Available({ c, pet }: { c: Case; pet: RegisteredPet }) {
                 ...(owner.emergencyContact ? [['Emergency contact', owner.emergencyContact] as [string, string]] : []),
               ]} />
               {pet.reporterIsOwner ? <p className="sa-meta mt-3">The owner is the person who filed this report.</p> : null}
+              {owner.residentId && c.status !== 'closed' ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    icon={MessageSquare}
+                    onClick={() => setMsgModalOpen(true)}
+                  >
+                    Message Owner
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={ShieldAlert}
+                    onClick={() => setWarnModalOpen(true)}
+                  >
+                    Send Warning
+                  </Button>
+                </div>
+              ) : null}
               {owner.residentId ? <p className="sa-small mt-3"><Link to={adminPath(`/residents/${owner.residentId}`)} className="font-semibold">View resident profile</Link></p> : null}
             </>
           ) : <p className="sa-small sa-text-2">No resident account is linked to this pet record yet. <Link to={adminPath(`/pets/${pet.petId}`)} className="font-semibold">Open the pet record</Link> to ask a resident to confirm it is theirs.</p>}
           <p className="sa-hint mt-3">Ownership is decided on the Assessment tab, with evidence other than the registry.</p>
         </Block>
       </Panel>
+
+      {msgModalOpen && owner?.residentId ? (
+        <Dialog
+          size="md"
+          title={`Message Owner — ${owner.name}`}
+          description={`Case ${c.id} · Registered pet ${now.name} (${now.species} · ${now.breed} · ${now.colour})`}
+          onClose={() => setMsgModalOpen(false)}
+          footer={
+            <>
+              <Button variant="ghost" disabled={pending} onClick={() => setMsgModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                icon={Send}
+                loading={pending}
+                disabled={!msgText.trim()}
+                onClick={() => void handleSendOwnerMessage()}
+              >
+                {msgType === 'ownership_verification' ? 'Send Ownership Verification' : 'Send Message'}
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-3.5">
+            <Field label="Message Type" required>
+              <Select
+                value={msgType}
+                onChange={(e) => {
+                  const next = e.target.value as 'ownership_verification' | 'direct_message';
+                  setMsgType(next);
+                  if (next === 'ownership_verification') {
+                    setMsgText(
+                      'Hello! The Subdivision Administration received a report involving an animal that may match your registered pet. We would like to verify whether this animal belongs to you. Please review the details and select Confirm Ownership or Decline Ownership.',
+                    );
+                  } else {
+                    setMsgText(
+                      `Hello! We are contacting you regarding Case ${c.id} involving your registered pet ${now.name}. Please check your messages and reply here.`,
+                    );
+                  }
+                }}
+              >
+                <option value="ownership_verification">
+                  Ownership Verification Request (with Confirm / Decline Ownership actions)
+                </option>
+                <option value="direct_message">Direct / Follow-up Message to Owner</option>
+              </Select>
+            </Field>
+            <Field label="Message Content" required hint="Review and edit before sending.">
+              <Textarea
+                rows={5}
+                value={msgText}
+                onChange={(e) => setMsgText(e.target.value)}
+                disabled={pending}
+              />
+            </Field>
+            {error ? <FormError message={error} /> : null}
+          </div>
+        </Dialog>
+      ) : null}
+
+      {warnModalOpen && owner?.residentId ? (
+        <SendOwnerWarningDialog
+          c={c}
+          target={{
+            userId: Number(owner.residentId),
+            ownerName: owner.name,
+            ownerPhone: owner.phone,
+            ownerEmail: owner.email,
+            ownerAddress: owner.address,
+            petId: Number(pet.petId),
+            petName: now.name,
+            petSpecies: now.species,
+            petBreed: now.breed,
+            petColour: now.colour,
+          }}
+          onClose={() => setWarnModalOpen(false)}
+          onSent={() => setWarnModalOpen(false)}
+        />
+      ) : null}
     </>
   );
 }

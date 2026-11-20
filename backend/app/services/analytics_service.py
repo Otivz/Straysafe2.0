@@ -405,8 +405,20 @@ def case_lifecycle_summary(db, base, eligible_reports, cat_names, start, end, gr
     followups = db.query(CaseFollowUp.status, CaseFollowUp.due_at, CaseFollowUp.completed_at).filter(CaseFollowUp.report_id.in_(eligible_reports)).all()
     now = local_now().replace(tzinfo=None)
     claims = db.query(OwnershipClaim.status, OwnershipClaim.submitted_at).filter(OwnershipClaim.report_id.in_(eligible_reports)).all()
+    merged_in_window = db.query(Report.report_id).filter(
+        Report.report_id.in_(eligible_reports),
+        Report.duplicate_of_report_id.isnot(None),
+        Report.created_at >= start,
+        Report.created_at < end,
+    ).count()
     return {
         'received': len(received), 'closed': len(closed),
+        'unique_incidents': len(received),
+        'primary_reports': len(received),
+        'merged_duplicates': merged_in_window,
+        'linked_reports': merged_in_window,
+        'related_reports': merged_in_window,
+        'submitted_reports': len(received) + merged_in_window,
         'resolved_share': percentage(resolved, len(closed)),
         'median_days_to_close': _median(days),
         'status_counts': {s: sum(1 for r in rows if status_of(r) == s) for s in V.CASE_STATUSES},

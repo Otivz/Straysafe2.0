@@ -9,7 +9,7 @@ shape (what a resident may see of a report is decided by utils/report_visibility
 from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
-from sqlalchemy import case as sql_case, func
+from sqlalchemy import case as sql_case, func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.report import Report, ReportMedia, StatusHistory
@@ -59,7 +59,10 @@ def case_summaries(db: Session, user: User, limit: Optional[int] = None, offset:
     page = min(limit if limit and limit > 0 else DEFAULT_PAGE, MAX_PAGE)
     offset = max(0, offset or 0)
 
-    query = db.query(Report)
+    query = db.query(Report).filter(
+        Report.duplicate_of_report_id.is_(None),
+        or_(Report.current_status_id.is_(None), Report.current_status_id != V.MERGED_LEGACY_ID),
+    )
     if scope is not None:
         query = query.filter(Report.subdivision_id == scope)
     if status == "open":
@@ -120,7 +123,7 @@ def _rows(db: Session, reports: List[Report]) -> List[Dict[str, Any]]:
             "reporter": {"user_id": r.user_id, "name": names.get(r.user_id) if r.user_id is not None else None},
             "assigned_leader_id": r.assigned_leader_id, "assigned_leader_name": names.get(r.assigned_leader_id) if r.assigned_leader_id is not None else None,
             "assessment": {"incident": case_state.incident_of(r), "evidence_sufficiency": case_state.sufficiency_of(r),
-                           "urgency": case_state.urgency_of(r), "saved_at": r.assessed_at},
+                           "urgency": case_state.urgency_of(r), "urgency_note": _clip(r.urgency_note, 200), "saved_at": r.assessed_at},
             "identity_status": case_state.identity_of(r), "identity_decided": r.report_id in decided,
             "ownership_status": case_state.ownership_of(r),
             "ownership_owner_id": r.ownership_owner_id, "pet_id": r.pet_id,

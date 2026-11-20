@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { Camera, Eye, EyeOff, Hourglass, ShieldCheck } from 'lucide-react';
+import { Camera, Eye, EyeOff, Hourglass } from 'lucide-react';
 import { fmtDateTime, fromLocalInput } from '../../../preview/lib/format';
 import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
 import { MapLegend } from '../../../preview/map/MapLegend';
@@ -44,14 +44,32 @@ function ReviewForm({ draft, live, onSending }: { draft: Draft; /** false once t
   // The pet's lost report that is already open (not the one just filed: once sent, the screen only shows its copy of the draft)
   const existing = live && pet ? activeLostReport(state, pet.id) : undefined;
   const extra = EXTRA_FIELD[draft.category];
-  const animal = pet ? ANIMAL_TYPES[pet.type] : draft.animalType ? ANIMAL_TYPES[draft.animalType] : '';
+  const animal = pet
+    ? ANIMAL_TYPES[pet.type]
+    : draft.animalType === 'other'
+      ? ((draft.customAnimalType ?? '').trim() || ANIMAL_TYPES.other)
+      : draft.animalType
+        ? ANIMAL_TYPES[draft.animalType]
+        : '';
   const pin = pointOf(draft.location);
 
+  const hasPhoto = lost
+    ? Boolean(pet?.photoUrl || draft.media.some((m) => m.kind === 'photo' && Boolean(m.file || m.url)))
+    : draft.media.some((m) => m.kind === 'photo' && Boolean(m.file || m.url));
   const missing: { text: string; to: string }[] = [];
+  if (!hasPhoto) {
+    missing.push({ text: 'at least one photo of the animal', to: stepPath('details') });
+  }
   if (lost) {
     if (!pet) missing.push({ text: 'which pet is missing', to: stepPath('details') });
-  } else if (!draft.animalType || draft.description.trim().length < 10) {
+  } else if (!draft.animalType || (draft.animalType === 'other' && !(draft.customAnimalType ?? '').trim()) || draft.description.trim().length < 10) {
     missing.push({ text: 'the description', to: stepPath('details') });
+  }
+  if (draft.category === 'injured' && (!draft.injuredConditions?.length || !draft.extra)) {
+    missing.push({ text: 'the animal condition and mobility', to: stepPath('details') });
+  }
+  if (draft.category === 'safety' && (!draft.dangerousBehaviors?.length || !draft.currentDanger || !draft.stillInLocation)) {
+    missing.push({ text: 'the dangerous behavior and current status', to: stepPath('details') });
   }
   if (!draft.location) missing.push({ text: lost ? 'where your pet was last seen' : 'where the animal was', to: stepPath('location') });
   const complete = missing.length === 0;
@@ -117,15 +135,11 @@ function ReviewForm({ draft, live, onSending }: { draft: Draft; /** false once t
       ) : null}
       {error && !unavailable ? <FormError message={error} /> : null}
 
-      {/* Photos stay optional: a reminder when nothing is attached, never a block, and none where safety comes first */}
-      {!lost && draft.media.length === 0 ? (
-        draft.category === 'safety' || draft.category === 'injured'
-          ? <Callout tone="sage" icon={ShieldCheck} title="No photo needed.">Keep your distance. Your report goes to your Subdivision Leader as it is.</Callout>
-          : draft.category === 'found_animal'
-            ? <Callout tone="amber" icon={Camera} title="No photo yet.">The photo is how the owner recognises their pet in the notice. Add one if the animal is still with you or nearby, and only if it is safe.
-                <span className="rs-row-actions rs-mt"><LinkButton size="sm" variant="secondary" to={`${stepPath('details')}?from=review`}>Add a photo</LinkButton></span></Callout>
-            : <Callout icon={Camera} title="No photo or video yet.">{/bark|howl|noise|ingay|tahol/i.test(draft.description) ? 'For barking, a short video taken from your home records the sound and helps your Subdivision Leader check it.' : 'A photo or a short video helps your Subdivision Leader check it and find the owner.'} You can submit without one.
-                <span className="rs-row-actions rs-mt"><LinkButton size="sm" variant="secondary" to={`${stepPath('details')}?from=review`}>{/bark|howl|noise|ingay|tahol/i.test(draft.description) ? 'Add a video' : 'Add a photo or video'}</LinkButton></span></Callout>
+      {!hasPhoto ? (
+        <Callout tone="amber" icon={Camera} title="Please upload at least one photo of the animal before submitting your report.">
+          For accurate animal identification and verification, please upload a clear photo of the animal.
+          <span className="rs-row-actions rs-mt"><LinkButton size="sm" variant="primary" to={`${stepPath('details')}?from=review`}>Upload photo</LinkButton></span>
+        </Callout>
       ) : null}
 
       <dl className="rs-summary">
@@ -147,7 +161,35 @@ function ReviewForm({ draft, live, onSending }: { draft: Draft; /** false once t
             ) : null}
             <Item label="Details" to={stepPath('details')}>{draft.description.trim() || 'Not added'}</Item>
             <Item label="When" to={stepPath('details')}>{fmtDateTime(fromLocalInput(draft.observedAt))}</Item>
+            {draft.category === 'injured' && draft.injuredConditions && draft.injuredConditions.length > 0 ? (
+              <Item label="Observed conditions" to={stepPath('details')}>
+                <ul className="rs-tags">{draft.injuredConditions.map((c) => <li key={c}>{c}</li>)}</ul>
+                {draft.injuredOtherDetail?.trim() ? <p className="rs-meta mt-1">Other: {draft.injuredOtherDetail.trim()}</p> : null}
+              </Item>
+            ) : null}
             {extra && draft.extra ? <Item label={extra.label} to={stepPath('details')}>{draft.extra}</Item> : null}
+            {draft.category === 'safety' && draft.dangerousBehaviors && draft.dangerousBehaviors.length > 0 ? (
+              <>
+                <Item label="Observed behaviors" to={stepPath('details')}>
+                  <ul className="rs-tags">{draft.dangerousBehaviors.map((b) => <li key={b}>{b}</li>)}</ul>
+                  {draft.dangerousOtherDetail?.trim() ? <p className="rs-meta mt-1">Other: {draft.dangerousOtherDetail.trim()}</p> : null}
+                </Item>
+                {draft.currentDanger ? <Item label="Currently dangerous?" to={stepPath('details')}>{draft.currentDanger}</Item> : null}
+                {draft.stillInLocation ? <Item label="Still in location?" to={stepPath('details')}>{draft.stillInLocation}</Item> : null}
+                {draft.movementDirection?.trim() ? <Item label="Movement / direction" to={stepPath('details')}>{draft.movementDirection.trim()}</Item> : null}
+                {draft.rabiesSymptoms && draft.rabiesSymptoms.length > 0 ? (
+                  <Item label="Reported rabies warning signs" to={stepPath('details')}>
+                    <ul className="rs-tags">{draft.rabiesSymptoms.map((s) => <li key={s}>{s}</li>)}</ul>
+                  </Item>
+                ) : null}
+                {draft.dangerousBehaviors.includes('Actual bite incident') && draft.biteDetails ? (
+                  <Item label="Bite incident" to={stepPath('details')}>
+                    Person bitten: {draft.biteDetails.personBitten || '—'} · Animal bitten: {draft.biteDetails.animalBitten || '—'} · Still nearby: {draft.biteDetails.stillNearby || '—'}
+                    {draft.biteDetails.whatHappened ? <p className="rs-meta mt-1">{draft.biteDetails.whatHappened}</p> : null}
+                  </Item>
+                ) : null}
+              </>
+            ) : null}
             {draft.category === 'nuisance' && draft.looks?.trim() ? <Item label="Looked like" to={stepPath('details')}>{draft.looks.trim()}</Item> : null}
             {draft.category === 'nuisance' && (draft.suspectName?.trim() || draft.suspectAddress?.trim() || draft.suspectDetails?.trim()) ? (
               <Item label="Whose animal" to={stepPath('details')}>{[draft.suspectName, draft.suspectAddress, draft.suspectDetails].map((x) => x?.trim()).filter(Boolean).join(' · ')}

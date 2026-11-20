@@ -1004,10 +1004,11 @@ def resolve_template_for_issuance(
     template_id: Optional[int],
     warning_level: Optional[str],
     actor_id: Optional[int] = None,
+    enforce_level_match: bool = True,
 ) -> Tuple[WarningLetterTemplate, WarningLetterTemplateVersion]:
     """
     The template the Leader chose, checked. There is no automatic choice: the Leader must pick one, it must be active, in their
-    subdivision (or platform-wide), and compatible with the letter's level. `is_default` only marks a suggestion in the picker.
+    subdivision (or platform-wide), and compatible with the letter's level when enforce_level_match is True.
     """
     if template_id is None:
         raise HTTPException(status_code=422, detail="Choose a warning letter template for this letter.")
@@ -1015,8 +1016,8 @@ def resolve_template_for_issuance(
     if tpl is None or (subdivision_id is not None and tpl.subdivision_id not in (subdivision_id, None)):
         raise HTTPException(status_code=404, detail="Selected warning letter template was not found.")
     if tpl.status != "active":
-        raise HTTPException(status_code=409, detail=f"Template '{tpl.name}' is archived and cannot be used.")
-    if not template_fits_level(tpl, warning_level):
+        raise HTTPException(status_code=409, detail=f"Template '{tpl.name}' is archived or inactive and cannot be used. Please select an active template.")
+    if enforce_level_match and not template_fits_level(tpl, warning_level):
         raise HTTPException(
             status_code=409,
             detail=f"Template '{tpl.name}' is for {tpl.warning_level} letters. Choose a template for {warning_level or 'this level'}, or one for all levels.",
@@ -1085,8 +1086,8 @@ def build_letter_context(
     overrides: Optional[Dict[str, str]] = None,
 ) -> Dict[str, str]:
     sub = db.get(Subdivision, subdivision_id) if subdivision_id else None
-    sub_name = sub.subdivision_name if sub else "Subdivision Office"
     office = case_policy.load_settings(db, subdivision_id).office if subdivision_id else None
+    sub_name = ((office.administration_name if office else "") or (sub.subdivision_name if sub else "") or "Subdivision Office").strip()
     inc_dt = incident_date or (getattr(report, "seen_at", None) or getattr(report, "created_at", None) if report else None) or datetime.now()
     iss_dt = issue_date or datetime.now()
     resolved_pet = _resolve_pet(db, pet, owner, report)
@@ -1097,8 +1098,8 @@ def build_letter_context(
     res_name = (recipient_name or (owner.name if owner else "") or "").strip()
     res_addr = (recipient_address or (owner.address if owner else "") or "").strip()
     issuer_role = "Subdivision Leader" if (issuer and issuer.role_id == 2) else ("Administrator" if (issuer and issuer.role_id == 4) else "Subdivision Officer")
-    issuer_name = (issuer.name if issuer else "") or issuer_role
-    issued_by = f"{issuer.name} ({issuer_role})" if issuer else issuer_role
+    issuer_name = (issuer.name if issuer else "") or ((office.contact_person if office else "") or "").strip() or issuer_role
+    issued_by = f"{issuer_name} ({issuer_role})" if issuer_name != issuer_role else issuer_role
 
     ctx: Dict[str, str] = {
         "resident_name": res_name,
@@ -1293,6 +1294,7 @@ def validate_letter_ready(
     summons_place: Optional[str] = None,
     overrides: Optional[Dict[str, str]] = None,
     issue_date: Optional[datetime] = None,
+    enforce_level_match: bool = True,
 ) -> Tuple[WarningLetterTemplate, WarningLetterTemplateVersion, Optional[Pet], Dict[str, str]]:
     """
     Everything that must be true before a warning letter is made, and nothing is written: the chosen template exists, is active and fits
@@ -1300,7 +1302,14 @@ def validate_letter_ready(
     message. Callers run it BEFORE they write anything (so a refusal leaves no half-made warning), and `create_generated_letter` runs it
     again, so no issuing path can skip it. Returns (template, version, the pet used, the values to fill in).
     """
-    tpl, ver = resolve_template_for_issuance(db, subdivision_id, template_id, warning_level, actor_id=issuer.user_id)
+    tpl, ver = resolve_template_for_issuance(
+        db,
+        subdivision_id,
+        template_id,
+        warning_level,
+        actor_id=issuer.user_id,
+        enforce_level_match=enforce_level_match,
+    )
     resolved_pet = _resolve_pet(db, pet, owner, report)
     ctx = build_letter_context(
         db=db,
@@ -1359,6 +1368,7 @@ def create_generated_letter(
     attachment_url: Optional[str] = None,
     attachment_name: Optional[str] = None,
     letter_date: Optional[datetime] = None,
+    enforce_level_match: bool = True,
 ) -> GeneratedWarningLetter:
     now = datetime.now()
     # Every issuing path goes through this check, whichever service called it (a caller may also run it earlier, before it writes).
@@ -1367,6 +1377,7 @@ def create_generated_letter(
         pet=pet, issuer=issuer, warning_level=warning_level, policy_reference=policy_reference, violation_description=violation_description,
         required_action=required_action, template_id=template_id, observation_days=observation_days, summons_at=summons_at,
         summons_place=summons_place, overrides=overrides, issue_date=letter_date or now,   # "Date issued": the date the Leader put on the letter
+        enforce_level_match=enforce_level_match,
     )
     if attachment_url:
         ctx["attachment_url"] = attachment_url
@@ -1461,11 +1472,20 @@ def _office_part(db: Session, letter: GeneratedWarningLetter, part: str) -> Opti
 
 
 def serialize_letter(letter: GeneratedWarningLetter, db: Session) -> Dict[str, Any]:
+    import json
     notif = db.get(Notification, letter.notification_id) if letter.notification_id else None
     warn = db.get(OwnerWarning, letter.warning_id) if letter.warning_id else None
     ph = letter.placeholders_json or {}
     sub_name, sub_addr, _ = _office_contact_lines(db, letter.subdivision_id, ph)
     issuer_name, issuer_role, _ = _issuer_lines(letter, sub_name)
+    supporting_docs = []
+    if warn and warn.supporting_documents:
+        try:
+            parsed = json.loads(warn.supporting_documents)
+            if isinstance(parsed, list):
+                supporting_docs = parsed
+        except Exception:
+            supporting_docs = []
     return {
         "letter_id": letter.letter_id,
         "warning_reference": letter.warning_reference,
@@ -1487,6 +1507,14 @@ def serialize_letter(letter: GeneratedWarningLetter, db: Session) -> Dict[str, A
         "pet_name": letter.pet_name,
         "pet_type": letter.pet_type,
         "warning_level": letter.warning_level,
+        "warning_category": (warn.warning_category or warn.violation_type) if warn else ph.get("warning_category"),
+        "warning_subject": (warn.warning_subject or letter.rendered_subject) if warn else letter.rendered_subject,
+        "additional_details": warn.additional_details if warn else None,
+        "supporting_documents": supporting_docs,
+        "workflow_status": (warn.workflow_status or ("Acknowledged" if warn.status == "Acknowledged" else "Sent")) if warn else "Sent",
+        "owner_response": warn.owner_response if warn else None,
+        "owner_responded_at": warn.owner_responded_at.isoformat() if (warn and warn.owner_responded_at) else None,
+        "thread_id": warn.thread_id if warn else None,
         "policy_id": letter.policy_id,
         "policy_reference": letter.policy_reference,
         "template_id": letter.template_id,

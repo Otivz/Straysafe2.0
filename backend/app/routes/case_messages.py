@@ -7,17 +7,26 @@ the Subdivision Leader of the subdivision (or the Administrator) and the residen
     POST /case-messages/{id}/messages         {"body": "...", "client_request_id": "..."}  write in it (refused once it has ended)
     POST /case-messages/{id}/read             mark it read up to the latest message
 
+Resident-to-Administration messaging (2026-11-19, docs/01-system/RESIDENT_MESSAGING.md):
+    POST /case-messages/reports/{report_id}   a resident opens (or reopens the same OPEN) conversation about their own report
+    POST /case-messages/general               {"subject", "body", "client_request_id"}  a resident's general conversation, with its first message
+    GET  /case-messages/inbox?status=&q=      the Subdivision Administration's inbox: all | unread | open | closed, with counts
+    GET  /case-messages/unread-count          conversations and messages unread, for the Messages badge
+    POST /case-messages/{id}/close            {"reason"}  staff close a conversation by hand (it is read-only afterwards)
+Every conversation tied to a report closes automatically when the report is resolved or closed; sending to a closed one is refused (409).
+
 A Leader opens a conversation from the case screen (routes/lost_found.py: POST /lost-found/reports/{id}/threads and /lost-found/matches/{id}/thread).
 """
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.user import User
 from app.services import case_messaging as CM
+from app.limiter import limiter
 from app.utils.auth import get_current_user
 
 router = APIRouter(prefix="/case-messages", tags=["case-messages"])
@@ -32,9 +41,48 @@ class ReadIn(BaseModel):
     through_message_id: int = Field(..., ge=0)
 
 
+class GeneralIn(BaseModel):
+    subject: str = Field(..., min_length=1, max_length=CM.MAX_SUBJECT)
+    body: str = Field(..., min_length=1, max_length=CM.MAX_BODY)
+    client_request_id: Optional[str] = Field(None, max_length=64)
+
+
+class CloseIn(BaseModel):
+    reason: Optional[str] = Field(None, max_length=300)
+
+
 @router.get("")
 def my_conversations(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> List[Dict[str, Any]]:
     return CM.threads_of_user(db, user)
+
+
+@router.get("/inbox")
+def staff_inbox(status: str = Query("all"), q: Optional[str] = Query(None, max_length=100),
+                db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    return CM.inbox(db, user, status, q)
+
+
+@router.get("/unread-count")
+def unread_count(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> Dict[str, int]:
+    return CM.unread_total(db, user)
+
+
+@router.post("/reports/{report_id}")
+@limiter.limit("30/minute")
+def open_report_conversation(request: Request, report_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    t = CM.open_for_resident(db, report_id, user)
+    db.commit()
+    db.refresh(t)
+    return CM.view(db, t, user)
+
+
+@router.post("/general", status_code=201)
+@limiter.limit("10/minute")
+def open_general_conversation(request: Request, body: GeneralIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    t = CM.open_general(db, user, body.subject, body.body, body.client_request_id)
+    db.commit()
+    db.refresh(t)
+    return CM.view(db, t, user)
 
 
 @router.get("/{thread_id}")
@@ -58,3 +106,12 @@ def read_conversation(thread_id: int, body: Optional[ReadIn] = None, db: Session
     CM.mark_read(db, t, user, body.through_message_id if body else None)
     db.commit()
     return CM.summary(db, t, user, mode)
+
+
+@router.post("/{thread_id}/close")
+def close_conversation(thread_id: int, body: Optional[CloseIn] = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    t, _ = CM.thread_for(db, thread_id, user)
+    t = CM.close_by_staff(db, t, user, body.reason if body else None)
+    db.commit()
+    db.refresh(t)
+    return CM.view(db, t, user)

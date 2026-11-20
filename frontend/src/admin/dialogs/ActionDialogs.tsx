@@ -7,11 +7,15 @@ import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
 import { Checkbox, Field, FieldGroup, Input, OptionGroup, Select, Textarea } from '../components/form';
 import { Callout, FormError, Kv } from '../components/layout';
+import {
+  SubdivisionContactFields,
+  useSubdivisionContactAutofill,
+} from '../components/SubdivisionContactFields';
 import { useToast } from '../components/toast';
-import { COMPLIANCE_RESULTS, CONTACT_METHODS, CONTACT_OUTCOMES, FOLLOWUP_KINDS, FOLLOWUP_MANUAL_KINDS, WARNING_DELIVERY } from '../data/constants';
+import { COMPLIANCE_RESULTS, CONTACT_OUTCOMES, FOLLOWUP_KINDS, FOLLOWUP_MANUAL_KINDS, WARNING_DELIVERY } from '../data/constants';
 import { useAdminData } from '../data/context';
 import { residentById } from '../data/selectors';
-import type { ComplianceResult, ContactMethod, FollowUpKind, OwnerContact, WarningDelivery } from '../data/types';
+import type { ComplianceResult, FollowUpKind, OwnerContact, WarningDelivery } from '../data/types';
 import { adminApi, type ApiTemplatePreviewResult, type ApiWarningTemplate } from '../live/api';
 import { reportIdOf } from '../../live/refs';
 import { errorMessage } from '../../preview/lib/errors';
@@ -20,29 +24,25 @@ import { useSubmit } from '../lib/useSubmit';
 import { templateOptionLabel, templatesForLevel } from '../lib/warningTemplates';
 import { FormFooter, type CaseDialogProps } from './BasicDialogs';
 
-const tomorrowNine = () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return toLocalInput(d); };
-
 /** What a contact can come to on a missing pet or a found animal (there is no ownership to deny): reached, no answer, or something else. */
 const PLAIN_OUTCOMES: OwnerContact['outcome'][] = ['cooperative', 'no_response', 'other'];
 const PLAIN_OUTCOME_LABEL: Record<OwnerContact['outcome'], string> = { cooperative: 'Reached them', no_response: 'No answer', other: 'Something else', denied_ownership: 'Denies ownership' };
 
-/** Record follow-up (scheduled or already done) and Record owner coordination share one dialog; only the fields differ. */
+/** Record completed follow-up and Record owner coordination share one dialog; only the fields differ. */
 export function FollowUpDialog({ c, mode, onClose }: CaseDialogProps & { mode: 'follow_up' | 'owner' }) {
   const { state, dispatch } = useAdminData();
   const toast = useToast();
   const { pending, error, run } = useSubmit();
   const owner = residentById(state, c.ownership.ownerResidentId);
-  // On a missing pet or a found animal this is just "a contact": who was reached, how, and what came of it
   const plain = c.category === 'lost_pet' || c.category === 'found_animal';
+  const contactAutofill = useSubdivisionContactAutofill(mode === 'owner' ? 'phone' : 'in_person');
 
-  // follow-up
+  // completed follow-up
   const [kind, setKind] = useState<FollowUpKind>('follow_up');
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
-  const [when, setWhen] = useState<'later' | 'done'>('later');
-  const [due, setDue] = useState(tomorrowNine);
+  const [recordedAt] = useState(() => new Date().toISOString());
   // owner coordination
-  const [method, setMethod] = useState<ContactMethod>('in_person');
   const [withWhom, setWithWhom] = useState(owner ? `${owner.name} (owner)` : '');
   const [at, setAt] = useState(() => toLocalInput(new Date()));
   const [summary, setSummary] = useState('');
@@ -56,8 +56,7 @@ export function FollowUpDialog({ c, mode, onClose }: CaseDialogProps & { mode: '
     e.preventDefault();
     const next: Record<string, string> = {};
     if (mode === 'follow_up') {
-      if (title.trim().length < 3) next.title = 'Describe what needs to happen.';
-      if (when === 'later' && !isValidLocalInput(due)) next.due = 'Choose a date and time.';
+      if (title.trim().length < 3) next.title = 'Describe what happened.';
     } else {
       if (!withWhom.trim()) next.withWhom = 'Who did you speak with?';
       if (summary.trim().length < 10) next.summary = 'Summarise what was discussed (at least a sentence).';
@@ -65,41 +64,96 @@ export function FollowUpDialog({ c, mode, onClose }: CaseDialogProps & { mode: '
     }
     setErrors(next);
     if (Object.keys(next).length) return;
-    const ok = await run(() => (mode === 'follow_up'
-      ? dispatch({ type: 'case/recordFollowUp', id: c.id, kind, title: title.trim(), notes: notes.trim() || undefined, dueAt: when === 'later' ? fromLocalInput(due) : null, doneNow: when === 'done' })
-      : dispatch({ type: 'case/recordOwnerContact', id: c.id, at: fromLocalInput(at), method, withWhom: withWhom.trim(), summary: summary.trim(), outcome, nextStepAt: nextStep && isValidLocalInput(nextStep) ? fromLocalInput(nextStep) : null })));
-    if (ok) { toast.success(mode === 'owner' ? (plain ? 'Contact recorded' : 'Owner coordination recorded') : when === 'later' ? 'Follow-up scheduled' : 'Follow-up recorded'); onClose(); }
+
+    const contactSuffix = contactAutofill.contactDetail.trim()
+      ? `\n[Subdivision Office Contact (${contactAutofill.methodDisplayLabel}): ${contactAutofill.contactDetail.trim()}${contactAutofill.contactPerson.trim() ? ` · Rep: ${contactAutofill.contactPerson.trim()}` : ''}]`
+      : '';
+
+    const ok = await run(() =>
+      mode === 'follow_up'
+        ? dispatch({
+            type: 'case/recordFollowUp',
+            id: c.id,
+            kind,
+            title: title.trim(),
+            notes: `${notes.trim()}${contactSuffix}`.trim() || undefined,
+            dueAt: null,
+            doneNow: true,
+          })
+        : dispatch({
+            type: 'case/recordOwnerContact',
+            id: c.id,
+            at: fromLocalInput(at),
+            method: contactAutofill.contactMethod,
+            withWhom: withWhom.trim(),
+            summary: `${summary.trim()}${contactSuffix}`.trim(),
+            outcome,
+            nextStepAt: nextStep && isValidLocalInput(nextStep) ? fromLocalInput(nextStep) : null,
+          }),
+    );
+    if (ok) {
+      toast.success(
+        mode === 'owner'
+          ? plain
+            ? 'Contact recorded'
+            : 'Owner coordination recorded'
+          : 'Follow-up saved as Completed',
+      );
+      onClose();
+    }
   };
 
   return (
     <Dialog
+      size="lg"
       title={mode === 'owner' ? (plain ? 'Record a contact' : 'Record owner coordination') : 'Record follow-up'}
-      description={mode === 'owner' ? (plain ? 'Write down who you spoke with, how, and what came of it.' : 'Log a conversation or notice with the person who may be responsible for the animal.') : 'Schedule a check, or record one that already happened.'}
+      description={mode === 'owner' ? (plain ? 'Write down who you spoke with, how, and what came of it.' : 'Log a conversation or notice with the person who may be responsible for the animal.') : 'Document a completed follow-up activity on this case.'}
       onClose={onClose} dirty={dirty} onSubmit={submit}
-      footer={({ requestClose }) => <FormFooter pending={pending} label={mode === 'owner' ? (plain ? 'Record contact' : 'Record coordination') : when === 'later' ? 'Schedule follow-up' : 'Record follow-up'} requestClose={requestClose} />}
+      footer={({ requestClose }) => <FormFooter pending={pending} label={mode === 'owner' ? (plain ? 'Record contact' : 'Record coordination') : 'Save Follow-up'} requestClose={requestClose} />}
     >
       {mode === 'follow_up' ? (
-        <>
-          <Field label="Type"><Select value={kind} onChange={(e) => setKind(e.target.value as FollowUpKind)}>{FOLLOWUP_MANUAL_KINDS.map((k) => <option key={k} value={k}>{FOLLOWUP_KINDS[k]}</option>)}</Select></Field>
-          <Field label="What needs to happen" required error={errors.title}><Input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Ask the guard whether the dog was seen again" /></Field>
-          <Field label="Details" optional><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} /></Field>
-          <FieldGroup label="When">
-            <OptionGroup name="when" label="When" inline value={when} onChange={setWhen} options={[{ value: 'later', label: 'Schedule for later' }, { value: 'done', label: 'Already done' }]} />
-          </FieldGroup>
-          {when === 'later' ? <Field label="Due" required error={errors.due} hint={isValidLocalInput(due) && new Date(due) < new Date() ? 'That time has passed, so it will show as overdue.' : undefined}><Input type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} /></Field> : null}
-        </>
-      ) : (
-        <>
+        <div className="space-y-3.5">
           <div className="sa-grid2">
-            <Field label="How"><Select value={method} onChange={(e) => setMethod(e.target.value as ContactMethod)}>{(Object.keys(CONTACT_METHODS) as ContactMethod[]).map((m) => <option key={m} value={m}>{CONTACT_METHODS[m]}</option>)}</Select></Field>
+            <Field label="Type"><Select value={kind} onChange={(e) => setKind(e.target.value as FollowUpKind)}>{FOLLOWUP_MANUAL_KINDS.map((k) => <option key={k} value={k}>{FOLLOWUP_KINDS[k]}</option>)}</Select></Field>
+            <Field label="Date and Time" hint="Automatically recorded when saved.">
+              <Input value={fmtDateTime(recordedAt)} readOnly disabled />
+            </Field>
+          </div>
+          <Field label="What Happened" required error={errors.title}><Input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Checked with guardhouse; dog was moved to a safe area" /></Field>
+          <SubdivisionContactFields
+            autofill={contactAutofill}
+            methodLabel="Contact Method"
+            compact
+          />
+          <Field label="Details" optional><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Additional observations, coordination notes, or outcome details" /></Field>
+        </div>
+      ) : (
+        <div className="space-y-3.5">
+          {owner ? (
+            <div className="rounded-lg border border-[var(--sa-border)] bg-[var(--sa-surface-2)] px-3.5 py-2.5 text-xs">
+              <span className="sa-eyebrow">Recipient (Pet Owner) Personal Contact Details</span>
+              <p className="mt-0.5 font-medium text-[var(--sa-text-1)]">
+                {owner.name} · {owner.unit}
+                {owner.phone && owner.phone !== '—' ? ` · Phone: ${owner.phone}` : ''}
+                {owner.email && owner.email !== '—' ? ` · Email: ${owner.email}` : ''}
+              </p>
+            </div>
+          ) : null}
+
+          <SubdivisionContactFields
+            autofill={contactAutofill}
+            methodLabel="How You Reached Them (Contact Method)"
+          />
+
+          <div className="sa-grid2">
+            <Field label="Who you spoke with (Recipient)" required error={errors.withWhom} hint="Use the name and relationship, e.g. “Maria Cruz (owner)”."><Input value={withWhom} onChange={(e) => setWithWhom(e.target.value)} /></Field>
             <Field label="When" required error={errors.at}><Input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} /></Field>
           </div>
-          <Field label="Who you spoke with" required error={errors.withWhom} hint="Use the name and relationship, e.g. “Maria Cruz (neighbour)”."><Input value={withWhom} onChange={(e) => setWithWhom(e.target.value)} /></Field>
           <Field label={plain ? 'What came of it' : 'What was discussed'} required error={errors.summary}><Textarea autoFocus value={summary} onChange={(e) => setSummary(e.target.value)} rows={plain ? 3 : 4} /></Field>
           <Field label="Outcome"><Select value={outcome} onChange={(e) => setOutcome(e.target.value as OwnerContact['outcome'])}>{(plain ? PLAIN_OUTCOMES : (Object.keys(CONTACT_OUTCOMES) as OwnerContact['outcome'][])).map((o) => <option key={o} value={o}>{plain ? PLAIN_OUTCOME_LABEL[o] : CONTACT_OUTCOMES[o]}</option>)}</Select></Field>
           {outcome === 'denied_ownership' ? <Callout>A denial is recorded as a <strong>dispute of ownership</strong>. It does not close the case, and it is not treated as dishonesty. Assess the evidence under your established procedure.</Callout> : null}
           <Field label="Next step" optional hint="Creates a follow-up for this date."><Input type="datetime-local" value={nextStep} onChange={(e) => setNextStep(e.target.value)} /></Field>
-        </>
+        </div>
       )}
       {error ? <FormError message={error} /> : null}
     </Dialog>
@@ -156,7 +210,9 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
   const [noPeriod, setNoPeriod] = useState(false);
   const [start, setStart] = useState(() => toLocalInput(new Date()));
   const [followOverride, setFollowOverride] = useState('');
+  const [summonsAt, setSummonsAt] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const isSecondWarning = warningLevel === '2nd Warning';
   const fitting = templatesForLevel(templates, warningLevel);
   // A template that does not fit the current level (the level changed after it was chosen, by hand or by the suggested tier)
   // counts as not chosen: the Leader must choose again. It is never swapped for another one.
@@ -200,8 +256,16 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
     if (!established) next.established = 'Confirm that the violation is sufficiently established.';
     if (terms && policy && policy.observationDays === null && !noPeriod && !(Number(days) >= 1 && Number(days) <= 60)) next.days = 'Enter a period from 1 to 60 days, or tick “No observation period”.';
     if (terms && !isValidLocalInput(start)) next.start = 'Choose when the warning starts.';
+    if (isSecondWarning && !isValidLocalInput(summonsAt)) next.summonsAt = 'Choose the date and time of the office summon.';
     setErrors(next);
     return Object.keys(next).length === 0 && !!policy;
+  };
+
+  const effectiveOverrides = (base: Record<string, string> = overrides): Record<string, string> => {
+    if (isSecondWarning && isValidLocalInput(summonsAt)) {
+      return { summons_date: fmtDateTime(fromLocalInput(summonsAt)), ...base };
+    }
+    return base;
   };
 
   const loadPreview = async (nextOverrides: Record<string, string> = overrides) => {
@@ -218,7 +282,8 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
         required_action: requiredAction.trim(),
         policy_id: policy.id,
         policy_reference: `${policy.reference} — ${policy.title}`,
-        field_overrides: nextOverrides,
+        ...(isSecondWarning && isValidLocalInput(summonsAt) ? { summons_at: fromLocalInput(summonsAt) } : {}),
+        field_overrides: effectiveOverrides(nextOverrides),
       });
       setPreview(res);
       setStep('preview');
@@ -248,7 +313,7 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
       warningLevel,
       templateId: Number(chosenTemplateId),
       requiredAction: requiredAction.trim(),
-      fieldOverrides: overrides,
+      fieldOverrides: effectiveOverrides(),
     }));
     if (ok) { toast.success(`Warning letter issued and resident notified under ${policy.reference}`); onClose(); }
   };
@@ -305,6 +370,23 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
               </Select>
             </Field>
           </div>
+          {isSecondWarning ? (
+            <Field
+              label="Date and time of summon"
+              required
+              error={errors.summonsAt}
+              hint="Scheduled office summons date and time (populates {{summons_date}})."
+            >
+              <Input
+                type="datetime-local"
+                value={summonsAt}
+                onChange={(e) => {
+                  setSummonsAt(e.target.value);
+                  setErrors((x) => ({ ...x, summonsAt: '' }));
+                }}
+              />
+            </Field>
+          ) : null}
           <Field label="Applicable policy" required error={errors.policy}>
             <Select value={policyId} onChange={(e) => setPolicyId(e.target.value)}>
               {policies.map((p) => <option key={p.id} value={p.id} disabled={p.status !== 'confirmed'}>{p.reference} — {p.title}{p.status !== 'confirmed' ? ' (awaiting confirmation)' : ''}</option>)}

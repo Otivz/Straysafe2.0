@@ -97,37 +97,77 @@ export const OUTCOME_GROUPS: Record<OutcomeGroup, { label: string; heading: stri
   invalid: { label: 'No action needed', heading: 'Not a valid concern', tone: 'neutral' },
 };
 
-export const REFERRAL_STATUS: Record<ReferralStatus, { label: string; tone: Tone; open: boolean }> = {
-  to_contact: { label: 'Not contacted yet', tone: 'amber', open: true },
-  sent: { label: 'Sent', tone: 'amber', open: true },
-  acknowledged: { label: 'Acknowledged', tone: 'amber', open: true },
-  in_progress: { label: 'In progress', tone: 'brand', open: true },
-  completed: { label: 'Completed externally', tone: 'sage', open: false },
-  declined: { label: 'Declined', tone: 'neutral', open: false },
-  no_response: { label: 'No response', tone: 'red', open: true },
+export const REFERRAL_STATUS: Record<ReferralStatus, { label: string; tone: Tone; open: boolean; description?: string }> = {
+  pending: { label: 'Pending', tone: 'amber', open: true, description: 'Referral has been created and is awaiting dispatch.' },
+  to_contact: { label: 'Pending', tone: 'amber', open: true, description: 'Referral has been created and is awaiting dispatch.' },
+  sent: { label: 'Sent', tone: 'amber', open: true, description: 'Referral has been sent or communicated to the receiving agency.' },
+  acknowledged: { label: 'Acknowledged', tone: 'amber', open: true, description: 'The external agency confirmed receipt of the referral.' },
+  in_progress: { label: 'In Progress', tone: 'brand', open: true, description: 'The external agency is actively handling or assisting with the case.' },
+  awaiting_response: { label: 'Awaiting Response', tone: 'amber', open: true, description: 'Waiting for feedback or update from the external agency.' },
+  no_response: { label: 'Awaiting Response', tone: 'red', open: true, description: 'Waiting for feedback or response from the external agency.' },
+  resolved: { label: 'Resolved', tone: 'sage', open: false, description: 'The referral objective has been completed by the external agency.' },
+  completed: { label: 'Resolved', tone: 'sage', open: false, description: 'The referral objective has been completed by the external agency.' },
+  declined: { label: 'Declined', tone: 'red', open: false, description: 'The external agency could not accept or handle the referral.' },
+  cancelled: { label: 'Cancelled', tone: 'neutral', open: false, description: 'The referral was cancelled by the referring office.' },
 };
 export const REFERRAL_STATUS_IDS = Object.keys(REFERRAL_STATUS) as ReferralStatus[];
+/** The 8 standard referral statuses exposed in the External Referral Management workflow. */
+export const PRIMARY_REFERRAL_STATUS_IDS: ReferralStatus[] = [
+  'pending',
+  'sent',
+  'acknowledged',
+  'in_progress',
+  'awaiting_response',
+  'resolved',
+  'declined',
+  'cancelled',
+];
+
+export const REFERRAL_PRIORITY_LABELS: Record<'normal' | 'high' | 'urgent', { label: string; tone: Tone }> = {
+  normal: { label: 'Normal', tone: 'neutral' },
+  high: { label: 'High', tone: 'amber' },
+  urgent: { label: 'Urgent', tone: 'red' },
+};
 
 export const ORGANIZATIONS = [
   { id: 'barangay', name: 'Barangay Hall — Peace & Order', kind: 'Barangay' },
-  { id: 'animal_control', name: 'Animal Control Personnel', kind: 'Animal control' },
   { id: 'vet_office', name: 'City Veterinary Office', kind: 'Veterinary' },
-  { id: 'welfare', name: 'Local Animal Welfare Group', kind: 'Animal welfare' },
-  { id: 'wildlife', name: 'Wildlife Response Unit', kind: 'Wildlife' },
+  { id: 'animal_control', name: 'Animal Control Personnel', kind: 'Animal control' },
+  { id: 'welfare', name: 'Local Animal Welfare / Rescue Group', kind: 'Animal welfare' },
+  { id: 'wildlife', name: 'Wildlife Response Unit (DENR / LGU)', kind: 'Wildlife' },
+  { id: 'other', name: 'Other External Agency / Clinic', kind: 'Other agency' },
 ] as const;
 
 export const FOLLOWUP_KINDS: Record<FollowUpKind, string> = {
-  follow_up: 'Follow-up', site_check: 'Site check', reporter_update: 'Update from reporter',
-  referral_check: 'Referral check', warning_end: 'End of observation', post_closure: 'Post-closure check',
+  follow_up: 'Follow-up',
+  coordination_update: 'Coordination Update',
+  rescue_update: 'Rescue Update',
+  welfare_check: 'Welfare Check',
+  site_check: 'Site check',
+  reporter_update: 'Update from reporter',
+  referral_check: 'Referral check',
+  warning_end: 'End of observation',
+  post_closure: 'Post-closure check',
 };
-export const FOLLOWUP_MANUAL_KINDS: FollowUpKind[] = ['follow_up', 'site_check', 'reporter_update', 'referral_check'];
+export const FOLLOWUP_MANUAL_KINDS: FollowUpKind[] = ['follow_up', 'coordination_update', 'rescue_update', 'welfare_check'];
 
 /** How an owner's confirmation that the pet is home reached the record. */
 export const RECOVERY_SOURCES: Record<'owner_app' | 'phone' | 'in_person', string> = { owner_app: 'In the app', phone: 'By phone', in_person: 'In person' };
 
 export const CONTACT_METHODS: Record<ContactMethod, string> = {
-  in_person: 'In person', phone: 'Phone call', message: 'Message', letter: 'Written notice',
+  phone: 'Phone Call',
+  email: 'Email',
+  in_person: 'In-Person',
+  message: 'Message',
+  letter: 'Written notice',
+  other: 'Other',
 };
+export const STANDARD_CONTACT_METHODS: { id: ContactMethod; label: string }[] = [
+  { id: 'phone', label: 'Phone Call' },
+  { id: 'email', label: 'Email' },
+  { id: 'in_person', label: 'In-Person' },
+  { id: 'other', label: 'Other' },
+];
 export const CONTACT_OUTCOMES = {
   cooperative: 'Cooperative / will act', denied_ownership: 'Denies ownership', no_response: 'No response', other: 'Other',
 } as const;

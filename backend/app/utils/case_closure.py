@@ -106,8 +106,9 @@ def _close_case_message_threads(session: Session, report_id: int, report) -> Non
     try:
         from app.services import case_messaging
         actor_id = getattr(report, "closed_by", None) if report is not None else None
-        reason = getattr(report, "closure_reason", None) if report is not None else None
-        case_messaging.close_for_report(session, report_id, actor_id, reason or "The report is closed, so this conversation has ended.")
+        # The residents in the conversation read this line: the standard sentence, never the Leader's private closure notes
+        # (closure_reason can hold assistance details and internal remarks).
+        case_messaging.close_for_report(session, report_id, actor_id, None)
     except Exception:  # noqa: BLE001
         pass
 

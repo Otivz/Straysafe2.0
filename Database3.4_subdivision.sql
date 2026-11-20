@@ -550,6 +550,58 @@ CREATE TABLE `pet_history` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =========================================
+-- TABLE: PET QR TAGS (2026-11-18; created at backend start by ensure_pet_tag_tables)
+-- =========================================
+CREATE TABLE `pet_tags` (
+  `tag_id` int NOT NULL AUTO_INCREMENT,
+  `pet_id` int NOT NULL,
+  `token` varchar(32) NOT NULL,
+  `status` varchar(20) NOT NULL DEFAULT 'active',
+  `created_by` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `disabled_at` datetime DEFAULT NULL,
+  `disabled_by` int DEFAULT NULL,
+  PRIMARY KEY (`tag_id`),
+  UNIQUE KEY `token` (`token`),
+  KEY `ix_pet_tags_pet_id` (`pet_id`),
+  KEY `ix_pet_tags_tag_id` (`tag_id`),
+  KEY `created_by` (`created_by`),
+  KEY `disabled_by` (`disabled_by`),
+  CONSTRAINT `pet_tags_ibfk_1` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE CASCADE,
+  CONSTRAINT `pet_tags_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `pet_tags_ibfk_3` FOREIGN KEY (`disabled_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `pet_tag_scans` (
+  `scan_id` int NOT NULL AUTO_INCREMENT,
+  `tag_id` int NOT NULL,
+  `pet_id` int NOT NULL,
+  `kind` varchar(20) NOT NULL DEFAULT 'view',
+  `scanner_user_id` int DEFAULT NULL,
+  `latitude` decimal(10,8) DEFAULT NULL,
+  `longitude` decimal(11,8) DEFAULT NULL,
+  `location_label` varchar(255) DEFAULT NULL,
+  `note` varchar(500) DEFAULT NULL,
+  `finder_phone` varchar(20) DEFAULT NULL,
+  `share_contact` tinyint(1) NOT NULL DEFAULT '0',
+  `photo_url` varchar(500) DEFAULT NULL,
+  `alert_id` int DEFAULT NULL,
+  `status` varchar(20) NOT NULL DEFAULT 'new',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`scan_id`),
+  KEY `ix_pet_tag_scans_tag_id` (`tag_id`),
+  KEY `ix_pet_tag_scans_pet_id` (`pet_id`),
+  KEY `ix_pet_tag_scans_created_at` (`created_at`),
+  KEY `ix_pet_tag_scans_scan_id` (`scan_id`),
+  KEY `scanner_user_id` (`scanner_user_id`),
+  KEY `alert_id` (`alert_id`),
+  CONSTRAINT `pet_tag_scans_ibfk_1` FOREIGN KEY (`tag_id`) REFERENCES `pet_tags` (`tag_id`) ON DELETE CASCADE,
+  CONSTRAINT `pet_tag_scans_ibfk_2` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE CASCADE,
+  CONSTRAINT `pet_tag_scans_ibfk_3` FOREIGN KEY (`scanner_user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `pet_tag_scans_ibfk_4` FOREIGN KEY (`alert_id`) REFERENCES `lost_pet_alerts` (`alert_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- =========================================
 -- TABLE: REPORTS
 -- =========================================
 DROP TABLE IF EXISTS `reports`;

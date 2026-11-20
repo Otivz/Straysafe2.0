@@ -1,15 +1,17 @@
-import { useContext } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { Bell, Building2, ChartColumn, ChevronsUpDown, FileText, FolderOpen, LayoutDashboard, LogOut, Megaphone, MessageSquareWarning, PawPrint, Settings, UserRound, Users, type LucideIcon } from 'lucide-react';
+import { Bell, Building2, ChartColumn, ChevronsUpDown, FileText, FolderOpen, Inbox, LayoutDashboard, LogOut, Megaphone, MessageSquareWarning, PawPrint, Settings, UserRound, Users, type LucideIcon } from 'lucide-react';
 import { adminPath } from '../config';
+import { adminApi } from '../live/api';
 import { NavGuardContext } from '../lib/navGuard';
 import { IconButton } from '../components/Button';
 import { Avatar } from '../components/layout';
 import { Menu } from '../components/Menu';
 
-const NAV: { to: string; label: string; icon: LucideIcon; badge?: 'newReports' }[] = [
+const NAV: { to: string; label: string; icon: LucideIcon; badge?: 'newReports' | 'messages' }[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/cases', label: 'Cases', icon: FolderOpen, badge: 'newReports' },
+  { to: '/messages', label: 'Messages', icon: Inbox, badge: 'messages' },
   { to: '/complaints', label: 'Complaints', icon: MessageSquareWarning },
   { to: '/community', label: 'Community', icon: Megaphone },
   { to: '/pets', label: 'Pet Registry', icon: PawPrint },
@@ -18,6 +20,23 @@ const NAV: { to: string; label: string; icon: LucideIcon; badge?: 'newReports' }
   { to: '/warning-templates', label: 'Warning Templates', icon: FileText },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
+
+/** Open resident conversations with unread messages, for the Messages badge. Polled while the tab is visible; a failure just shows no badge. */
+function useUnreadMessages(): number {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    let live = true;
+    const load = () => {
+      if (document.visibilityState !== 'visible') return;
+      adminApi.messagesUnread().then((r) => { if (live) setCount(r.conversations); }, () => undefined);
+    };
+    load();
+    const timer = setInterval(load, 30_000);
+    document.addEventListener('visibilitychange', load);
+    return () => { live = false; clearInterval(timer); document.removeEventListener('visibilitychange', load); };
+  }, []);
+  return count;
+}
 
 export function BellButton({ unread, onClick }: { unread: number; onClick: () => void }) {
   return (
@@ -33,6 +52,7 @@ export function Sidebar({ open, subdivision, adminName, unread, newReports, onCl
   onClose: () => void; onNotifications: () => void; onLogout: () => void;
 }) {
   const guard = useContext(NavGuardContext);
+  const unreadMessages = useUnreadMessages();
   return (
     <>
       <div className="sa-scrim" data-open={open} onClick={onClose} aria-hidden="true" />
@@ -63,6 +83,7 @@ export function Sidebar({ open, subdivision, adminName, unread, newReports, onCl
               <Icon size={18} strokeWidth={1.9} aria-hidden="true" />
               {label}
               {badge === 'newReports' && newReports > 0 ? <span className="sa-nav__count" aria-label={`${newReports} new reports`}>{newReports}</span> : null}
+              {badge === 'messages' && unreadMessages > 0 ? <span className="sa-nav__count" aria-label={`${unreadMessages} conversations with unread messages`}>{unreadMessages}</span> : null}
             </NavLink>
           ))}
         </nav>

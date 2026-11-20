@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, CalendarClock, CircleCheck, Clock3, Handshake, Landmark, PawPrint } from 'lucide-react';
 import { adminPath } from '../config';
+import { Badge } from '../components/Badge';
 import { LinkButton } from '../components/Button';
 import { EmptyState, Panel } from '../components/layout';
 import { MatchCard } from '../components/MatchParts';
@@ -95,8 +96,15 @@ export default function DashboardPage() {
                     <li key={c.id} className="sa-attn__item">
                       <span className="sa-attn__bar" data-tone={tone} aria-hidden="true" />
                       <div className="min-w-0">
-                        <p className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5"><span className="sa-ref">{c.id}</span><span className="sa-meta">{CATEGORIES[c.category].label}</span></p>
+                        <p className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+                          <span className="sa-ref">{c.id}</span>
+                          {c.priority === 'urgent' ? <Badge tone="red">URGENT</Badge> : c.priority === 'high' ? <Badge tone="amber">HIGH</Badge> : null}
+                          <span className="sa-meta">{CATEGORIES[c.category].label}</span>
+                        </p>
                         <p className="sa-rowtitle mt-0.5"><Link to={link(c.id)}>{c.title}</Link></p>
+                        {(c.category === 'injured' || c.category === 'safety') && c.animal.condition ? (
+                          <p className="sa-small sa-text-2 mt-0.5 truncate">{c.animal.condition.replace(/\n+/g, ' · ')}</p>
+                        ) : null}
                         {reasons.slice(0, 2).map((r) => { const Icon = REASON_ICON[r.kind] ?? Clock3; return <p key={r.kind} className="sa-reason" data-tone={r.tone}><Icon size={13} className="shrink-0" aria-hidden="true" />{r.label}</p>; })}
                       </div>
                       <LinkButton size="sm" to={link(c.id)} aria-label={`Review ${c.id}`}>Review<ArrowRight size={14} aria-hidden="true" /></LinkButton>

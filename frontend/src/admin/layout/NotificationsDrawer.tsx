@@ -26,9 +26,10 @@ export function NotificationsDrawer({ onClose }: { onClose: () => void }) {
   const unread = all.filter((n) => !n.read);
   const list = filter === 'unread' ? unread : all;
 
-  const open = (id: string, caseId?: string, read?: boolean) => {
+  const open = (id: string, caseId?: string, read?: boolean, to?: string) => {
     if (!read) dispatch({ type: 'notification/read', id }).catch((e: unknown) => toast.error(errorMessage(e)));
-    if (caseId) { onClose(); navigate(adminPath(`/cases/${caseId}`)); }
+    if (to) { onClose(); navigate(adminPath(to)); }
+    else if (caseId) { onClose(); navigate(adminPath(`/cases/${caseId}`)); }
   };
 
   return (
@@ -47,7 +48,7 @@ export function NotificationsDrawer({ onClose }: { onClose: () => void }) {
             const { icon: Icon, tone } = NOTIFICATION_ICON[n.kind];
             return (
               <li key={n.id}>
-                <button type="button" className="sa-notif" data-unread={!n.read} onClick={() => open(n.id, n.caseId, n.read)}>
+                <button type="button" className="sa-notif" data-unread={!n.read} onClick={() => open(n.id, n.caseId, n.read, n.to)}>
                   <span className={cx('sa-tl__icon', tone !== 'neutral' && `sa-tl__icon--${tone}`)}><Icon size={14} aria-hidden="true" /></span>
                   <span className="min-w-0">
                     <span className="sa-notif__title">{n.title}</span>

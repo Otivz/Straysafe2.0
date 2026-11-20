@@ -19,6 +19,7 @@ import ProfilePage from './pages/account/ProfilePage';
 import SettingsPage from './pages/account/SettingsPage';
 import WarningsPage from './pages/account/WarningsPage';
 import WarningLetterPage from './pages/account/WarningLetterPage';
+import OwnershipVerificationPage from './pages/reports/OwnershipVerificationPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
@@ -35,6 +36,9 @@ import SightingHistoryPage from './pages/community/SightingHistoryPage';
 import SightingPage from './pages/community/SightingPage';
 import { EditPetPage, RegisterPetPage } from './pages/pets/PetFormPage';
 import PetDetailsPage from './pages/pets/PetDetailsPage';
+import PetTagPage from './pages/pets/PetTagPage';
+import PetTagScansPage from './pages/pets/PetTagScansPage';
+import ScanTagPage from './pages/tag/ScanTagPage';
 import PetsPage from './pages/pets/PetsPage';
 import CategoryPage from './pages/report/CategoryPage';
 import DetailsPage from './pages/report/DetailsPage';
@@ -48,6 +52,8 @@ import MyReportsPage from './pages/reports/MyReportsPage';
 import RecoveryPage from './pages/reports/RecoveryPage';
 import ReportDetailsPage from './pages/reports/ReportDetailsPage';
 import ConversationPage from './pages/reports/ConversationPage';
+import MessagesPage from './pages/messages/MessagesPage';
+import NewMessagePage from './pages/messages/NewMessagePage';
 
 /** Signed-in frame: data store + layout. Child routes render inside the layout's <Outlet />. */
 function SignedIn() {
@@ -99,9 +105,13 @@ export default function ResidentApp({ mode }: { mode: ResidentMode }) {
                 <Route path="reports/:reportId" element={<ReportDetailsPage />} />
                 <Route path="reports/:reportId/update" element={<AddUpdatePage />} />
                 <Route path="reports/:reportId/recovered" element={<RecoveryPage />} />
+                <Route path="messages" element={<MessagesPage />} />
+                <Route path="messages/new" element={<NewMessagePage />} />
                 <Route path="conversations/:conversationId" element={<ConversationPage />} />
+                <Route path="ownership/:requestId" element={<OwnershipVerificationPage />} />
 
                 <Route path="community" element={<CommunityPage />} />
+                <Route path="scan" element={<ScanTagPage />} />
                 <Route path="community/lost" element={<NoticeDirectoryPage key="lost" kind="lost_pet" />} />
                 <Route path="community/found" element={<NoticeDirectoryPage key="found" kind="found_animal" />} />
                 <Route path="community/:noticeId" element={<NoticePage />} />
@@ -115,6 +125,9 @@ export default function ResidentApp({ mode }: { mode: ResidentMode }) {
                 <Route path="pets/new" element={<RegisterPetPage />} />
                 <Route path="pets/:petId" element={<PetDetailsPage />} />
                 <Route path="pets/:petId/edit" element={<EditPetPage />} />
+                <Route path="pets/:petId/tag" element={<PetTagPage />} />
+                <Route path="pets/:petId/scans" element={<PetTagScansPage />} />
+                <Route path="pets/:petId/scans/:scanId" element={<PetTagScansPage />} />
 
                 <Route path="notifications" element={<NotificationsPage />} />
                 <Route path="warnings" element={<WarningsPage />} />

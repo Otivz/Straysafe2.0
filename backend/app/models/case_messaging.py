@@ -21,9 +21,11 @@ class CaseMessageThread(Base):
 
     thread_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     subdivision_id: Mapped[int] = mapped_column(Integer, ForeignKey("subdivisions.subdivision_id"), nullable=False, index=True)
-    kind: Mapped[str] = mapped_column(String(8), nullable=False)                                     # direct | bridge
+    kind: Mapped[str] = mapped_column(String(8), nullable=False)                                     # direct | bridge | general
     # direct: the report the resident is about. bridge: the lost-pet report (and `related_report_id` is the found-animal report).
-    report_id: Mapped[int] = mapped_column(Integer, ForeignKey("reports.report_id", ondelete="CASCADE"), nullable=False, index=True)
+    # general: none (2026-11-19 migration made the column nullable).
+    report_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("reports.report_id", ondelete="CASCADE"), nullable=True, index=True)
+    subject: Mapped[Optional[str]] = mapped_column(String(160), nullable=True)                      # what the conversation is about
     related_report_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("reports.report_id", ondelete="CASCADE"), nullable=True, index=True)
     match_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)             # bridge: the lost_found_matches row it was opened for
     link_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)                           # bridge: the case link it was opened for
@@ -31,6 +33,7 @@ class CaseMessageThread(Base):
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     closed_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
     close_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    close_trigger: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)                 # case_closed | link_removed | manual
     created_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
@@ -43,8 +46,9 @@ class CaseMessageMember(Base):
     member_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     thread_id: Mapped[int] = mapped_column(Integer, ForeignKey("case_message_threads.thread_id", ondelete="CASCADE"), nullable=False, index=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
-    role: Mapped[str] = mapped_column(String(10), nullable=False)                                    # leader | owner | finder | reporter
+    role: Mapped[str] = mapped_column(String(10), nullable=False)                                    # leader | owner | finder | reporter | resident | pet_owner
     report_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)                         # the report this member speaks for
+    last_delivered_message_id: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     last_read_message_id: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     joined_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 

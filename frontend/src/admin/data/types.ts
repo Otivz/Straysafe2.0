@@ -79,7 +79,16 @@ export interface Note {
   text: string;
 }
 
-export type FollowUpKind = 'follow_up' | 'site_check' | 'reporter_update' | 'referral_check' | 'warning_end' | 'post_closure';
+export type FollowUpKind =
+  | 'follow_up'
+  | 'coordination_update'
+  | 'rescue_update'
+  | 'welfare_check'
+  | 'site_check'
+  | 'reporter_update'
+  | 'referral_check'
+  | 'warning_end'
+  | 'post_closure';
 export interface FollowUp {
   id: string;
   kind: FollowUpKind;
@@ -93,7 +102,7 @@ export interface FollowUp {
   completionNote?: string;
 }
 
-export type ContactMethod = 'in_person' | 'phone' | 'message' | 'letter';
+export type ContactMethod = 'in_person' | 'phone' | 'email' | 'message' | 'letter' | 'other';
 export interface OwnerContact {
   id: string;
   at: string;
@@ -117,10 +126,24 @@ export interface Warning {
   id: string;
   ownerResidentId: string | null;
   ownerName: string;
+  petId?: string | null;
+  petName?: string | null;
   policyId: string;
   policyTitle: string;
   policyRef: string;
+  warningCategory?: string | null;
+  warningSubject?: string | null;
   details: string;
+  additionalDetails?: string | null;
+  supportingDocuments?: ReferralAttachment[];
+  adminNotes?: string | null;
+  workflowStatus?: string | null;
+  acknowledgedAt?: string | null;
+  ownerResponse?: string | null;
+  ownerRespondedAt?: string | null;
+  threadId?: string | null;
+  renderedSubject?: string | null;
+  renderedBody?: string | null;
   delivery: WarningDelivery;
   issuedAt: string;
   issuedBy: string;
@@ -144,28 +167,66 @@ export interface Warning {
   viewedAt?: string | null;
 }
 
-/** `to_contact`: the assistance is written down but nobody has been contacted yet. Saving a referral is never proof that the organisation was reached. */
-export type ReferralStatus = 'to_contact' | 'sent' | 'acknowledged' | 'in_progress' | 'completed' | 'declined' | 'no_response';
+/** `to_contact` / `pending`: assistance is written down or created before being sent. */
+export type ReferralStatus =
+  | 'to_contact'
+  | 'pending'
+  | 'sent'
+  | 'acknowledged'
+  | 'in_progress'
+  | 'awaiting_response'
+  | 'resolved'
+  | 'completed'
+  | 'declined'
+  | 'cancelled'
+  | 'no_response';
+export type ReferralPriority = 'normal' | 'high' | 'urgent';
+export interface ReferralAttachment {
+  name: string;
+  url: string;
+  type?: string;
+  uploadedAt?: string;
+}
 export interface ReferralNote {
   id: string;
   at: string;
   by: string;
   text: string;
   status?: ReferralStatus;
+  updateType?: string;
+  responderName?: string;
+  assistanceProvided?: string;
+  progressNotes?: string;
+  followUpInstructions?: string;
+  additionalNotes?: string;
+  supportingDocuments?: ReferralAttachment[];
+  evidenceUrl?: string;
 }
 export interface Referral {
   id: string;
+  referenceNo: string;
   orgId: string;
   orgName: string;
   reason: string;
+  priorityLevel: ReferralPriority;
   referredAt: string;
+  contactMethod: ContactMethod;
   contactPerson: string;
   contactChannel: string;
+  contactDetail: string;
   status: ReferralStatus;
   notes: ReferralNote[];
+  supportingDocuments: ReferralAttachment[];
+  additionalNotes?: string;
+  assistanceProvided?: string;
+  actionsCompleted?: string;
   externalOutcome?: string;
   remainingFollowUp?: string;
   followUpAt?: string | null;
+  outcomeDate?: string | null;
+  outcomeNote?: string | null;
+  outcomeRecordedBy?: string | null;
+  outcomeRecordedAt?: string | null;
   createdBy: string;
   updatedAt: string;
 }
@@ -263,6 +324,39 @@ export interface Closure {
   closedBy: string;
 }
 
+export interface InjuredAssessment {
+  injurySeverity?: string;
+  bleeding?: string;
+  illnessSigns?: string;
+  weakness?: string;
+  mobility?: string;
+  trapped?: string;
+  neglectSuspected?: string;
+}
+
+export interface DangerousAssessment {
+  aggressiveSeverity?: string;
+  attackOrBiteOccurred?: string;
+  peopleThreatened?: string;
+  animalsThreatened?: string;
+  stillInArea?: string;
+  threatOngoing?: string;
+  rabiesSignsReported?: string;
+  securityRequired?: string;
+}
+
+export interface MergedReportInfo {
+  reportId: number;
+  reference: string;
+  reporterName: string | null;
+  createdAt: string | null;
+  mergedAt: string | null;
+  mergedByName: string | null;
+  mergeNotes: string | null;
+  description: string | null;
+  photoCount: number;
+}
+
 export interface Case {
   id: string;
   category: CategoryId;
@@ -270,7 +364,9 @@ export interface Case {
   priority: Priority;
   title: string;
   description: string;
-  animal: { type: AnimalType; description: string; count: number };
+  animal: { type: AnimalType; customType?: string | null; description: string; count: number; condition?: string | null; breed?: string | null; color?: string | null };
+  duplicateOfReportId?: number | null;
+  mergedReports?: MergedReportInfo[];
   /** Words for the place, plus the pin when the reporter placed one. */
   location: { area: string; detail: string; lat?: number; lng?: number };
   observedAt: string;
@@ -408,6 +504,7 @@ export interface ThreadMessage {
   mine: boolean;
   body: string;
   at: string;
+  deliveryStatus?: 'sent' | 'delivered' | 'read' | null;
 }
 
 /** A conversation read in full. */
@@ -512,9 +609,47 @@ export interface MatchSide {
 }
 
 /** pending: waiting for a Leader. confirmed: linked (both residents were told). rejected: ruled out, kept so it is never suggested again. moot: the found report was linked to another lost report. */
-export type MatchStatus = 'pending' | 'confirmed' | 'rejected' | 'moot';
+export type MatchStatus = 'pending' | 'under_review' | 'confirmed' | 'rejected' | 'moot';
 /** `manual`: a Leader linked the two reports themselves and they share too little to be compared as a suggestion. */
-export type MatchLevel = 'strong' | 'possible' | 'manual';
+export type MatchLevel = 'strong' | 'possible' | 'manual' | 'low';
+
+/** One attribute of the multi-attribute comparison (backend utils/match_scoring.py). `score` is null when it could not be compared. */
+export interface MatchAttribute {
+  key: 'visual' | 'location' | 'breed' | 'coat' | 'description';
+  label: string;
+  score: number | null;
+  verdict: 'match' | 'similar' | 'differs' | 'unknown';
+  explanation: string;
+  /** Configured weight, and its share of the score once the attributes that could not be compared are left out. */
+  weight: number;
+  effectiveWeight: number;
+  available: boolean;
+  proximity?: string | null;
+  distanceM?: number | null;
+}
+
+/** How a possible match was scored: every attribute, how much information there was, the classification and the explanations. */
+export interface MatchAnalysis {
+  algorithm: string;
+  score: number;
+  rawScore: number | null;
+  /** Share (%) of the comparison, by weight, that could be made. */
+  coverage: number;
+  attributesCompared: number;
+  attributesTotal: number;
+  classification: 'strong' | 'potential' | 'low' | 'insufficient' | 'excluded';
+  classificationLabel: string;
+  attributes: MatchAttribute[];
+  explanations: string[];
+  unavailable: string[];
+  notes: string[];
+  disclaimer: string;
+  /** A suggestion made before multi-attribute matching: no breakdown was stored, so this is today's comparison. */
+  computedOnView: boolean;
+}
+
+/** An earlier result of a recalculated match (kept, never overwritten). */
+export interface MatchHistoryEntry { at: string; score: number; classification: string | null; algorithm: string; reason: string }
 export interface MatchRow { key: string; label: string; lost: string; found: string; verdict: 'match' | 'similar' | 'differs' | 'unknown'; note: string }
 
 /**
@@ -535,6 +670,15 @@ export interface PossibleMatch {
   decidedAt: string | null;
   /** After a confirmation: how the owner and the finder get in touch (they choose; the Leader is asked only when one of them wants help). */
   coordination: { mode: 'none' | 'direct' | 'leader'; status: 'open' | 'resolved' } | null;
+  /** Multi-attribute matching: the classification and how much information it rests on (also on the list), the reviewers' notes. */
+  classification?: MatchAnalysis['classification'] | null;
+  coverage?: number | null;
+  reviewNote?: string | null;
+  hasPhotoComparison?: boolean;
+  /** Only once the match was opened in full. */
+  analysis?: MatchAnalysis;
+  history?: MatchHistoryEntry[];
+  canComparePhotos?: boolean;
   /** Only once the match was opened in full. */
   rows?: MatchRow[];
 }
@@ -609,6 +753,8 @@ export interface AdminNotification {
   at: string;
   read: boolean;
   caseId?: string;
+  /** Where a tap goes when it is not a case: a resident's message opens its conversation in Messages (path below the app base). */
+  to?: string;
 }
 
 export interface Policy {
@@ -626,9 +772,44 @@ export interface Policy {
   countWindowDays?: number | null;
 }
 
+export type ExternalAgencyType =
+  | 'barangay'
+  | 'veterinary_office'
+  | 'municipal_vet'
+  | 'animal_welfare'
+  | 'animal_control'
+  | 'other';
+
+export interface ExternalAgency {
+  id: string;
+  name: string;
+  type: ExternalAgencyType;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  address: string;
+}
+
 export type PublicationMode = 'immediate' | 'review';
 export interface Settings {
-  subdivision: { name: string; city: string; address: string; officePhone: string; officeEmail: string; officeHours: string };
+  subdivision: {
+    name: string;
+    city: string;
+    administrationName: string;
+    contactPerson: string;
+    address: string;
+    officePhone: string;
+    officeEmail: string;
+    officeHours: string;
+  };
+  externalCoordination: {
+    barangayName: string;
+    contactPerson: string;
+    phone: string;
+    email: string;
+    address: string;
+    agencies: ExternalAgency[];
+  };
   notifications: {
     newReports: boolean; urgent: boolean; followUps: boolean; claims: boolean; caseActivity: boolean;
     channels: { inApp: boolean; email: boolean; push: boolean };

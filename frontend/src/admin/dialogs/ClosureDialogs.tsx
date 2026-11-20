@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
-import { Checkbox, Field, FieldGroup, OptionGroup, Select, Textarea } from '../components/form';
+import { Checkbox, Field, FieldGroup, Input, OptionGroup, Select, Textarea } from '../components/form';
 import { Callout, FormError, Kv } from '../components/layout';
 import { useToast } from '../components/toast';
 import { CATEGORIES, DISPOSITIONS, OFFERED_DISPOSITION_IDS, OUTCOME_GROUPS, PRIORITIES, VERIFICATION } from '../data/constants';
@@ -16,6 +16,24 @@ import { FormFooter, type CaseDialogProps } from './BasicDialogs';
 const ACTION_KINDS = new Set(['follow_up', 'owner_contact', 'warning', 'compliance', 'referral', 'referral_update', 'notice', 'link']);
 const FOLLOW_UP_CHOICES = [['', 'No further follow-up needed'], ['3', 'Check again in 3 days'], ['7', 'Check again in 7 days'], ['14', 'Check again in 14 days'], ['30', 'Check again in 30 days']] as const;
 const GROUPS: OutcomeGroup[] = ['resolved', 'unresolved', 'invalid'];
+const WELFARE_OUTCOMES = [
+  'Treated and Released',
+  'Retrieved by Owner',
+  'Transferred to Veterinary Clinic',
+  'Transferred to Animal Shelter / Barangay',
+  'Under Continued Monitoring',
+  'Deceased / Humanely Handled',
+  'Other',
+] as const;
+const DANGEROUS_OUTCOMES = [
+  'Animal No Longer Present',
+  'Animal Behavior No Longer Threatening',
+  'Retrieved or Handled by Authorized Personnel',
+  'Referred to Appropriate Authorities',
+  'Owner Identified and Contacted',
+  'Under Continued Monitoring',
+  'Other',
+] as const;
 
 /**
  * Close case (A13). Closing needs a documented disposition and reason, and the interface keeps "closed" from being read
@@ -30,7 +48,20 @@ export function CloseCaseDialog({ c, onClose }: CaseDialogProps) {
   const [reason, setReason] = useState('');
   const [followDays, setFollowDays] = useState('');
   const [ack, setAck] = useState(false);
+  const [welfareOutcome, setWelfareOutcome] = useState('');
+  const [finalCondition, setFinalCondition] = useState('');
+  const [assistanceProvided, setAssistanceProvided] = useState('');
+  const [referralOutcome, setReferralOutcome] = useState('');
+  const [dangerousOutcome, setDangerousOutcome] = useState('');
+  const [securityActions, setSecurityActions] = useState('');
+  const [advisoryStatus, setAdvisoryStatus] = useState('');
+  const [threatOngoing, setThreatOngoing] = useState('No');
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const isInjuredCase = c.category === 'injured';
+  const isSafetyCase = c.category === 'safety';
+  const requiresWelfare = isInjuredCase && disposition !== 'invalid_report' && disposition !== 'duplicate_report';
+  const requiresSafetyOutcome = isSafetyCase && disposition !== 'invalid_report' && disposition !== 'duplicate_report';
 
   const open = openItems(c);
   const openCount = open.followUps.length + open.warnings.length + open.referrals.length + open.claims.length;
@@ -42,6 +73,11 @@ export function CloseCaseDialog({ c, onClose }: CaseDialogProps) {
     const found: Record<string, string> = {};
     if (!disposition) found.disposition = 'Choose the outcome that best describes how this case ended.';
     if (reason.trim().length < 15) found.reason = 'Explain how the outcome was reached (at least a sentence).';
+    if (requiresWelfare && !welfareOutcome) found.welfareOutcome = 'Document the animal welfare outcome before closing.';
+    if (requiresSafetyOutcome && !dangerousOutcome) found.dangerousOutcome = 'Document the dangerous animal incident outcome before closing.';
+    if (requiresSafetyOutcome && threatOngoing === 'Yes' && (disposition === 'resolved_intervention' || disposition === 'owner_compliance')) {
+      found.threatOngoing = 'A case cannot be marked resolved while the threat is still ongoing.';
+    }
     if (openCount > 0 && !ack) found.ack = 'Confirm that you reviewed the open items.';
     setErrors(found);
     if (Object.keys(found).length === 0) setStep('confirm');
@@ -50,7 +86,22 @@ export function CloseCaseDialog({ c, onClose }: CaseDialogProps) {
   const confirm = async () => {
     if (!disposition) return;
     const due = followDays ? (() => { const d = new Date(); d.setDate(d.getDate() + Number(followDays)); d.setHours(9, 0, 0, 0); return d.toISOString(); })() : null;
-    if (await run(() => dispatch({ type: 'case/close', id: c.id, disposition, reason: reason.trim(), followUpCheckAt: due, endOpenItems: openCount > 0 }))) {
+    if (await run(() => dispatch({
+      type: 'case/close',
+      id: c.id,
+      disposition,
+      reason: reason.trim(),
+      followUpCheckAt: due,
+      endOpenItems: openCount > 0,
+      ...(welfareOutcome ? { welfareOutcome } : {}),
+      ...(finalCondition.trim() ? { finalAnimalCondition: finalCondition.trim() } : {}),
+      ...(assistanceProvided.trim() ? { assistanceProvided: assistanceProvided.trim() } : {}),
+      ...(referralOutcome.trim() ? { referralOutcome: referralOutcome.trim() } : {}),
+      ...(dangerousOutcome ? { dangerousOutcome } : {}),
+      ...(securityActions.trim() ? { securityActionsPerformed: securityActions.trim() } : {}),
+      ...(advisoryStatus.trim() ? { advisoryStatus: advisoryStatus.trim() } : {}),
+      ...(isSafetyCase ? { threatOngoing } : {}),
+    }))) {
       toast.success(`${c.id} closed — ${OUTCOME_GROUPS[DISPOSITIONS[disposition].group].label.toLowerCase()}`);
       onClose();
     }
@@ -74,6 +125,13 @@ export function CloseCaseDialog({ c, onClose }: CaseDialogProps) {
         </Callout>
         <Kv rows={[
           ['Outcome', group.label],
+          ...(welfareOutcome ? [['Animal welfare outcome', welfareOutcome] as [string, string]] : []),
+          ...(dangerousOutcome ? [['Dangerous animal outcome', dangerousOutcome] as [string, string]] : []),
+          ...(securityActions.trim() ? [['Security actions performed', securityActions.trim()] as [string, string]] : []),
+          ...(advisoryStatus.trim() ? [['Community advisory status', advisoryStatus.trim()] as [string, string]] : []),
+          ...(finalCondition.trim() ? [['Final animal condition', finalCondition.trim()] as [string, string]] : []),
+          ...(assistanceProvided.trim() ? [['Assistance provided', assistanceProvided.trim()] as [string, string]] : []),
+          ...(referralOutcome.trim() ? [['Referral outcome', referralOutcome.trim()] as [string, string]] : []),
           ['Reason', reason.trim()],
           ['Follow-up check', followDays ? `Check again in ${followDays} days` : 'None needed'],
           ...(openCount > 0 ? [['Open items', `${plural(openCount, 'item')} will be ended: pending follow-ups cancelled, active warnings concluded. Referrals stay on record.`] as [string, string]] : []),
@@ -132,6 +190,58 @@ export function CloseCaseDialog({ c, onClose }: CaseDialogProps) {
           ))}
         </div>
       </FieldGroup>
+
+      {isInjuredCase ? (
+        <div className="flex flex-col gap-3 rounded-lg border border-[var(--sa-line)] bg-[var(--sa-sand)]/50 p-3.5">
+          <p className="sa-label m-0">Animal welfare outcome documentation</p>
+          <Field label="Animal welfare status / outcome" required={requiresWelfare} error={errors.welfareOutcome}>
+            <Select value={welfareOutcome} onChange={(e) => setWelfareOutcome(e.target.value)}>
+              <option value="">Choose outcome</option>
+              {WELFARE_OUTCOMES.map((o) => <option key={o} value={o}>{o}</option>)}
+            </Select>
+          </Field>
+          <Field label="Final animal condition" optional>
+            <Input value={finalCondition} onChange={(e) => setFinalCondition(e.target.value)} placeholder="e.g. Stabilized, walking normally, under vet care" />
+          </Field>
+          <Field label="Assistance provided" optional>
+            <Input value={assistanceProvided} onChange={(e) => setAssistanceProvided(e.target.value)} placeholder="e.g. Guardhouse secured area, transported to clinic" />
+          </Field>
+          {c.referrals.length > 0 ? (
+            <Field label="Referral outcome" optional>
+              <Input value={referralOutcome} onChange={(e) => setReferralOutcome(e.target.value)} placeholder="e.g. Received by City Vet / Barangay team" />
+            </Field>
+          ) : null}
+        </div>
+      ) : null}
+
+      {isSafetyCase ? (
+        <div className="flex flex-col gap-3 rounded-lg border border-[var(--sa-line)] bg-[var(--sa-sand)]/50 p-3.5">
+          <p className="sa-label m-0">Dangerous animal incident resolution</p>
+          <Field label="Dangerous animal incident outcome" required={requiresSafetyOutcome} error={errors.dangerousOutcome}>
+            <Select value={dangerousOutcome} onChange={(e) => setDangerousOutcome(e.target.value)}>
+              <option value="">Choose outcome</option>
+              {DANGEROUS_OUTCOMES.map((o) => <option key={o} value={o}>{o}</option>)}
+            </Select>
+          </Field>
+          <Field label="Is the safety threat still ongoing?" error={errors.threatOngoing}>
+            <Select value={threatOngoing} onChange={(e) => setThreatOngoing(e.target.value)}>
+              <option value="No">No — threat subsided or handled</option>
+              <option value="Yes">Yes — threat is still ongoing</option>
+            </Select>
+          </Field>
+          <Field label="Security actions performed" optional>
+            <Input value={securityActions} onChange={(e) => setSecurityActions(e.target.value)} placeholder="e.g. Guardhouse monitored area, escorted animal out" />
+          </Field>
+          <Field label="Community advisory status" optional>
+            <Input value={advisoryStatus} onChange={(e) => setAdvisoryStatus(e.target.value)} placeholder="e.g. Published & archived / Not needed" />
+          </Field>
+          {c.referrals.length > 0 ? (
+            <Field label="External authority response" optional>
+              <Input value={referralOutcome} onChange={(e) => setReferralOutcome(e.target.value)} placeholder="e.g. Animal control / Barangay responded on site" />
+            </Field>
+          ) : null}
+        </div>
+      ) : null}
 
       <Field label="Closure reason" required error={errors.reason} hint="Stays in the case record. Say what happened and why it is appropriate to close."><Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} /></Field>
       <Field label="Remaining follow-up check"><Select value={followDays} onChange={(e) => setFollowDays(e.target.value)}>{FOLLOW_UP_CHOICES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Field>

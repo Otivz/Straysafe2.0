@@ -9,7 +9,7 @@ import { useToast } from '../../components/toast';
 import { ANIMAL_TYPES, CLAIM_STATUS, IDENTITY, OWNERSHIP, OWNERSHIP_EVIDENCE, OWNERSHIP_IDS, SIZE_LABEL, SUFFICIENCY, URGENCY, VERIFICATION } from '../../data/constants';
 import { useAdminData } from '../../data/context';
 import { registryMatches, residentById } from '../../data/selectors';
-import type { Assessment, Case, EvidenceSufficiency, IdentityReview, IdentityStatus, IncidentVerification, MatchDecision, OwnershipReview, OwnershipStatus, UrgencyLevel } from '../../data/types';
+import type { Assessment, Case, DangerousAssessment, EvidenceSufficiency, IdentityReview, IdentityStatus, IncidentVerification, InjuredAssessment, MatchDecision, OwnershipReview, OwnershipStatus, Priority, UrgencyLevel } from '../../data/types';
 import { fmtDateTime, relative } from '../../../preview/lib/format';
 import { useNow } from '../../../preview/lib/hooks';
 import { useUnsavedGuard } from '../../lib/navGuard';
@@ -29,20 +29,51 @@ const bare = (a: Assessment): Omit<Assessment, 'savedAt' | 'savedBy'> => ({
 const Lockable = ({ locked, children }: { locked: boolean; children: ReactNode }) => <fieldset disabled={locked} className="m-0 min-w-0 border-0 p-0">{children}</fieldset>;
 
 // ------------------------------------------------------------------------------------------------ incident review
-interface IncidentForm { incident: IncidentVerification; basis: string; reviewed: string[]; sufficiency: EvidenceSufficiency; urgency: UrgencyLevel; urgencyNote: string; notes: string; setUrgent: boolean }
-const incidentInit = (a: Assessment): IncidentForm => ({ incident: a.incident, basis: a.incidentBasis, reviewed: a.evidenceReviewed, sufficiency: a.evidenceSufficiency, urgency: a.urgency, urgencyNote: a.urgencyNote, notes: a.notes, setUrgent: false });
+interface IncidentForm {
+  incident: IncidentVerification;
+  basis: string;
+  reviewed: string[];
+  sufficiency: EvidenceSufficiency;
+  urgency: UrgencyLevel;
+  urgencyNote: string;
+  notes: string;
+  setUrgent: boolean;
+  injuredAssessment: InjuredAssessment;
+  dangerousAssessment: DangerousAssessment;
+  priorityOverride: Priority;
+  priorityChangeReason: string;
+}
+const emptyInjuredAssessment = (): InjuredAssessment => ({
+  injurySeverity: '', bleeding: '', illnessSigns: '', weakness: '', mobility: '', trapped: '', neglectSuspected: '',
+});
+const emptyDangerousAssessment = (): DangerousAssessment => ({
+  aggressiveSeverity: '', attackOrBiteOccurred: '', peopleThreatened: '', animalsThreatened: '',
+  stillInArea: '', threatOngoing: '', rabiesSignsReported: '', securityRequired: '',
+});
+const incidentInit = (a: Assessment, priority: Priority): IncidentForm => ({
+  incident: a.incident, basis: a.incidentBasis, reviewed: a.evidenceReviewed, sufficiency: a.evidenceSufficiency,
+  urgency: a.urgency, urgencyNote: a.urgencyNote, notes: a.notes, setUrgent: false,
+  injuredAssessment: emptyInjuredAssessment(), dangerousAssessment: emptyDangerousAssessment(),
+  priorityOverride: priority, priorityChangeReason: '',
+});
 
 function IncidentSection({ c, locked, openDialog }: { c: Case; locked: boolean; openDialog: OpenCaseDialog }) {
   const { dispatch } = useAdminData();
   const { openMedia } = useMediaViewer();
   const toast = useToast();
   const { pending, error, run } = useSubmit();
-  const initial = incidentInit(c.assessment);
+  const initial = incidentInit(c.assessment, c.priority);
   const [f, setF] = useState(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const set = (patch: Partial<IncidentForm>) => setF((p) => ({ ...p, ...patch }));
+  const setInjured = (patch: Partial<InjuredAssessment>) => setF((p) => ({ ...p, injuredAssessment: { ...p.injuredAssessment, ...patch } }));
+  const setDangerous = (patch: Partial<DangerousAssessment>) => setF((p) => ({ ...p, dangerousAssessment: { ...p.dangerousAssessment, ...patch } }));
   const dirty = !same(f, initial);
   useUnsavedGuard(dirty);
+  const isInjured = c.category === 'injured';
+  const isSafety = c.category === 'safety';
+  const isAutoUrgent = (isInjured && c.priority === 'urgent' && (/unable to move/i.test(c.assessment.urgencyNote) || /Can the animal move\?:\s*No/i.test(c.animal.condition ?? '')))
+    || (isSafety && /Automatic safety priority/i.test(c.assessment.urgencyNote));
 
   const evidenceMediaItems: LightboxMediaItem[] = c.evidence
     .filter((e) => Boolean(e.url))
@@ -59,22 +90,202 @@ function IncidentSection({ c, locked, openDialog }: { c: Case; locked: boolean; 
     e.preventDefault();
     const next: Record<string, string> = {};
     if (f.incident !== 'not_reviewed' && f.basis.trim().length < 5) next.basis = 'Say what the decision is based on.';
+    if (((isAutoUrgent && f.priorityOverride !== 'urgent') || (isSafety && f.priorityOverride !== c.priority)) && f.priorityChangeReason.trim().length < 5) {
+      next.priorityChangeReason = 'Provide a reason for adjusting the assigned priority (at least 5 characters).';
+    }
     setErrors(next);
     if (Object.keys(next).length) return;
     const assessment: Omit<Assessment, 'savedAt' | 'savedBy'> = { incident: f.incident, incidentBasis: f.basis.trim(), evidenceSufficiency: f.sufficiency, evidenceReviewed: f.reviewed, urgency: f.urgency, urgencyNote: f.urgencyNote.trim(), notes: f.notes.trim() };
-    if (await run(() => dispatch({ type: 'case/saveAssessment', id: c.id, assessment, identity: c.identity, ownership: c.ownership, alsoSetUrgent: f.setUrgent && f.urgency === 'immediate' }))) toast.success('Assessment saved');
+    const hasInjuredFields = Object.values(f.injuredAssessment).some((v) => Boolean(v && v.trim()));
+    const hasDangerousFields = Object.values(f.dangerousAssessment).some((v) => Boolean(v && v.trim()));
+    if (await run(() => dispatch({
+      type: 'case/saveAssessment',
+      id: c.id,
+      assessment,
+      identity: c.identity,
+      ownership: c.ownership,
+      alsoSetUrgent: f.setUrgent && f.urgency === 'immediate',
+      ...(isInjured && hasInjuredFields ? { injuredAssessment: f.injuredAssessment } : {}),
+      ...(isSafety && hasDangerousFields ? { dangerousAssessment: f.dangerousAssessment } : {}),
+      ...((isInjured || isSafety) && f.priorityOverride !== c.priority ? { priorityOverride: f.priorityOverride, priorityChangeReason: f.priorityChangeReason.trim() } : {}),
+    }))) toast.success('Assessment saved');
   };
 
   return (
     <form onSubmit={submit} noValidate>
       <Lockable locked={locked}>
         <Panel>
+          {isInjured ? (
+            <Block title="Reported animal condition & mobility" description="Recorded by the reporting resident at submission.">
+              {isAutoUrgent ? (
+                <Callout className="mb-4" tone="red" title="Automatically flagged as URGENT">
+                  This injured/sick animal report was automatically prioritized as Urgent because the resident reported the animal is unable to move.
+                </Callout>
+              ) : null}
+              {c.animal.condition ? (
+                <p className="sa-small whitespace-pre-line rounded border border-[var(--sa-line)] bg-[var(--sa-sand)] p-3">{c.animal.condition}</p>
+              ) : (
+                <p className="sa-small sa-text-3">No structured condition details recorded.</p>
+              )}
+            </Block>
+          ) : null}
+
+          {isSafety ? (
+            <Block title="Reported dangerous behavior & threat context" description="Recorded by the reporting resident at submission.">
+              {isAutoUrgent ? (
+                <Callout className="mb-4" tone={c.priority === 'urgent' ? 'red' : 'amber'} title={`Automatically prioritized (${c.priority.toUpperCase()})`}>
+                  {c.assessment.urgencyNote}
+                </Callout>
+              ) : null}
+              {c.animal.condition ? (
+                <p className="sa-small whitespace-pre-line rounded border border-[var(--sa-line)] bg-[var(--sa-sand)] p-3">{c.animal.condition}</p>
+              ) : (
+                <p className="sa-small sa-text-3">No structured behavior details recorded.</p>
+              )}
+            </Block>
+          ) : null}
+
           <Block title="Incident review" description="Did the reported incident occur? This is separate from which animal was involved and who is responsible for it.">
             <FieldGroup label="Verification">
               <OptionGroup name="incident" cols={2} label="Incident verification" value={f.incident} onChange={(v) => set({ incident: v })} options={(Object.keys(VERIFICATION) as IncidentVerification[]).map((v) => ({ value: v, label: VERIFICATION[v].label, description: VERIFICATION[v].description }))} />
             </FieldGroup>
             <Field className="mt-4" label="What the decision is based on" required={f.incident !== 'not_reviewed'} error={errors.basis}><Textarea rows={2} value={f.basis} onChange={(e) => set({ basis: e.target.value })} placeholder="e.g. The guard also saw the dog on Tuesday evening." /></Field>
           </Block>
+
+          {isInjured ? (
+            <Block title="Injured / sick animal assessment" description="Record your clinical and physical condition findings based on site checks and evidence.">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Visible injury severity" optional>
+                  <Select value={f.injuredAssessment.injurySeverity ?? ''} onChange={(e) => setInjured({ injurySeverity: e.target.value })}>
+                    <option value="">Not assessed</option>
+                    <option value="None">None</option>
+                    <option value="Minor">Minor</option>
+                    <option value="Moderate">Moderate</option>
+                    <option value="Severe">Severe</option>
+                  </Select>
+                </Field>
+                <Field label="Presence of bleeding" optional>
+                  <Select value={f.injuredAssessment.bleeding ?? ''} onChange={(e) => setInjured({ bleeding: e.target.value })}>
+                    <option value="">Not assessed</option>
+                    <option value="None">None</option>
+                    <option value="Minor bleeding">Minor bleeding</option>
+                    <option value="Active / heavy bleeding">Active / heavy bleeding</option>
+                    <option value="Not observed">Not observed</option>
+                  </Select>
+                </Field>
+                <Field label="Signs of illness" optional>
+                  <Select value={f.injuredAssessment.illnessSigns ?? ''} onChange={(e) => setInjured({ illnessSigns: e.target.value })}>
+                    <option value="">Not assessed</option>
+                    <option value="None">None</option>
+                    <option value="Mild">Mild</option>
+                    <option value="Severe">Severe</option>
+                    <option value="Suspected contagious">Suspected contagious</option>
+                  </Select>
+                </Field>
+                <Field label="Physical weakness" optional>
+                  <Select value={f.injuredAssessment.weakness ?? ''} onChange={(e) => setInjured({ weakness: e.target.value })}>
+                    <option value="">Not assessed</option>
+                    <option value="Alert / strong">Alert / strong</option>
+                    <option value="Weak">Weak</option>
+                    <option value="Collapsed / unresponsive">Collapsed / unresponsive</option>
+                  </Select>
+                </Field>
+                <Field label="Mobility condition" optional>
+                  <Select value={f.injuredAssessment.mobility ?? ''} onChange={(e) => setInjured({ mobility: e.target.value })}>
+                    <option value="">Not assessed</option>
+                    <option value="Mobile">Mobile</option>
+                    <option value="Limited mobility">Limited mobility</option>
+                    <option value="Unable to move">Unable to move</option>
+                    <option value="Unknown">Unknown</option>
+                  </Select>
+                </Field>
+                <Field label="Trapped or stuck" optional>
+                  <Select value={f.injuredAssessment.trapped ?? ''} onChange={(e) => setInjured({ trapped: e.target.value })}>
+                    <option value="">Not assessed</option>
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                  </Select>
+                </Field>
+                <Field label="Appears neglected or abandoned" optional>
+                  <Select value={f.injuredAssessment.neglectSuspected ?? ''} onChange={(e) => setInjured({ neglectSuspected: e.target.value })}>
+                    <option value="">Not assessed</option>
+                    <option value="No">No</option>
+                    <option value="Suspected">Suspected</option>
+                    <option value="Yes">Yes</option>
+                  </Select>
+                </Field>
+              </div>
+            </Block>
+          ) : null}
+
+          {isSafety ? (
+            <Block title="Dangerous animal safety risk assessment" description="Assess the safety threat to residents and animals based on verification and site checks.">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Aggressive behavior severity" optional>
+                  <Select value={f.dangerousAssessment.aggressiveSeverity ?? ''} onChange={(e) => setDangerous({ aggressiveSeverity: e.target.value })}>
+                    <option value="">Not assessed</option>
+                    <option value="Low / calm">Low / calm</option>
+                    <option value="Moderate / threatening">Moderate / threatening</option>
+                    <option value="Severe / attacking">Severe / attacking</option>
+                  </Select>
+                </Field>
+                <Field label="Attack or bite occurred?" optional>
+                  <Select value={f.dangerousAssessment.attackOrBiteOccurred ?? ''} onChange={(e) => setDangerous({ attackOrBiteOccurred: e.target.value })}>
+                    <option value="">Not assessed</option>
+                    <option value="Yes — confirmed">Yes — confirmed</option>
+                    <option value="Attempted only">Attempted only</option>
+                    <option value="No">No</option>
+                    <option value="Unverified">Unverified</option>
+                  </Select>
+                </Field>
+                <Field label="People threatened?" optional>
+                  <Select value={f.dangerousAssessment.peopleThreatened ?? ''} onChange={(e) => setDangerous({ peopleThreatened: e.target.value })}>
+                    <option value="">Not assessed</option>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                  </Select>
+                </Field>
+                <Field label="Other animals threatened?" optional>
+                  <Select value={f.dangerousAssessment.animalsThreatened ?? ''} onChange={(e) => setDangerous({ animalsThreatened: e.target.value })}>
+                    <option value="">Not assessed</option>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                  </Select>
+                </Field>
+                <Field label="Animal still in area?" optional>
+                  <Select value={f.dangerousAssessment.stillInArea ?? ''} onChange={(e) => setDangerous({ stillInArea: e.target.value })}>
+                    <option value="">Not assessed</option>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                    <option value="Unknown">Unknown</option>
+                  </Select>
+                </Field>
+                <Field label="Threat ongoing?" optional>
+                  <Select value={f.dangerousAssessment.threatOngoing ?? ''} onChange={(e) => setDangerous({ threatOngoing: e.target.value })}>
+                    <option value="">Not assessed</option>
+                    <option value="Yes">Yes</option>
+                    <option value="Subsided">Subsided</option>
+                    <option value="Unknown">Unknown</option>
+                  </Select>
+                </Field>
+                <Field label="Suspected rabies warning signs reported?" optional>
+                  <Select value={f.dangerousAssessment.rabiesSignsReported ?? ''} onChange={(e) => setDangerous({ rabiesSignsReported: e.target.value })}>
+                    <option value="">Not assessed</option>
+                    <option value="Yes — refer to vet/health authority">Yes — refer to vet/health authority</option>
+                    <option value="No">No</option>
+                  </Select>
+                </Field>
+                <Field label="Immediate security assistance required?" optional>
+                  <Select value={f.dangerousAssessment.securityRequired ?? ''} onChange={(e) => setDangerous({ securityRequired: e.target.value })}>
+                    <option value="">Not assessed</option>
+                    <option value="Yes — urgent guardhouse dispatch">Yes — urgent guardhouse dispatch</option>
+                    <option value="Monitoring only">Monitoring only</option>
+                    <option value="No">No</option>
+                  </Select>
+                </Field>
+              </div>
+            </Block>
+          ) : null}
 
           <Block title="Evidence review" description={c.evidence.length ? 'Mark what you have looked at, then say whether it is enough to act on.' : 'Evidence is optional. A report can be assessed from its description alone.'}>
             {c.evidence.length > 0 ? (
@@ -110,8 +321,25 @@ function IncidentSection({ c, locked, openDialog }: { c: Case; locked: boolean; 
 
           <Block title="Urgency" description="Is anyone, or the animal, at immediate risk? Urgent concerns do not wait for routine steps.">
             <OptionGroup name="urgency" cols={3} label="Urgency" value={f.urgency} onChange={(v) => set({ urgency: v })} options={(['immediate', 'possible', 'none'] as UrgencyLevel[]).map((u) => ({ value: u, label: URGENCY[u].label, description: URGENCY[u].description }))} />
+            {(isInjured || isSafety) ? (
+              <div className="mt-4">
+                <Field label="Official priority level">
+                  <Select value={f.priorityOverride} onChange={(e) => set({ priorityOverride: e.target.value as Priority })}>
+                    <option value="urgent">Urgent (Immediate attention)</option>
+                    <option value="high">High</option>
+                    <option value="normal">Moderate (Normal)</option>
+                    <option value="low">Low</option>
+                  </Select>
+                </Field>
+                {((isAutoUrgent && f.priorityOverride !== 'urgent') || (isSafety && f.priorityOverride !== c.priority)) ? (
+                  <Field className="mt-3" label="Reason for adjusting assigned priority" required error={errors.priorityChangeReason}>
+                    <Textarea rows={2} value={f.priorityChangeReason} onChange={(e) => set({ priorityChangeReason: e.target.value })} placeholder="Explain why the assigned priority is being changed." />
+                  </Field>
+                ) : null}
+              </div>
+            ) : null}
             <Field className="mt-4" label="Urgency notes" optional><Textarea rows={2} value={f.urgencyNote} onChange={(e) => set({ urgencyNote: e.target.value })} /></Field>
-            {f.urgency === 'immediate' && c.priority !== 'urgent' ? <Checkbox className="mt-3" label="Also set the case priority to Urgent" checked={f.setUrgent} onChange={(e) => set({ setUrgent: e.target.checked })} /> : null}
+            {f.urgency === 'immediate' && c.priority !== 'urgent' && !isInjured && !isSafety ? <Checkbox className="mt-3" label="Also set the case priority to Urgent" checked={f.setUrgent} onChange={(e) => set({ setUrgent: e.target.checked })} /> : null}
           </Block>
 
           <Block title="Assessment notes">

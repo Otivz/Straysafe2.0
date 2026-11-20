@@ -3,7 +3,7 @@
  * is one the backend already serves (reports, lost-pet-alerts, announcements, ownership-claims, pets, users, notifications,
  * chat, landmarks, cases/categories). Types only describe what the screens read.
  */
-import { httpDownloadBlob, httpGet, httpGetPage, httpPost, httpPut, httpPatch, httpUpload } from '../../live/http';
+import { httpDownloadBlob, httpGet, httpGetBlob, httpGetPage, httpPost, httpPut, httpPatch, httpUpload } from '../../live/http';
 import type { ApiAnnouncement, ApiGeneratedWarningLetter, ApiNotification, ApiNotificationPrefs, ApiPet, ApiUser } from '../../admin/live/api';
 
 export type { ApiAnnouncement, ApiGeneratedWarningLetter, ApiNotification, ApiNotificationPrefs, ApiPet, ApiUser };
@@ -107,26 +107,110 @@ export interface ApiResidentClaim {
   statement: string; evidence: string[]; submitted_at: string | null; reviewed_at: string | null; review_note: string | null; claimed_pet_id: number | null;
 }
 
+/** A pet's QR tag (GET/POST /pets/{id}/tag). `link` is what the QR holds; `link_is_public` is false when the server has no public address set. */
+export interface ApiPetTag {
+  pet_id: number; has_tag: boolean; tag_id: number | null; token: string | null; link: string | null; created_at: string | null;
+  last_scanned_at?: string | null; cooldown_minutes?: number; cooldown_remaining_seconds?: number;
+  link_is_public: boolean; can_manage: boolean; can_disable: boolean;
+}
+
+/** One "tell the owner" message from someone who scanned the tag. `finder_phone` only for the owner, only when the finder chose to share it. */
+export interface ApiPetTagFoundReport {
+  scan_id: number; status: 'new' | 'seen_by_owner' | 'resolved'; created_at: string; location_label: string | null;
+  latitude: number | null; longitude: number | null; note: string | null; photo_url: string | null;
+  from_signed_in_resident: boolean; finder_phone: string | null; phone_shared: boolean;
+}
+export interface ApiPetTagScans { found_reports: ApiPetTagFoundReport[]; views: { count: number; last_at: string | null } }
+
 const PAGE = 100;
 const MAX_REPORTS = 500;       // a safety stop: a resident's own reports are read in pages until the server says there is no more
 
+export interface ApiQrCollarHistoryEntry {
+  status: string;
+  label: string;
+  at: string;
+  by_id?: number | null;
+  by_name?: string | null;
+  note?: string | null;
+}
+
+export interface ApiQrCollarRequest {
+  request_id: number;
+  reference: string;
+  pet_id: number;
+  pet_name: string;
+  pet_reference: string | null;
+  pet_type: string | null;
+  pet_breed: string | null;
+  pet_color: string | null;
+  pet_size: string | null;
+  pet_photo_url: string | null;
+  resident_id: number;
+  resident_name: string;
+  resident_unit: string | null;
+  subdivision_id: number;
+  status: 'pending' | 'accepted' | 'ready_for_pickup' | 'completed';
+  status_label: string;
+  notes: string | null;
+  admin_notes: string | null;
+  thread_id: number | null;
+  requested_at: string;
+  accepted_at: string | null;
+  accepted_by_name: string | null;
+  ready_at: string | null;
+  ready_by_name: string | null;
+  completed_at: string | null;
+  completed_by_name: string | null;
+  updated_at: string;
+  history: ApiQrCollarHistoryEntry[];
+}
+
 export interface ApiCaseConversation {
-  thread_id: number; kind: 'direct' | 'bridge'; status: 'open' | 'closed'; can_reply: boolean; ended_reason: string | null;
-  report_id: number; related_report_id: number | null; my_report_id: number | null; title: string; subtitle: string;
+  thread_id: number; kind: 'direct' | 'bridge' | 'general'; status: 'open' | 'closed'; can_reply: boolean; ended_reason: string | null;
+  report_id: number | null; related_report_id: number | null;
+  /** Resident-to-Administration messaging (2026-11-19): what it is about, its report and how it ended. */
+  subject: string | null; report_ref: string | null; report_category: string | null; case_status: string | null;
+  closed_at: string | null; close_trigger: 'case_closed' | 'link_removed' | 'manual' | null; started_by_resident: boolean; my_report_id: number | null; title: string; subtitle: string;
   unread: number; message_count: number; last_at: string | null; last_text: string; created_at: string;
   people: Array<{ user_id: number; role: string; label: string; name: string; me: boolean; report_id: number | null }>;
 }
 export interface ApiCaseConversationMessage {
   message_id: number; kind: 'message' | 'system'; sender_id: number | null; sender_name: string | null;
   sender_role: string; label: string; mine: boolean; body: string; at: string;
+  delivery_status?: 'sent' | 'delivered' | 'read' | null;
 }
-export interface ApiCaseConversationDetail extends ApiCaseConversation { messages: ApiCaseConversationMessage[] }
+/**
+ * Possible Pet Owner Verification (2026-11-20): the Subdivision Administration asks whether a reported animal is this resident's registered pet.
+ * Only the pet's owner receives it: the reported animal (no reporter details, no exact pin) and their own pet, and the Yes / No answer.
+ */
+export interface ApiOwnershipVerification {
+  request_id: number; status: 'identified' | 'awaiting' | 'owner_confirmed' | 'owner_declined' | 'verified' | 'not_confirmed' | 'unable_to_contact'; status_label: string;
+  owner_response: 'YES' | 'NO' | null; owner_response_at: string | null; final_label: string | null;
+  question?: string; can_answer?: boolean;
+  owner_note?: string | null; final_at?: string | null; requested_at?: string | null; staff_message?: string | null; thread_id?: number | null;
+  history?: { label: string; at: string | null }[];
+  reported_animal?: { reference: string | null; photos: string[]; animal_type: string | null; breed: string | null; color: string | null; size: string | null;
+    landmark: string | null; subdivision: string | null; reported_at: string | null };
+  your_pet?: { pet_id: number; pet_name: string; reference_code: string | null; photos: string[]; animal_type: string | null; breed: string | null; color: string | null;
+    gender?: string | null; size?: string | null; distinctive_markings?: string | null } | null;
+}
+export interface ApiCaseConversationDetail extends ApiCaseConversation { messages: ApiCaseConversationMessage[]; verification?: ApiOwnershipVerification | null; report_photos?: string[] }
 
 export const residentApi = {
+  /** The possible owner's answer to an ownership verification. Recorded and shown to the administration; it never decides ownership by itself. */
+  /** The verification page (linked from the request message and notification): the reported animal beside the owner's registered pet. */
+  ownershipVerification: (requestId: number) => httpGet<ApiOwnershipVerification>(`/pet-match-confirmations/${requestId}/verification`),
+  answerOwnershipVerification: (requestId: number, answer: 'YES' | 'NO', note: string) =>
+    httpPost<{ message: string }>(`/pet-match-confirmations/${requestId}/respond`, { answer, note: note.trim() || null }),
   conversations: () => httpGet<ApiCaseConversation[]>('/case-messages'),
   conversation: (id: number) => httpGet<ApiCaseConversationDetail>(`/case-messages/${id}`),
   sendConversationMessage: (id: number, body: string, clientRequestId: string) => httpPost<ApiCaseConversationDetail>(`/case-messages/${id}/messages`, { body, client_request_id: clientRequestId }),
   readConversation: (id: number, throughMessageId: number) => httpPost<ApiCaseConversation>(`/case-messages/${id}/read`, { through_message_id: throughMessageId }),
+  /** "Message Subdivision Administration" from the resident's own report: the open conversation about it (the same one when asked again). */
+  openReportConversation: (reportId: number) => httpPost<ApiCaseConversationDetail>(`/case-messages/reports/${reportId}`, {}),
+  /** A general conversation with the Subdivision Administration (no report), opened with its first message. */
+  startGeneralConversation: (subject: string, body: string, clientRequestId: string) =>
+    httpPost<ApiCaseConversationDetail>('/case-messages/general', { subject, body, client_request_id: clientRequestId }),
   categories: () => httpGet<ApiResidentCategories>('/cases/categories'),
   coverage: () => httpGet<ApiCoverage>('/reports/coverage-area'),
   landmarks: (subdivisionId: number) => httpGet<ApiLandmark[]>('/landmarks', { subdivision_id: subdivisionId }),
@@ -211,6 +295,19 @@ export const residentApi = {
   createPet: (body: Record<string, unknown>) => httpPost<ApiPet>('/pets/', body),
   updatePet: (id: number, body: Record<string, unknown>) => httpPut<ApiPet>(`/pets/${id}`, body),
   uploadPetPhoto: (id: number, file: File) => { const form = new FormData(); form.append('file', file); return httpUpload<{ photo_url: string }>(`/pets/${id}/photo`, form); },
+  petTag: (id: number) => httpGet<ApiPetTag>(`/pets/${id}/tag`),
+  /** Create a tag, or replace the current one (the old tag stops working at once). */
+  createPetTag: (id: number) => httpPost<ApiPetTag>(`/pets/${id}/tag`),
+  disablePetTag: (id: number) => httpPost<ApiPetTag>(`/pets/${id}/tag/disable`),
+  petTagQr: (id: number) => httpGetBlob(`/pets/${id}/tag/qr.png`),
+  petTagScans: (id: number) => httpGet<ApiPetTagScans>(`/pets/${id}/tag/scans`),
+  resolvePetTagScan: (id: number, scanId: number) => httpPost<{ resolved: number }>(`/pets/${id}/tag/scans/${scanId}/resolve`),
+  /** "Pet is back home": every open message resolved (and any shared phone number deleted). */
+  resolveAllPetTagScans: (id: number) => httpPost<{ resolved: number }>(`/pets/${id}/tag/scans/resolve`),
+  qrCollarRequests: (petId?: number) =>
+    httpGet<{ items: ApiQrCollarRequest[] }>('/qr-collar-requests/mine', petId ? { pet_id: petId } : undefined),
+  requestQrCollar: (petId: number, notes?: string) =>
+    httpPost<ApiQrCollarRequest>('/qr-collar-requests', { pet_id: petId, notes: notes?.trim() || null }),
   ownershipRequests: () => httpGet<ApiOwnershipRequest[]>('/pet-ownership/mine'),
   answerOwnership: (id: number, accept: boolean, reason?: string) => httpPost(`/pet-ownership/${id}/${accept ? 'accept' : 'reject'}`, accept ? {} : { reason: reason ?? null }),
 
@@ -225,4 +322,5 @@ export const residentApi = {
   warningLetter: (letterId: number) => httpGet<ApiGeneratedWarningLetter>(`/warning-letters/${letterId}`),
   downloadWarningLetter: (letterId: number, ref: string, format: 'pdf' | 'docx') => httpDownloadBlob(`/warning-letters/${letterId}/download`, `${ref}.${format}`, { format }),
   acknowledgeWarning: (warningId: number) => httpPatch(`/warnings/${warningId}/acknowledge`, { confirmed: true }),
+  respondToWarning: (warningId: number, response: string) => httpPost(`/warnings/${warningId}/respond`, { response }),
 };

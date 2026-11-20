@@ -132,15 +132,16 @@ def suggest_tier(db: Session, violation_type: str, pet_id: Optional[int], owner_
 
 
 def require_can_issue(db: Session, actor: User, owner: User, report: Optional[Report], pet: Optional[Pet]) -> None:
-    """Leader only, own subdivision, the registered pet's actual owner (a resident account)."""
-    if actor.role_id != 2:
-        raise HTTPException(status_code=403, detail="Only the Subdivision Leader can issue official warnings.")
+    """Authorized Subdivision Admin (Leader or Administrator), own subdivision, the registered pet's actual owner (a resident account)."""
+    if actor.role_id not in (2, 4):
+        raise HTTPException(status_code=403, detail="Only an authorized Subdivision Admin can issue official warnings.")
     if report is None:
         raise HTTPException(status_code=400, detail="A warning must be issued for a report (the incident).")
-    if not actor.subdivision_id or report.subdivision_id != actor.subdivision_id:
-        raise HTTPException(status_code=403, detail="You can only issue warnings for reports in your own subdivision.")
-    if report.assigned_leader_id and report.assigned_leader_id != actor.user_id:
-        raise HTTPException(status_code=403, detail="Only the leader handling this report can issue its warnings.")
+    if actor.role_id == 2:
+        if not actor.subdivision_id or report.subdivision_id != actor.subdivision_id:
+            raise HTTPException(status_code=403, detail="You can only issue warnings for reports in your own subdivision.")
+        if report.assigned_leader_id and report.assigned_leader_id != actor.user_id:
+            raise HTTPException(status_code=403, detail="Only the leader handling this report can issue its warnings.")
     if owner.role_id != 1:
         raise HTTPException(status_code=400, detail="Warnings are issued to the pet owner's resident account.")
     if pet is not None:

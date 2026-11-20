@@ -165,7 +165,7 @@ try {
     // the weaker match is the second card
     await page.evaluate(`[...document.querySelectorAll('button')].filter((b) => b.innerText.trim() === 'Review match')[1].click()`);
     await seen('Do these reports describe the same animal?');
-    await page.click('Not the same animal');
+    await page.click('Not a match');
     await seen('Ruled out. Nobody was told.');
     await seen('Possible matches to review (1)');
     assert.equal((await matchFor(weakId)).status, 'rejected');
@@ -186,7 +186,7 @@ try {
     await seen('Possible matches to review (2)');
     await page.click('Review match');                                    // the strongest is first
     await seen('Do these reports describe the same animal?');
-    await page.click('Same animal: link them');
+    await page.click('Confirm verified match: link them');
     await seen('Linked. Both residents were told.');
     const m = await matchFor(strongId);
     assert.equal(m.status, 'confirmed');
@@ -273,7 +273,7 @@ try {
     // the possible match: ruled out from the lane
     await page.click('Review match');
     await seen('Do these reports describe the same animal?');
-    await page.click('Not the same animal');
+    await page.click('Not a match');
     await seen('Ruled out. Nobody was told.');
     assert.equal((await matchFor(weakId)).status, 'rejected');
     await seen('Needs you · 1');

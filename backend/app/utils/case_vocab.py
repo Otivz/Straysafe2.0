@@ -147,24 +147,49 @@ ANIMAL_TYPE_LABELS: Tuple[str, ...] = (
     "Dog", "Cat", "Unknown", "Bird", "Small mammal", "Reptile", "Livestock", "Wildlife", "Other")
 _ANIMAL_ALIASES: Dict[str, str] = {
     "dog": "Dog", "canine": "Dog", "puppy": "Dog", "cat": "Cat", "feline": "Cat", "kitten": "Cat",
-    "bird": "Bird", "small_mammal": "Small mammal", "small mammal": "Small mammal", "rabbit": "Small mammal",
-    "reptile": "Reptile", "livestock": "Livestock", "wildlife": "Wildlife", "other": "Other", "unknown": "Unknown",
+    "bird": "Bird", "small_mammal": "Small mammal", "small mammal": "Small mammal",
+    "reptile": "Reptile", "livestock": "Livestock", "wildlife": "Wildlife", "other": "Other", "others": "Other", "unknown": "Unknown",
     "other / unknown": "Other",
 }
 
 
 def normalize_animal_type(value: Optional[str]) -> Optional[str]:
-    """The stored label for an animal type given as an id ('small_mammal') or a label ('Small mammal'), else None."""
-    key = (value or "").strip().lower()
-    return _ANIMAL_ALIASES.get(key)
+    """The stored label for an animal type given as an id ('dog'), a known label ('Cat'), or a custom animal type ('Rabbit', 'Turtle', etc.)."""
+    cleaned = " ".join((value or "").strip().split())
+    if not cleaned or len(cleaned) > 100:
+        return None
+    key = cleaned.lower()
+    if key in _ANIMAL_ALIASES:
+        return _ANIMAL_ALIASES[key]
+    return cleaned[:1].upper() + cleaned[1:]
 
 
 # ----------------------------------------------------------------------------------------------------- assessment
 INCIDENT_VERIFICATION = ("not_reviewed", "verified", "partial", "unverified", "invalid")
+INCIDENT_VERIFICATION_LABELS: Dict[str, str] = {
+    "not_reviewed": "Not Yet Reviewed",
+    "verified": "Verified",
+    "partial": "Partly Verified",
+    "unverified": "Could Not Be Verified",
+    "invalid": "Invalid Report",
+}
 EVIDENCE_SUFFICIENCY = ("not_assessed", "sufficient", "needs_more")
 URGENCY_LEVELS = ("not_assessed", "immediate", "possible", "none")
 IDENTITY_STATUSES = ("unidentified", "possible_match", "identified")
+IDENTITY_STATUS_LABELS: Dict[str, str] = {
+    "unidentified": "Unidentified Animal",
+    "possible_match": "Possible Match",
+    "identified": "Identity Confirmed",
+}
 OWNERSHIP_STATUSES = ("unknown", "claimed", "under_review", "confirmed", "disputed", "unconfirmed")
+OWNERSHIP_STATUS_LABELS: Dict[str, str] = {
+    "unknown": "Unknown",
+    "claimed": "Claimed",
+    "under_review": "Under Review",
+    "confirmed": "Confirmed Owner",
+    "disputed": "Disputed",
+    "unconfirmed": "Unconfirmed",
+}
 # Evidence an administrator may rely on. Pet registration is owner-declared, so it can never be the only basis.
 OWNERSHIP_EVIDENCE: Dict[str, bool] = {   # id -> weak
     "registry": True, "photos": False, "markings": False, "cctv": False, "firsthand": False,
@@ -202,18 +227,35 @@ def level_for_priority(priority: str) -> str:
 
 # ------------------------------------------------------------------------------------------------------ referrals
 ORG_TYPES = ("barangay", "animal_control", "veterinary", "animal_welfare", "wildlife", "other")
-# to_contact: assistance is needed and written down, but nobody has been contacted yet. Saving a referral is NOT proof that the
-# organisation was reached: the contact itself is recorded as the first update (2026-11-11).
-REFERRAL_STATUSES = ("to_contact", "sent", "acknowledged", "in_progress", "completed", "declined", "no_response")
-OPEN_REFERRAL_STATUSES: FrozenSet[str] = frozenset({"to_contact", "sent", "acknowledged", "in_progress", "no_response"})
-REFERRAL_CONTACT_METHODS = ("call", "visit", "message", "letter", "other")
+# to_contact / pending: assistance is needed and written down, or created before sending.
+REFERRAL_STATUSES = (
+    "to_contact", "pending", "sent", "acknowledged", "in_progress",
+    "awaiting_response", "resolved", "completed", "declined", "cancelled", "no_response",
+)
+OPEN_REFERRAL_STATUSES: FrozenSet[str] = frozenset({
+    "to_contact", "pending", "sent", "acknowledged", "in_progress", "awaiting_response", "no_response",
+})
+REFERRAL_CONTACT_METHODS = ("call", "visit", "email", "message", "letter", "other")
 # approved-UI contact method -> stored contact_method
-UI_CONTACT_TO_STORED = {"in_person": "visit", "phone": "call", "message": "message", "letter": "letter"}
+UI_CONTACT_TO_STORED = {
+    "in_person": "visit", "phone": "call", "email": "email",
+    "message": "message", "letter": "letter", "other": "other",
+}
 
 # --------------------------------------------------------------------------------------- follow-ups, contacts, links
-FOLLOWUP_KINDS = ("follow_up", "site_check", "reporter_update", "referral_check", "warning_end", "post_closure")
+FOLLOWUP_KINDS = (
+    "follow_up",
+    "coordination_update",
+    "rescue_update",
+    "welfare_check",
+    "site_check",
+    "reporter_update",
+    "referral_check",
+    "warning_end",
+    "post_closure",
+)
 FOLLOWUP_STATUSES = ("pending", "done", "cancelled")
-CONTACT_METHODS = ("in_person", "phone", "message", "letter")
+CONTACT_METHODS = ("in_person", "phone", "email", "message", "letter", "other")
 CONTACT_OUTCOMES = ("cooperative", "denied_ownership", "no_response", "other")
 LINK_TYPES = ("related", "duplicate", "same_animal", "same_incident")
 

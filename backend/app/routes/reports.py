@@ -45,6 +45,8 @@ from app.utils.notification_dispatcher import (
     notify_report_submitted,
     notify_report_status_update,
     notify_leader_new_report,
+    notify_leader_urgent_injured,
+    notify_leader_dangerous_animal,
 )
 from app.schemas.coverage import CoverageAreaResponse, CoverageAreaUpdate
 from app.schemas.report import (
@@ -2191,6 +2193,38 @@ def create_report(
         apply_report_color_payload(report_data)
         last_seen_at = report_data.pop("last_seen_at", None)     # not a report column: it goes into the Lost Pet snapshot
         client_request_id = report_data.pop("client_request_id", None)     # a Lost Pet submission's retry key (kept on a Lost Pet report only)
+        injured_conditions = report_data.pop("injured_conditions", None)
+        injured_other_detail = report_data.pop("injured_other_detail", None)
+        can_move = report_data.pop("can_move", None)
+        dangerous_behaviors = report_data.pop("dangerous_behaviors", None)
+        dangerous_other_detail = report_data.pop("dangerous_other_detail", None)
+        current_danger = report_data.pop("current_danger", None)
+        still_in_location = report_data.pop("still_in_location", None)
+        bite_details = report_data.pop("bite_details", None)
+        rabies_symptoms = report_data.pop("rabies_symptoms", None)
+        movement_direction = report_data.pop("movement_direction", None)
+        media_urls = [u.strip() for u in (report_data.pop("media_urls", None) or []) if isinstance(u, str) and u.strip()]
+
+        validated_media: list[tuple[str, str]] = []
+        has_valid_photo = False
+        for m_url in media_urls:
+            validate_cloudinary_url(m_url, allowed={"Image", "Video"})
+            is_vid = any(m_url.lower().split("?")[0].endswith(ext) for ext in (".mp4", ".mov", ".webm", ".avi", ".mkv")) or "/video/upload/" in m_url.lower()
+            if not is_vid:
+                validate_cloudinary_url(m_url, allowed={"Image"})
+                has_valid_photo = True
+            validated_media.append((m_url, "Video" if is_vid else "Image"))
+
+        if not has_valid_photo and report_data.get("pet_id"):
+            pet_for_photo = db.query(Pet).filter(Pet.pet_id == report_data["pet_id"]).first()
+            if pet_for_photo and (pet_for_photo.photo_url or "").strip():
+                has_valid_photo = True
+
+        if not has_valid_photo:
+            raise HTTPException(
+                status_code=422,
+                detail="Please upload at least one photo of the animal before submitting your report.",
+            )
 
         # Any kind of animal can be reported (dog, cat, bird, small mammal, reptile, livestock, wildlife, other): the
         # report needs no pet registration. Given as an id ('small_mammal') or a label ('Small mammal').
@@ -2265,6 +2299,74 @@ def create_report(
 
         if report_data.get("is_sensitive") is None:
             report_data["is_sensitive"] = bool(chosen_category and chosen_category.category_name == case_vocab.CATEGORY_FAMILIES[case_vocab.NUISANCE])
+
+        # Specialized Injured / Sick Animal workflow & backend-authoritative urgent priority rule
+        from app.utils import injured_rules
+        auto_urgent_injured = False
+        injured_can_move = None
+        if chosen_family == case_vocab.INJURED:
+            formatted_condition = injured_rules.format_injured_condition(
+                conditions=injured_conditions,
+                other_detail=injured_other_detail,
+                can_move=can_move,
+                fallback_condition=report_data.get("condition"),
+            )
+            if formatted_condition:
+                report_data["condition"] = formatted_condition
+            injured_can_move = injured_rules.extract_can_move(can_move=can_move, condition_text=report_data.get("condition"))
+            # Enforce backend priority: frontend-submitted priority values never override this rule
+            if injured_rules.is_unable_to_move(can_move=can_move, condition_text=report_data.get("condition")):
+                report_data["priority_level"] = "High"
+                report_data["urgency_level"] = "immediate"
+                report_data["urgency_note"] = injured_rules.AUTO_URGENT_REASON
+                auto_urgent_injured = True
+            else:
+                # Non-immobile injured reports follow standard priority logic (never auto-urgent from client input)
+                report_data.pop("urgency_level", None)
+                report_data.pop("urgency_note", None)
+                if current_user.role_id == 1:
+                    report_data["priority_level"] = "Medium"
+
+        # Specialized Dangerous Animal workflow & backend-authoritative safety priority rule
+        from app.utils import dangerous_rules
+        auto_safety_prio = None
+        auto_safety_reason = None
+        dangerous_behaviors_summary = ""
+        dangerous_has_bite = False
+        if chosen_family == case_vocab.SAFETY:
+            formatted_safety_cond = dangerous_rules.format_dangerous_condition(
+                behaviors=dangerous_behaviors,
+                other_detail=dangerous_other_detail,
+                current_danger=current_danger,
+                still_in_location=still_in_location,
+                bite_details=bite_details,
+                rabies_symptoms=rabies_symptoms,
+                movement_direction=movement_direction,
+                fallback_condition=report_data.get("condition"),
+            )
+            if formatted_safety_cond:
+                report_data["condition"] = formatted_safety_cond
+            auto_safety_prio, auto_safety_reason = dangerous_rules.evaluate_dangerous_priority(
+                behaviors=dangerous_behaviors,
+                current_danger=current_danger,
+                rabies_symptoms=rabies_symptoms,
+                condition_text=report_data.get("condition"),
+            )
+            dangerous_behaviors_summary = ", ".join(dangerous_behaviors or []) or "Dangerous behavior reported"
+            dangerous_has_bite = any("actual bite" in b.lower() for b in (dangerous_behaviors or []))
+            if auto_safety_prio == "urgent":
+                report_data["priority_level"] = "High"
+                report_data["urgency_level"] = "immediate"
+                report_data["urgency_note"] = auto_safety_reason
+            elif auto_safety_prio == "high":
+                report_data["priority_level"] = "High"
+                report_data["urgency_level"] = "possible"
+                report_data["urgency_note"] = auto_safety_reason
+            else:
+                report_data.pop("urgency_level", None)
+                report_data["urgency_note"] = auto_safety_reason
+                if current_user.role_id == 1:
+                    report_data["priority_level"] = "Medium"
 
         # Registration-first Lost Pet rule (utils/lost_pet_rules.py): a Lost Pet report is a resident's own registered pet, one
         # active report per pet (the pet row is locked, so two requests together cannot both pass). What the report says about
@@ -2378,9 +2480,69 @@ def create_report(
             remarks="Initial report submitted by resident."
         )
         db.add(initial_history)
+
+        if auto_urgent_injured:
+            db.add(StatusHistory(
+                report_id=db_report.report_id,
+                report_status_id=db_report.current_status_id,
+                updated_by=None,
+                latitude=db_report.latitude,
+                longitude=db_report.longitude,
+                landmark=db_report.landmark,
+                facility_id=db_report.facility_id,
+                remarks="Automatic urgent priority assigned: Animal is unable to move.",
+            ))
+            log_activity(
+                db=db,
+                action="AUTO_URGENT_PRIORITY",
+                target_table="reports",
+                target_id=db_report.report_id,
+                description=f"Report #{db_report.report_id} automatically prioritized as URGENT (injured animal unable to move).",
+                user_id=db_report.user_id,
+                log_type="operation",
+                new_values={"priority": "urgent", "urgency_level": "immediate", "can_move": injured_can_move or "No", "reason": injured_rules.AUTO_URGENT_REASON},
+                request=req,
+            )
+
+        if chosen_family == case_vocab.SAFETY and auto_safety_prio in ("urgent", "high"):
+            db.add(StatusHistory(
+                report_id=db_report.report_id,
+                report_status_id=db_report.current_status_id,
+                updated_by=None,
+                latitude=db_report.latitude,
+                longitude=db_report.longitude,
+                landmark=db_report.landmark,
+                facility_id=db_report.facility_id,
+                remarks=f"Automatic safety priority assigned ({auto_safety_prio.upper()}): {auto_safety_reason}",
+            ))
+            log_activity(
+                db=db,
+                action="AUTO_SAFETY_PRIORITY",
+                target_table="reports",
+                target_id=db_report.report_id,
+                description=f"Report #{db_report.report_id} automatically prioritized as {auto_safety_prio.upper()} (dangerous animal safety risk).",
+                user_id=db_report.user_id,
+                log_type="operation",
+                new_values={"priority": auto_safety_prio, "reason": auto_safety_reason, "behaviors": dangerous_behaviors_summary},
+                request=req,
+            )
         
+        # Attach uploaded media URLs atomically with the report creation
+        rep_animal_type = "Dog" if (db_report.animal_type or "").lower() == "dog" else "Cat" if (db_report.animal_type or "").lower() == "cat" else "Unknown"
+        for m_url, m_kind in validated_media:
+            db.add(
+                ReportMedia(
+                    report_id=db_report.report_id,
+                    file_url=m_url,
+                    media_type=m_kind,
+                    animal_type=rep_animal_type,
+                    dominant_color=db_report.animal_color or "Unknown",
+                    is_evidence=False,
+                )
+            )
+
         # If pet_id is linked and the pet has a photo, automatically create ReportMedia so the lost pet's photo is visible in all report feeds
-        if db_report.pet_id:
+        if db_report.pet_id and not validated_media:
             linked_pet = db.query(Pet).filter(Pet.pet_id == db_report.pet_id).first()
             if linked_pet and linked_pet.photo_url:
                 p_type = 'Unknown'
@@ -2455,17 +2617,56 @@ def create_report(
                     User.subdivision_id == db_report.subdivision_id,
                     User.role_id == 2
                 ).all()
+                notified_any_leader = False
+                ref_code = f"SS-{(db_report.created_at or datetime.now()).year}-{db_report.report_id:04d}"
                 for leader in leaders:
                     if leader.user_id != db_report.user_id:
-                        notify_leader_new_report(
-                            db=db,
-                            leader=leader,
-                            report_id=db_report.report_id,
-                            animal_type=db_report.animal_type or "Stray Animal",
-                            landmark=db_report.landmark,
-                            subdivision_name=None,
-                            priority=db_report.priority_level or "Medium",
-                        )
+                        notified_any_leader = True
+                        if auto_urgent_injured:
+                            notify_leader_urgent_injured(
+                                db=db,
+                                leader=leader,
+                                report_id=db_report.report_id,
+                                animal_type=db_report.animal_type or "Animal",
+                                landmark=db_report.landmark,
+                                subdivision_name=None,
+                                reference=ref_code,
+                                can_move=injured_can_move or "No",
+                            )
+                        elif chosen_family == case_vocab.SAFETY and auto_safety_prio in ("urgent", "high"):
+                            notify_leader_dangerous_animal(
+                                db=db,
+                                leader=leader,
+                                report_id=db_report.report_id,
+                                animal_type=db_report.animal_type or "Animal",
+                                landmark=db_report.landmark,
+                                subdivision_name=None,
+                                reference=ref_code,
+                                priority=auto_safety_prio,
+                                behaviors_summary=dangerous_behaviors_summary,
+                                has_bite=dangerous_has_bite,
+                            )
+                        else:
+                            notify_leader_new_report(
+                                db=db,
+                                leader=leader,
+                                report_id=db_report.report_id,
+                                animal_type=db_report.animal_type or "Stray Animal",
+                                landmark=db_report.landmark,
+                                subdivision_name=None,
+                                priority=db_report.priority_level or "Medium",
+                            )
+                if (auto_urgent_injured or (chosen_family == case_vocab.SAFETY and auto_safety_prio in ("urgent", "high"))) and notified_any_leader:
+                    db.add(StatusHistory(
+                        report_id=db_report.report_id,
+                        report_status_id=db_report.current_status_id,
+                        updated_by=None,
+                        latitude=db_report.latitude,
+                        longitude=db_report.longitude,
+                        landmark=db_report.landmark,
+                        remarks="Subdivision Leader notified of urgent injured animal report." if auto_urgent_injured else "Subdivision Leader notified of dangerous animal safety report.",
+                    ))
+                    db.commit()
             except Exception as notif_err:
                 print(f"Notice: Failed to create leader notification: {notif_err}")
 
@@ -5410,23 +5611,24 @@ def _merge_one(db: Session, actor: User, report: Report, primary_report: Report,
         report_id=report.report_id,
         report_status_id=18,
         updated_by=actor.user_id,
-        remarks=f"Report confirmed as duplicate of Case #{primary_report.report_id} by {actor.name}. Linked to existing claim. Reason: {notes}"
+        remarks=f"Linked as Related Report to primary Case #{primary_report.report_id} by {actor.name}. Reason: {notes}"
     ))
     sec_reporter_name = report.reporter.name if report.reporter else f"Resident #{report.user_id}"
     db.add(StatusHistory(
         report_id=primary_report.report_id,
         report_status_id=primary_report.current_status_id,
         updated_by=actor.user_id,
-        remarks=f"Linked duplicate Report #{report.report_id} filed by {sec_reporter_name}. Sighting evidence consolidated."
+        remarks=f"Linked Related Report #{report.report_id} filed by {sec_reporter_name}. Supporting evidence consolidated."
     ))
 
     if report.user_id and report.user_id != actor.user_id:
+        primary_ref = f"SS-{(primary_report.created_at or datetime.now()).year}-{primary_report.report_id:04d}"
         db.add(Notification(
             user_id=report.user_id,
-            title=f"📋 Report #{report.report_id} Linked to Active Case #{primary_report.report_id}",
+            title=f"Report #{report.report_id} Linked to Existing Incident {primary_ref}",
             message=(
-                f"Thank you for your report! Officer {actor.name} verified that this sighting matches active Case #{primary_report.report_id}. "
-                f"Your photos and report have been consolidated into the active case file to aid the rescue team."
+                f"Your report has been identified as describing an incident already reported in STRAY-SAFE ({primary_ref}). "
+                f"It has been linked to the existing incident record. Your original submission and evidence have been preserved."
             ),
             type="report_status",
             related_id=report.report_id
@@ -5505,7 +5707,7 @@ def _first_reported(reports_list: List[Report]) -> Report:
     return min(reports_list, key=lambda r: (r.created_at or datetime.max, r.report_id))
 
 
-def _merge_group(db: Session, actor: User, report_ids: List[int], notes: str, req: Request, commit: bool = True) -> Report:
+def _merge_group(db: Session, actor: User, report_ids: List[int], notes: str, req: Request, commit: bool = True, primary_report_id: Optional[int] = None) -> Report:
     """
     Merge every report in the group into the first-filed one. All-or-nothing: every report is checked before anything
     changes, and any problem names the report it's about. With commit=False the caller commits (or the session is
@@ -5532,7 +5734,12 @@ def _merge_group(db: Session, actor: User, report_ids: List[int], notes: str, re
             raise HTTPException(status_code=404, detail=f"Report #{rid} not found.")
         group.append(rep)
 
-    primary_report = _first_reported(group)
+    if primary_report_id is not None:
+        if primary_report_id not in ids:
+            raise HTTPException(status_code=400, detail="Selected primary report must be one of the reports in the merge group.")
+        primary_report = next(r for r in group if r.report_id == primary_report_id)
+    else:
+        primary_report = _first_reported(group)
     # Across subdivisions the Barangay reviews the pair (no escalation needed); a subdivision leader can't
     from app.utils.case_review import is_cross_subdivision, require_cross_subdivision_reviewer
     cross = is_cross_subdivision(group)
@@ -5576,7 +5783,7 @@ def merge_report_group(
     the others become 'Merged — Duplicate' under it. Returns the main case.
     """
     notes = _require_merge_notes(merge_in.notes)
-    primary_report = _merge_group(db, current_user, merge_in.report_ids, notes, req)
+    primary_report = _merge_group(db, current_user, merge_in.report_ids, notes, req, primary_report_id=merge_in.primary_report_id)
     return _merge_response(db, primary_report)
 
 
@@ -5642,6 +5849,8 @@ def unmerge_duplicate_report(
     # Reset status back to Verified (2) if assigned, else Reported (1)
     new_status = 2 if report.assigned_leader_id else 1
     report.current_status_id = new_status
+    report.case_status = "under_review" if report.assigned_leader_id else "reported"
+    report.closure_disposition = None
     # Rule 7: it was seen through the main case; on its own it needs its own decision (Pending Review until then)
     report_visibility.reset_to_pending(db, report, f"Separated from Case #{prev_primary_id}: visibility must be decided again.")
 

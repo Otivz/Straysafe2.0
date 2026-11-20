@@ -58,6 +58,9 @@ const ANDROID_BUILD = import.meta.env.MODE === 'android' || import.meta.env.MODE
 const AdminLiveRoot = ANDROID_BUILD ? null : lazy(() => import('./admin/AdminLiveRoot'))
 // eslint-disable-next-line react-refresh/only-export-components -- the entry file: nothing hot-reloads from here
 const ResidentLiveRoot = lazy(() => import('./resident/ResidentLiveRoot'))
+// The public page a phone opens from a pet's QR tag (/t/<token>): no sign-in, outside both interfaces' guards.
+// eslint-disable-next-line react-refresh/only-export-components -- the entry file: nothing hot-reloads from here
+const TagScanPage = lazy(() => import('./resident/pages/tag/TagScanPage'))
 
 function SubdAdminRedirect() {
   const location = useLocation();
@@ -70,6 +73,7 @@ createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <Routes>
         <Route path={`${RESIDENT_LIVE_BASE}/*`} element={<Suspense fallback={null}><ResidentLiveRoot /></Suspense>} />
+        <Route path="/t/:token" element={<Suspense fallback={null}><TagScanPage /></Suspense>} />
         {/* Addresses the retired portals used (bookmarks, e-mails and notifications sent earlier still carry them). The web app only:
             the Android app has no Leader interface, and its catch-all below already leads every address to the Resident app. */}
         {ANDROID_BUILD ? null : (

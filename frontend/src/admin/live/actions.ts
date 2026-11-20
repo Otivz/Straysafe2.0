@@ -53,7 +53,18 @@ const numeric = (value: string, what: string): number => {
 };
 
 /** How the referral screen says it reached the organisation -> the contact method the server stores. */
-const CHANNEL_METHOD: Record<string, ContactMethod> = { 'phone call': 'phone', message: 'message', 'in person': 'in_person', email: 'message', 'written letter': 'letter' };
+const CHANNEL_METHOD: Record<string, ContactMethod> = {
+  phone: 'phone',
+  'phone call': 'phone',
+  email: 'email',
+  in_person: 'in_person',
+  'in-person': 'in_person',
+  'in person': 'in_person',
+  message: 'message',
+  letter: 'letter',
+  'written letter': 'letter',
+  other: 'other',
+};
 export const methodOfChannel = (channel: string): ContactMethod => CHANNEL_METHOD[channel.trim().toLowerCase()] ?? 'phone';
 
 /** The violation an owner warning names. The server offers a fixed list; nuisance and safety concerns are the only ones eligible. */
@@ -104,6 +115,31 @@ export async function runAction(a: AdminAction, ctx: ActionContext): Promise<Act
     case 'case/saveAssessment': {
       const rid = reportId(a.id);
       const body = assessmentBody(ctx.caseOf(a.id), a.assessment, a.identity, a.ownership);
+      if (a.injuredAssessment && Object.values(a.injuredAssessment).some(Boolean)) {
+        body.injured_assessment = {
+          injury_severity: a.injuredAssessment.injurySeverity || null,
+          bleeding: a.injuredAssessment.bleeding || null,
+          illness_signs: a.injuredAssessment.illnessSigns || null,
+          weakness: a.injuredAssessment.weakness || null,
+          mobility: a.injuredAssessment.mobility || null,
+          trapped: a.injuredAssessment.trapped || null,
+          neglect_suspected: a.injuredAssessment.neglectSuspected || null,
+        };
+      }
+      if (a.dangerousAssessment && Object.values(a.dangerousAssessment).some(Boolean)) {
+        body.dangerous_assessment = {
+          aggressive_severity: a.dangerousAssessment.aggressiveSeverity || null,
+          attack_or_bite_occurred: a.dangerousAssessment.attackOrBiteOccurred || null,
+          people_threatened: a.dangerousAssessment.peopleThreatened || null,
+          animals_threatened: a.dangerousAssessment.animalsThreatened || null,
+          still_in_area: a.dangerousAssessment.stillInArea || null,
+          threat_ongoing: a.dangerousAssessment.threatOngoing || null,
+          rabies_signs_reported: a.dangerousAssessment.rabiesSignsReported || null,
+          security_required: a.dangerousAssessment.securityRequired || null,
+        };
+      }
+      if (a.priorityOverride) body.priority_override = a.priorityOverride;
+      if (a.priorityChangeReason) body.priority_change_reason = a.priorityChangeReason;
       // Marking the urgency "immediate" makes the case Urgent on the server by itself (alsoSetUrgent needs no second request).
       if (Object.keys(body).length > 0) await adminApi.assessment(rid, body);
       return done({ cases: [a.id] });
@@ -140,14 +176,53 @@ export async function runAction(a: AdminAction, ctx: ActionContext): Promise<Act
 
     case 'case/createReferral':
       await adminApi.createReferral(reportId(a.id), {
-        org_type: orgTypeOf(a.orgId), org_name: a.orgName, reason: a.reason, contact_method: methodOfChannel(a.contactChannel),
-        contact_person: a.contactPerson === 'Not recorded' ? null : a.contactPerson, contact_detail: a.contactChannel || null, referred_at: toServer(a.referredAt), notes: a.notes || null,
-        contacted: a.contacted ?? true,
+        org_type: orgTypeOf(a.orgId),
+        org_name: a.orgName,
+        reason: a.reason,
+        priority_level: a.priorityLevel ?? 'normal',
+        is_urgent: a.priorityLevel === 'urgent',
+        contact_method: a.contactMethod ?? methodOfChannel(a.contactChannel),
+        contact_person: !a.contactPerson || a.contactPerson === 'Not recorded' ? null : a.contactPerson,
+        contact_detail: a.contactDetail?.trim() || a.contactChannel || null,
+        referred_at: toServer(a.referredAt),
+        notes: a.notes || null,
+        additional_notes: a.additionalNotes?.trim() || a.notes?.trim() || null,
+        supporting_documents: (a.supportingDocuments ?? []).map((d) => ({
+          name: d.name,
+          url: d.url,
+          type: d.type ?? 'document',
+          uploaded_at: d.uploadedAt ?? null,
+        })),
+        initial_status: a.initialStatus ?? (a.contacted === false ? 'pending' : 'sent'),
+        contacted: a.contacted ?? (a.initialStatus ? a.initialStatus !== 'pending' && a.initialStatus !== 'to_contact' : true),
       });
       return done({ cases: [a.id] });
     case 'case/updateReferral':
       await adminApi.updateReferral(reportId(a.id), numeric(a.referralId, 'referral'), {
-        status: a.status, note: a.note, external_outcome: a.externalOutcome || null, remaining_follow_up: a.remainingFollowUp || null, follow_up_at: toServer(a.followUpAt),
+        status: a.status,
+        note: a.note,
+        ...(a.updateType ? { update_type: a.updateType } : {}),
+        ...(a.responderName ? { responder_name: a.responderName } : {}),
+        ...(a.assistanceProvided ? { assistance_provided: a.assistanceProvided } : {}),
+        ...(a.actionsCompleted ? { actions_completed: a.actionsCompleted } : {}),
+        ...(a.progressNotes ? { progress_notes: a.progressNotes } : {}),
+        ...(a.followUpInstructions ? { follow_up_instructions: a.followUpInstructions } : {}),
+        ...(a.additionalNotes ? { additional_notes: a.additionalNotes } : {}),
+        external_outcome: a.externalOutcome || null,
+        remaining_follow_up: a.remainingFollowUp || null,
+        follow_up_at: toServer(a.followUpAt),
+        ...(a.updateDate ? { update_date: toServer(a.updateDate) } : {}),
+        ...(a.completionDate ? { completion_date: toServer(a.completionDate) } : {}),
+        ...(a.supportingDocuments && a.supportingDocuments.length > 0
+          ? {
+            supporting_documents: a.supportingDocuments.map((d) => ({
+              name: d.name,
+              url: d.url,
+              type: d.type ?? 'document',
+              uploaded_at: d.uploadedAt ?? null,
+            })),
+          }
+          : {}),
         ...(a.contact ? { contact_method: a.contact.method, contact_person: a.contact.person || null, contact_detail: a.contact.detail || null } : {}),
       });
       return done({ cases: [a.id] });
@@ -162,9 +237,12 @@ export async function runAction(a: AdminAction, ctx: ActionContext): Promise<Act
 
     // The server decides, locks both reports, and answers with the match as it now stands; both reports are read again (a link, a history line, a conversation).
     case 'match/decide': {
-      const m = await adminApi.decideMatch(numeric(a.matchId, 'possible match'), a.decision);
+      const m = await adminApi.decideMatch(numeric(a.matchId, 'possible match'), a.decision, a.note);
       return done({ cases: [caseRef(m.lost_report_id, null), caseRef(m.found_report_id, null)], matches: true, notifications: true });
     }
+    // Recalculation and the AI photo comparison change only the match's score and breakdown (the server keeps the earlier result).
+    case 'match/rescore': { await adminApi.rescoreMatch(numeric(a.matchId, 'possible match')); return done({ matches: true }); }
+    case 'match/comparePhotos': { await adminApi.compareMatchPhotos(numeric(a.matchId, 'possible match')); return done({ matches: true }); }
     case 'match/unlink': {
       const m = await adminApi.unlinkMatch(numeric(a.matchId, 'linked match'));
       return done({ cases: [caseRef(m.lost_report_id, null), caseRef(m.found_report_id, null)], matches: true, notifications: true });
@@ -196,7 +274,20 @@ export async function runAction(a: AdminAction, ctx: ActionContext): Promise<Act
     }
 
     case 'case/close':
-      await adminApi.close(reportId(a.id), { disposition: a.disposition, reason: a.reason, end_open_items: a.endOpenItems, post_closure_check_at: toServer(a.followUpCheckAt) });
+      await adminApi.close(reportId(a.id), {
+        disposition: a.disposition,
+        reason: a.reason,
+        end_open_items: a.endOpenItems,
+        post_closure_check_at: toServer(a.followUpCheckAt),
+        ...(a.welfareOutcome ? { welfare_outcome: a.welfareOutcome } : {}),
+        ...(a.finalAnimalCondition ? { final_animal_condition: a.finalAnimalCondition } : {}),
+        ...(a.assistanceProvided ? { assistance_provided: a.assistanceProvided } : {}),
+        ...(a.referralOutcome ? { referral_outcome: a.referralOutcome } : {}),
+        ...(a.dangerousOutcome ? { dangerous_outcome: a.dangerousOutcome } : {}),
+        ...(a.securityActionsPerformed ? { security_actions_performed: a.securityActionsPerformed } : {}),
+        ...(a.advisoryStatus ? { advisory_status: a.advisoryStatus } : {}),
+        ...(a.threatOngoing ? { threat_ongoing: a.threatOngoing } : {}),
+      });
       return done({ cases: [a.id], notices: true, matches: true });
     // (a report that closes or reopens changes which possible matches can still be decided)
     case 'case/reopen': await adminApi.reopen(reportId(a.id), a.reason); return done({ cases: [a.id], matches: true });

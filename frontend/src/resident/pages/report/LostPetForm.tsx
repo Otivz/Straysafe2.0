@@ -21,7 +21,7 @@ import { FlowScreen } from './FlowScreen';
 
 const MAX = 600;
 
-type Errors = Partial<Record<'pet' | 'observedAt' | 'description', string>>;
+type Errors = Partial<Record<'pet' | 'observedAt' | 'description' | 'media', string>>;
 type Choice = { pet: Pet; active?: Report };
 
 /** What choosing a pet writes into the draft: only which pet it is. Everything else about it is read from its registered profile. */
@@ -96,6 +96,10 @@ export function LostPetForm({ draft }: { draft: Draft }) {
     ev.preventDefault();
     const found: Errors = {};
     if (!chosen) found.pet = free.length === 0 && choices.length === 0 ? REGISTER_FIRST : 'Choose which pet is missing.';
+    const hasUploadedPhoto = draft.media.some((m) => m.kind === 'photo' && Boolean(m.file || m.url));
+    if (chosen && !chosen.photoUrl && !hasUploadedPhoto) {
+      found.media = 'Please upload at least one photo of the animal before submitting your report.';
+    }
     if (!isValidLocalInput(draft.observedAt)) found.observedAt = 'Choose when your pet was last seen.';
     else if (new Date(draft.observedAt).getTime() > Date.now() + 60_000) found.observedAt = 'The time cannot be in the future.';
     // What is written here ends up in a notice that neighbours read.
@@ -157,8 +161,21 @@ export function LostPetForm({ draft }: { draft: Draft }) {
                 <Textarea value={draft.description} onChange={(e) => { patch({ description: e.target.value }); clear('description'); }} maxLength={MAX} rows={4} placeholder="Slipped out of the gate this morning. Shy with strangers." />
               </Field>
 
-              <FieldGroup label="A recent photo (optional)" hint="Your pet’s registered photo is used already. Add one only if it shows something new, such as a collar. Never go near an animal just to take one.">
-                <MediaPicker value={draft.media} onChange={(media) => patch({ media })} accept="photo" max={3} />
+              <FieldGroup
+                label={chosen?.photoUrl ? 'A recent photo (optional)' : 'Animal photo'}
+                required={!chosen?.photoUrl}
+                error={errors.media}
+                hint={chosen?.photoUrl
+                  ? 'Your pet’s registered photo is used already. For accurate animal identification and verification, you may also upload a recent photo.'
+                  : 'For accurate animal identification and verification, please upload a clear photo of the animal.'}
+              >
+                <MediaPicker
+                  value={draft.media}
+                  onChange={(media) => { patch({ media }); clear('media'); }}
+                  accept="photo"
+                  max={3}
+                  invalid={Boolean(errors.media)}
+                />
               </FieldGroup>
             </>
           ) : null}

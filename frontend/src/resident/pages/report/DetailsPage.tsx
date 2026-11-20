@@ -3,13 +3,18 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { isValidLocalInput, toLocalInput } from '../../../preview/lib/format';
 import { ANIMAL_ICON } from '../../components/icons';
 import { ColorTagInput } from '../../components/ColorTagInput';
+import { BreedInput } from '../../components/BreedInput';
 import { ChoiceChips, Field, FieldGroup, Input, Select, Textarea } from '../../components/form';
 import { MediaPicker } from '../../components/MediaPicker';
 import { ConfirmSheet } from '../../components/Sheet';
 import { ShieldAlert } from 'lucide-react';
 import { Button, Callout } from '../../components/ui';
 import { residentPath } from '../../config';
-import { ANIMAL_TYPES, ANIMAL_TYPE_IDS, CATEGORIES, EXTRA_FIELD } from '../../data/constants';
+import {
+  ANIMAL_TYPES, ANIMAL_TYPE_IDS, BITE_MEDICAL_WARNING, CATEGORIES, CURRENT_DANGER_OPTIONS,
+  DANGEROUS_BEHAVIORS, DANGEROUS_SAFETY_WARNING, EXTRA_FIELD, INJURED_CONDITIONS,
+  RABIES_SYMPTOMS, RABIES_WARNING, STILL_IN_LOCATION_OPTIONS,
+} from '../../data/constants';
 import { useResidentData } from '../../data/context';
 import { LOST_NOTE } from '../../data/entries';
 import { visibilityAfterSending } from '../../data/selectors';
@@ -36,19 +41,23 @@ const COPY: Record<'incident' | 'found', { screen: string; label: string; hint: 
   },
 };
 
-const NOTES: Record<CategoryId, { tone: 'info' | 'amber'; title?: string; text: string }> = {
+const NOTES: Partial<Record<CategoryId, { tone: 'info' | 'amber'; title?: string; text: string }>> = {
   lost_pet: LOST_NOTE,
   found_animal: { tone: 'info', text: 'An administrator reviews this before any notice is published. Please do not hand the animal to someone who only says it is theirs.' },
-  safety: { tone: 'amber', title: 'Stay safe.', text: 'Keep your distance and never touch, feed or corner the animal. If someone is in danger right now, contact the guardhouse or local emergency services first.' },
-  injured: { tone: 'amber', title: 'Do not handle the animal.', text: 'Keep a safe distance and note exactly where it is. A frightened or hurt animal may bite or scratch.' },
+  safety: { tone: 'amber', title: 'Safety Warning — Keep a safe distance', text: DANGEROUS_SAFETY_WARNING },
   nuisance: { tone: 'info', text: 'This report is private. Neighbours will not see it, or who sent it.' },
   other: { tone: 'info', text: 'This report is private. Neighbours will not see it, or who sent it.' },
 };
 
 /** The note that follows the subdivision's publication setting (connected); every other note is fixed. */
-const FOUND_PUBLISHED: (typeof NOTES)[CategoryId] = { tone: 'info', text: 'After you submit, a notice with the animal’s description and the general area is visible to neighbours. Please do not hand the animal to someone who only says it is theirs.' };
+const FOUND_PUBLISHED: NonNullable<(typeof NOTES)[CategoryId]> = { tone: 'info', text: 'After you submit, a notice with the animal’s description and the general area is visible to neighbours. Please do not hand the animal to someone who only says it is theirs.' };
 
-type Errors = Partial<Record<'animalType' | 'description' | 'observedAt', string>>;
+type Errors = Partial<Record<
+  'media' | 'animalType' | 'customAnimalType' | 'description' | 'observedAt' | 'injuredConditions' | 'injuredOtherDetail' | 'canMove'
+  | 'dangerousBehaviors' | 'dangerousOtherDetail' | 'currentDanger' | 'stillInLocation'
+  | 'bitePerson' | 'biteAnimal' | 'biteDetails' | 'biteNearby',
+  string
+>>;
 
 function DetailsForm({ draft }: { draft: Draft }) {
   const { state, local } = useResidentData();
@@ -58,17 +67,89 @@ function DetailsForm({ draft }: { draft: Draft }) {
   const { ref, invalid } = useFormFocus();
   const [errors, setErrors] = useState<Errors>({});
   const [discarding, setDiscarding] = useState(false);
+  const isInjured = draft.category === 'injured';
+  const isSafety = draft.category === 'safety';
   const kind: 'incident' | 'found' = CATEGORIES[draft.category].kind === 'found' ? 'found' : 'incident';
-  const copy = COPY[kind];
+  const copy = isInjured
+    ? {
+        screen: 'Injured or sick animal',
+        label: 'Describe the injury, illness, or physical condition',
+        when: 'When did you observe the animal?',
+        hint: 'Describe visible injuries, bleeding, weakness, entrapment, or neglect and any helpful details.',
+        placeholder: 'e.g. Medium brown dog limping near the clubhouse gate, appears weak with a visible wound on its front leg.',
+      }
+    : isSafety
+      ? {
+          screen: 'Dangerous animal report',
+          label: 'Physical description & additional observations',
+          when: 'When did you observe the animal?',
+          hint: 'Describe identifying characteristics, size, collar/markings, and what happened.',
+          placeholder: 'e.g. Large black dog without a leash barking and lunging at passersby near the park entrance.',
+        }
+      : COPY[kind];
   const note = draft.category === 'found_animal' && visibilityAfterSending(state, 'found') === 'published' ? FOUND_PUBLISHED : NOTES[draft.category];
   const extra = EXTRA_FIELD[draft.category];
   const patch = (p: Partial<Draft>) => local({ type: 'draft/patch', patch: p });
   const clear = (key: keyof Errors) => setErrors((prev) => ({ ...prev, [key]: undefined }));
+  const selectedConditions = draft.injuredConditions ?? [];
+  const selectedBehaviors = draft.dangerousBehaviors ?? [];
+  const selectedRabies = draft.rabiesSymptoms ?? [];
+  const bite = draft.biteDetails ?? {
+    personBitten: '', animalBitten: '', affectedCount: '', incidentTime: '', incidentLocation: '', whatHappened: '', stillNearby: '',
+  };
+  const patchBite = (bPatch: Partial<NonNullable<Draft['biteDetails']>>) => patch({ biteDetails: { ...bite, ...bPatch } });
+
+  const toggleCondition = (cond: string) => {
+    const exists = selectedConditions.includes(cond);
+    const updated = exists ? selectedConditions.filter((c) => c !== cond) : [...selectedConditions, cond];
+    patch({ injuredConditions: updated });
+    clear('injuredConditions');
+  };
+
+  const toggleBehavior = (beh: string) => {
+    const exists = selectedBehaviors.includes(beh);
+    const updated = exists ? selectedBehaviors.filter((b) => b !== beh) : [...selectedBehaviors, beh];
+    patch({ dangerousBehaviors: updated });
+    clear('dangerousBehaviors');
+  };
+
+  const toggleRabies = (sym: string) => {
+    const exists = selectedRabies.includes(sym);
+    const updated = exists ? selectedRabies.filter((s) => s !== sym) : [...selectedRabies, sym];
+    patch({ rabiesSymptoms: updated });
+  };
 
   const submit = (ev: FormEvent) => {
     ev.preventDefault();
     const found: Errors = {};
+    if (!draft.media.some((m) => m.kind === 'photo' && Boolean(m.file || m.url))) {
+      found.media = 'Please upload at least one photo of the animal before submitting your report.';
+    }
+    if (isInjured) {
+      if (selectedConditions.length === 0) found.injuredConditions = 'Select at least one observed condition.';
+      if (selectedConditions.includes('Other observable condition') && !(draft.injuredOtherDetail ?? '').trim()) {
+        found.injuredOtherDetail = 'Please describe the other observable condition.';
+      }
+      if (!draft.extra || !draft.extra.trim()) found.canMove = 'Please answer whether the animal can move.';
+    }
+    if (isSafety) {
+      if (selectedBehaviors.length === 0) found.dangerousBehaviors = 'Select at least one observed dangerous behavior.';
+      if (selectedBehaviors.includes('Other dangerous behavior') && !(draft.dangerousOtherDetail ?? '').trim()) {
+        found.dangerousOtherDetail = 'Please describe the other dangerous behavior.';
+      }
+      if (!draft.currentDanger) found.currentDanger = 'Please indicate whether the animal is currently displaying dangerous behavior.';
+      if (!draft.stillInLocation) found.stillInLocation = 'Please indicate whether the animal is still in the reported location.';
+      if (selectedBehaviors.includes('Actual bite incident')) {
+        if (!bite.personBitten) found.bitePerson = 'Please indicate if a person was bitten.';
+        if (!bite.animalBitten) found.biteAnimal = 'Please indicate if another animal was bitten.';
+        if (!bite.stillNearby) found.biteNearby = 'Please indicate if the animal is still nearby.';
+        if (bite.whatHappened.trim().length < 5) found.biteDetails = 'Briefly describe what happened during the bite incident.';
+      }
+    }
     if (!draft.animalType) found.animalType = 'Choose the kind of animal.';
+    else if (draft.animalType === 'other' && !(draft.customAnimalType ?? '').trim()) {
+      found.customAnimalType = 'Please enter the name or type of the animal.';
+    }
     if (draft.description.trim().length < 10) found.description = 'Add a few more details (at least 10 characters).';
     else if (kind !== 'incident') {
       // A found-animal description ends up in a notice that neighbours read.
@@ -93,35 +174,249 @@ function DetailsForm({ draft }: { draft: Draft }) {
         </>
       )}
     >
-      <Callout tone={note.tone} title={note.title}>{note.text}</Callout>
+      {note ? <Callout tone={note.tone} title={note.title}>{note.text}</Callout> : null}
 
       <form id="report-details" className="rs-stack" onSubmit={submit} noValidate>
         <div ref={ref} className="rs-stack">
-          {kind === 'incident' ? (
-            <FieldGroup label="Photos or video (optional)" hint="Take one now if you safely can, while the animal is still there. Up to 5 files: photos up to 10 MB, videos up to 50 MB. Only authorized administrators see them.">
-              <MediaPicker value={draft.media} onChange={(media) => patch({ media })} accept="both" max={5} />
+          <FieldGroup
+            label={kind === 'incident' ? 'Animal photo (required)' : 'Animal photo'}
+            required
+            error={errors.media}
+            hint="For accurate animal identification and verification, please upload a clear photo of the animal."
+          >
+            <MediaPicker
+              value={draft.media}
+              onChange={(media) => { patch({ media }); clear('media'); }}
+              accept={kind === 'incident' ? 'both' : 'photo'}
+              max={kind === 'incident' ? 5 : 3}
+              invalid={Boolean(errors.media)}
+            />
+            {kind === 'incident' ? (
               <Callout tone="amber" icon={ShieldAlert} title="Keep a safe distance." className="mt-3">
                 Never approach, touch or corner an animal to get a better picture. Avoid showing people’s faces, children or house numbers.
               </Callout>
-            </FieldGroup>
-          ) : null}
+            ) : null}
+          </FieldGroup>
 
           <FieldGroup label={kind === 'incident' ? 'What kind of animal?' : 'What kind of animal is it?'} required error={errors.animalType}>
             <ChoiceChips
               label="Kind of animal"
               value={draft.animalType}
-              onChange={(v) => { patch({ animalType: v }); clear('animalType'); }}
+              onChange={(v) => {
+                patch({ animalType: v, ...(v !== 'other' ? { customAnimalType: '' } : {}) });
+                clear('animalType');
+                clear('customAnimalType');
+              }}
               options={ANIMAL_TYPE_IDS.map((id) => ({ value: id, label: ANIMAL_TYPES[id], icon: ANIMAL_ICON[id] }))}
             />
           </FieldGroup>
+
+          {draft.animalType === 'other' ? (
+            <Field
+              label="Specify the animal"
+              required
+              error={errors.customAnimalType}
+              hint="For example: Rabbit, Bird, Turtle, Snake, Hamster"
+            >
+              <Input
+                value={draft.customAnimalType ?? ''}
+                maxLength={80}
+                onChange={(e) => { patch({ customAnimalType: e.target.value }); clear('customAnimalType'); }}
+                placeholder="e.g. Rabbit, Bird, Turtle, Snake, Hamster"
+              />
+            </Field>
+          ) : null}
 
           <FieldGroup label="Colour or coat" hint="Optional. Type a colour and press Enter (e.g. White, Tan, Black) or choose a suggestion.">
             <ColorTagInput value={draft.colors ?? []} onChange={(colors) => patch({ colors })} />
           </FieldGroup>
 
           <Field label="Breed" optional>
-            <Input value={draft.breed ?? ''} onChange={(e) => patch({ breed: e.target.value })} maxLength={60} placeholder="e.g. Aspin, Shih Tzu, Puspin" />
+            <BreedInput
+              value={draft.breed ?? ''}
+              onChange={(breed) => patch({ breed })}
+              animalType={draft.animalType}
+              placeholder="e.g. Aspin, Shih Tzu, Puspin"
+              maxLength={60}
+            />
           </Field>
+
+          {isInjured ? (
+            <>
+              <FieldGroup label="Observed condition(s)" required error={errors.injuredConditions} hint="Select all conditions you observed on the animal.">
+                <div className="flex flex-wrap gap-2">
+                  {INJURED_CONDITIONS.map((cond) => {
+                    const active = selectedConditions.includes(cond);
+                    return (
+                      <button
+                        key={cond}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => toggleCondition(cond)}
+                        className={active
+                          ? 'rounded-full border border-[var(--rs-brand,#b45309)] bg-[var(--rs-brand,#b45309)] px-3 py-1.5 text-sm font-medium text-white transition'
+                          : 'rounded-full border border-[var(--rs-line,#d6cfc7)] bg-white px-3 py-1.5 text-sm font-medium text-[var(--rs-ink,#292524)] hover:bg-[var(--rs-sand,#f5f2ed)] transition'}
+                      >
+                        {cond}
+                      </button>
+                    );
+                  })}
+                </div>
+              </FieldGroup>
+
+              {selectedConditions.includes('Other observable condition') ? (
+                <Field label="Describe the other condition" required error={errors.injuredOtherDetail}>
+                  <Input
+                    value={draft.injuredOtherDetail ?? ''}
+                    maxLength={300}
+                    onChange={(e) => { patch({ injuredOtherDetail: e.target.value }); clear('injuredOtherDetail'); }}
+                    placeholder="e.g. Swollen eye, limping on rear leg, tangled in wire"
+                  />
+                </Field>
+              ) : null}
+
+              <FieldGroup label="Can the animal move?" required error={errors.canMove} hint="This helps the Subdivision Leader prioritize urgent rescue or veterinary response.">
+                <ChoiceChips
+                  label="Can the animal move?"
+                  value={draft.extra}
+                  onChange={(v) => { patch({ extra: v }); clear('canMove'); }}
+                  options={(extra?.options ?? ['Yes', 'A little', 'No', 'Not sure']).map((o) => ({ value: o, label: o }))}
+                />
+                {draft.extra === 'No' ? (
+                  <Callout tone="amber" title="Automatic Urgent Priority" className="mt-2">
+                    Because the animal cannot move, this report will automatically be marked as Urgent so your Subdivision Leader is alerted immediately. Please keep a safe distance.
+                  </Callout>
+                ) : null}
+              </FieldGroup>
+            </>
+          ) : null}
+
+          {isSafety ? (
+            <>
+              <FieldGroup label="Dangerous behavior observed" required error={errors.dangerousBehaviors} hint="Select all behaviors you observed.">
+                <div className="flex flex-wrap gap-2">
+                  {DANGEROUS_BEHAVIORS.map((beh) => {
+                    const active = selectedBehaviors.includes(beh);
+                    return (
+                      <button
+                        key={beh}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => toggleBehavior(beh)}
+                        className={active
+                          ? 'rounded-full border border-[var(--rs-brand,#b45309)] bg-[var(--rs-brand,#b45309)] px-3 py-1.5 text-sm font-medium text-white transition'
+                          : 'rounded-full border border-[var(--rs-line,#d6cfc7)] bg-white px-3 py-1.5 text-sm font-medium text-[var(--rs-ink,#292524)] hover:bg-[var(--rs-sand,#f5f2ed)] transition'}
+                      >
+                        {beh}
+                      </button>
+                    );
+                  })}
+                </div>
+              </FieldGroup>
+
+              {selectedBehaviors.includes('Other dangerous behavior') ? (
+                <Field label="Describe the other dangerous behavior" required error={errors.dangerousOtherDetail}>
+                  <Input
+                    value={draft.dangerousOtherDetail ?? ''}
+                    maxLength={300}
+                    onChange={(e) => { patch({ dangerousOtherDetail: e.target.value }); clear('dangerousOtherDetail'); }}
+                    placeholder="e.g. Blocking residents from entering the gate"
+                  />
+                </Field>
+              ) : null}
+
+              {selectedBehaviors.includes('Actual bite incident') ? (
+                <div className="flex flex-col gap-3 rounded-xl border border-[var(--rs-line,#d6cfc7)] bg-[var(--rs-sand,#f5f2ed)]/50 p-3.5">
+                  <Callout tone="amber" title="Seek immediate medical attention">
+                    {BITE_MEDICAL_WARNING}
+                  </Callout>
+                  <p className="font-semibold text-sm">Bite / Attack Incident Details</p>
+                  <FieldGroup label="Was a person bitten?" required error={errors.bitePerson}>
+                    <ChoiceChips label="Was a person bitten?" value={bite.personBitten} onChange={(v) => { patchBite({ personBitten: v }); clear('bitePerson'); }} options={[{ value: 'Yes', label: 'Yes' }, { value: 'No', label: 'No' }]} />
+                  </FieldGroup>
+                  <FieldGroup label="Was another animal bitten?" required error={errors.biteAnimal}>
+                    <ChoiceChips label="Was another animal bitten?" value={bite.animalBitten} onChange={(v) => { patchBite({ animalBitten: v }); clear('biteAnimal'); }} options={[{ value: 'Yes', label: 'Yes' }, { value: 'No', label: 'No' }]} />
+                  </FieldGroup>
+                  <Field label="Number of affected individuals" optional>
+                    <Input value={bite.affectedCount} maxLength={40} onChange={(e) => patchBite({ affectedCount: e.target.value })} placeholder="e.g. 1 person" />
+                  </Field>
+                  <Field label="Approximate time of incident" optional>
+                    <Input value={bite.incidentTime} maxLength={80} onChange={(e) => patchBite({ incidentTime: e.target.value })} placeholder="e.g. Around 3:15 PM today" />
+                  </Field>
+                  <Field label="Location of incident" optional>
+                    <Input value={bite.incidentLocation} maxLength={150} onChange={(e) => patchBite({ incidentLocation: e.target.value })} placeholder="e.g. Near Phase 2 basketball court" />
+                  </Field>
+                  <Field label="Brief description of what happened" required error={errors.biteDetails}>
+                    <Textarea rows={2} value={bite.whatHappened} maxLength={400} onChange={(e) => { patchBite({ whatHappened: e.target.value }); clear('biteDetails'); }} placeholder="Describe how the bite or attack occurred." />
+                  </Field>
+                  <FieldGroup label="Is the animal still nearby?" required error={errors.biteNearby}>
+                    <ChoiceChips label="Is the animal still nearby?" value={bite.stillNearby} onChange={(v) => { patchBite({ stillNearby: v }); clear('biteNearby'); }} options={STILL_IN_LOCATION_OPTIONS.map((o) => ({ value: o, label: o }))} />
+                  </FieldGroup>
+                </div>
+              ) : null}
+
+              {selectedBehaviors.includes('Suspected rabies symptoms') ? (
+                <div className="flex flex-col gap-3 rounded-xl border border-[var(--rs-line,#d6cfc7)] bg-[var(--rs-sand,#f5f2ed)]/50 p-3.5">
+                  <Callout tone="amber" title="Suspected Rabies Warning">
+                    {RABIES_WARNING}
+                  </Callout>
+                  <FieldGroup label="Observable warning signs" hint="Reported warning signs only (not a medical diagnosis).">
+                    <div className="flex flex-wrap gap-2">
+                      {RABIES_SYMPTOMS.map((sym) => {
+                        const active = selectedRabies.includes(sym);
+                        return (
+                          <button
+                            key={sym}
+                            type="button"
+                            aria-pressed={active}
+                            onClick={() => toggleRabies(sym)}
+                            className={active
+                              ? 'rounded-full border border-[var(--rs-brand,#b45309)] bg-[var(--rs-brand,#b45309)] px-3 py-1.5 text-sm font-medium text-white transition'
+                              : 'rounded-full border border-[var(--rs-line,#d6cfc7)] bg-white px-3 py-1.5 text-sm font-medium text-[var(--rs-ink,#292524)] hover:bg-[var(--rs-sand,#f5f2ed)] transition'}
+                          >
+                            {sym}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </FieldGroup>
+                </div>
+              ) : null}
+
+              <FieldGroup label="Is the animal currently displaying dangerous behavior?" required error={errors.currentDanger}>
+                <ChoiceChips
+                  label="Current dangerous behavior"
+                  value={draft.currentDanger ?? ''}
+                  onChange={(v) => { patch({ currentDanger: v }); clear('currentDanger'); }}
+                  options={CURRENT_DANGER_OPTIONS.map((o) => ({ value: o, label: o }))}
+                />
+              </FieldGroup>
+
+              <FieldGroup label="Is the animal still in the reported location?" required error={errors.stillInLocation}>
+                <ChoiceChips
+                  label="Still in location"
+                  value={draft.stillInLocation ?? ''}
+                  onChange={(v) => { patch({ stillInLocation: v }); clear('stillInLocation'); }}
+                  options={STILL_IN_LOCATION_OPTIONS.map((o) => ({ value: o, label: o }))}
+                />
+              </FieldGroup>
+
+              {selectedBehaviors.includes('Dangerous roaming animal') || draft.stillInLocation === 'No' ? (
+                <Field label="Last observed location and direction of movement" optional>
+                  <Input
+                    value={draft.movementDirection ?? ''}
+                    maxLength={300}
+                    onChange={(e) => patch({ movementDirection: e.target.value })}
+                    placeholder="e.g. Heading north toward Block 5 gate"
+                  />
+                </Field>
+              ) : null}
+
+              <Field label="Identifying characteristics" optional hint="Size, collar, ear notch, or distinguishing markings.">
+                <Input value={draft.looks ?? ''} maxLength={200} onChange={(e) => patch({ looks: e.target.value })} placeholder="e.g. Large, black collar, scar on muzzle" />
+              </Field>
+            </>
+          ) : null}
 
           <Field label={copy.label} required error={errors.description} hint={<>{copy.hint} <span className="rs-count">{draft.description.length}/{MAX}</span></>}>
             <Textarea value={draft.description} onChange={(e) => { patch({ description: e.target.value }); clear('description'); }} maxLength={MAX} rows={5} placeholder={copy.placeholder} />
@@ -131,7 +426,7 @@ function DetailsForm({ draft }: { draft: Draft }) {
             <Input type="datetime-local" value={draft.observedAt} max={toLocalInput(now)} onChange={(e) => { patch({ observedAt: e.target.value }); clear('observedAt'); }} />
           </Field>
 
-          {extra ? (
+          {extra && !isInjured ? (
             <Field label={extra.label} optional>
               <Select value={draft.extra} onChange={(e) => patch({ extra: e.target.value })}>
                 <option value="">Choose one</option>
@@ -140,11 +435,13 @@ function DetailsForm({ draft }: { draft: Draft }) {
             </Field>
           ) : null}
 
-          {draft.category === 'nuisance' ? (
+          {draft.category === 'nuisance' || isSafety ? (
             <>
-              <Field label="Size, collar or markings" optional hint="Size, collar, tags or distinguishing marks that help recognise it—even if you don’t know the owner.">
-                <Input value={draft.looks ?? ''} maxLength={200} onChange={(e) => patch({ looks: e.target.value })} placeholder="e.g. Small, red collar, notched ear" />
-              </Field>
+              {draft.category === 'nuisance' ? (
+                <Field label="Size, collar or markings" optional hint="Size, collar, tags or distinguishing marks that help recognise it—even if you don’t know the owner.">
+                  <Input value={draft.looks ?? ''} maxLength={200} onChange={(e) => patch({ looks: e.target.value })} placeholder="e.g. Small, red collar, notched ear" />
+                </Field>
+              ) : null}
               <details className="rs-details" open={draft.suspectName || draft.suspectAddress || draft.suspectDetails ? true : undefined}>
                 <summary>Do you know whose animal it is?<span className="rs-opt"> optional</span></summary>
                 <p className="rs-hint">If you know, it helps your Subdivision Leader look into it. Only they see it. Nobody is penalised because of what you write here: the Leader checks first.</p>
@@ -153,12 +450,6 @@ function DetailsForm({ draft }: { draft: Draft }) {
                 <Field label="Anything else that helps" optional><Textarea rows={2} value={draft.suspectDetails ?? ''} maxLength={1000} onChange={(e) => patch({ suspectDetails: e.target.value })} /></Field>
               </details>
             </>
-          ) : null}
-
-          {kind !== 'incident' ? (
-            <FieldGroup label="Photo (optional)" hint="A clear photo helps neighbours recognise the animal. Never go near an animal just to take one.">
-              <MediaPicker value={draft.media} onChange={(media) => patch({ media })} accept="photo" max={3} />
-            </FieldGroup>
           ) : null}
         </div>
       </form>

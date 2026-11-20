@@ -38,7 +38,7 @@ export interface ApiCaseSummary {
   reporter: { user_id: number | null; name: string | null };
   assigned_leader_id: number | null;
   assigned_leader_name: string | null;
-  assessment: { incident: IncidentVerification; evidence_sufficiency: EvidenceSufficiency; urgency: UrgencyLevel; saved_at: string | null };
+  assessment: { incident: IncidentVerification; evidence_sufficiency: EvidenceSufficiency; urgency: UrgencyLevel; urgency_note?: string | null; saved_at: string | null };
   identity_status: IdentityStatus;
   /** False while the status only comes from the reporter naming a registered pet (no Leader has decided the identity yet). */
   identity_decided?: boolean;
@@ -57,18 +57,36 @@ export interface ApiCaseSummary {
 
 export interface ApiSummaryPage { total: number; limit: number; offset: number; has_more: boolean; items: ApiCaseSummary[] }
 
-export interface ApiReferralUpdate { update_id: number; update_type: string; source: string; update_date: string | null; note: string | null; evidence_url: string | null; status_after: ReferralStatus | null; recorded_by: number | null; recorded_by_name: string | null; recorded_at: string | null }
+export interface ApiReferralDocument { name: string; url: string; type?: string; uploaded_at?: string }
+export interface ApiReferralUpdate {
+  update_id: number; update_type: string; source: string; update_date: string | null; note: string | null; evidence_url: string | null;
+  status_after: ReferralStatus | null; responder_name?: string | null; assistance_provided?: string | null; progress_notes?: string | null;
+  follow_up_instructions?: string | null; additional_notes?: string | null; supporting_documents?: ApiReferralDocument[];
+  recorded_by: number | null; recorded_by_name: string | null; recorded_at: string | null;
+}
 export interface ApiReferral {
   referral_id: number; report_id: number; org_type: string; org_name: string | null; status: ReferralStatus; is_open: boolean; is_urgent: boolean;
+  priority_level?: 'normal' | 'high' | 'urgent' | null;
   reason: string | null; reference_no: string | null; contact_method: string | null; contact_person: string | null; contact_detail: string | null;
-  referred_at: string | null; referred_by: number | null; referred_by_name: string | null; external_outcome: string | null; remaining_follow_up: string | null;
-  follow_up_at: string | null; updates: ApiReferralUpdate[];
+  referred_at: string | null; referred_by: number | null; referred_by_name: string | null;
+  status_updated_at?: string | null; status_updated_by?: number | null; status_updated_by_name?: string | null;
+  supporting_documents?: ApiReferralDocument[]; additional_notes?: string | null;
+  assistance_provided?: string | null; actions_completed?: string | null;
+  external_outcome: string | null; remaining_follow_up: string | null;
+  follow_up_at: string | null;
+  outcome_date?: string | null; outcome_note?: string | null; outcome_recorded_by?: number | null; outcome_recorded_by_name?: string | null; outcome_recorded_at?: string | null;
+  updates: ApiReferralUpdate[];
 }
 export interface ApiFollowUp { followup_id: number; kind: FollowUpKind; title: string; notes: string | null; due_at: string | null; status: 'pending' | 'done' | 'cancelled'; referral_id: number | null; created_by: number | null; created_by_name: string | null; created_at: string | null; completed_at: string | null; completion_note: string | null; cancel_reason: string | null }
 export interface ApiContact { log_id: number; method: ContactMethod; with_whom: string; summary: string; outcome: 'cooperative' | 'denied_ownership' | 'no_response' | 'other'; contact_at: string | null; logged_by: number | null; logged_by_name: string | null }
 export interface ApiObservation { observation_id: number; warning_id: number; result: ComplianceResult | null; observed_at: string | null; notes: string; concluded: 'compliant' | 'non_compliant' | null; by: number | null; by_name: string | null; recorded_at: string | null }
 export interface ApiWarning {
   warning_id: number; warning_level: string; violation_type: string; status: string; owner_user_id: number; owner_name: string | null; description: string | null;
+  warning_category?: string | null; warning_subject?: string | null; additional_details?: string | null;
+  supporting_documents?: ApiReferralDocument[]; admin_notes?: string | null; workflow_status?: string | null;
+  pet_id?: number | null; pet_name?: string | null; acknowledged_at?: string | null;
+  owner_response?: string | null; owner_responded_at?: string | null; thread_id?: number | null;
+  rendered_subject?: string | null; rendered_body?: string | null;
   issued_by: number | null; issued_by_name: string | null; policy_id: string | null; policy_title: string | null; policy_reference: string | null;
   observation_days: number | null; follow_up_at: string | null; fine_amount: number; created_at: string | null;
   observations: ApiObservation[]; concluded: 'compliant' | 'non_compliant' | null; concluded_at: string | null;
@@ -128,6 +146,18 @@ export interface ApiCaseDetail {
   warnings: ApiWarning[];
   claims: ApiClaim[];
   links: ApiLink[];
+  duplicate_of_report_id?: number | null;
+  merged_reports?: Array<{
+    report_id: number;
+    reference: string;
+    reporter_name: string | null;
+    created_at: string | null;
+    merged_at: string | null;
+    merged_by_name: string | null;
+    merge_notes: string | null;
+    description: string | null;
+    photo_count: number;
+  }>;
   /** Notification alerts sent or scheduled about this case (missing pet or found animal only). */
   alerts?: ApiCaseAlert[];
   /** The Leader's conversations on this case (missing pet or found animal only). */
@@ -188,21 +218,44 @@ export interface ApiThread {
   unread: number; message_count: number; last_at: string | null; last_text: string; created_at: string | null;
   people: { user_id: number; role: 'leader' | 'owner' | 'finder' | 'reporter'; label: string; name: string; me: boolean; report_id: number | null }[];
 }
-export interface ApiThreadMessage { message_id: number; kind: 'message' | 'system'; sender_id: number | null; sender_name: string | null; sender_role: string; label: string; mine: boolean; body: string; at: string }
+export interface ApiThreadMessage {
+  message_id: number; kind: 'message' | 'system'; sender_id: number | null; sender_name: string | null;
+  sender_role: string; label: string; mine: boolean; body: string; at: string;
+  delivery_status?: 'sent' | 'delivered' | 'read' | null;
+}
 export interface ApiThreadView extends ApiThread { messages: ApiThreadMessage[] }
+/**
+ * A resident conversation in the Messages inbox (backend services/case_messaging.py summary, 2026-11-19): a `direct` one about a report
+ * (opened by the Leader or by the resident) or a resident's `general` one (no report). Kept apart from ApiThread, which the case screen's
+ * lost/found conversations use.
+ */
+export interface ApiInboxThread {
+  thread_id: number; kind: 'direct' | 'general'; status: 'open' | 'closed'; can_reply: boolean; ended_reason: string | null;
+  report_id: number | null; title: string; subtitle: string; subject: string | null; report_ref: string | null; report_category: string | null;
+  case_status: string | null; closed_at: string | null; close_trigger: 'case_closed' | 'link_removed' | 'manual' | null; started_by_resident: boolean;
+  unread: number; message_count: number; last_at: string | null; last_text: string; created_at: string | null;
+  people: { user_id: number; role: string; label: string; name: string; me: boolean; report_id: number | null }[];
+}
+export interface ApiInboxThreadView extends ApiInboxThread { messages: ApiThreadMessage[] }
+export type InboxFilter = 'all' | 'unread' | 'open' | 'closed';
+export interface ApiInbox { items: ApiInboxThread[]; counts: Record<InboxFilter, number> }
 /** A notification alert (backend services/case_alerts.py alert_view). Times are naive server times. */
 export interface ApiCaseAlert {
   alert_id: number; report_id: number; title: string; message: string; include_photo: boolean; destination: 'notice' | 'sighting' | 'claim' | 'inbox';
   audience: 'all' | 'helpers'; status: 'scheduled' | 'active' | 'paused' | 'finished' | 'stopped' | 'cancelled'; stop_reason: string | null;
-  schedule: { mode: 'now' | 'later' | 'repeat'; repeat: 'every' | 'times' | null; every_minutes: number | null; times: string[]; start_at: string;
-    end_kind: 'resolved' | 'date' | 'count' | null; end_at: string | null; max_sends: number | null };
+  schedule: {
+    mode: 'now' | 'later' | 'repeat'; repeat: 'every' | 'times' | null; every_minutes: number | null; times: string[]; start_at: string;
+    end_kind: 'resolved' | 'date' | 'count' | null; end_at: string | null; max_sends: number | null
+  };
   next_send_at: string | null; upcoming: string[]; sends_done: number; created_at: string; created_by: number | null; created_by_name: string | null; stopped_at: string | null;
   sends: { slot_at: string; sent_at: string; recipients: number; skipped_before: number }[];
 }
 export interface ApiAlertBody {
   title: string; message: string; include_photo: boolean; destination: string; audience: string; client_request_id?: string;
-  schedule: { mode: string; at?: string | null; repeat?: string; every?: number; unit?: string; times?: string[]; start_at?: string | null; until?: string; until_at?: string | null;
-    count?: number; latest_end?: string | null };
+  schedule: {
+    mode: string; at?: string | null; repeat?: string; every?: number; unit?: string; times?: string[]; start_at?: string | null; until?: string; until_at?: string | null;
+    count?: number; latest_end?: string | null
+  };
 }
 
 export interface ApiMatchSide {
@@ -210,15 +263,81 @@ export interface ApiMatchSide {
   colors: string[]; size: string | null; features: string[]; collar: string | null; place: string | null; at: string | null; reported_at: string | null;
   words: string | null; open: boolean; reporter: { user_id: number; name: string; phone: string | null } | null;
 }
-export type ApiMatchStatus = 'pending' | 'confirmed' | 'rejected' | 'moot';
+export type ApiMatchStatus = 'pending' | 'under_review' | 'confirmed' | 'rejected' | 'moot';
 export interface ApiMatch {
-  match_id: number; subdivision_id: number; lost_report_id: number; found_report_id: number; score: number; level: 'strong' | 'possible' | 'manual'; status: ApiMatchStatus;
+  match_id: number; subdivision_id: number; lost_report_id: number; found_report_id: number; score: number; level: 'strong' | 'possible' | 'manual' | 'low'; status: ApiMatchStatus;
   reasons: string[]; created_at: string | null; decided_at: string | null; decided_by: number | null; link_id: number | null; coordination_id: number | null;
   lost: ApiMatchSide; found: ApiMatchSide; coordination?: { coordination_id: number; mode: 'none' | 'direct' | 'leader'; status: 'open' | 'resolved' } | null;
   /** Only on the one-match read: the side-by-side rows and the reasons in favour. */
   rows?: ApiMatchRow[]; comparison_reasons?: string[];
+  /** Multi-attribute matching (2026-11-19). On every read: */
+  algorithm?: string | null; review_note?: string | null; has_photo_comparison?: boolean; classification?: ApiMatchAnalysis['classification'] | null; coverage?: number | null;
+  /** On the one-match read: the stored breakdown, the earlier results, whether both reports have a photo. */
+  analysis?: ApiMatchAnalysis; history?: ApiMatchHistory[]; can_compare_photos?: boolean;
 }
+export interface ApiMatchAttribute {
+  score: number | null; verdict: 'match' | 'similar' | 'differs' | 'unknown'; explanation: string; label: string; weight: number; effective_weight: number;
+  available: boolean; proximity?: string | null; distance_m?: number | null;
+}
+export interface ApiMatchAnalysis {
+  algorithm: string; score: number; raw_score: number | null; coverage: number; attributes_compared: number; attributes_total: number;
+  classification: 'strong' | 'potential' | 'low' | 'insufficient' | 'excluded'; classification_label: string;
+  attributes: Record<'visual' | 'location' | 'breed' | 'coat' | 'description', ApiMatchAttribute>;
+  explanations: string[]; unavailable: string[]; notes: string[]; disclaimer: string; computed_on_view?: boolean;
+}
+export interface ApiMatchHistory { at: string; score: number; level: string; algorithm: string; classification: string | null; replaced_because: string }
 export interface ApiMatchRow { key: string; label: string; lost: string; found: string; verdict: 'match' | 'similar' | 'differs' | 'unknown'; note: string; reason: string | null }
+
+export interface ApiQrCollarHistoryEntry {
+  status: string;
+  label: string;
+  at: string;
+  by_id?: number | null;
+  by_name?: string | null;
+  note?: string | null;
+}
+
+export interface ApiQrCollarRequest {
+  request_id: number;
+  reference: string;
+  pet_id: number;
+  pet_name: string;
+  pet_reference: string | null;
+  pet_type: string | null;
+  pet_breed: string | null;
+  pet_color: string | null;
+  pet_size: string | null;
+  pet_photo_url: string | null;
+  resident_id: number;
+  resident_name: string;
+  resident_unit: string | null;
+  subdivision_id: number;
+  status: 'pending' | 'accepted' | 'ready_for_pickup' | 'completed';
+  status_label: string;
+  notes: string | null;
+  admin_notes: string | null;
+  thread_id: number | null;
+  requested_at: string;
+  accepted_at: string | null;
+  accepted_by_name: string | null;
+  ready_at: string | null;
+  ready_by_name: string | null;
+  completed_at: string | null;
+  completed_by_name: string | null;
+  updated_at: string;
+  history: ApiQrCollarHistoryEntry[];
+}
+
+export interface ApiQrCollarRequestsResponse {
+  items: ApiQrCollarRequest[];
+  counts: {
+    total: number;
+    pending: number;
+    accepted: number;
+    ready_for_pickup: number;
+    completed: number;
+  };
+}
 
 // ----------------------------------------------------------------------------------------------------- directories
 export interface ApiUser {
@@ -260,12 +379,37 @@ export interface ApiNotificationPrefs {
 
 // ---------------------------------------------------------------------------------------------------------- settings
 export interface ApiPolicy { id: string; title: string; reference: string; summary: string; applies_to: CategoryId[]; observation_days: number | null; status: 'confirmed' | 'pending_confirmation'; fine_amount?: number | null; count_window_days?: number | null }
+export interface ApiExternalAgency {
+  id: string;
+  name: string;
+  agency_type: string;
+  contact_person: string;
+  phone: string;
+  email: string;
+  address: string;
+}
+
 export interface ApiCaseSettings {
   categories: Record<CategoryId, boolean>;
   policies: ApiPolicy[];
   followups: { default_days: number; min_days: number; max_days: number };
   publication: { lost_pet: 'immediate' | 'review'; found_animal: 'immediate' | 'review' };
-  office: { address: string; phone: string; email: string; hours: string };
+  office: {
+    administration_name?: string;
+    contact_person?: string;
+    address: string;
+    phone: string;
+    email: string;
+    hours: string;
+  };
+  external_coordination?: {
+    barangay_name: string;
+    contact_person: string;
+    phone: string;
+    email: string;
+    address: string;
+    agencies?: ApiExternalAgency[];
+  };
 }
 export interface ApiCategories { subdivision_id: number | null; subdivision: { name: string | null; city: string | null; office: ApiCaseSettings['office'] }; categories: { id: CategoryId; enabled: boolean }[] }
 
@@ -311,7 +455,10 @@ export interface ApiGeneratedWarningLetter {
   complaint_step_id: number | null; report_id: number | null; case_reference: string;
   recipient_user_id: number | null; recipient_name: string; recipient_address: string | null;
   pet_id: number | null; pet_name: string | null; pet_type: string | null;
-  warning_level: string; policy_id: string | null; policy_reference: string | null;
+  warning_level: string; warning_category?: string | null; warning_subject?: string | null;
+  additional_details?: string | null; supporting_documents?: ApiReferralDocument[];
+  workflow_status?: string | null; owner_response?: string | null; owner_responded_at?: string | null; thread_id?: number | null;
+  policy_id: string | null; policy_reference: string | null;
   template_id: number | null; template_name: string; template_version_id: number | null; template_version_number: number;
   rendered_subject: string; rendered_body: string; rendered_html: string; placeholders: Record<string, string>;
   /** Issued before the layout marker existed: its old header/recipient/signature lines are hidden when shown (as before). */
@@ -324,9 +471,47 @@ export interface ApiGeneratedWarningLetter {
   attachment_url?: string | null; attachment_name?: string | null;
 }
 
+/** A pet's QR tag as the Leader sees it (GET /pets/{id}/tag). The Leader can turn a tag off, never create or print one. */
+export interface ApiPetTagInfo { pet_id: number; has_tag: boolean; tag_id: number | null; created_at: string | null; can_disable: boolean }
+/** One "tell the owner" message from a tag scan. The Leader never gets the finder's phone number, only whether one was shared. */
+export interface ApiTagFoundReport {
+  scan_id: number; status: 'new' | 'seen_by_owner' | 'resolved'; created_at: string; location_label: string | null;
+  latitude: number | null; longitude: number | null; note: string | null; photo_url: string | null;
+  from_signed_in_resident: boolean; phone_shared: boolean; alert_id: number | null;
+}
+
 // ------------------------------------------------------------------------------------------------------------ calls
 const PAGE = 200;
 const MAX_CASES = 2000;       // a safety stop, not a business rule: the list is read in pages of 200 until the server says there is no more
+
+// ---- Possible Pet Owner Verification (backend services/owner_verification.py, docs/01-system/POSSIBLE_OWNER_VERIFICATION.md)
+export type ApiOwnerStatus = 'identified' | 'awaiting' | 'owner_confirmed' | 'owner_declined' | 'verified' | 'not_confirmed' | 'unable_to_contact';
+export interface ApiOwnerEvent { kind: string; label: string; status: string | null; at: string; by: number | null; by_name: string | null; note?: string; attempt?: number; decision?: string }
+export interface ApiOwnerRequest {
+  request_id: number; raw_status: string; raw_status_label: string; requested_at: string | null; requested_by_name: string | null; message: string | null;
+  follow_up_count: number; last_follow_up_at: string | null; owner_response: 'YES' | 'NO' | null; owner_note: string | null; owner_response_at: string | null;
+  final_decision: string | null; final_label: string | null; final_by_name: string | null; final_at: string | null; cancel_reason: string | null;
+  thread_id: number | null; thread_status: 'open' | 'closed' | null; unread: number; events: ApiOwnerEvent[];
+}
+export interface ApiOwnerMatchAttribute { key: string; label: string; score: number | null; available: boolean; explanation: string | null }
+export interface ApiPossibleOwner {
+  pet_id: number; match_id: number | null;
+  resident: { user_id: number; name: string; phone?: string | null; email?: string | null; address?: string | null; subdivision: string | null };
+  pet: { name: string; reference_code: string | null; species: string | null; breed: string | null; colour: string | null; size: string | null; markings: string | null; photo_url: string | null; status: string | null };
+  registered_address: string | null;
+  matching: {
+    method: 'multi_attribute' | 'registry' | 'manual'; label: string; score: number | null; classification: string | null; classification_label: string | null;
+    coverage: number | null; attributes: ApiOwnerMatchAttribute[]; explanation: string | null
+  } | null;
+  status: ApiOwnerStatus; status_label: string;
+  request: ApiOwnerRequest | null; earlier_requests: ApiOwnerRequest[];
+  actions: { contact: boolean; follow_up: boolean; mark_unable: boolean; finalize: boolean; message_owner?: boolean; send_warning?: boolean };
+}
+export interface ApiPossibleOwners {
+  applicable: boolean; reason: string | null; can_contact: boolean; blocked_reason: string | null; template: string | null;
+  animal: { reference: string | null; animal_type: string | null; breed: string | null; colour: string | null; size: string | null; subdivision: string | null; reported_at: string | null; photo_count: number } | null;
+  candidates: ApiPossibleOwner[]; request_id?: number;
+}
 
 export const adminApi = {
   /** Every case summary the Leader may see, newest first (read in pages). `truncated` says the safety stop was reached. */
@@ -354,6 +539,11 @@ export const adminApi = {
   reopen: (id: number, reason: string) => httpPost(`/cases/${id}/reopen`, { reason }),
   createReferral: (id: number, body: Record<string, unknown>) => httpPost(`/cases/${id}/referrals`, body),
   updateReferral: (id: number, referralId: number, body: Record<string, unknown>) => httpPost(`/cases/${id}/referrals/${referralId}/updates`, body),
+  uploadReferralDocument: (id: number, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return httpUpload<ApiReferralDocument>(`/cases/${id}/referrals/upload`, form);
+  },
   createFollowUp: (id: number, body: Record<string, unknown>) => httpPost(`/cases/${id}/followups`, body),
   completeFollowUp: (id: number, followUpId: number, note?: string) => httpPost(`/cases/${id}/followups/${followUpId}/complete`, { note: note || null }),
   cancelFollowUp: (id: number, followUpId: number, reason?: string) => httpPost(`/cases/${id}/followups/${followUpId}/cancel`, { reason: reason || null }),
@@ -364,6 +554,47 @@ export const adminApi = {
   recordCompliance: (id: number, warningId: number, body: Record<string, unknown>) => httpPost(`/cases/${id}/warnings/${warningId}/observations`, body),
   warningSuggestion: (params: { violation_type: string; report_id: number; owner_id: number; policy_id: string }) => httpGet<{ suggested_tier: string; instructions?: string }>('/warnings/suggestion', params),
   issueWarning: (body: Record<string, unknown>) => httpPost('/warnings/', body),
+  updateWarningAdmin: (warningId: number, body: { workflow_status?: string; admin_notes?: string; follow_up_message?: string; client_request_id?: string }) =>
+    httpPost(`/warnings/${warningId}/admin-update`, body),
+  duplicates: (reportId: number) => httpGet<{
+    report_id: number;
+    candidates: Array<{
+      report_id: number;
+      reference: string;
+      category: string | null;
+      animal_type: string | null;
+      breed: string | null;
+      color: string | null;
+      landmark: string | null;
+      incident_at: string | null;
+      created_at: string | null;
+      reporter_name: string;
+      description: string | null;
+      condition: string | null;
+      case_status: string;
+      photo_urls: string[];
+      combined_score: number;
+      classification: string;
+      species_status: string;
+      location_class: string;
+      distance_meters: number | null;
+      scores: {
+        location: number | null;
+        breed: number | null;
+        colour: number | null;
+        description: number | null;
+        date: number | null;
+        time: number | null;
+      };
+      reasons: string[];
+    }>;
+  }>(`/cases/${reportId}/duplicates`),
+  duplicateDecision: (reportId: number, body: { other_report_id: number; decision: 'not_duplicate' | 'defer'; reason?: string }) =>
+    httpPost<{ ok: boolean }>(`/cases/${reportId}/duplicates/decision`, body),
+  mergeReports: (body: { report_ids: number[]; notes: string; primary_report_id?: number }) =>
+    httpPost('/reports/merge-group', body),
+  unmergeReport: (reportId: number, reason: string) =>
+    httpPost(`/reports/${reportId}/unmerge`, { reason }),
 
   warningTemplatePlaceholders: () => httpGet<{ placeholders: ApiPlaceholderDef[] }>('/warning-templates/placeholders'),
   warningTemplates: (status: 'all' | 'active' | 'archived' = 'all') => httpGet<{ items: ApiWarningTemplate[] }>('/warning-templates', { status }),
@@ -393,6 +624,22 @@ export const adminApi = {
   /** Ask a resident to confirm that a pet record is theirs. Nothing moves until they say yes; the Leader must say how they checked (at least 10 characters). */
   assignPetOwner: (petId: number, ownerId: number, evidenceNote: string) => httpPost<ApiPet>(`/pets/${petId}/assign-owner?owner_id=${ownerId}`, { evidence_note: evidenceNote }),
 
+  // Pet QR tags (Phase 3 of the pet QR tags plan)
+  taggedPetIds: () => httpGet<{ pet_ids: number[] }>('/pet-tags/active'),
+  petTag: (petId: number) => httpGet<ApiPetTagInfo>(`/pets/${petId}/tag`),
+  disablePetTag: (petId: number) => httpPost<ApiPetTagInfo>(`/pets/${petId}/tag/disable`),
+  petTagScans: (petId: number) => httpGet<{ found_reports: ApiTagFoundReport[]; views: { count: number; last_at: string | null } }>(`/pets/${petId}/tag/scans`),
+  qrCollarRequests: () => httpGet<ApiQrCollarRequestsResponse>('/qr-collar-requests/admin'),
+  acceptQrCollarRequest: (requestId: number, adminNotes?: string) =>
+    httpPost<ApiQrCollarRequest>(`/qr-collar-requests/${requestId}/accept`, { admin_notes: adminNotes?.trim() || null }),
+  readyQrCollarRequest: (requestId: number, message?: string, adminNotes?: string) =>
+    httpPost<ApiQrCollarRequest>(`/qr-collar-requests/${requestId}/ready`, {
+      message: message?.trim() || null,
+      admin_notes: adminNotes?.trim() || null,
+    }),
+  completeQrCollarRequest: (requestId: number, adminNotes?: string) =>
+    httpPost<ApiQrCollarRequest>(`/qr-collar-requests/${requestId}/complete`, { admin_notes: adminNotes?.trim() || null }),
+  alertTagScans: (alertId: number) => httpGet<{ alert_id: number; found_reports: ApiTagFoundReport[] }>(`/pet-tags/alerts/${alertId}/scans`),
   alerts: () => httpGet<{ total: number; results: ApiAlert[] }>('/lost-pet-alerts/all', { limit: PAGE }),
   requestAlert: (reportId: number, body: Record<string, unknown>) => httpPost<ApiAlert>(`/lost-pet-alerts/reports/${reportId}/request`, body),
   activateAlert: (alertId: number, body: Record<string, unknown>) => httpPost<ApiAlert>(`/lost-pet-alerts/${alertId}/activate`, body),
@@ -409,7 +656,12 @@ export const adminApi = {
   /** One match with the side-by-side comparison. */
   lostFoundMatch: (matchId: number) => httpGet<ApiMatch>(`/lost-found/matches/${matchId}`),
   /** confirm: link the two reports and tell both residents; reject: rule the pair out (nobody is told); reopen: review a ruled-out pair again. */
-  decideMatch: (matchId: number, decision: 'confirm' | 'reject' | 'reopen') => httpPost<ApiMatch>(`/lost-found/matches/${matchId}/decision`, { decision }),
+  decideMatch: (matchId: number, decision: 'under_review' | 'confirm' | 'reject' | 'reopen', note?: string | null) =>
+    httpPost<ApiMatch>(`/lost-found/matches/${matchId}/decision`, { decision, note: note?.trim() || null }),
+  /** Recalculate an undecided match from the reports as they are now (the earlier result is kept in its history). */
+  rescoreMatch: (matchId: number) => httpPost<ApiMatch>(`/lost-found/matches/${matchId}/rescore`, {}),
+  /** The AI photo comparison of the two reports (when the administrator has the AI on), then a recalculation. */
+  compareMatchPhotos: (matchId: number) => httpPost<ApiMatch>(`/lost-found/matches/${matchId}/photo-comparison`, {}),
   /** Notification alerts of a case: residents reached by each choice; create, change, pause, resume, stop. They never touch the Community notice. */
   caseAlertAudience: (reportId: number) => httpGet<{ all: number; helpers: number; residents: number; turned_off: number; push_ready: boolean }>(`/case-alerts/reports/${reportId}/audience`),
   createCaseAlert: (reportId: number, body: ApiAlertBody) => httpPost<ApiCaseAlert>(`/case-alerts/reports/${reportId}`, body),
@@ -426,6 +678,44 @@ export const adminApi = {
   openReportThread: (reportId: number, party: 'owner' | 'reporter') => httpPost<ApiThreadView>(`/lost-found/reports/${reportId}/threads`, { party }),
   thread: (threadId: number) => httpGet<ApiThreadView>(`/case-messages/${threadId}`),
   sendThreadMessage: (threadId: number, body: string, clientRequestId: string) => httpPost<ApiThreadView>(`/case-messages/${threadId}/messages`, { body, client_request_id: clientRequestId }),
+  /** The Messages inbox: resident conversations of this subdivision (all | unread | open | closed), searched by subject, reference or name. */
+  inbox: (status: InboxFilter, q: string) => httpGet<ApiInbox>('/case-messages/inbox', q.trim() ? { status, q: q.trim() } : { status }),
+  inboxThread: (threadId: number) => httpGet<ApiInboxThreadView>(`/case-messages/${threadId}`),
+  sendInboxMessage: (threadId: number, body: string, clientRequestId: string) =>
+    httpPost<ApiInboxThreadView>(`/case-messages/${threadId}/messages`, { body, client_request_id: clientRequestId }),
+  closeInboxThread: (threadId: number, reason: string) => httpPost<ApiInboxThreadView>(`/case-messages/${threadId}/close`, { reason: reason.trim() || null }),
+  messagesUnread: () => httpGet<{ conversations: number; messages: number }>('/case-messages/unread-count'),
+  /** Possible Pet Owners of a case: registered pets the matching linked to it, their owner, what matched and the verification status. */
+  possibleOwners: (reportId: number) => httpGet<ApiPossibleOwners>(`/owner-verification/reports/${reportId}`),
+  /** Contact Possible Owner: the verification request and its conversation (tied to the case), with the Leader's edited message. */
+  contactPossibleOwner: (reportId: number, petId: number, message: string, clientRequestId: string) =>
+    httpPost<ApiPossibleOwners>(`/owner-verification/reports/${reportId}/contact`, { pet_id: petId, message, client_request_id: clientRequestId }),
+  messagePossibleOwner: (
+    reportId: number,
+    petId: number,
+    messageType: 'ownership_verification' | 'direct_message',
+    message: string,
+    clientRequestId: string,
+    contactMethod?: string | null,
+    contactDetail?: string | null,
+  ) =>
+    httpPost<ApiPossibleOwners & { thread_id?: number | null; mode?: string }>(
+      `/owner-verification/reports/${reportId}/message`,
+      {
+        pet_id: petId,
+        message_type: messageType,
+        message,
+        client_request_id: clientRequestId,
+        contact_method: contactMethod ?? null,
+        contact_detail: contactDetail ?? null,
+      },
+    ),
+  followUpPossibleOwner: (requestId: number, message: string, clientRequestId: string) =>
+    httpPost<ApiPossibleOwners>(`/owner-verification/requests/${requestId}/follow-up`, { message, client_request_id: clientRequestId }),
+  markOwnerUnreachable: (requestId: number, note: string) => httpPost<ApiPossibleOwners>(`/owner-verification/requests/${requestId}/unable-to-contact`, { note }),
+  /** The final verification after the owner's YES (or recording a NO): the existing staff decision, refused until the owner answered. */
+  decideOwnership: (reportId: number, petId: number, decision: 'CONFIRMED_MATCH' | 'NOT_A_MATCH' | 'UNABLE_TO_VERIFY', notes: string) =>
+    httpPost<{ message: string; status: string }>('/manual-matching/decisions', { report_a_id: reportId, pet_id: petId, decision, notes }),
   readThread: (threadId: number, throughMessageId?: number) => httpPost<ApiThread>(`/case-messages/${threadId}/read`, throughMessageId === undefined ? {} : { through_message_id: throughMessageId }),
   announcements: (subdivisionId: number) => httpGet<ApiAnnouncement[]>(`/announcements/subdivision/${subdivisionId}`),
   createAnnouncement: (body: Record<string, unknown>) => httpPost<ApiAnnouncement>('/announcements/', body),

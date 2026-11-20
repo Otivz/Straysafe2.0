@@ -30,6 +30,11 @@ A missing-pet report and a found-animal report of the same subdivision may descr
 
 ## The score
 
+> **Superseded 2026-11-19:** the score is now the multi-attribute engine's (visual similarity, location, breed, coat colour, physical description,
+> configurable weights, coverage and classification), and suggestions can be marked Under review, recalculated (earlier results kept) and
+> decided with notes. See [MULTI_ATTRIBUTE_MATCHING.md](MULTI_ATTRIBUTE_MATCHING.md). The comparison rows below are still shown side by side;
+> their points no longer make the score. The rules above (Leader-only, nothing linked or recovered automatically) are unchanged.
+
 Weights are **defaults, not policy**; they are constants in `compare` and are meant to be tuned once real reports exist.
 
 | What is compared | Points |

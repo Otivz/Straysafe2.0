@@ -132,9 +132,18 @@ def list_templates(
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     sub_id = _staff_subdivision(current_user, subdivision_id, write=False)
+    if sub_id is not None:
+        has_any = (
+            db.query(WarningLetterTemplate.template_id)
+            .filter(WarningLetterTemplate.subdivision_id == sub_id)
+            .first()
+        )
+        if has_any is None:
+            WL.seed_standard_templates(db.connection(), sub_id, actor_id=current_user.user_id)
+            db.commit()
     q = db.query(WarningLetterTemplate)
     if sub_id is not None:
-        q = q.filter(WarningLetterTemplate.subdivision_id == sub_id)
+        q = q.filter(WarningLetterTemplate.subdivision_id.in_([sub_id, None]))
     if status in ("active", "archived"):
         q = q.filter(WarningLetterTemplate.status == status)
     rows = q.order_by(WarningLetterTemplate.is_default.desc(), WarningLetterTemplate.updated_at.desc()).all()
@@ -480,7 +489,14 @@ def preview_template(
                 raise HTTPException(status_code=404, detail="Template not found.")
             _check_template_scope(current_user, tpl)
         else:
-            tpl, ver = WL.resolve_template_for_issuance(db, sub_id, body.template_id, body.warning_level, actor_id=current_user.user_id)
+            tpl, ver = WL.resolve_template_for_issuance(
+                db,
+                sub_id,
+                body.template_id,
+                body.warning_level,
+                actor_id=current_user.user_id,
+                enforce_level_match=False,
+            )
             db.commit()
         subj_tpl, body_tpl = ver.subject_template, ver.body_template
         tpl_meta = {"template_id": tpl.template_id, "name": tpl.name, "version_number": ver.version_number}

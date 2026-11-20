@@ -23,6 +23,58 @@ export const EXTRA_FIELD: Partial<Record<CategoryId, { label: string; options: s
   found_animal: { label: 'Where is the animal now?', options: ['With me', 'Where I found it', 'With a neighbour', 'Not sure'] },
 };
 
+export const INJURED_CONDITIONS = [
+  'Injury or bleeding',
+  'Visible illness',
+  'Weakness or difficulty standing',
+  'Difficulty walking or moving',
+  'Unable to move',
+  'Trapped or stuck',
+  'Appears abandoned or neglected',
+  'Other observable condition',
+] as const;
+
+export const INJURED_SAFETY_WARNING =
+  'Do not attempt to touch, carry, or treat an injured animal yourself. Keep a safe distance and observe its condition. Frightened or injured animals may bite or scratch. Contact the subdivision guardhouse if immediate assistance is needed.';
+
+export const DANGEROUS_BEHAVIORS = [
+  'Aggressive or threatening behavior',
+  'Attempted bite or attack',
+  'Actual bite incident',
+  'Chasing or attacking people',
+  'Attacking other animals',
+  'Suspected rabies symptoms',
+  'Dangerous roaming animal',
+  'Repeated aggressive behavior',
+  'Other dangerous behavior',
+] as const;
+
+export const CURRENT_DANGER_OPTIONS = [
+  'Yes, currently aggressive',
+  'Previously aggressive but currently calm',
+  'Not sure',
+] as const;
+
+export const STILL_IN_LOCATION_OPTIONS = ['Yes', 'No', 'Not sure'] as const;
+
+export const RABIES_SYMPTOMS = [
+  'Unusual aggression',
+  'Excessive drooling or foaming',
+  'Unusual or disoriented behavior',
+  'Difficulty swallowing',
+  'Unprovoked biting or attacking',
+  'Other unusual behavior',
+] as const;
+
+export const DANGEROUS_SAFETY_WARNING =
+  'Do not approach, provoke, chase, or attempt to capture the animal. Keep children and pets away from the area. Maintain a safe distance and report the animal\'s exact location. If an attack or bite has occurred, seek appropriate assistance immediately.';
+
+export const RABIES_WARNING =
+  'Do not approach or attempt to capture the animal. Keep a safe distance and immediately notify the subdivision security personnel or appropriate local authorities. Suspected rabies requires assessment by qualified professionals.';
+
+export const BITE_MEDICAL_WARNING =
+  'If someone was bitten or attacked, please seek immediate medical attention from a healthcare professional or appropriate health facility.';
+
 /** What happens to a report after it is sent. Shown before submitting and after, so nothing is a surprise. */
 export const VISIBILITY_COPY = {
   private: { short: 'Private', long: 'Only authorized subdivision administrators can see this report. It never appears in Community.' },
@@ -31,9 +83,9 @@ export const VISIBILITY_COPY = {
 } as const;
 
 export const ANIMAL_TYPES: Record<AnimalType, string> = {
-  dog: 'Dog', cat: 'Cat', bird: 'Bird', small_mammal: 'Small mammal', reptile: 'Reptile', livestock: 'Livestock', wildlife: 'Wild animal', other: 'Other / not sure',
+  dog: 'Dog', cat: 'Cat', bird: 'Bird', small_mammal: 'Small mammal', reptile: 'Reptile', livestock: 'Livestock', wildlife: 'Wild animal', other: 'Others',
 };
-export const ANIMAL_TYPE_IDS = Object.keys(ANIMAL_TYPES) as AnimalType[];
+export const ANIMAL_TYPE_IDS: AnimalType[] = ['dog', 'cat', 'other'];
 /** What can be registered as a pet: dogs and cats only for now (the registry holds nothing else, and a wider list needs the stakeholders' decision). */
 export const PET_TYPE_IDS: AnimalType[] = ['dog', 'cat'];
 export const SEX_LABEL: Record<PetSex, string> = { male: 'Male', female: 'Female', unknown: 'Not sure' };

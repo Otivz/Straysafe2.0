@@ -355,6 +355,22 @@ test('a warning notification maps to the warning kind and links directly to the 
   assert.equal(n({ type: 'warning_letter', link: null }).to, '/warnings');
 });
 
+test('a pet_tag_found notification routes to the separate tag scan page', () => {
+  const n = (over = {}) => notificationFromApi({
+    notification_id: 35,
+    type: 'pet_tag_found',
+    title: 'Someone found Baron',
+    message: "Someone scanned Baron's QR tag near Near my house and left you a message.",
+    related_id: 5,
+    is_read: false,
+    created_at: '2026-11-18T15:00:00+00:00',
+    ...over,
+  }, lookup);
+  assert.deepEqual([n().kind, n().to], ['sighting', '/pets/5/scans']);
+  assert.equal(n({ link: '/resident-app/pets/5/scans/12' }).to, '/pets/5/scans/12');
+  assert.equal(n({ related_id: null, link: null }).to, '/pets');
+});
+
 test('notification switches round-trip through the server flags; community, advisories and SMS are not switches the server has', () => {
   const read = settingsFrom(prefs());
   assert.deepEqual(read, { notifications: { reportUpdates: true, sightings: true, claims: true, community: true, advisories: true, lostFoundAlerts: true }, channels: { push: true, email: true, sms: false } });

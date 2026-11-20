@@ -9,6 +9,7 @@ import AdminLayout from './layout/AdminLayout';
 import { AdminModeContext, useAdminMode, type AdminMode } from './mode';
 import DashboardPage from './pages/DashboardPage';
 import CasesPage from './pages/CasesPage';
+import MessagesPage from './pages/MessagesPage';
 import NotFoundPage from './pages/NotFoundPage';
 import CaseDetailPage from './pages/case/CaseDetailPage';
 import ComplaintsPage from './pages/complaints/ComplaintsPage';
@@ -57,6 +58,8 @@ export default function AdminApp({ mode }: { mode: AdminMode }) {
                 <Route path="dashboard" element={<DashboardPage />} />
                 <Route path="cases" element={<CasesPage />} />
                 <Route path="cases/:caseId" element={<CaseDetailPage />} />
+                <Route path="messages" element={<MessagesPage />} />
+                <Route path="messages/:threadId" element={<MessagesPage />} />
                 <Route path="complaints" element={<ComplaintsPage />} />
                 <Route path="complaints/people/:respondentId" element={<PersonPage />} />
                 <Route path="community" element={<CommunityPage />} />

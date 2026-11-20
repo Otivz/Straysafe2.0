@@ -8,12 +8,14 @@ import { heroOf, monitoringLine, needsYou, peopleOf, situationTiles } from '../.
 import type { Case } from '../../data/types';
 import { usePageTitle } from '../../lib/hooks';
 import { useNow } from '../../../preview/lib/hooks';
+import { AlertTagMessages } from '../../components/PetTagBlocks';
 import { CaseDialogs } from './CaseDialogs';
 import type { CaseDialog } from './dialogState';
 import { Activity, Resolve } from './monitored/Activity';
 import { Alerts } from './monitored/Alerts';
 import HeroBlock from './monitored/Hero';
 import Lane from './monitored/Lane';
+import PossibleOwnersBlock, { CaseWarningsSection } from './PossibleOwnersBlock';
 import { BarangayHelp, LinkedReports, Ownership, Sightings } from './monitored/Sections';
 
 /**
@@ -66,8 +68,13 @@ export default function MonitoredCasePage({ c, detail }: { c: Case; detail: { st
               <Lane c={c} needs={needs} tiles={tiles} line={monitoringLine(c, now)} now={now} openDialog={open} />
               <Alerts c={c} now={now} openDialog={open} />
               <Sightings c={c} now={now} openDialog={open} />
+              {c.lostPet?.alertId ? <AlertTagMessages alertId={c.lostPet.alertId} /> : null}
               <LinkedReports c={c} now={now} openDialog={open} />
               <BarangayHelp c={c} openDialog={open} />
+              <PossibleOwnersBlock c={c} variant="section" />
+              <section className="sa-mc-sec" aria-label="Official Warnings">
+                <CaseWarningsSection c={c} />
+              </section>
               {found ? <Ownership c={c} openDialog={open} /> : null}
               <Activity c={c} now={now} />
               <Resolve c={c} openDialog={open} />

@@ -14,6 +14,11 @@ seen the animal was found) and never at a photo. It runs the moment either repor
 
 A lost report can have several confirmed found reports, each confirmed on its own. A found report links to ONE lost report only; its other
 suggestions become `moot`. Nothing here changes a case status.
+
+Multi-attribute matching (2026-11-19, docs/01-system/MULTI_ATTRIBUTE_MATCHING.md): the score is the weighted combination of five attributes
+(AI photo similarity, location, breed, coat colour, physical description) from utils/match_scoring.py, each 0-100 only when both reports say
+enough about it; the breakdown, the algorithm and every earlier result are kept on the match. A Leader can mark a suggestion Under review, run
+the AI photo comparison, recalculate, and confirm or rule it out with notes. A different kind of animal is still never suggested.
 """
 import math
 import re
@@ -41,14 +46,18 @@ from app.services import case_work
 from app.services import lost_pet_lifecycle as LP
 from app.utils import case_state
 from app.utils import case_vocab as V
+from app.utils import match_scoring as MS
 from app.utils.auth import verify_subdivision_scope
 from app.utils.db_clock import db_now
 
-STRONG_FROM = 70
-POSSIBLE_FROM = 40
-PENDING, CONFIRMED, REJECTED, MOOT = "pending", "confirmed", "rejected", "moot"
-STATUSES = (PENDING, CONFIRMED, REJECTED, MOOT)
-DECISIONS = ("confirm", "reject", "reopen")
+# Defaults of the configurable thresholds (utils/match_scoring.DEFAULT_CONFIG; the administrator's matching_config overrides them)
+STRONG_FROM = MS.DEFAULT_CONFIG["thresholds"]["strong"]
+POSSIBLE_FROM = MS.DEFAULT_CONFIG["thresholds"]["potential"]
+PENDING, UNDER_REVIEW, CONFIRMED, REJECTED, MOOT = "pending", "under_review", "confirmed", "rejected", "moot"
+STATUSES = (PENDING, UNDER_REVIEW, CONFIRMED, REJECTED, MOOT)
+OPEN_STATUSES = (PENDING, UNDER_REVIEW)          # waiting for a Leader's decision
+DECISIONS = ("confirm", "reject", "reopen", "under_review")
+MAX_HISTORY = 50
 NOTE_ACTION = "CASE_NOTE"        # internal, staff-only notes live in the audit log (services/case_notes.py)
 NOTIFIED = ("They can message each other in the app once both agree, or ask the Subdivision Leader to help. "
             "Phone numbers and addresses stay private.")
@@ -110,6 +119,10 @@ class Facts:
     lng: Optional[float] = None
     place: str = ""
     at: Optional[datetime] = None
+    # what the report says in its own words (multi-attribute matching reads them; the facts above are what the rows show)
+    texts: List[str] = field(default_factory=list)
+    color_tags: List[str] = field(default_factory=list)
+    subdivision_id: Optional[int] = None
 
 
 def _colors(*texts: Optional[str]) -> List[str]:
@@ -152,7 +165,14 @@ def facts_of(db: Session, report: Report) -> Facts:
               size=(report.estimated_size or "").lower() if (report.estimated_size or "").lower() in _SIZE_ORDER else None,
               features=_features(report.description, report.condition, report.animal_color, snap_pet.get("markings"), snap_pet.get("color")),
               collar=_collar(report.description, report.condition, snap_pet.get("markings")),
-              lat=_num(report.latitude), lng=_num(report.longitude), place=(report.landmark or "").strip(), at=report.created_at)
+              lat=_num(report.latitude), lng=_num(report.longitude), place=(report.landmark or "").strip(), at=report.created_at,
+              # colour fields often carry markings too ("Gray tabby with a white chest"): the description reads them as well
+              texts=[t for t in (report.description, report.condition, report.animal_color, snap_pet.get("markings"), snap_pet.get("description"),
+                                 snap_pet.get("color")) if t],
+              color_tags=[c for c in ((report.animal_colors or []) if isinstance(report.animal_colors, list) else [])
+                          + ([report.animal_color] if report.animal_color and not report.animal_colors else [])
+                          + list(snap_pet.get("colors") or []) + ([snap_pet.get("color")] if snap_pet.get("color") else []) if c],
+              subdivision_id=report.subdivision_id)
     if family_of(report) == V.LOST_PET:
         alert = db.query(LostPetAlert).filter(LostPetAlert.report_id == report.report_id).first()
         if alert is not None:
@@ -186,10 +206,10 @@ def _labels(ids: List[str], table: Dict[str, str]) -> str:
 
 
 # --------------------------------------------------------------------------------------------------- comparison
-def compare(lost: Facts, found: Facts) -> Dict[str, Any]:
+def _rows(lost: Facts, found: Facts) -> Dict[str, Any]:
     """
-    The score (0 to 100) and the side-by-side rows the Leader reads. Each row has a verdict (match, similar, differs, unknown), its points
-    and, when it speaks in favour, a sentence for "why they may match". Kind of animal is a hard rule. Weights are defaults, not policy.
+    The side-by-side rows the Leader reads (kind, coat, size, features, collar, where, when). Each row has a verdict (match, similar, differs,
+    unknown) and a note. Since 2026-11-19 the SCORE is not made here: see compare(). The old points stay in the rows only as history.
     """
     rows: List[Dict[str, Any]] = []
 
@@ -200,7 +220,7 @@ def compare(lost: Facts, found: Facts) -> Dict[str, Any]:
     kind = lambda f: (f.species or "not known").capitalize() + (f" · {f.breed}" if f.breed and f.species in ("dog", "cat") else "")   # noqa: E731
     if lost.species and found.species and lost.species != found.species:
         add("species", "Animal", kind(lost), kind(found), "differs", "Different kinds of animal")
-        return {"score": 0, "level": "none", "rows": rows, "reasons": [], "excluded": "Different kinds of animal"}
+        return {"rows": rows, "excluded": "Different kinds of animal"}
     if lost.species and found.species:
         add("species", "Animal", kind(lost), kind(found), "match", f"Both are {word[lost.species]}", 15, f"Both are {word[lost.species]}")
     else:
@@ -282,10 +302,40 @@ def compare(lost: Facts, found: Facts) -> Dict[str, Any]:
     else:
         add("when", "When", li, fi, "unknown", "Time not known")
 
-    score = max(0, min(100, sum(r["points"] for r in rows)))
-    level = "strong" if score >= STRONG_FROM else "possible" if score >= POSSIBLE_FROM else "none"
-    reasons = [r["reason"] for r in sorted((r for r in rows if r["reason"] and r["points"] > 0), key=lambda r: -r["points"])][:5]
-    return {"score": score, "level": level, "rows": rows, "reasons": reasons}
+    return {"rows": rows}
+
+
+def profile_of(f: Facts) -> MS.Profile:
+    """A report's facts as the matching engine reads them: its own words when it has them, else the facts the rows show."""
+    texts = list(f.texts) or [FEATURE_LABELS.get(x, x) for x in f.features] + ([f.collar] if f.collar else [])
+    colors = list(f.color_tags) or [COLOR_LABELS.get(c, c) for c in f.colors]
+    return MS.Profile(species=f.species, breed=f.breed, colors=colors, size=f.size, texts=texts, lat=f.lat, lng=f.lng,
+                      subdivision_id=f.subdivision_id, place=f.place)
+
+
+def compare(lost: Facts, found: Facts, visual: Optional[Dict[str, Any]] = None, cfg: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    The multi-attribute score (utils/match_scoring.py) and the side-by-side rows. `visual`: the stored AI photo comparison of the pair, if any.
+    A different kind of animal is excluded. An animal found well before the pet was last seen missing is held at Low Similarity.
+    """
+    cfg = cfg or MS.DEFAULT_CONFIG
+    base = _rows(lost, found)
+    rows = base["rows"]
+    if base.get("excluded"):
+        analysis = MS.combine({}, cfg, excluded="Different kinds of animal.")
+        return {"score": 0, "level": "none", "rows": rows, "reasons": [], "excluded": base["excluded"], "analysis": analysis}
+    caps = []
+    if lost.at and found.at and (found.at - lost.at).total_seconds() / 3600 < -_SKEW_HOURS:
+        caps.append("The animal was reported found before the pet was last seen missing, so this is held at Low Similarity.")
+    analysis = MS.analyze(profile_of(lost), profile_of(found), cfg, vision=visual, b_label="where the pet was last seen", caps=caps)
+    attrs = analysis["attributes"]
+    rows.append({"key": "breed", "label": "Breed", "lost": lost.breed or "Not noted", "found": found.breed or "Not noted",
+                 "verdict": attrs["breed"]["verdict"], "note": attrs["breed"]["explanation"], "points": 0, "reason": None})
+    rows.append({"key": "visual", "label": "Photos (AI comparison)", "lost": "", "found": "", "verdict": attrs["visual"]["verdict"],
+                 "note": attrs["visual"]["explanation"], "points": 0, "reason": None})
+    reasons = [attrs[a]["explanation"] for a in sorted(MS.ATTRIBUTES, key=lambda a: -(attrs[a]["score"] or 0) * attrs[a]["weight"])
+               if attrs[a]["available"] and attrs[a]["verdict"] in ("match", "similar")][:5]
+    return {"score": analysis["score"], "level": MS.level_of(analysis["classification"]), "rows": rows, "reasons": reasons, "analysis": analysis}
 
 
 # ------------------------------------------------------------------------------------------------ suggestions
@@ -312,8 +362,9 @@ def suggest_for_report(db: Session, report: Report, now: Optional[datetime] = No
     if not ids:
         return []
     linked = _linked_found_ids(db, report.subdivision_id)
-    seen_pairs = {(m.lost_report_id, m.found_report_id) for m in db.query(LostFoundMatch).filter(
+    existing = {(m.lost_report_id, m.found_report_id): m for m in db.query(LostFoundMatch).filter(
         (LostFoundMatch.lost_report_id == report.report_id) | (LostFoundMatch.found_report_id == report.report_id)).all()}
+    cfg = MS.load_config(db)
     candidates = db.query(Report).options(joinedload(Report.category)).filter(
         Report.subdivision_id == report.subdivision_id, Report.category_id.in_(ids), Report.report_id != report.report_id,
         Report.duplicate_of_report_id.is_(None)).all()
@@ -323,28 +374,136 @@ def suggest_for_report(db: Session, report: Report, now: Optional[datetime] = No
         if not is_open(other):
             continue
         lost, found = (report, other) if fam == V.LOST_PET else (other, report)
-        if (lost.report_id, found.report_id) in seen_pairs or found.report_id in linked:
+        prior = existing.get((lost.report_id, found.report_id))
+        if prior is not None:
+            # a pair already looked at is never suggested again; one still waiting for a decision is recalculated (the old result is kept)
+            if prior.status in OPEN_STATUSES:
+                rescore(db, prior, "The reports were checked again.", cfg=cfg)
+            continue
+        if found.report_id in linked:
             continue
         theirs = facts_of(db, other)
-        result = compare(mine, theirs) if fam == V.LOST_PET else compare(theirs, mine)
+        result = compare(mine, theirs, cfg=cfg) if fam == V.LOST_PET else compare(theirs, mine, cfg=cfg)
         if result["level"] == "none":
             continue
         m = LostFoundMatch(subdivision_id=report.subdivision_id, lost_report_id=lost.report_id, found_report_id=found.report_id,
-                           score=result["score"], level=result["level"], reasons=result["reasons"], status=PENDING)
+                           score=result["score"], level=result["level"], reasons=result["reasons"], status=PENDING,
+                           analysis=result["analysis"], algorithm=MS.ALGORITHM, history=[])
         db.add(m)
         db.flush()
         created.append(m)
         for target, partner in ((lost, found), (found, lost)):
             _note(db, target, None, f"A possible match was suggested: report #{partner.report_id} ({_describe(db, partner)}). "
-                  f"{'Strong' if m.level == 'strong' else 'Possible'} match, waiting for a Leader to review it.")
+                  f"{result['analysis']['classification_label']}, {m.score}% similarity from {result['analysis']['attributes_compared']} of "
+                  f"{result['analysis']['attributes_total']} attributes, waiting for a Leader to review it.")
+        db.add(AuditLog(user_id=None, action="LOST_FOUND_MATCH_SUGGESTED", target_table="lost_found_matches", target_id=m.match_id,
+                        description=f"Possible match suggested between report #{lost.report_id} and #{found.report_id}.", log_type="operation",
+                        new_values=_audit_snapshot(m)))
     if created:
         best = max(created, key=lambda m: m.score)
         other_id = best.found_report_id if fam == V.LOST_PET else best.lost_report_id
-        extra = f" and {len(created) - 1} more" if len(created) > 1 else ""
+        other_rep = db.get(Report, other_id)
+        extra = f" (and {len(created) - 1} more)" if len(created) > 1 else ""
+        mine_kind, other_kind = ("Lost Pet", "Found Animal") if fam == V.LOST_PET else ("Found Animal", "Lost Pet")
+        # one notification per new suggestion batch, to the Leaders only (residents are told nothing until a Leader confirms)
         LP.notify(db, LP.leader_ids(db, report.subdivision_id), "lost_found_review", report.report_id,
-                  "Possible lost and found match to review",
-                  f"Report #{report.report_id} may be the same animal as report #{other_id}{extra}. Nothing is linked until you review it.")
+                  "Potential Animal Match Detected",
+                  f"{mine_kind} report {case_messaging.report_ref(report)} has a possible match with {other_kind} report "
+                  f"{case_messaging.report_ref(other_rep)}{extra}: {best.score}% similarity. Please review the matching details. "
+                  "Nothing is linked until you confirm it.")
     return created
+
+
+def _audit_snapshot(m: LostFoundMatch) -> Dict[str, Any]:
+    """What the audit log keeps of a match result: the scores and the explanations, never a resident's contact details."""
+    a = m.analysis if isinstance(m.analysis, dict) else {}
+    return {"lost_report_id": m.lost_report_id, "found_report_id": m.found_report_id, "score": m.score, "level": m.level, "status": m.status,
+            "algorithm": m.algorithm or a.get("algorithm"), "classification": a.get("classification"), "coverage": a.get("coverage"),
+            "attribute_scores": {k: v.get("score") for k, v in (a.get("attributes") or {}).items()}, "explanations": a.get("explanations") or []}
+
+
+def rescore(db: Session, m: LostFoundMatch, reason: str, actor: Optional[User] = None, cfg: Optional[Dict[str, Any]] = None) -> bool:
+    """
+    Recalculate a possible match from the reports as they are now (new photos, new details, a photo comparison, a new configuration).
+    The earlier result is kept in `history`, never silently overwritten; nothing changes when the result is the same. A decided match
+    keeps the score it was decided on. Returns whether anything changed. Commits nothing.
+    """
+    if m.status not in OPEN_STATUSES:
+        return False
+    lost, found = _pair(db, m)
+    result = compare(facts_of(db, lost), facts_of(db, found), visual=m.visual if isinstance(m.visual, dict) else None, cfg=cfg or MS.load_config(db))
+    new_level = result["level"] if result["level"] != "none" else ("manual" if m.level == "manual" else "low")
+    old = m.analysis if isinstance(m.analysis, dict) else {}
+    same = (m.score == result["score"] and old.get("classification") == result["analysis"]["classification"]
+            and old.get("attributes_compared") == result["analysis"]["attributes_compared"] and m.algorithm == MS.ALGORITHM)
+    if same:
+        return False
+    history = list(m.history or []) if isinstance(m.history, list) else []
+    history.append({"at": db_now(db).isoformat(), "score": m.score, "level": m.level, "algorithm": m.algorithm or "points-v0",
+                    "classification": old.get("classification"), "coverage": old.get("coverage"),
+                    "attribute_scores": {k: v.get("score") for k, v in (old.get("attributes") or {}).items()},
+                    "replaced_because": reason, "by": actor.user_id if actor else None})
+    m.history = history[-MAX_HISTORY:]
+    m.score, m.level, m.reasons, m.analysis, m.algorithm = result["score"], new_level, result["reasons"], result["analysis"], MS.ALGORITHM
+    db.add(AuditLog(user_id=actor.user_id if actor else None, action="LOST_FOUND_MATCH_RESCORED", target_table="lost_found_matches",
+                    target_id=m.match_id, description=f"Possible match recalculated: {reason}", log_type="operation",
+                    old_values={"score": history[-1]["score"], "classification": history[-1]["classification"]}, new_values=_audit_snapshot(m)))
+    return True
+
+
+def rescore_for_report(db: Session, report_id: int, reason: str) -> int:
+    """Recalculate every undecided possible match of a report (its details or photos changed). Never raises. Commits nothing."""
+    try:
+        n = 0
+        cfg = MS.load_config(db)
+        for m in db.query(LostFoundMatch).filter((LostFoundMatch.lost_report_id == report_id) | (LostFoundMatch.found_report_id == report_id),
+                                                 LostFoundMatch.status.in_(OPEN_STATUSES)).all():
+            n += int(rescore(db, m, reason, cfg=cfg))
+        return n
+    except Exception as exc:  # noqa: BLE001  (a recalculation must never break the change that asked for it)
+        print(f"Notice: possible matches of report {report_id} were not recalculated: {exc}")
+        return 0
+
+
+def run_photo_comparison(db: Session, m: LostFoundMatch, actor: User) -> LostFoundMatch:
+    """
+    The AI photo comparison of the two reports (Gemini Vision, the same comparison the Pet Registry matching uses), asked for by a Leader.
+    It needs a photo on both reports and the AI switched on by the administrator. The result is stored on the match (and reused for the same
+    two photos) and the match is recalculated. Commits nothing.
+    """
+    from app.models.ai_vision_comparison import AiVisionComparison
+    from app.utils import ai_matching
+    from app.utils.ai_suggestions import is_gemini_enabled_in_db
+    if m.status not in OPEN_STATUSES:
+        raise HTTPException(status_code=409, detail="This possible match was already decided.")
+    lost, found = _pair(db, m)
+    url_l, url_f = _photo(lost), _photo(found)
+    if not url_l or not url_f:
+        raise HTTPException(status_code=422, detail="Both reports need a photo for an AI photo comparison.")
+    if not is_gemini_enabled_in_db():
+        raise HTTPException(status_code=409, detail="AI photo comparison is turned off by the administrator. The other attributes are still compared.")
+    fl, ff = facts_of(db, lost), facts_of(db, found)
+    meta_l = {"species": (fl.species or "Animal").capitalize(), "breed": fl.breed or "Unknown", "color": ", ".join(fl.color_tags) or "Unknown"}
+    meta_f = {"species": (ff.species or "Animal").capitalize(), "breed": ff.breed or "Unknown", "color": ", ".join(ff.color_tags) or "Unknown"}
+    key = ai_matching.vision_pair_key(url_f, url_l, meta_f, meta_l)
+    row = db.get(AiVisionComparison, key)
+    result = dict(row.result) if row is not None and row.result else None
+    if result is None:
+        img_f, img_l = ai_matching._load_image(url_f), ai_matching._load_image(url_l)
+        if img_f is None or img_l is None:
+            raise HTTPException(status_code=502, detail="A photo could not be loaded for the comparison. Try again later.")
+        result = ai_matching.compare_animals_vision(img_f, img_l, meta_f, meta_l)
+        if result is None:
+            raise HTTPException(status_code=502, detail="The AI photo comparison did not return a result. The other attributes are still compared.")
+        db.merge(AiVisionComparison(pair_key=key, result=result, created_at=datetime.now()))
+    m.visual = {k: result.get(k) for k in ("individual_similarity_score", "final_assessment", "reason", "visual_corroborations",
+                                            "visual_contradictions", "_model")}
+    m.visual["compared_at"] = db_now(db).isoformat()
+    rescore(db, m, "An AI photo comparison was added.", actor=actor)
+    db.add(AuditLog(user_id=actor.user_id, action="LOST_FOUND_MATCH_PHOTO_COMPARED", target_table="lost_found_matches", target_id=m.match_id,
+                    description=f"{actor.name} ran the AI photo comparison: {m.visual.get('individual_similarity_score')}% visual similarity.",
+                    log_type="operation", new_values={"visual_score": m.visual.get("individual_similarity_score"), "model": m.visual.get("_model")}))
+    return m
 
 
 def suggest_after_filing(db: Session, report_id: int) -> int:
@@ -408,10 +567,22 @@ def _pair(db: Session, m: LostFoundMatch) -> Tuple[Report, Report]:
     return lost, found
 
 
-def decide(db: Session, m: LostFoundMatch, actor: User, decision: str, req: Optional[Request] = None) -> LostFoundMatch:
-    """Confirm (link and tell both residents), rule out (kept, nobody told) or review a ruled-out pair again. Commits nothing."""
+def _with_note(m: LostFoundMatch, actor: User, now: datetime, decision: str, note: Optional[str]) -> None:
+    """Keep the reviewer's notes with the match (newest last), each with who and when."""
+    text = " ".join((note or "").split())[:1000]
+    if not text:
+        return
+    line = f"[{now.strftime('%Y-%m-%d %H:%M')}] {actor.name} ({decision.replace('_', ' ')}): {text}"
+    m.review_note = ((m.review_note + "\n") if m.review_note else "") + line
+
+
+def decide(db: Session, m: LostFoundMatch, actor: User, decision: str, req: Optional[Request] = None, note: Optional[str] = None) -> LostFoundMatch:
+    """
+    Mark under review, confirm (link and tell both residents), rule out (kept, nobody told) or review a ruled-out pair again. Every decision
+    may carry the reviewer's notes; who and when are recorded. Nothing here confirms ownership or resolves a report. Commits nothing.
+    """
     if decision not in DECISIONS:
-        raise HTTPException(status_code=422, detail="Choose confirm, reject or reopen.")
+        raise HTTPException(status_code=422, detail="Choose under review, confirm, reject or reopen.")
     lost, found = _pair(db, m)
     for r in sorted((lost, found), key=lambda x: x.report_id):          # lock in one order: two Leaders can never deadlock on the same pair
         LP.lock_case(db, r.report_id)
@@ -422,8 +593,20 @@ def decide(db: Session, m: LostFoundMatch, actor: User, decision: str, req: Opti
         L.require_not_merged(r)
     now = db_now(db)
 
-    if decision == "confirm":
+    if decision == "under_review":
         if m.status != PENDING:
+            raise HTTPException(status_code=409, detail="Only a suggested match can be marked Under review.")
+        m.status = UNDER_REVIEW
+        _with_note(m, actor, now, decision, note)
+        for target, partner in ((lost, found), (found, lost)):
+            _note(db, target, actor, f"Marked the possible match with report #{partner.report_id} as Under review. Nobody was notified.")
+        L.audit(db, actor, "LOST_FOUND_MATCH_UNDER_REVIEW", lost, f"{actor.name} marked the possible match between report #{lost.report_id} and "
+                f"#{found.report_id} as Under review.", table="lost_found_matches", target_id=m.match_id,
+                old={"status": PENDING}, new={"status": UNDER_REVIEW, "note": (note or "").strip() or None})
+        return m
+
+    if decision == "confirm":
+        if m.status not in OPEN_STATUSES:
             raise HTTPException(status_code=409, detail="This possible match was already decided.")
         if not is_open(lost) or not is_open(found):
             raise HTTPException(status_code=409, detail="One of the reports is closed, so it can no longer be linked.")
@@ -431,11 +614,13 @@ def decide(db: Session, m: LostFoundMatch, actor: User, decision: str, req: Opti
             raise HTTPException(status_code=409, detail="This found report is already linked to another lost report.")
         links = case_work.link_reports(db, lost, actor, LinkIn(report_ids=[found.report_id], link_type="same_animal",
                                                                note="Confirmed as the same animal from a possible match."), synchronize_lost_found=False)
+        previous = m.status
         m.status, m.decided_by, m.decided_at = CONFIRMED, actor.user_id, now
+        _with_note(m, actor, now, decision, note)
         m.link_id = links[0].link_id if links else None
         # a found report links to one lost report only: its other suggestions no longer apply
         for other in db.query(LostFoundMatch).filter(LostFoundMatch.found_report_id == found.report_id, LostFoundMatch.match_id != m.match_id,
-                                                     LostFoundMatch.status == PENDING).all():
+                                                     LostFoundMatch.status.in_(OPEN_STATUSES)).all():
             other.status, other.decided_at = MOOT, now
             other_lost = db.get(Report, other.lost_report_id)
             if other_lost is not None:
@@ -447,17 +632,21 @@ def decide(db: Session, m: LostFoundMatch, actor: User, decision: str, req: Opti
             _note(db, target, actor, f"Confirmed as the same animal as report #{partner.report_id} ({_describe(db, partner)}). Both residents were notified"
                   + (" and a direct conversation between the owner and the finder was opened." if bridge is not None else "."))
         L.audit(db, actor, "LOST_FOUND_MATCH_CONFIRMED", lost, f"{actor.name} confirmed that report #{lost.report_id} and #{found.report_id} are the same animal.",
-                table="lost_found_matches", target_id=m.match_id, new={"lost_report_id": lost.report_id, "found_report_id": found.report_id, "score": m.score})
+                table="lost_found_matches", target_id=m.match_id, old={"status": previous},
+                new={**_audit_snapshot(m), "verified_by": actor.user_id, "verified_at": now.isoformat(), "note": (note or "").strip() or None})
         return m
 
     if decision == "reject":
-        if m.status != PENDING:
+        if m.status not in OPEN_STATUSES:
             raise HTTPException(status_code=409, detail="This possible match was already decided.")
+        previous = m.status
         m.status, m.decided_by, m.decided_at = REJECTED, actor.user_id, now
+        _with_note(m, actor, now, decision, note)
         for target, partner in ((lost, found), (found, lost)):
             _note(db, target, actor, f"Decided that report #{partner.report_id} ({_describe(db, partner)}) is not the same animal. Nobody was notified.")
         L.audit(db, actor, "LOST_FOUND_MATCH_REJECTED", lost, f"{actor.name} ruled out a possible match between report #{lost.report_id} and #{found.report_id}.",
-                table="lost_found_matches", target_id=m.match_id)
+                table="lost_found_matches", target_id=m.match_id, old={"status": previous},
+                new={**_audit_snapshot(m), "reviewed_by": actor.user_id, "reviewed_at": now.isoformat(), "note": (note or "").strip() or None})
         return m
 
     # reopen
@@ -468,8 +657,11 @@ def decide(db: Session, m: LostFoundMatch, actor: User, decision: str, req: Opti
     if db.query(LostFoundMatch.match_id).filter(LostFoundMatch.found_report_id == found.report_id, LostFoundMatch.status == CONFIRMED).first():
         raise HTTPException(status_code=409, detail="This found report is already linked to another lost report.")
     m.status, m.decided_by, m.decided_at = PENDING, None, None
+    _with_note(m, actor, now, decision, note)
     for target, partner in ((lost, found), (found, lost)):
         _note(db, target, actor, f"Reopened the review of report #{partner.report_id}.")
+    L.audit(db, actor, "LOST_FOUND_MATCH_REOPENED", lost, f"{actor.name} reopened the review of report #{lost.report_id} and #{found.report_id}.",
+            table="lost_found_matches", target_id=m.match_id, old={"status": REJECTED}, new={"status": PENDING, "note": (note or "").strip() or None})
     return m
 
 
@@ -533,9 +725,10 @@ def link_by_leader(db: Session, actor: User, report_id: int, other_id: int, req:
         raise HTTPException(status_code=409, detail="One of the reports is closed, so it can no longer be linked.")
     m = db.query(LostFoundMatch).filter(LostFoundMatch.lost_report_id == lost.report_id, LostFoundMatch.found_report_id == found.report_id).first()
     if m is None:
-        result = compare(facts_of(db, lost), facts_of(db, found))
+        result = compare(facts_of(db, lost), facts_of(db, found), cfg=MS.load_config(db))
         m = LostFoundMatch(subdivision_id=lost.subdivision_id, lost_report_id=lost.report_id, found_report_id=found.report_id, score=result["score"],
-                           level=result["level"] if result["level"] != "none" else "manual", reasons=result["reasons"], status=PENDING)
+                           level=result["level"] if result["level"] != "none" else "manual", reasons=result["reasons"], status=PENDING,
+                           analysis=result["analysis"], algorithm=MS.ALGORITHM, history=[])
         try:
             with db.begin_nested():
                 db.add(m)
@@ -672,14 +865,23 @@ def match_view(db: Session, m: LostFoundMatch, detail: bool = False) -> Dict[str
         "score": m.score, "level": m.level, "status": m.status, "reasons": m.reasons or [], "created_at": m.created_at.isoformat() if m.created_at else None,
         "decided_at": m.decided_at.isoformat() if m.decided_at else None, "decided_by": m.decided_by, "link_id": m.link_id,
         "coordination_id": m.coordination_id, "lost": report_brief(db, lost), "found": report_brief(db, found),
+        "algorithm": m.algorithm, "review_note": m.review_note, "has_photo_comparison": isinstance(m.visual, dict),
+        "classification": (m.analysis or {}).get("classification") if isinstance(m.analysis, dict) else None,
+        "coverage": (m.analysis or {}).get("coverage") if isinstance(m.analysis, dict) else None,
     }
     if m.coordination_id:
         c = db.get(LostPetCoordination, m.coordination_id)
         out["coordination"] = {"coordination_id": c.coordination_id, "mode": c.mode, "status": c.status} if c is not None else None
     if detail:
-        result = compare(facts_of(db, lost), facts_of(db, found))
+        result = compare(facts_of(db, lost), facts_of(db, found), visual=m.visual if isinstance(m.visual, dict) else None, cfg=MS.load_config(db))
         out["rows"] = [{k: v for k, v in r.items() if k != "points"} for r in result["rows"]]
         out["comparison_reasons"] = result["reasons"]
+        # the breakdown the score was made from; a suggestion made before 2026-11-19 has none stored, so today's comparison is shown and says so
+        out["analysis"] = m.analysis if isinstance(m.analysis, dict) else {**result["analysis"], "computed_on_view": True}
+        out["current_analysis"] = result["analysis"]
+        out["history"] = list(m.history or []) if isinstance(m.history, list) else []
+        out["photo_comparison"] = m.visual if isinstance(m.visual, dict) else None
+        out["can_compare_photos"] = bool(_photo(lost) and _photo(found))
     return out
 
 
@@ -700,7 +902,7 @@ def list_matches(db: Session, user: User, *, subdivision_id: Optional[int] = Non
     if report_id is not None:
         q = q.filter((LostFoundMatch.lost_report_id == report_id) | (LostFoundMatch.found_report_id == report_id))
     # the ones waiting for a decision first (strongest first), then the decided ones, newest first
-    waiting_first = case((LostFoundMatch.status == PENDING, 0), else_=1)
+    waiting_first = case((LostFoundMatch.status.in_(OPEN_STATUSES), 0), else_=1)
     return q.order_by(waiting_first, LostFoundMatch.score.desc(), LostFoundMatch.match_id.desc()).limit(limit).all()
 
 
@@ -709,10 +911,10 @@ def queue_rows(db: Session, subdivision_id: Optional[int], report_ids: List[int]
     if not report_ids:
         return []
     open_ids = set(report_ids)
-    q = db.query(LostFoundMatch).filter(LostFoundMatch.status == PENDING)
+    q = db.query(LostFoundMatch).filter(LostFoundMatch.status.in_(OPEN_STATUSES))
     if subdivision_id:
         q = q.filter(LostFoundMatch.subdivision_id == subdivision_id)
     rows = [m for m in q.order_by(LostFoundMatch.score.desc(), LostFoundMatch.match_id).limit(200).all()
             if m.lost_report_id in open_ids and m.found_report_id in open_ids]
     return [{"match_id": m.match_id, "lost_report_id": m.lost_report_id, "found_report_id": m.found_report_id, "level": m.level, "score": m.score,
-             "reasons": m.reasons or [], "created_at": m.created_at} for m in rows]
+             "reasons": m.reasons or [], "created_at": m.created_at, "status": m.status} for m in rows]

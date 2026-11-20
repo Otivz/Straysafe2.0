@@ -138,9 +138,27 @@ SIGHTING_COLUMNS: List[Tuple[str, str]] = [
     ("care_note", "TEXT NULL"),
 ]
 COORDINATION_MESSAGE_COLUMNS: List[Tuple[str, str]] = [("client_request_id", "VARCHAR(64) NULL")]
+CASE_MESSAGE_THREAD_COLUMNS: List[Tuple[str, str]] = [
+    ("subject", "VARCHAR(160) NULL"),
+    ("close_trigger", "VARCHAR(20) NULL"),
+]
+# Multi-attribute matching (2026-11-19): the breakdown, history and review notes of a lost/found possible match (backend/migrations/2026-11-19_multi_attribute_matching.sql)
+LOST_FOUND_MATCH_COLUMNS: List[Tuple[str, str]] = [
+    ("analysis", "JSON NULL"),
+    ("algorithm", "VARCHAR(40) NULL"),
+    ("history", "JSON NULL"),
+    ("visual", "JSON NULL"),
+    ("review_note", "TEXT NULL"),
+]
+PET_MATCH_CONFIRMATION_COLUMNS: List[Tuple[str, str]] = [
+    ("thread_id", "INT NULL"),
+    ("follow_up_count", "INT NOT NULL DEFAULT 0"),
+    ("last_follow_up_at", "DATETIME NULL"),
+    ("events", "JSON NULL"),
+]
 CASE_TABLES = ("case_followups", "case_contact_logs", "case_links", "ownership_claims",
                "lost_pet_coordinations", "lost_pet_coordination_messages", "lost_found_matches",
-               "case_message_threads", "case_message_members", "case_messages")
+               "case_message_threads", "case_message_members", "case_messages", "qr_collar_requests")
 
 
 # ------------------------------------------------------------------------------------------------------- helpers
@@ -306,21 +324,16 @@ def ensure_report_case_columns(conn) -> List[str]:
 
 def _widen_animal_type(conn, actions: List[str]) -> None:
     """
-    MySQL: append the new animal types to reports.animal_type's ENUM. Members are added at the END of the list, in
-    the existing order, so MySQL changes it in place without rebuilding the table or touching a stored value.
-    SQLite stores the column as text, so there is nothing to change.
+    MySQL: convert reports.animal_type from ENUM to VARCHAR(100) so manually entered custom animal types (e.g. Rabbit,
+    Turtle, Snake, Hamster) under 'Others' are stored directly in reports.animal_type.
     """
     if not _is_mysql(conn):
         return
     existing = _animal_type_members(conn)
     if existing is None:
         return
-    missing = [label for label in V.ANIMAL_TYPE_LABELS if label not in existing]
-    if not missing:
-        return
-    members = ",".join("'" + v.replace("'", "''") + "'" for v in existing + missing)
-    conn.execute(text(f"ALTER TABLE reports MODIFY COLUMN animal_type ENUM({members}) NULL DEFAULT 'Unknown'"))
-    actions.append("reports.animal_type accepts " + ", ".join(missing))
+    conn.execute(text("ALTER TABLE reports MODIFY COLUMN animal_type VARCHAR(100) NULL DEFAULT 'Unknown'"))
+    actions.append("reports.animal_type widened to VARCHAR(100) for custom animal types")
 
 
 def backfill_report_case_state(conn) -> List[str]:
@@ -436,6 +449,48 @@ def ensure_coordination_message_columns(conn) -> List[str]:
     return actions
 
 
+def ensure_case_message_thread_columns(conn) -> List[str]:
+    """
+    Resident-to-Administration messaging (2026-11-19, docs/01-system/RESIDENT_MESSAGING.md): add subject and close_trigger to existing
+    case_message_threads tables, and let report_id be empty (a resident's general conversation is about no report). Same change as
+    backend/migrations/2026-11-19_resident_messaging.sql; both are idempotent, so either may run first.
+    """
+    actions: List[str] = []
+    if not _has_table(conn, "case_message_threads"):
+        return actions
+    _add_columns(conn, "case_message_threads", CASE_MESSAGE_THREAD_COLUMNS, actions)
+    if _is_mysql(conn):
+        nullable = conn.execute(text(
+            "SELECT IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+            "AND TABLE_NAME = 'case_message_threads' AND COLUMN_NAME = 'report_id'")).scalar()
+        if nullable == "NO":
+            # Only the NULL-ability changes: same type, and the foreign key to reports stays as it is.
+            conn.execute(text("ALTER TABLE case_message_threads MODIFY COLUMN report_id INT NULL"))
+            actions.append("case_message_threads.report_id may be empty")
+    # Conversations closed before close_trigger existed: say why they ended (they were already read-only).
+    res = conn.execute(text(
+        "UPDATE case_message_threads SET close_trigger = 'link_removed' WHERE status = 'closed' AND close_trigger IS NULL "
+        "AND kind = 'bridge' AND close_reason LIKE '%removed the link%'"))
+    res2 = conn.execute(text("UPDATE case_message_threads SET close_trigger = 'case_closed' WHERE status = 'closed' AND close_trigger IS NULL"))
+    if (res.rowcount or 0) + (res2.rowcount or 0) > 0:
+        actions.append(f"case_message_threads.close_trigger filled for {(res.rowcount or 0) + (res2.rowcount or 0)} closed conversation(s)")
+    return actions
+
+
+def ensure_lost_found_match_columns(conn) -> List[str]:
+    """Multi-attribute matching (2026-11-19): add the breakdown, history, photo comparison and review-note columns to lost_found_matches."""
+    actions: List[str] = []
+    _add_columns(conn, "lost_found_matches", LOST_FOUND_MATCH_COLUMNS, actions)
+    return actions
+
+
+def ensure_pet_match_confirmation_columns(conn) -> List[str]:
+    """Possible Pet Owner Verification (2026-11-20): the conversation, follow-up and status-history columns of pet_match_confirmation_requests."""
+    actions: List[str] = []
+    _add_columns(conn, "pet_match_confirmation_requests", PET_MATCH_CONFIRMATION_COLUMNS, actions)
+    return actions
+
+
 def ensure_case_record_tables(conn) -> List[str]:
     """Case records, matching and participant messages. Create missing tables without replacing existing records."""
     import app.models  # noqa: F401  (registers every table in CASE_TABLES)
@@ -474,6 +529,9 @@ STEPS = (
     ("alert_type_column", ensure_alert_type_column),
     ("sighting_columns", ensure_sighting_columns),
     ("coordination_message_columns", ensure_coordination_message_columns),
+    ("case_message_thread_columns", ensure_case_message_thread_columns),
+    ("lost_found_match_columns", ensure_lost_found_match_columns),
+    ("pet_match_confirmation_columns", ensure_pet_match_confirmation_columns),
     ("case_categories", seed_case_categories),
 )
 

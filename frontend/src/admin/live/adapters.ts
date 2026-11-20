@@ -10,13 +10,13 @@ import { fromServer, fromServerOrNull } from '../../live/dates.ts';
 import { caseRef } from '../../live/refs.ts';
 import { fmtDay } from '../../preview/lib/format.ts';
 import type {
-  AdminNotification, AdminProfile, AnimalType, Case, CategoryId, ClaimStatus, Closure, ComplianceObservation, DispositionId, EventKind, Evidence,
+  AdminNotification, AdminProfile, AnimalType, Case, CategoryId, ClaimStatus, Closure, ComplianceObservation, ContactMethod, DispositionId, EventKind, Evidence,
   FollowUp, LostPetCase, LostPetConversation, LostPetPerson, LostPetSighting, MatchSide, Note, Notice, NoticeStatus, OwnerContact, OwnershipClaim, Pet, PetFacts, Policy, PossibleMatch, Referral, ReferralNote,
-  RegisteredPet, Resident, Settings, TimelineEvent, Warning, CaseThread, ThreadView, CaseAlert,
+  RegisteredPet, Resident, Settings, TimelineEvent, Warning, CaseThread, ThreadView, CaseAlert, MatchAnalysis,
 } from '../data/types.ts';
 import type {
   ApiAlert, ApiAnalytics, ApiAnnouncement, ApiCasePet, ApiCaseDetail, ApiCaseSettings, ApiCaseSummary, ApiCategories, ApiClosure, ApiHistory, ApiLostCoordination, ApiLostParty,
-  ApiLostSighting, ApiMatch, ApiMatchSide, ApiMedia, ApiNote, ApiNotification, ApiNotificationPrefs, ApiPet, ApiPetFacts, ApiQueue, ApiReport, ApiUser, ApiThread, ApiThreadView,
+  ApiLostSighting, ApiMatch, ApiMatchAnalysis, ApiMatchSide, ApiMedia, ApiNote, ApiNotification, ApiNotificationPrefs, ApiPet, ApiPetFacts, ApiQueue, ApiReport, ApiUser, ApiThread, ApiThreadView,
   ApiCaseAlert,
 } from './api.ts';
 import { placePhrase } from '../../preview/lib/place.ts';
@@ -79,6 +79,8 @@ export function eventKindOf(text: string): EventKind {
   if (/claim/.test(t)) return 'claim';
   if (/priority/.test(t)) return 'priority';
   if (/assess/.test(t)) return 'assessment';
+  if (/identit/.test(t)) return 'identity';
+  if (/ownership/.test(t)) return 'ownership';
   return 'info';
 }
 
@@ -87,7 +89,21 @@ export const isOriginalSubmission = (remarks: string | null | undefined): boolea
 
 export function eventFromHistory(h: Pick<ApiHistory, 'history_id' | 'remarks' | 'created_at' | 'updater_name'>): TimelineEvent {
   const text = (h.remarks ?? '').trim() || 'Update recorded';
-  return { id: `h${h.history_id}`, at: fromServer(h.created_at), actor: h.updater_name?.trim() || 'System', kind: eventKindOf(text), title: clip(text, 220) };
+  const kind = eventKindOf(text);
+  if (text.includes('\n')) {
+    const newlineIndex = text.indexOf('\n');
+    const title = text.slice(0, newlineIndex).trim();
+    const detail = text.slice(newlineIndex + 1).trim();
+    return {
+      id: `h${h.history_id}`,
+      at: fromServer(h.created_at),
+      actor: h.updater_name?.trim() || 'System',
+      kind,
+      title: clip(title, 220),
+      detail: detail || undefined,
+    };
+  }
+  return { id: `h${h.history_id}`, at: fromServer(h.created_at), actor: h.updater_name?.trim() || 'System', kind, title: clip(text, 220) };
 }
 
 // ------------------------------------------------------------------------------------------------------------ cases
@@ -218,7 +234,7 @@ export function caseFromSummary(s: ApiCaseSummary, lookup: Lookup): Case {
     priority: s.priority,
     title: caseTitle(s.category.family, type, s.location.landmark),
     description: s.animal.description ?? '',
-    animal: { type, description: animalDescription(s.animal), count: s.animal.count ?? 1 },
+    animal: { type, customType: s.animal.type && !['dog', 'cat', 'unknown', 'other', 'others'].includes(s.animal.type.trim().toLowerCase()) ? s.animal.type.trim() : null, description: animalDescription(s.animal), count: s.animal.count ?? 1, condition: s.animal.condition ?? null, breed: s.animal.breed ?? null, color: s.animal.color ?? null },
     location: { area: s.location.landmark?.trim() || 'Location not named', detail: '', ...(hasPin ? { lat: s.location.latitude as number, lng: s.location.longitude as number } : {}) },
     observedAt: reportedAt,
     reportedAt,
@@ -243,7 +259,7 @@ export function caseFromSummary(s: ApiCaseSummary, lookup: Lookup): Case {
     })(),
     assessment: {
       incident: s.assessment.incident, incidentBasis: '', evidenceSufficiency: s.assessment.evidence_sufficiency, evidenceReviewed: [],
-      urgency: s.assessment.urgency, urgencyNote: '', notes: '', savedAt: fromServerOrNull(s.assessment.saved_at), savedBy: null,
+      urgency: s.assessment.urgency, urgencyNote: s.assessment.urgency_note ?? '', notes: '', savedAt: fromServerOrNull(s.assessment.saved_at), savedBy: null,
     },
     identity: { status: s.identity_status, matches: matchesOf(s.identity_status, s.pet_id), note: '', decided: s.identity_decided },
     ownership: { status: s.ownership_status, ownerResidentId: idOf(s.ownership_owner_id), evidence: [], note: '' },
@@ -286,20 +302,83 @@ export const orgIdOf = (orgType: string): string => REFERRAL_ORG_ID[orgType] ?? 
 export const orgTypeOf = (orgId: string): string => REFERRAL_ORG_TYPE[orgId] ?? 'other';
 
 /** The referral's contact channel as one line: the detail given (a number, an address) else the method used. */
-const METHOD_LABEL: Record<string, string> = { call: 'Phone call', visit: 'In person', message: 'Message', letter: 'Written notice', other: 'Other' };
+const METHOD_LABEL: Record<string, string> = { call: 'Phone', visit: 'In-Person', email: 'Email', message: 'Message', letter: 'Written notice', other: 'Other' };
+const STORED_TO_UI_METHOD: Record<string, ContactMethod> = {
+  call: 'phone',
+  phone: 'phone',
+  visit: 'in_person',
+  in_person: 'in_person',
+  email: 'email',
+  message: 'message',
+  letter: 'letter',
+  other: 'other',
+};
 
 export function referralFromApi(r: ApiCaseDetail['referrals'][number]): Referral {
   const orgId = orgIdOf(r.org_type);
   const notes: ReferralNote[] = [...r.updates].sort((a, b) => (b.update_id - a.update_id)).map((u) => ({
-    id: `rn${u.update_id}`, at: fromServer(u.recorded_at) || fromServer(u.update_date), by: u.recorded_by_name ?? 'Case officer', text: u.note ?? '', ...(u.status_after ? { status: u.status_after } : {}),
+    id: `rn${u.update_id}`,
+    at: fromServer(u.recorded_at) || fromServer(u.update_date),
+    by: u.recorded_by_name ?? 'Case officer',
+    text: u.note ?? '',
+    ...(u.status_after ? { status: u.status_after } : {}),
+    ...(u.update_type ? { updateType: u.update_type } : {}),
+    ...(u.responder_name ? { responderName: u.responder_name } : {}),
+    ...(u.assistance_provided ? { assistanceProvided: u.assistance_provided } : {}),
+    ...(u.progress_notes ? { progressNotes: u.progress_notes } : {}),
+    ...(u.follow_up_instructions ? { followUpInstructions: u.follow_up_instructions } : {}),
+    ...(u.additional_notes ? { additionalNotes: u.additional_notes } : {}),
+    ...(u.evidence_url ? { evidenceUrl: u.evidence_url } : {}),
+    ...(u.supporting_documents && u.supporting_documents.length > 0
+      ? {
+        supportingDocuments: u.supporting_documents.map((d) => ({
+          name: d.name,
+          url: d.url,
+          type: d.type,
+          uploadedAt: d.uploaded_at ? fromServer(d.uploaded_at) : undefined,
+        })),
+      }
+      : {}),
   }));
+  const referredAt = fromServer(r.referred_at);
+  const year = referredAt ? new Date(referredAt).getFullYear() || new Date().getFullYear() : new Date().getFullYear();
+  const referenceNo = r.reference_no?.trim() || `REF-${year}-${String(r.referral_id).padStart(4, '0')}`;
+  const contactMethod: ContactMethod = STORED_TO_UI_METHOD[(r.contact_method ?? '').toLowerCase()] ?? 'phone';
+  const methodLabel = METHOD_LABEL[r.contact_method ?? ''] || 'Phone';
+  const detail = r.contact_detail?.trim() || '';
+  const contactChannel = detail && detail.toLowerCase() !== methodLabel.toLowerCase() ? `${methodLabel} (${detail})` : methodLabel;
   return {
-    id: String(r.referral_id), orgId, orgName: r.org_name?.trim() || ORG_DEFAULT_NAME[orgId] || 'Other organisation', reason: r.reason ?? '',
-    referredAt: fromServer(r.referred_at), contactPerson: r.contact_person ?? '', contactChannel: r.contact_detail?.trim() || METHOD_LABEL[r.contact_method ?? ''] || '',
-    status: r.status, notes,
-    ...(r.external_outcome ? { externalOutcome: r.external_outcome } : {}), ...(r.remaining_follow_up ? { remainingFollowUp: r.remaining_follow_up } : {}),
-    followUpAt: fromServerOrNull(r.follow_up_at), createdBy: r.referred_by_name ?? 'Case officer',
-    updatedAt: (notes[0]?.at) || fromServer(r.referred_at),
+    id: String(r.referral_id),
+    referenceNo,
+    orgId,
+    orgName: r.org_name?.trim() || ORG_DEFAULT_NAME[orgId] || 'Other organisation',
+    reason: r.reason ?? '',
+    priorityLevel: r.priority_level ?? (r.is_urgent ? 'urgent' : 'normal'),
+    referredAt,
+    contactMethod,
+    contactPerson: r.contact_person ?? '',
+    contactChannel,
+    contactDetail: detail,
+    status: r.status,
+    notes,
+    supportingDocuments: (r.supporting_documents ?? []).map((d) => ({
+      name: d.name,
+      url: d.url,
+      type: d.type,
+      uploadedAt: d.uploaded_at ? fromServer(d.uploaded_at) : undefined,
+    })),
+    ...(r.additional_notes ? { additionalNotes: r.additional_notes } : {}),
+    ...(r.assistance_provided ? { assistanceProvided: r.assistance_provided } : {}),
+    ...(r.actions_completed ? { actionsCompleted: r.actions_completed } : {}),
+    ...(r.external_outcome ? { externalOutcome: r.external_outcome } : {}),
+    ...(r.remaining_follow_up ? { remainingFollowUp: r.remaining_follow_up } : {}),
+    followUpAt: fromServerOrNull(r.follow_up_at),
+    outcomeDate: fromServerOrNull(r.outcome_date ?? null),
+    outcomeNote: r.outcome_note ?? null,
+    outcomeRecordedBy: r.outcome_recorded_by_name ?? null,
+    outcomeRecordedAt: fromServerOrNull(r.outcome_recorded_at ?? null),
+    createdBy: r.referred_by_name ?? 'Case officer',
+    updatedAt: fromServer(r.status_updated_at ?? null) || (notes[0]?.at) || referredAt,
   };
 }
 
@@ -323,19 +402,40 @@ export function warningFromApi(w: ApiCaseDetail['warnings'][number], caseClosure
   const observations: ComplianceObservation[] = w.observations.map((o) => ({
     id: `obs${o.observation_id}`, at: fromServer(o.observed_at) || fromServer(o.recorded_at), by: o.by_name ?? 'Case officer', result: o.result ?? 'unable_to_observe', notes: o.notes,
   }));
-  const concluded = w.concluded !== null;
+  const concluded = w.concluded !== null || w.workflow_status === 'Closed' || w.status === 'Resolved';
   const endedByClosure = !concluded && caseClosure !== null;
   const start = w.observation_days ? fromServer(w.created_at) : null;
   return {
-    id: String(w.warning_id), ownerResidentId: idOf(w.owner_user_id), ownerName: w.owner_name ?? 'Owner', policyId: w.policy_id ?? '', policyTitle: w.policy_title ?? 'Policy not recorded',
-    policyRef: w.policy_reference ?? '', details: w.description ?? '', delivery: 'in_app', issuedAt: fromServer(w.created_at), issuedBy: w.issued_by_name ?? 'Case officer',
+    id: String(w.warning_id), ownerResidentId: idOf(w.owner_user_id), ownerName: w.owner_name ?? 'Owner',
+    petId: idOf(w.pet_id ?? null), petName: w.pet_name ?? null,
+    policyId: w.policy_id ?? '', policyTitle: w.policy_title ?? 'Responsible Pet Ownership Policy',
+    policyRef: w.policy_reference ?? 'Subdivision Policy',
+    warningCategory: w.warning_category ?? w.violation_type,
+    warningSubject: w.warning_subject ?? w.rendered_subject ?? `${w.warning_level}: ${w.violation_type}`,
+    details: w.description ?? '',
+    additionalDetails: w.additional_details ?? null,
+    supportingDocuments: (w.supporting_documents ?? []).map((d) => ({
+      name: d.name,
+      url: d.url,
+      type: d.type,
+      uploadedAt: d.uploaded_at ? fromServer(d.uploaded_at) : undefined,
+    })),
+    adminNotes: w.admin_notes ?? null,
+    workflowStatus: w.workflow_status ?? (w.status === 'Acknowledged' ? 'Acknowledged' : 'Sent'),
+    acknowledgedAt: fromServerOrNull(w.acknowledged_at ?? null),
+    ownerResponse: w.owner_response ?? null,
+    ownerRespondedAt: fromServerOrNull(w.owner_responded_at ?? null),
+    threadId: idOf(w.thread_id ?? null),
+    renderedSubject: w.rendered_subject ?? w.warning_subject ?? null,
+    renderedBody: w.rendered_body ?? w.description ?? null,
+    delivery: 'in_app', issuedAt: fromServer(w.created_at), issuedBy: w.issued_by_name ?? 'Case officer',
     observationDays: w.observation_days, observationStart: start, observationEnd: w.observation_days ? fromServerOrNull(w.follow_up_at) : null, followUpAt: fromServerOrNull(w.follow_up_at),
     status: concluded || endedByClosure ? 'concluded' : 'active',
-    ...(concluded ? { outcome: w.concluded as 'compliant' | 'non_compliant', outcomeNote: observations[0]?.notes ?? '', concludedAt: fromServer(w.concluded_at) }
+    ...(w.concluded ? { outcome: w.concluded as 'compliant' | 'non_compliant', outcomeNote: observations[0]?.notes ?? '', concludedAt: fromServer(w.concluded_at) }
       : endedByClosure ? { outcome: 'other' as const, outcomeNote: 'Case closed.', concludedAt: caseClosure.closedAt } : {}),
     observations,
     letterId: w.letter_id ?? null,
-    warningReference: w.warning_reference ?? null,
+    warningReference: w.warning_reference ?? `WARN-${String(w.warning_id).padStart(4, '0')}`,
     warningLevel: w.warning_level ?? null,
     templateName: w.template_name ?? null,
     templateVersionNumber: w.template_version_number ?? null,
@@ -368,9 +468,30 @@ export function applyDetail(base: Case, d: ApiCaseDetail, report: ApiReport | nu
   const noteList = notes.map(noteFromApi);
   const history = (report?.history ?? []).filter((h) => !isOriginalSubmission(h.remarks)).map(eventFromHistory);
   const noteEvents: TimelineEvent[] = noteList.map((n) => ({ id: `ev-${n.id}`, at: n.at, actor: n.by, kind: 'note', title: 'Internal note added', detail: clip(n.text) }));
+  const followUpLabels: Record<string, string> = {
+    follow_up: 'Follow-up',
+    coordination_update: 'Coordination Update',
+    rescue_update: 'Rescue Update',
+    welfare_check: 'Welfare Check',
+    site_check: 'Site check',
+    reporter_update: 'Update from reporter',
+    referral_check: 'Referral check',
+    warning_end: 'End of observation',
+    post_closure: 'Post-closure check',
+  };
+  const followUpEvents: TimelineEvent[] = followUps
+    .filter((f) => f.status === 'done')
+    .map((f) => ({
+      id: `fu-${f.id}`,
+      at: f.completedAt || f.createdAt,
+      actor: f.createdBy,
+      kind: 'follow_up',
+      title: `${followUpLabels[f.kind] ?? 'Follow-up'} · Completed: ${f.title}`,
+      ...(f.completionNote || f.notes ? { detail: clip(f.completionNote || f.notes || '') } : {}),
+    }));
   const reportedAt = fromServer(d.reported_at) || base.reportedAt;
   const first: TimelineEvent = { id: 'reported', at: reportedAt, actor: d.reporter.name ?? 'Reporter', kind: 'reported', title: 'Report submitted' };
-  const timeline = [...history, ...noteEvents, first].sort((a, b) => b.at.localeCompare(a.at));
+  const timeline = [...history, ...noteEvents, ...followUpEvents, first].sort((a, b) => b.at.localeCompare(a.at));
   const confirmedPet = matchesOf(d.identity.status, d.identity.pet_id);
   const closureWithCheck = closure ? { ...closure, followUpCheck: followUps.find((f) => f.kind === 'post_closure' && f.status === 'pending')?.dueAt ?? null } : null;
 
@@ -379,7 +500,7 @@ export function applyDetail(base: Case, d: ApiCaseDetail, report: ApiReport | nu
     category: d.category.family, status: d.case_status, priority: d.priority, sensitive: d.is_sensitive,
     title: caseTitle(d.category.family, type, d.location.landmark),
     description: d.animal.description ?? '',
-    animal: { type, description: animalDescription(d.animal), count: d.animal.count ?? 1 },
+    animal: { type, customType: d.animal.type && !['dog', 'cat', 'unknown', 'other', 'others'].includes(d.animal.type.trim().toLowerCase()) ? d.animal.type.trim() : null, description: animalDescription(d.animal), count: d.animal.count ?? 1, condition: d.animal.condition ?? null, breed: d.animal.breed ?? null, color: d.animal.color ?? null },
     location: { area: d.location.landmark?.trim() || 'Location not named', detail: '', ...(hasPin ? { lat: d.location.latitude as number, lng: d.location.longitude as number } : {}) },
     observedAt: reportedAt, reportedAt,
     updatedAt: timeline[0]?.at ?? base.updatedAt,
@@ -400,6 +521,18 @@ export function applyDetail(base: Case, d: ApiCaseDetail, report: ApiReport | nu
     warnings: d.warnings.map((w) => warningFromApi(w, closure)),
     referrals: d.referrals.map(referralFromApi),
     relatedCaseIds: d.links.map((l) => lookup.refOf(l.report_id)),
+    duplicateOfReportId: d.duplicate_of_report_id ?? null,
+    mergedReports: (d.merged_reports ?? []).map((m) => ({
+      reportId: m.report_id,
+      reference: m.reference,
+      reporterName: m.reporter_name,
+      createdAt: m.created_at ? fromServer(m.created_at) : null,
+      mergedAt: m.merged_at ? fromServer(m.merged_at) : null,
+      mergedByName: m.merged_by_name,
+      mergeNotes: m.merge_notes,
+      description: m.description,
+      photoCount: m.photo_count,
+    })),
     notes: noteList,
     threads: (d.threads ?? []).map(threadFromApi),
     alerts: (d.alerts ?? []).map(alertFromApi),
@@ -427,10 +560,26 @@ export function applyQueue(cases: Case[], queue: ApiQueue, opened: ReadonlySet<s
     const c = get(r.report_id);
     if (c && !opened.has(c.id)) {
       const orgId = orgIdOf(r.org_type);
+      const referredAt = fromServer(r.referred_at);
+      const year = referredAt ? new Date(referredAt).getFullYear() || new Date().getFullYear() : new Date().getFullYear();
       c.referrals = [...c.referrals, {
-        id: String(r.referral_id), orgId, orgName: r.org_name?.trim() || ORG_DEFAULT_NAME[orgId] || 'Other organisation', reason: r.reason ?? '', referredAt: fromServer(r.referred_at),
-        contactPerson: r.contact_person ?? '', contactChannel: r.contact_detail ?? '', status: r.status, notes: [], followUpAt: fromServerOrNull(r.follow_up_at), createdBy: 'Case officer',
-        updatedAt: fromServer(r.updated_at) || fromServer(r.referred_at),
+        id: String(r.referral_id),
+        referenceNo: `REF-${year}-${String(r.referral_id).padStart(4, '0')}`,
+        orgId,
+        orgName: r.org_name?.trim() || ORG_DEFAULT_NAME[orgId] || 'Other organisation',
+        reason: r.reason ?? '',
+        priorityLevel: r.is_urgent ? 'urgent' : 'normal',
+        referredAt,
+        contactMethod: 'phone',
+        contactPerson: r.contact_person ?? '',
+        contactChannel: r.contact_detail ?? '',
+        contactDetail: r.contact_detail ?? '',
+        status: r.status,
+        notes: [],
+        supportingDocuments: [],
+        followUpAt: fromServerOrNull(r.follow_up_at),
+        createdBy: 'Case officer',
+        updatedAt: fromServer(r.updated_at) || referredAt,
       }];
     }
   }
@@ -490,7 +639,16 @@ export function threadFromApi(t: ApiThread): CaseThread {
 export function threadViewFromApi(t: ApiThreadView): ThreadView {
   return {
     ...threadFromApi(t),
-    messages: t.messages.map((m) => ({ id: String(m.message_id), kind: m.kind, senderName: m.sender_name, label: m.label, mine: m.mine, body: m.body, at: fromServer(m.at) })),
+    messages: t.messages.map((m) => ({
+      id: String(m.message_id),
+      kind: m.kind,
+      senderName: m.sender_name,
+      label: m.label,
+      mine: m.mine,
+      body: m.body,
+      at: fromServer(m.at),
+      deliveryStatus: m.delivery_status ?? null,
+    })),
   };
 }
 
@@ -505,6 +663,28 @@ export function matchFromApi(m: ApiMatch, lookup: Pick<Lookup, 'refOf'>): Possib
     createdAt: fromServerOrNull(m.created_at), decidedAt: fromServerOrNull(m.decided_at),
     coordination: m.coordination ? { mode: m.coordination.mode, status: m.coordination.status } : null,
     ...(m.rows ? { rows: m.rows.map((r) => ({ key: r.key, label: r.label, lost: r.key === 'when' ? fromServer(r.lost) : r.lost, found: r.key === 'when' ? fromServer(r.found) : r.found, verdict: r.verdict, note: r.note })) } : {}),
+    classification: m.classification ?? null, coverage: m.coverage ?? null, reviewNote: m.review_note ?? null, hasPhotoComparison: Boolean(m.has_photo_comparison),
+    ...(m.analysis ? { analysis: matchAnalysisFromApi(m.analysis) } : {}),
+    ...(m.history ? { history: m.history.map((h) => ({ at: fromServer(h.at), score: h.score, classification: h.classification, algorithm: h.algorithm, reason: h.replaced_because })) } : {}),
+    ...(m.can_compare_photos !== undefined ? { canComparePhotos: m.can_compare_photos } : {}),
+  };
+}
+
+const ATTRIBUTE_ORDER = ['visual', 'location', 'breed', 'coat', 'description'] as const;
+
+/** The server's breakdown, attributes in a fixed order. Only what the server computed: nothing is added or estimated here. */
+export function matchAnalysisFromApi(a: ApiMatchAnalysis): MatchAnalysis {
+  return {
+    algorithm: a.algorithm, score: a.score, rawScore: a.raw_score, coverage: a.coverage, attributesCompared: a.attributes_compared, attributesTotal: a.attributes_total,
+    classification: a.classification, classificationLabel: a.classification_label,
+    attributes: ATTRIBUTE_ORDER.filter((k) => a.attributes?.[k]).map((k) => {
+      const x = a.attributes[k];
+      return {
+        key: k, label: x.label, score: x.score, verdict: x.verdict, explanation: x.explanation, weight: x.weight, effectiveWeight: x.effective_weight,
+        available: x.available, proximity: x.proximity ?? null, distanceM: x.distance_m ?? null
+      };
+    }),
+    explanations: a.explanations ?? [], unavailable: a.unavailable ?? [], notes: a.notes ?? [], disclaimer: a.disclaimer, computedOnView: Boolean(a.computed_on_view),
   };
 }
 
@@ -603,7 +783,8 @@ const NOTIFICATION_KIND: [RegExp, AdminNotification['kind']][] = [
   [/request|new.?report|report.?submitted|new_report/i, 'new_report'],
 ];
 /** Notification types whose related_id is a report id (the others, such as a lost-pet alert, point at something else). */
-const REPORT_RELATED = /status_update|new_report|report|follow|observation|warning|claim|referral/i;
+// owner_verification: a possible owner answered an ownership verification (Possible Pet Owners on the case screen).
+const REPORT_RELATED = /status_update|new_report|report|follow|observation|warning|claim|referral|owner_verification/i;
 
 export function notificationFromApi(n: ApiNotification): AdminNotification {
   const haystack = `${n.type ?? ''} ${n.title}`;
@@ -613,17 +794,34 @@ export function notificationFromApi(n: ApiNotification): AdminNotification {
   const matchReview = (n.type ?? '').toLowerCase() === 'lost_found_review';
   const kind = helpRequest ? 'help_request' : matchReview ? 'case_activity' : NOTIFICATION_KIND.find(([re]) => re.test(haystack))?.[1] ?? 'case_activity';
   const caseId = n.related_id !== null && (helpRequest || matchReview || (REPORT_RELATED.test(n.type ?? '') && !/alert/i.test(n.type ?? ''))) ? caseRef(n.related_id, n.created_at) : undefined;
+  // A resident wrote to the administration: its related id is the CONVERSATION's (backend services/case_messaging.py), opened in Messages.
+  if ((n.type ?? '').toLowerCase() === 'resident_message') {
+    return {
+      id: String(n.notification_id), kind: 'case_activity', title: n.title, body: n.message ?? '', at: fromServer(n.created_at), read: n.is_read,
+      to: n.related_id !== null ? `/messages/${n.related_id}` : '/messages'
+    };
+  }
+  if ((n.type ?? '').toLowerCase() === 'qr_collar_request') {
+    return {
+      id: String(n.notification_id), kind: 'case_activity', title: n.title, body: n.message ?? '', at: fromServer(n.created_at), read: n.is_read,
+      to: '/pets?tab=collar-requests',
+    };
+  }
   return { id: String(n.notification_id), kind, title: n.title, body: n.message ?? '', at: fromServer(n.created_at), read: n.is_read, ...(caseId ? { caseId } : {}) };
 }
 
 // ------------------------------------------------------------------------------------------------------- settings
 export function policyFromApi(p: ApiCaseSettings['policies'][number]): Policy {
-  return { id: p.id, title: p.title, reference: p.reference, summary: p.summary, appliesTo: p.applies_to, observationDays: p.observation_days, status: p.status,
-    fineAmount: p.fine_amount ?? null, countWindowDays: p.count_window_days ?? null };
+  return {
+    id: p.id, title: p.title, reference: p.reference, summary: p.summary, appliesTo: p.applies_to, observationDays: p.observation_days, status: p.status,
+    fineAmount: p.fine_amount ?? null, countWindowDays: p.count_window_days ?? null
+  };
 }
 export function policyToApi(p: Policy): ApiCaseSettings['policies'][number] {
-  return { id: p.id, title: p.title, reference: p.reference, summary: p.summary, applies_to: p.appliesTo, observation_days: p.observationDays, status: p.status,
-    fine_amount: p.fineAmount ?? null, count_window_days: p.countWindowDays ?? null };
+  return {
+    id: p.id, title: p.title, reference: p.reference, summary: p.summary, applies_to: p.appliesTo, observation_days: p.observationDays, status: p.status,
+    fine_amount: p.fineAmount ?? null, count_window_days: p.countWindowDays ?? null
+  };
 }
 
 /** The notification flags the backend keeps (per type, per channel) read as the Admin screen's toggles. See notificationFlagsFrom. */
@@ -650,8 +848,56 @@ const ALL_CATEGORIES_ON: Settings['categories'] = { lost_pet: true, found_animal
 
 export function settingsFrom(cs: ApiCaseSettings, cats: ApiCategories, prefs: ApiNotificationPrefs): Settings {
   const categories: Settings['categories'] = { ...ALL_CATEGORIES_ON, ...cs.categories };      // an older stored value may lack one
+  const subName = cats.subdivision.name ?? '';
+  const defaultAdminName = subName
+    ? /subdivision|barangay|administration/i.test(subName)
+      ? subName
+      : `${subName} Subdivision Administration`
+    : '';
+  const extRaw = cs.external_coordination;
+  const rawAgencies = extRaw?.agencies ?? [];
+  const legacyName = extRaw?.barangay_name?.trim() || '';
+  const agencies = rawAgencies.length > 0
+    ? rawAgencies.map((a) => ({
+        id: a.id,
+        name: a.name?.trim() || '',
+        type: (a.agency_type || 'other') as Settings['externalCoordination']['agencies'][number]['type'],
+        contactPerson: a.contact_person?.trim() || '',
+        phone: a.phone?.trim() || '',
+        email: a.email?.trim() || '',
+        address: a.address?.trim() || '',
+      }))
+    : legacyName
+      ? [{
+          id: 'barangay-default',
+          name: legacyName,
+          type: 'barangay' as const,
+          contactPerson: extRaw?.contact_person?.trim() || '',
+          phone: extRaw?.phone?.trim() || '',
+          email: extRaw?.email?.trim() || '',
+          address: extRaw?.address?.trim() || '',
+        }]
+      : [];
+
   return {
-    subdivision: { name: cats.subdivision.name ?? '', city: cats.subdivision.city ?? '', address: cs.office.address, officePhone: cs.office.phone, officeEmail: cs.office.email, officeHours: cs.office.hours },
+    subdivision: {
+      name: subName,
+      city: cats.subdivision.city ?? '',
+      administrationName: cs.office.administration_name?.trim() || defaultAdminName,
+      contactPerson: cs.office.contact_person?.trim() || '',
+      address: cs.office.address,
+      officePhone: cs.office.phone,
+      officeEmail: cs.office.email,
+      officeHours: cs.office.hours,
+    },
+    externalCoordination: {
+      barangayName: legacyName,
+      contactPerson: extRaw?.contact_person?.trim() || '',
+      phone: extRaw?.phone?.trim() || '',
+      email: extRaw?.email?.trim() || '',
+      address: extRaw?.address?.trim() || '',
+      agencies,
+    },
     notifications: notificationSettingsFrom(prefs),
     categories,
     policies: cs.policies.map(policyFromApi),
@@ -661,10 +907,34 @@ export function settingsFrom(cs: ApiCaseSettings, cats: ApiCategories, prefs: Ap
 
 /** The case settings the server stores, from the screen's settings (the follow-up bounds are kept as the server has them). */
 export function caseSettingsTo(s: Settings, current: ApiCaseSettings): ApiCaseSettings {
+  const firstBarangay = s.externalCoordination.agencies.find((a) => a.type === 'barangay');
   return {
     categories: s.categories, policies: s.policies.map(policyToApi), followups: current.followups,
     publication: { lost_pet: s.privacy.lostPetPublication, found_animal: s.privacy.foundPublication },
-    office: { address: s.subdivision.address.trim(), phone: s.subdivision.officePhone.trim(), email: s.subdivision.officeEmail.trim(), hours: s.subdivision.officeHours.trim() },
+    office: {
+      administration_name: s.subdivision.administrationName.trim(),
+      contact_person: s.subdivision.contactPerson.trim(),
+      address: s.subdivision.address.trim(),
+      phone: s.subdivision.officePhone.trim(),
+      email: s.subdivision.officeEmail.trim(),
+      hours: s.subdivision.officeHours.trim(),
+    },
+    external_coordination: {
+      barangay_name: (firstBarangay?.name ?? s.externalCoordination.barangayName).trim(),
+      contact_person: (firstBarangay?.contactPerson ?? s.externalCoordination.contactPerson).trim(),
+      phone: (firstBarangay?.phone ?? s.externalCoordination.phone).trim(),
+      email: (firstBarangay?.email ?? s.externalCoordination.email).trim(),
+      address: (firstBarangay?.address ?? s.externalCoordination.address).trim(),
+      agencies: s.externalCoordination.agencies.map((a) => ({
+        id: a.id,
+        name: a.name.trim(),
+        agency_type: a.type,
+        contact_person: a.contactPerson.trim(),
+        phone: a.phone.trim(),
+        email: a.email.trim(),
+        address: a.address.trim(),
+      })),
+    },
   };
 }
 
@@ -674,7 +944,19 @@ export function profileFromUser(u: ApiUser): AdminProfile {
 
 // -------------------------------------------------------------------------------------------------------- analytics
 const OUTCOME_LABEL = { resolved: 'Resolved', unresolved: 'Not resolved', invalid: 'No action needed' } as const;
-const REFERRAL_LABEL = { to_contact: 'Not contacted yet', sent: 'Sent', acknowledged: 'Acknowledged', in_progress: 'In progress', completed: 'Completed externally', declined: 'Declined', no_response: 'No response' } as const;
+const REFERRAL_LABEL: Record<Referral['status'], string> = {
+  to_contact: 'Pending',
+  pending: 'Pending',
+  sent: 'Sent',
+  acknowledged: 'Acknowledged',
+  in_progress: 'In Progress',
+  awaiting_response: 'Awaiting Response',
+  no_response: 'Awaiting Response',
+  resolved: 'Resolved',
+  completed: 'Resolved',
+  declined: 'Declined',
+  cancelled: 'Cancelled',
+};
 
 /** The server's lifecycle numbers in the shape data/selectors.ts `analytics()` returns, so the page does not change. */
 export function analyticsFromApi(api: ApiAnalytics) {

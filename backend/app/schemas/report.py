@@ -75,6 +75,19 @@ class ReportCreate(ReportBase):
     suspected_owner_name: Optional[str] = Field(None, max_length=150)
     suspected_owner_address: Optional[str] = Field(None, max_length=255)
     suspected_owner_details: Optional[str] = Field(None, max_length=1000)
+    # Injured / Sick Animal specialized reporting fields
+    injured_conditions: Optional[List[str]] = Field(None, max_length=20)
+    injured_other_detail: Optional[str] = Field(None, max_length=300)
+    can_move: Optional[Literal["Yes", "A little", "No", "Not sure"]] = None
+    # Dangerous Animal specialized reporting fields
+    dangerous_behaviors: Optional[List[str]] = Field(None, max_length=20)
+    dangerous_other_detail: Optional[str] = Field(None, max_length=300)
+    current_danger: Optional[str] = Field(None, max_length=100)
+    still_in_location: Optional[str] = Field(None, max_length=50)
+    bite_details: Optional[dict] = None
+    rabies_symptoms: Optional[List[str]] = Field(None, max_length=20)
+    movement_direction: Optional[str] = Field(None, max_length=300)
+    media_urls: Optional[List[str]] = Field(None, max_length=10)
 
 
 class ReportMediaResponse(BaseModel):
@@ -401,8 +414,9 @@ class ReportMergeRequest(BaseModel):
 
 
 class ReportMergeGroupRequest(BaseModel):
-    report_ids: List[int]  # every report in the group; the first-filed one becomes the main case
+    report_ids: List[int]  # every report in the group
     notes: str
+    primary_report_id: Optional[int] = None  # optional explicit primary report; defaults to earliest filed
 
 
 class ReportUnmergeRequest(BaseModel):

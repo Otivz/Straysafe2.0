@@ -10,8 +10,9 @@ export type CaseDialog =
   | { kind: 'warning' }
   | { kind: 'compliance' }
   | { kind: 'referral' }
-  /** `contact`: record the contact attempt itself (the referral was only written down). */
-  | { kind: 'coordination'; referralId: string; contact?: boolean }
+  | { kind: 'referralDetail'; referralId: string }
+  /** `contact`: record the contact attempt itself; `mode`: status update, external agency response, or final outcome. */
+  | { kind: 'coordination'; referralId: string; contact?: boolean; mode?: 'status' | 'response' | 'outcome' }
   | { kind: 'claim'; claimId: string }
   | { kind: 'link' }
   | { kind: 'unlink'; otherId: string }
