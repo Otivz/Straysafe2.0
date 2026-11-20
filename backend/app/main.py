@@ -1428,6 +1428,7 @@ ensure_standard_warning_templates()
 def ensure_pet_tag_tables():
     """Pet QR tags (pet_tags, pet_tag_scans): ensures one permanent unique QR tag per registered pet."""
     from sqlalchemy import inspect
+    from app.models.pet import Pet
     from app.models.pet_tag import PetTag, PetTagScan
     from app.services import pet_tags as T
     try:

@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { adminPath } from '../../config';
-import { Callout, ErrorState, PageSkeleton } from '../../components/layout';
+import { Button } from '../../components/Button';
+import { Callout, ErrorState, PageSkeleton, Tabs } from '../../components/layout';
+import { CaseReferralsSection } from '../../dialogs/CoordinationDialogs';
 import { CATEGORY_ICON } from '../../components/icons';
 import { useAdminData, type DetailStatus } from '../../data/context';
 import { heroOf, monitoringLine, needsYou, peopleOf, situationTiles } from '../../data/monitored';
+import { openItems } from '../../data/selectors';
 import type { Case } from '../../data/types';
 import { usePageTitle } from '../../lib/hooks';
 import { useNow } from '../../../preview/lib/hooks';
@@ -16,7 +19,7 @@ import { Alerts } from './monitored/Alerts';
 import HeroBlock from './monitored/Hero';
 import Lane from './monitored/Lane';
 import PossibleOwnersBlock, { CaseWarningsSection } from './PossibleOwnersBlock';
-import { BarangayHelp, LinkedReports, Ownership, Sightings } from './monitored/Sections';
+import { LinkedReports, Ownership, Sightings } from './monitored/Sections';
 
 /**
  * A missing pet or a found animal, as ONE calm page that follows the Leader's job.
@@ -43,6 +46,11 @@ export default function MonitoredCasePage({ c, detail }: { c: Case; detail: { st
   const people = peopleOf(c, state.matches);
   const Icon = CATEGORY_ICON[c.category];
   const open = (d: CaseDialog) => setDialog(d);
+  // Two tabs (2026-11-20): the case itself, and its external referrals. ?tab=referrals opens the second one.
+  const [params, setParams] = useSearchParams();
+  const tab: 'case' | 'referrals' = params.get('tab') === 'referrals' ? 'referrals' : 'case';
+  const setTab = (key: 'case' | 'referrals') => { const next = new URLSearchParams(params); if (key === 'case') next.delete('tab'); else next.set('tab', key); setParams(next, { replace: true }); };
+  const openReferrals = openItems(c).referrals;
   const toLane = () => document.getElementById('mc-lane')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   // One status, said once: monitoring (the resting state), needs you (something to do), or how it ended
@@ -64,20 +72,42 @@ export default function MonitoredCasePage({ c, detail }: { c: Case; detail: { st
           : (
             <>
               {detail.error ? <Callout tone="amber" className="mb-4">{detail.error}</Callout> : null}
+              <Tabs
+                idPrefix="mc"
+                label="Case sections"
+                value={tab}
+                onChange={setTab}
+                items={[{ key: 'case', label: 'Case' }, { key: 'referrals', label: 'Referrals', count: c.referrals.length }]}
+              />
+              {tab === 'referrals' ? (
+                <div role="tabpanel" id="mc-panel" aria-labelledby="mc-tab-referrals" className="pt-5">
+                  <CaseReferralsSection c={c} openDialog={open} />
+                </div>
+              ) : (
+              <div role="tabpanel" id="mc-panel" aria-labelledby="mc-tab-case" className="pt-5">
+              {openReferrals.length > 0 ? (
+                <Callout className="mb-4">
+                  {openReferrals.length === 1 ? `1 open referral: ${openReferrals[0].orgName}.` : `${openReferrals.length} open referrals.`}{' '}
+                  <Button variant="link" onClick={() => setTab('referrals')}>Open Referrals</Button>
+                </Callout>
+              ) : null}
               <HeroBlock c={c} hero={hero} people={people} now={now} openDialog={open} canLog={!closed} />
               <Lane c={c} needs={needs} tiles={tiles} line={monitoringLine(c, now)} now={now} openDialog={open} />
               <Alerts c={c} now={now} openDialog={open} />
               <Sightings c={c} now={now} openDialog={open} />
               {c.lostPet?.alertId ? <AlertTagMessages alertId={c.lostPet.alertId} /> : null}
               <LinkedReports c={c} now={now} openDialog={open} />
-              <BarangayHelp c={c} openDialog={open} />
-              <PossibleOwnersBlock c={c} variant="section" />
-              <section className="sa-mc-sec" aria-label="Official Warnings">
-                <CaseWarningsSection c={c} />
-              </section>
+              {found ? <PossibleOwnersBlock c={c} variant="section" /> : null}
+              {found || c.warnings.length > 0 ? (
+                <section className="sa-mc-sec" aria-label="Official Warnings">
+                  <CaseWarningsSection c={c} hideSendButton={found} />
+                </section>
+              ) : null}
               {found ? <Ownership c={c} openDialog={open} /> : null}
               <Activity c={c} now={now} />
               <Resolve c={c} openDialog={open} />
+              </div>
+              )}
             </>
           )}
 

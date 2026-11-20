@@ -51,7 +51,10 @@ export default function PetDetailsPage() {
       <header className="mb-6 flex flex-wrap items-center gap-4">
         <PetAvatar type={pet.type} size="lg" photoUrl={pet.photoUrls?.[0]} />
         <div>
-          <h1 className="sa-h1">{pet.name}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="sa-h1">{pet.name}</h1>
+            <Badge tone={pet.status === 'Lost' ? 'amber' : pet.status === 'Deceased' ? 'neutral' : 'sage'} dot>{pet.status || 'Active'}</Badge>
+          </div>
           <p className="sa-text-2 mt-0.5">{ANIMAL_TYPES[pet.type]} · {pet.breed} · registered {fmtDate(pet.registeredAt)}</p>
         </div>
       </header>
@@ -67,6 +70,7 @@ export default function PetDetailsPage() {
           <Panel>
             <Block title="Pet information">
               <Kv wide rows={[
+                ['Status', <Badge key="status" tone={pet.status === 'Lost' ? 'amber' : pet.status === 'Deceased' ? 'neutral' : 'sage'} dot>{pet.status || 'Active'}</Badge>],
                 ['Animal', `${ANIMAL_TYPES[pet.type]} · ${pet.breed}`], ['Colour', pet.color], ['Sex', pet.sex === 'unknown' ? 'Not recorded' : pet.sex[0].toUpperCase() + pet.sex.slice(1)],
                 ['Age', pet.ageText], ['Size', SIZE_LABEL[pet.size]],
                 ['Vaccination', VACCINATION[pet.vaccination]],

@@ -14,9 +14,30 @@ export interface ApiPetConfirmedIncident {
   reference_code: string;
   category: string;
   incident_date: string | null;
+  reported_at?: string | null;
+  verified_at?: string | null;
+  closed_at?: string | null;
   status: 'reported' | 'under_review' | 'in_progress' | 'closed';
   status_label: string;
+  location_area?: string | null;
+  animal_summary?: string | null;
+  condition?: string | null;
+  verified_findings?: string[];
   summary: string;
+  outcome_group?: 'resolved' | 'unresolved' | 'invalid' | null;
+  outcome_label?: string | null;
+  photos?: string[];
+  warning_letters?: {
+    letter_id: number;
+    warning_reference: string;
+    warning_level: string;
+    issued_at: string | null;
+  }[];
+  milestones?: {
+    label: string;
+    at: string;
+    detail?: string | null;
+  }[];
   has_warning_letter: boolean;
 }
 
@@ -301,9 +322,17 @@ export const residentApi = {
   disablePetTag: (id: number) => httpPost<ApiPetTag>(`/pets/${id}/tag/disable`),
   petTagQr: (id: number) => httpGetBlob(`/pets/${id}/tag/qr.png`),
   petTagScans: (id: number) => httpGet<ApiPetTagScans>(`/pets/${id}/tag/scans`),
-  resolvePetTagScan: (id: number, scanId: number) => httpPost<{ resolved: number }>(`/pets/${id}/tag/scans/${scanId}/resolve`),
+  resolvePetTagScan: (id: number, scanId: number, body?: { recovered?: boolean; note?: string }) =>
+    httpPost<{ resolved: number; recovered: boolean; pet_status: string; report_id?: number | null; alert_id?: number | null }>(
+      `/pets/${id}/tag/scans/${scanId}/resolve`,
+      body,
+    ),
   /** "Pet is back home": every open message resolved (and any shared phone number deleted). */
-  resolveAllPetTagScans: (id: number) => httpPost<{ resolved: number }>(`/pets/${id}/tag/scans/resolve`),
+  resolveAllPetTagScans: (id: number, body?: { recovered?: boolean; note?: string }) =>
+    httpPost<{ resolved: number; recovered: boolean; pet_status: string; report_id?: number | null; alert_id?: number | null }>(
+      `/pets/${id}/tag/scans/resolve`,
+      body,
+    ),
   qrCollarRequests: (petId?: number) =>
     httpGet<{ items: ApiQrCollarRequest[] }>('/qr-collar-requests/mine', petId ? { pet_id: petId } : undefined),
   requestQrCollar: (petId: number, notes?: string) =>

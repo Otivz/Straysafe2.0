@@ -90,6 +90,7 @@ export function LinkedReports({ c, now, openDialog }: { c: Case; now: Date; open
   const closed = c.status === 'closed';
   const { linked, ruledOut } = matchesOf(state.matches, c.id);
   const byHand = state.cases.filter((x) => c.relatedCaseIds.includes(x.id) && !linked.some((m) => sameReport(partnerOf(m, c.id).caseId, x.id)));
+  if (linked.length === 0 && byHand.length === 0 && ruledOut.length === 0) return null;
   const review = (matchId: string) => openDialog({ kind: 'match', matchId });
   return (
     <section className="sa-mc-sec" aria-labelledby="mc-linked">

@@ -225,7 +225,7 @@ export default function PetsPage() {
                               <td>
                                 <div className="flex items-center gap-3">
                                   <PetAvatar type={p.type} photoUrl={p.photoUrls?.[0]} />
-                                  <div className="min-w-0"><p className="sa-rowtitle"><Link to={adminPath(`/pets/${p.id}`)} onClick={(e) => e.stopPropagation()}>{p.name}</Link></p><p className="sa-meta">{ANIMAL_TYPES[p.type]} · {p.breed}</p>{tagged.has(p.id) ? <p className="mt-1"><Badge icon={QrCode}>QR tag</Badge></p> : null}</div>
+                                  <div className="min-w-0"><p className="sa-rowtitle"><Link to={adminPath(`/pets/${p.id}`)} onClick={(e) => e.stopPropagation()}>{p.name}</Link></p><p className="sa-meta">{ANIMAL_TYPES[p.type]} · {p.breed}</p>{(p.status === 'Lost' || tagged.has(p.id)) ? <p className="mt-1 flex flex-wrap gap-1.5">{p.status === 'Lost' ? <Badge tone="amber" dot>Lost</Badge> : null}{tagged.has(p.id) ? <Badge icon={QrCode}>QR tag</Badge> : null}</p> : null}</div>
                                 </div>
                               </td>
                               <td className="hidden md:table-cell"><p className="sa-small">{p.color}</p><p className="sa-meta">{SIZE_LABEL[p.size]} · {p.ageText}</p></td>

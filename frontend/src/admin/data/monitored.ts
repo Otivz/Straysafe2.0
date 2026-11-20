@@ -225,7 +225,7 @@ export function situationTiles(c: Case, matches: PossibleMatch[], now: Date, not
   } else if (mine.waiting.length > 0) {
     out.push({ key: 'related', label: 'Linked reports', value: plural(mine.waiting.length, 'possible match', 'possible matches'), tone: 'amber', meta: 'Waiting for your review' });
   } else {
-    out.push({ key: 'related', label: 'Linked reports', value: 'None', meta: `No ${other} is linked` });
+    out.push({ key: 'related', label: 'Linked reports', value: 'None', meta: `No ${other} is linked`, ...(open ? { action: { label: 'Link a report', open: { kind: 'link' as const } } } : {}) });
   }
 
   if (!c.sensitive) {
@@ -264,15 +264,14 @@ export function situationTiles(c: Case, matches: PossibleMatch[], now: Date, not
     }
   }
 
-  const barangay = c.referrals.filter((r) => r.orgId === 'barangay');
-  const asked = barangay.filter((r) => r.status !== 'to_contact');
+  const asked = c.referrals.filter((r) => r.status !== 'to_contact');
   if (asked.length > 0) {
     const last = [...asked].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
-    out.push({ key: 'barangay', label: 'Barangay', value: REFERRAL_STATUS[last.status].label, tone: toneOf(REFERRAL_STATUS[last.status].tone), meta: `Updated ${since(last.updatedAt, now)}` });
-  } else if (barangay.length > 0) {
-    out.push({ key: 'barangay', label: 'Barangay', value: 'Not contacted yet', tone: 'amber', meta: 'Written down, nobody called yet' });
+    out.push({ key: 'barangay', label: 'Referrals', value: REFERRAL_STATUS[last.status].label, tone: toneOf(REFERRAL_STATUS[last.status].tone), meta: `${last.orgName} · Updated ${since(last.updatedAt, now)}` });
+  } else if (c.referrals.length > 0) {
+    out.push({ key: 'barangay', label: 'Referrals', value: 'Not contacted yet', tone: 'amber', meta: `${c.referrals[0].orgName} — written down, nobody called yet` });
   } else {
-    out.push({ key: 'barangay', label: 'Barangay', value: 'Not asked', meta: 'Only if you need their help', ...(open ? { action: { label: 'Ask for help', open: { kind: 'referral' as const } } } : {}) });
+    out.push({ key: 'barangay', label: 'Referrals', value: 'None', meta: 'Barangay, vet, or welfare office', ...(open ? { action: { label: 'Create referral', open: { kind: 'referral' as const } } } : {}) });
   }
 
   const contact = [...c.ownerContacts].sort((a, b) => b.at.localeCompare(a.at))[0];

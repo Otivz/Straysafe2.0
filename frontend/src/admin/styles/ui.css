@@ -143,8 +143,9 @@
   .sa-block { padding: 20px 24px; }
   .sa-block + .sa-block { border-top: 1px solid var(--sa-line-soft); }
   .sa-block--tight { padding: 16px 20px; }
-  .sa-block__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-  .sa-block__head > :first-child { min-width: 0; }
+  /* Wraps, so on a phone a wide action (filter tabs, buttons) drops under the title instead of squeezing it into a narrow column. */
+  .sa-block__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 12px; margin-bottom: 14px; }
+  .sa-block__head > :first-child { min-width: 0; flex: 1 1 220px; }
   .sa-section { display: flex; flex-direction: column; gap: 14px; }
   .sa-section__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
   .sa-prose { max-width: 68ch; line-height: 1.65; color: var(--sa-ink); }
@@ -343,5 +344,19 @@
     .sa-pageheader__actions { justify-content: flex-start; }
     .sa-kv, .sa-kv--wide { grid-template-columns: 1fr; gap: 2px 0; }
     .sa-kv dd { margin-bottom: 8px; }
+  }
+
+  /* Touch sizes (2026-11-20): phones and tablets, and any touch screen. A fingertip needs about 44px; the desktop sizes above stay dense.
+     Input text is 16px here because iPhones zoom the page in when a smaller field is focused. */
+  @media (max-width: 1023px), (pointer: coarse) {
+    .sa-btn { height: 44px; }
+    .sa-btn--sm { height: 40px; }
+    .sa-btn--link { height: auto; }
+    .sa-btn--icon { width: 44px; }
+    .sa-btn--icon.sa-btn--sm { width: 40px; }
+    .sa-input { height: 44px; font-size: 16px; text-overflow: ellipsis; }
+    textarea.sa-input { height: auto; }
+    .sa-seg__btn { height: 38px; }
+    .sa-tab { padding-top: 13px; padding-bottom: 14px; }
   }
 }

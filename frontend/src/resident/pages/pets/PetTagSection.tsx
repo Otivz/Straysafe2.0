@@ -148,11 +148,6 @@ export function PetTagSection({
                 <span className="rs-meta">Unique StraySafe QR code for {petName}</span>
               </div>
             ) : null}
-            {(tag.cooldown_remaining_seconds ?? 0) > 0 ? (
-              <Callout tone="info">
-                Scan cooldown active: this QR code was recently scanned and can be scanned again in {Math.ceil((tag.cooldown_remaining_seconds ?? 0) / 60)} minute(s).
-              </Callout>
-            ) : null}
             {!tag.link_is_public ? (
               <Callout tone="amber">The app’s public address is not set yet, so this tag only opens on this network. Ask the office before printing a tag to keep.</Callout>
             ) : null}

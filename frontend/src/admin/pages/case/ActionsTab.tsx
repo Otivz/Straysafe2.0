@@ -14,7 +14,6 @@ import type { Case, Warning } from '../../data/types';
 import { adminApi, type ApiGeneratedWarningLetter } from '../../live/api';
 import { dueInfo, fmtDateTime, remaining } from '../../../preview/lib/format';
 import { errorMessage } from '../../../preview/lib/errors';
-import { CaseReferralsSection } from '../../dialogs/CoordinationDialogs';
 import type { OpenCaseDialog } from './dialogState';
 
 type Props = { c: Case; now: Date; openDialog: OpenCaseDialog };
@@ -441,9 +440,6 @@ export default function ActionsTab({ c, now, openDialog }: Props) {
         </Panel>
       ) : null}
 
-      <div className="sa-fade-up">
-        <CaseReferralsSection c={c} openDialog={openDialog} hideCreateButton />
-      </div>
     </div>
   );
 }

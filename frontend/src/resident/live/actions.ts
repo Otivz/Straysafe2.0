@@ -273,6 +273,19 @@ export async function runAction(a: ResidentAction, ctx: ResidentActionContext): 
       return done({ reportNumbers: [number], notices: true, pets: true });
     }
 
+    case 'petTag/resolve': {
+      const petNum = numeric(a.petId, 'pet');
+      const body = { recovered: a.recovered, ...(a.note?.trim() ? { note: a.note.trim() } : {}) };
+      const res = a.scanId != null
+        ? await residentApi.resolvePetTagScan(petNum, a.scanId, body)
+        : await residentApi.resolveAllPetTagScans(petNum, body);
+      return done({
+        reportNumbers: res.report_id ? [res.report_id] : [],
+        notices: Boolean(res.recovered),
+        pets: Boolean(res.recovered),
+      });
+    }
+
     case 'sighting/add': {
       const ref = noticeRef(a.noticeId) ?? fail('That notice could not be found.', 404);
       if (ref.kind !== 'alert') fail('Sightings are for lost-pet and found-animal notices.', 409);

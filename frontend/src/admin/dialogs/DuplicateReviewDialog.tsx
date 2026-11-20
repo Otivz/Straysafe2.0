@@ -3,7 +3,7 @@ import { ArrowLeft, CheckCircle2, Clock, Link2, ShieldCheck, XCircle } from 'luc
 import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
-import { Field, OptionGroup, Textarea } from '../components/form';
+import { Field, Textarea } from '../components/form';
 import { Callout, FormError } from '../components/layout';
 import { useToast } from '../components/toast';
 import { ANIMAL_TYPES, CATEGORIES } from '../data/constants';
@@ -56,7 +56,6 @@ export function DuplicateReviewDialog({
   const { reload } = useAdminData();
   const toast = useToast();
   const [mode, setMode] = useState<'compare' | 'link' | 'reject'>('compare');
-  const [primaryId, setPrimaryId] = useState<string>(String(reportIdOf(c.id) ?? ''));
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -117,7 +116,7 @@ export function DuplicateReviewDialog({
     try {
       await adminApi.mergeReports({
         report_ids: [currentRid, candidate.report_id],
-        primary_report_id: Number(primaryId),
+        primary_report_id: currentRid,
         notes: reason.trim(),
       });
       toast.success('Relationship confirmed and reports linked');
@@ -132,13 +131,11 @@ export function DuplicateReviewDialog({
   };
 
   if (mode === 'link' && currentRid) {
-    const primaryRef = Number(primaryId) === currentRid ? c.id : candidate.reference;
-    const secondaryRef = Number(primaryId) === currentRid ? candidate.reference : c.id;
     return (
       <Dialog
         size="lg"
         title="Confirm Relationship & Link Reports"
-        description="Choose the primary report and confirm linking. All original reports, reporters, descriptions, and evidence remain preserved."
+        description={`Link ${candidate.reference} under ${c.id}. All original reports, reporters, descriptions, and evidence remain preserved.`}
         onClose={onClose}
         dirty={reason !== ''}
         footer={(
@@ -148,28 +145,19 @@ export function DuplicateReviewDialog({
           </>
         )}
       >
-        <Callout tone="info" title={`Primary incident record: ${primaryRef}`}>
-          <strong>{secondaryRef}</strong> will be recorded as a <strong>Linked Report ({primaryRef})</strong>. Its original reporter, description, photographs, and history remain preserved.
+        <Callout tone="info" title={`Primary incident record: ${c.id}.`}>
+          <strong>{candidate.reference}</strong> will be recorded as a <strong>Linked Report ({c.id})</strong>. Its original reporter, description, photographs, and history remain preserved.
         </Callout>
 
-        <OptionGroup
-          name="primary_report"
-          label="Select Primary Report"
-          value={primaryId}
-          onChange={setPrimaryId}
-          options={[
-            {
-              value: String(currentRid),
-              label: `${c.id} · ${CATEGORIES[c.category].label} (Current report)`,
-              description: `Reporter: ${c.reporter.name} · Observed ${fmtDate(c.observedAt)} · ${c.evidence.length} evidence item(s)`,
-            },
-            {
-              value: String(candidate.report_id),
-              label: `${candidate.reference} · ${candidate.category || 'Report'}`,
-              description: `Reporter: ${candidate.reporter_name} · Observed ${candidate.incident_at ? fmtDate(fromServer(candidate.incident_at)) : '—'} · ${candidate.photo_urls.length} photo(s)`,
-            },
-          ]}
-        />
+        <div className="rounded-lg border border-[var(--sa-line)] bg-[var(--sa-sand)] p-3.5">
+          <p className="sa-small m-0 font-semibold text-[var(--sa-ink-3,#78716c)]">Report to be linked</p>
+          <p className="mt-1 font-semibold text-[var(--sa-ink,#1c1917)]">
+            {candidate.reference} · {candidate.category || 'Report'}
+          </p>
+          <p className="sa-small sa-text-2 mt-0.5">
+            Reporter: {candidate.reporter_name} · Observed {candidate.incident_at ? fmtDate(fromServer(candidate.incident_at)) : '—'} · {candidate.photo_urls.length} photo(s)
+          </p>
+        </div>
 
         <Field label="Relationship notes" required hint="Recorded in the audit trail and case history.">
           <Textarea

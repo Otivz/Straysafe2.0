@@ -17,16 +17,20 @@ Public (Phase 2, `public_router`; no sign-in needed, an optional sign-in is used
 """
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.limiter import limiter
+from app.models.lost_pet_alert import LostPetAlert
 from app.models.pet import Pet
+from app.models.report import Report
 from app.models.user import User
 from app.routes.pets import check_pet_access
 from app.schemas.pet_tag import PetTagResponse
+from app.services import lost_pet_lifecycle as LP
 from app.services import pet_tags as T
 from app.utils.audit import log_activity
 from app.utils.auth import get_current_user, get_optional_user
@@ -140,26 +144,112 @@ def tag_scans(pet_id: int, db: Session = Depends(get_db), current_user: User = D
     return history
 
 
+class ResolveScanBody(BaseModel):
+    recovered: bool = False
+    note: Optional[str] = Field(default=None, max_length=300)
+
+
+def _resolve_and_maybe_recover(
+    db: Session,
+    pet: Pet,
+    current_user: User,
+    request: Request,
+    scan_id: Optional[int],
+    body: Optional[ResolveScanBody],
+) -> dict:
+    """Resolve one or all QR tag scans; when `recovered=True`, also confirm Lost Pet recovery / restore Pet.status."""
+    count = T.resolve_scans(db, pet, scan_id)
+    recovered_done = False
+    report_id: Optional[int] = None
+    alert_id: Optional[int] = None
+
+    if body and body.recovered:
+        alert = (
+            db.query(LostPetAlert)
+            .join(Report, Report.report_id == LostPetAlert.report_id)
+            .filter(
+                LostPetAlert.alert_type == "lost_pet",
+                LostPetAlert.status.in_(LP.OPEN_ALERT),
+                or_(LostPetAlert.pet_id == pet.pet_id, Report.pet_id == pet.pet_id),
+            )
+            .order_by(LostPetAlert.alert_id.desc())
+            .first()
+        )
+        if alert is not None:
+            LP.confirm_recovery(
+                db,
+                alert,
+                source="owner_app",
+                actor=current_user,
+                note=(body.note or "").strip() or None,
+                req=request,
+            )
+            recovered_done = True
+            report_id = alert.report_id
+            alert_id = alert.alert_id
+        else:
+            count += T.resolve_scans(db, pet)
+            if pet.status in ("Lost", "Found", "Rescued", "Missing"):
+                pet.status = "Active"
+                recovered_done = True
+                log_activity(
+                    db,
+                    "PET_TAG_RECOVERED",
+                    target_table="pets",
+                    target_id=pet.pet_id,
+                    description=f"{pet.pet_name} was confirmed back home from a QR tag scan",
+                    user_id=current_user.user_id,
+                    request=request,
+                    commit=False,
+                )
+
+    if count and scan_id is None and not recovered_done:
+        log_activity(
+            db,
+            "PET_TAG_SCANS_RESOLVED",
+            target_table="pets",
+            target_id=pet.pet_id,
+            description=f"{pet.pet_name} is back home: {count} QR tag message(s) resolved",
+            user_id=current_user.user_id,
+            request=request,
+            commit=False,
+        )
+
+    db.commit()
+    return {
+        "resolved": count,
+        "recovered": recovered_done,
+        "pet_status": pet.status,
+        "report_id": report_id,
+        "alert_id": alert_id,
+    }
+
+
 @router.post("/{pet_id}/tag/scans/resolve")
-def resolve_all_scans(pet_id: int, request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def resolve_all_scans(
+    pet_id: int,
+    request: Request,
+    payload: Optional[ResolveScanBody] = Body(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     pet = _load_pet(db, pet_id)
     _require_owner(current_user, pet)
-    count = T.resolve_scans(db, pet)
-    if count:
-        log_activity(db, "PET_TAG_SCANS_RESOLVED", target_table="pets", target_id=pet.pet_id,
-                     description=f"{pet.pet_name} is back home: {count} QR tag message(s) resolved",
-                     user_id=current_user.user_id, request=request, commit=False)
-    db.commit()
-    return {"resolved": count}
+    return _resolve_and_maybe_recover(db, pet, current_user, request, None, payload)
 
 
 @router.post("/{pet_id}/tag/scans/{scan_id}/resolve")
-def resolve_one_scan(pet_id: int, scan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def resolve_one_scan(
+    pet_id: int,
+    scan_id: int,
+    request: Request,
+    payload: Optional[ResolveScanBody] = Body(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     pet = _load_pet(db, pet_id)
     _require_owner(current_user, pet)
-    count = T.resolve_scans(db, pet, scan_id)
-    db.commit()
-    return {"resolved": count}
+    return _resolve_and_maybe_recover(db, pet, current_user, request, scan_id, payload)
 
 
 # ---- Phase 2: the public scan page ----------------------------------------------------------------------------------

@@ -722,6 +722,7 @@ export function petFromApi(p: ApiPet, now: Date): Pet {
     markings: (p.distinctive_markings ?? '').split(/[,;]\s*/).map((m) => m.trim()).filter(Boolean),
     description: (p.notes ?? p.health_condition ?? '').trim(), photos: photoUrls.length, photoUrls,
     ownerId: p.owner_id === null ? '' : String(p.owner_id), registeredAt: fromServer(p.created_at), vaccination, microchipped: false,
+    status: p.status?.trim() || 'Active',
     ...(p.registered_by_user_id != null || p.registered_by_name
       ? { registeredBy: { name: p.registered_by_name?.trim() || NOT_RECORDED, byOwner: p.owner_id !== null && p.registered_by_user_id === p.owner_id, userId: idOf(p.registered_by_user_id) } } : {}),
   };

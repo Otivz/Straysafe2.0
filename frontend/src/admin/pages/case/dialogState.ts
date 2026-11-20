@@ -9,7 +9,8 @@ export type CaseDialog =
   | { kind: 'completeFollowUp'; followUpId: string }
   | { kind: 'warning' }
   | { kind: 'compliance' }
-  | { kind: 'referral' }
+  /** `agencyId`: a saved External Coordination agency to start with, or 'manual' for another organization (2026-11-20). */
+  | { kind: 'referral'; agencyId?: string }
   | { kind: 'referralDetail'; referralId: string }
   /** `contact`: record the contact attempt itself; `mode`: status update, external agency response, or final outcome. */
   | { kind: 'coordination'; referralId: string; contact?: boolean; mode?: 'status' | 'response' | 'outcome' }

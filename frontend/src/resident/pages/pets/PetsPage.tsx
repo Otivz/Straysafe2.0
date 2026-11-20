@@ -52,6 +52,7 @@ export default function PetsPage() {
           {state.pets.map((p) => {
             const Icon = ANIMAL_ICON[p.type];
             const missing = activeLostReport(state, p.id);
+            const isLost = Boolean(missing) || p.status === 'Lost';
             return (
               <li key={p.id}>
                 <Link to={residentPath(`/pets/${p.id}`)} className="rs-card rs-card--link">
@@ -59,7 +60,7 @@ export default function PetsPage() {
                   <span className="rs-card__text">
                     <span className="rs-card__title">{p.name}</span>
                     <span className="rs-card__meta">{petSummary(p)}</span>
-                    {missing ? <span className="rs-card__row"><Pill tone="amber" dot>Reported missing</Pill></span> : null}
+                    {isLost ? <span className="rs-card__row"><Pill tone="amber" dot>Lost</Pill></span> : null}
                   </span>
                 </Link>
               </li>
