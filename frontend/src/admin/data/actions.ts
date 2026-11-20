@@ -4,7 +4,7 @@
  * the result: nothing is applied to the screen's data until the request has succeeded and the touched records have been read back.
  */
 import type {
-  AdminProfile, AlertInput, Assessment, CaseStatus, ClaimStatus, ComplianceResult, ContactMethod, DangerousAssessment, DispositionId, FollowUpKind, IdentityReview, InjuredAssessment, Notice,
+  AdminProfile, AlertInput, Assessment, CaseStatus, ClaimStatus, ComplianceResult, ConcernStatus, ContactMethod, DangerousAssessment, DispositionId, FollowUpKind, IdentityReview, InjuredAssessment, Notice,
   OwnerContact, OwnershipReview, Priority, ReferralAttachment, ReferralPriority, ReferralStatus, Resident, Settings, WarningDelivery,
 } from './types';
 
@@ -84,6 +84,20 @@ export type AdminAction =
   | { type: 'case/unlinkCase'; id: string; otherId: string }
   | { type: 'case/close'; id: string; disposition: DispositionId; reason: string; followUpCheckAt: string | null; endOpenItems: boolean; welfareOutcome?: string; finalAnimalCondition?: string; assistanceProvided?: string; referralOutcome?: string; dangerousOutcome?: string; securityActionsPerformed?: string; advisoryStatus?: string; threatOngoing?: string }
   | { type: 'case/reopen'; id: string; reason: string }
+  | {
+      type: 'case/updateConcern';
+      id: string;
+      concernId: number;
+      status: ConcernStatus;
+      outcome?: string;
+      threatOngoing?: string;
+      resolutionNotes?: string;
+      finalAnimalCondition?: string;
+      assistanceProvided?: string;
+      securityActionsPerformed?: string;
+      advisoryStatus?: string;
+      referralOutcome?: string;
+    }
   | { type: 'notice/save'; notice: Notice; publish: boolean }
   | { type: 'notice/archive'; id: string; reason: string }
   | { type: 'notice/delete'; id: string }

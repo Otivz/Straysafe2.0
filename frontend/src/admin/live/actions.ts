@@ -291,6 +291,19 @@ export async function runAction(a: AdminAction, ctx: ActionContext): Promise<Act
       return done({ cases: [a.id], notices: true, matches: true });
     // (a report that closes or reopens changes which possible matches can still be decided)
     case 'case/reopen': await adminApi.reopen(reportId(a.id), a.reason); return done({ cases: [a.id], matches: true });
+    case 'case/updateConcern':
+      await adminApi.updateConcern(reportId(a.id), a.concernId, {
+        status: a.status,
+        ...(a.outcome !== undefined ? { outcome: a.outcome } : {}),
+        ...(a.threatOngoing !== undefined ? { threat_ongoing: a.threatOngoing } : {}),
+        ...(a.resolutionNotes !== undefined ? { resolution_notes: a.resolutionNotes } : {}),
+        ...(a.finalAnimalCondition !== undefined ? { final_animal_condition: a.finalAnimalCondition } : {}),
+        ...(a.assistanceProvided !== undefined ? { assistance_provided: a.assistanceProvided } : {}),
+        ...(a.securityActionsPerformed !== undefined ? { security_actions_performed: a.securityActionsPerformed } : {}),
+        ...(a.advisoryStatus !== undefined ? { advisory_status: a.advisoryStatus } : {}),
+        ...(a.referralOutcome !== undefined ? { referral_outcome: a.referralOutcome } : {}),
+      });
+      return done({ cases: [a.id] });
 
     // --------------------------------------------------------------------------------------------------- notices
     case 'notice/save': return saveNotice(a.notice, a.publish, ctx);

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarClock, GitMerge, Link2, MapPin, PawPrint, SearchX, Unlink } from 'lucide-react';
+import { CalendarClock, GitMerge, Link2, Mail, MapPin, MessageSquare, PawPrint, Phone, SearchX, Unlink } from 'lucide-react';
 import { adminPath } from '../../config';
 import { Badge, StatusBadge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
 import { Field, Textarea } from '../../components/form';
 import { Block, Callout, EmptyState, FormError } from '../../components/layout';
+import { useMediaViewer } from '../../components/MediaLightbox';
 import { useToast } from '../../components/toast';
 import { CATEGORIES } from '../../data/constants';
 import { useAdminData } from '../../data/context';
@@ -78,6 +79,7 @@ function formatDateTimeComparison(
 /** Unified Related Reports section: candidate review cards, linked report traceability, and unlink support. */
 export default function RelatedReportsBlock({ c, openDialog }: { c: Case; openDialog: OpenCaseDialog }) {
   const { state, reload } = useAdminData();
+  const { openMedia } = useMediaViewer();
   const toast = useToast();
   const linked = state.cases.filter((x) => c.relatedCaseIds.includes(x.id));
   const closed = c.status === 'closed';
@@ -181,8 +183,8 @@ export default function RelatedReportsBlock({ c, openDialog }: { c: Case; openDi
       action={!closed ? <Button size="sm" icon={Link2} onClick={() => openDialog({ kind: 'link' })}>Link Reports</Button> : undefined}
     >
       {c.duplicateOfReportId ? (
-        <Callout tone="amber" title={`LINKED TO Report #${c.duplicateOfReportId}`} className="mb-4">
-          This report was confirmed as a related report and linked to the primary case. Its original details, reporter, and evidence remain preserved.
+        <Callout tone="amber" title={`Merged into Case #SS-${new Date(c.reportedAt).getFullYear()}-${String(c.duplicateOfReportId).padStart(4, '0')}`} className="mb-4">
+          This report was merged into the master case while preserving its original details, reporter, media, location, and independent concern tracking.
         </Callout>
       ) : null}
 
@@ -289,33 +291,117 @@ export default function RelatedReportsBlock({ c, openDialog }: { c: Case; openDi
         <div className="mt-4 border-t border-solid pt-4" style={{ borderColor: 'var(--sa-line-soft)' }}>
           <p className="sa-label mb-2 flex items-center gap-1.5">
             <GitMerge size={14} aria-hidden="true" />
-            Linked Reports ({mergedList.length})
+            Merged Reports ({mergedList.length})
           </p>
-          <ul className="m-0 flex list-none flex-col gap-2 p-0">
-            {mergedList.map((m) => (
-              <li key={m.reportId} className="sa-record flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="flex flex-wrap items-center gap-2">
-                    <span className="sa-ref">{m.reference}</span>
-                    <Badge tone="neutral">LINKED TO {c.id}</Badge>
-                    {m.photoCount > 0 ? <Badge>{m.photoCount} photo(s) preserved</Badge> : null}
-                  </p>
-                  <p className="sa-small mt-1">{m.description || 'No description'}</p>
-                  <p className="sa-meta mt-1">
-                    Original reporter: {m.reporterName || 'Unknown'}
-                    {m.createdAt ? ` · Submitted ${fmtDateTime(m.createdAt)}` : ''}
-                    {m.mergedAt ? ` · Linked ${fmtDateTime(m.mergedAt)}` : ''}
-                    {m.mergedByName ? ` by ${m.mergedByName}` : ''}
-                  </p>
-                  {m.mergeNotes ? <p className="sa-small sa-text-2 mt-0.5">Notes: {m.mergeNotes}</p> : null}
-                </div>
-                {!closed ? (
-                  <Button size="sm" variant="ghost" icon={Unlink} onClick={() => { setUnmerging(m); setUnmergeReason(''); setUnmergeError(null); }}>
-                    Unlink
-                  </Button>
-                ) : null}
-              </li>
-            ))}
+          <ul className="m-0 flex list-none flex-col gap-3 p-0">
+            {mergedList.map((m) => {
+              const mediaItems = (m.media ?? []).map((med, i) => ({
+                url: med.fileUrl,
+                kind: (med.mediaType || '').toLowerCase().includes('video') ? ('video' as const) : ('photo' as const),
+                title: `${m.reference} · Media ${i + 1}`,
+                source: `Submitted by ${m.reporterName || 'original reporter'}`,
+                date: m.createdAt ? fmtDateTime(m.createdAt) : '',
+              }));
+              return (
+                <li key={m.reportId} className="sa-record flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="sa-ref">{m.reference}</span>
+                      <Badge tone="neutral">{m.mergedIntoLabel || `Merged into Case #${c.id}`}</Badge>
+                      {m.categoryLabel ? <Badge tone="brand">{m.categoryLabel}</Badge> : null}
+                      {m.originalStatusLabel ? <Badge tone="neutral">Original status: {m.originalStatusLabel}</Badge> : null}
+                      {m.photoCount > 0 ? <Badge>{m.photoCount} media item(s)</Badge> : null}
+                    </div>
+
+                    <p className="sa-small text-[#1c1917]">{m.description || 'No description'}</p>
+                    {m.condition ? (
+                      <p className="sa-small sa-text-2 whitespace-pre-line rounded border border-[var(--sa-line-soft,#e7e2da)] bg-[var(--sa-sand,#f5f4f0)]/50 px-2.5 py-1.5">
+                        {m.condition}
+                      </p>
+                    ) : null}
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--sa-ink-2,#57534e)]">
+                      {m.locationLandmark || (m.latitude != null && m.longitude != null) ? (
+                        <span className="inline-flex items-center gap-1">
+                          <MapPin size={12} aria-hidden="true" />
+                          <span>
+                            {m.locationLandmark || 'Pinned spot'}
+                            {m.latitude != null && m.longitude != null ? ` (${m.latitude.toFixed(5)}, ${m.longitude.toFixed(5)})` : ''}
+                          </span>
+                        </span>
+                      ) : null}
+                      <span>
+                        Reporter: {m.reporterName || 'Unknown'}
+                        {m.reporterUnit ? ` (${m.reporterUnit})` : ''}
+                      </span>
+                      {m.reporterPhone ? (
+                        <span className="inline-flex items-center gap-1"><Phone size={12} aria-hidden="true" />{m.reporterPhone}</span>
+                      ) : null}
+                      {m.reporterEmail ? (
+                        <span className="inline-flex items-center gap-1"><Mail size={12} aria-hidden="true" />{m.reporterEmail}</span>
+                      ) : null}
+                    </div>
+
+                    <p className="sa-meta">
+                      Report ID #{m.reportId}
+                      {m.createdAt ? ` · Submitted ${fmtDateTime(m.createdAt)}` : ''}
+                      {m.mergedAt ? ` · Merged ${fmtDateTime(m.mergedAt)}` : ''}
+                      {m.mergedByName ? ` by ${m.mergedByName}` : ''}
+                    </p>
+                    {m.mergeNotes ? <p className="sa-small sa-text-2">Merge notes: {m.mergeNotes}</p> : null}
+
+                    {mediaItems.length > 0 ? (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {mediaItems.map((item, idx) => (
+                          <button
+                            key={`${m.reportId}-med-${idx}`}
+                            type="button"
+                            onClick={() => openMedia(mediaItems, idx)}
+                            className="h-14 w-14 overflow-hidden rounded-lg border border-[var(--sa-line,#e7e2da)] bg-stone-100 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--sa-brand-tint)]"
+                            title={`Open ${item.title}`}
+                          >
+                            {item.kind === 'video' ? (
+                              <span className="flex h-full w-full items-center justify-center text-[11px] font-medium text-stone-700">Video</span>
+                            ) : (
+                              <img src={item.url} alt={item.title} className="h-full w-full object-cover" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    {!closed && m.reporterId ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        icon={MessageSquare}
+                        onClick={() => {
+                          const firstName = (m.reporterName || '').trim().split(/\s+/)[0] || 'reporter';
+                          openDialog({
+                            kind: 'messages',
+                            target: {
+                              kind: 'direct',
+                              party: 'reporter',
+                              name: m.reporterName || 'Reporter',
+                              label: `Message ${firstName}`,
+                              reportId: m.reference,
+                            },
+                          });
+                        }}
+                      >
+                        Message {(m.reporterName || '').trim().split(/\s+/)[0] || 'reporter'}
+                      </Button>
+                    ) : null}
+                    {!closed ? (
+                      <Button size="sm" variant="ghost" icon={Unlink} onClick={() => { setUnmerging(m); setUnmergeReason(''); setUnmergeError(null); }}>
+                        Unmerge
+                      </Button>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       ) : null}

@@ -147,16 +147,53 @@ export interface ApiCaseDetail {
   claims: ApiClaim[];
   links: ApiLink[];
   duplicate_of_report_id?: number | null;
+  concerns?: Array<{
+    concern_id: number;
+    master_report_id: number;
+    source_report_id: number;
+    source_reference: string;
+    is_primary: boolean;
+    concern_family: CategoryId;
+    concern_label: string;
+    original_status_id?: number | null;
+    original_status_label?: string | null;
+    status: 'ongoing_assessment' | 'in_progress' | 'resolved' | 'not_applicable';
+    status_label: string;
+    outcome?: string | null;
+    threat_ongoing?: string | null;
+    details?: Record<string, string>;
+    resolution_notes?: string | null;
+    resolved_at?: string | null;
+    resolved_by?: number | null;
+    resolved_by_name?: string | null;
+    updated_at?: string | null;
+    updated_by_name?: string | null;
+  }>;
+  open_concerns_count?: number;
   merged_reports?: Array<{
     report_id: number;
     reference: string;
+    category_family?: CategoryId;
+    category_label?: string | null;
+    reporter_id?: number | null;
     reporter_name: string | null;
+    reporter_phone?: string | null;
+    reporter_email?: string | null;
+    reporter_unit?: string | null;
     created_at: string | null;
     merged_at: string | null;
     merged_by_name: string | null;
     merge_notes: string | null;
+    merged_into_label?: string | null;
     description: string | null;
+    condition?: string | null;
+    location_landmark?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    original_status_id?: number | null;
+    original_status_label?: string | null;
     photo_count: number;
+    media?: Array<{ media_id: number; file_url: string; media_type?: string | null }>;
   }>;
   /** Notification alerts sent or scheduled about this case (missing pet or found animal only). */
   alerts?: ApiCaseAlert[];
@@ -416,6 +453,23 @@ export interface ApiCategories { subdivision_id: number | null; subdivision: { n
 /** The reporting area the server holds (GET /reports/coverage-area): where the maps open, the outline they draw and the radius reports must fall in. */
 export interface ApiCoverage { center_label: string; center_latitude: number; center_longitude: number; radius_meters: number; boundary_polygon: { lat: number; lng: number }[]; is_active: boolean }
 
+export interface ApiLandmark {
+  landmark_id: number;
+  name: string;
+  category: string;
+  description: string | null;
+  subdivision_id: number | null;
+  barangay_id: number;
+  latitude: number;
+  longitude: number;
+  is_holding_facility: boolean;
+  status: string;
+  subdivision_name?: string | null;
+  barangay_name?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
 export interface ApiAnalytics {
   case_lifecycle: {
     received: number; closed: number; resolved_share: number | null; median_days_to_close: number | null;
@@ -535,6 +589,7 @@ export const adminApi = {
   move: (id: number, to: CaseStatus, note?: string) => httpPost(`/cases/${id}/status`, { to, note: note || null }),
   priority: (id: number, priority: Priority, reason: string) => httpPut(`/cases/${id}/priority`, { priority, reason }),
   assessment: (id: number, body: Record<string, unknown>) => httpPut(`/cases/${id}/assessment`, body),
+  updateConcern: (id: number, concernId: number, body: Record<string, unknown>) => httpPut(`/cases/${id}/concerns/${concernId}`, body),
   close: (id: number, body: Record<string, unknown>) => httpPost(`/cases/${id}/close`, body),
   reopen: (id: number, reason: string) => httpPost(`/cases/${id}/reopen`, { reason }),
   createReferral: (id: number, body: Record<string, unknown>) => httpPost(`/cases/${id}/referrals`, body),
@@ -733,6 +788,13 @@ export const adminApi = {
   settings: (subdivisionId: number) => httpGet<ApiCaseSettings>(`/cases/settings/${subdivisionId}`),
   saveSettings: (subdivisionId: number, body: ApiCaseSettings) => httpPut<ApiCaseSettings>(`/cases/settings/${subdivisionId}`, body),
   categories: () => httpGet<ApiCategories>('/cases/categories'),
+
+  landmarks: (subdivisionId: number) => httpGet<ApiLandmark[]>('/landmarks', { subdivision_id: subdivisionId }),
+  createLandmark: (body: { name: string; category?: string; description?: string | null; subdivision_id?: number | null; latitude: number; longitude: number }) =>
+    httpPost<ApiLandmark>('/landmarks', body),
+  updateLandmark: (id: number, body: { name?: string; category?: string; description?: string | null; latitude?: number; longitude?: number }) =>
+    httpPut<ApiLandmark>(`/landmarks/${id}`, body),
+  deleteLandmark: (id: number) => httpDelete<{ message: string; deleted_landmark_id: number }>(`/landmarks/${id}`),
 
   analytics: (startDate: string, endDate: string) => httpGet<ApiAnalytics>('/analytics/subdivision', { start_date: startDate, end_date: endDate, group_by: 'week' }),
 };

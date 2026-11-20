@@ -1568,6 +1568,9 @@ ensure_owner_communication_and_warning_columns()
 ensure_external_referral_columns()
 ensure_pet_tag_tables()
 
+from app.services.case_concerns import ensure_case_concerns_table  # noqa: E402
+ensure_case_concerns_table(engine)
+
 # Case workflow alignment (Subdivision Admin): new columns, tables, the six categories and the backfill. Idempotent, never
 # drops or rewrites existing data (app/db_migrations/case_alignment.py). strict=True: if the schema still cannot support the
 # case workflow code afterwards, this raises CaseAlignmentError and the application does NOT start, instead of running

@@ -105,6 +105,13 @@ def _close_case_message_threads(session: Session, report_id: int, report) -> Non
     """Close any open Subdivision Leader-to-resident or resident-to-resident conversations when a report closes."""
     try:
         from app.services import case_messaging
+        from app.utils import case_state
+        dup_of = getattr(report, "duplicate_of_report_id", None) if report is not None else None
+        if dup_of and getattr(report, "current_status_id", None) == 18:
+            from app.models.report import Report
+            master = session.get(Report, dup_of)
+            if master is not None and not case_state.is_closed(master):
+                return
         actor_id = getattr(report, "closed_by", None) if report is not None else None
         # The residents in the conversation read this line: the standard sentence, never the Leader's private closure notes
         # (closure_reason can hold assistance details and internal remarks).

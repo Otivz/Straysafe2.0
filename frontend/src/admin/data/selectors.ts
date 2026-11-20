@@ -262,7 +262,22 @@ export function warningEligibility(c: Case, s: AdminState): { ok: boolean; reaso
   return { ok: true };
 }
 
+export function unresolvedConcernsOf(c: Case) {
+  const list = c.concerns ?? [];
+  if (list.length <= 1) return [];
+  return list.filter((x) => x.status !== 'resolved' && x.status !== 'not_applicable');
+}
+
 export function dispositionAvailability(c: Case, id: DispositionId): { ok: boolean; reason?: string } {
+  if (id !== 'invalid_report' && id !== 'duplicate_report' && id !== 'withdrawn_by_reporter') {
+    const pending = unresolvedConcernsOf(c);
+    if (pending.length > 0) {
+      return {
+        ok: false,
+        reason: `Unresolved concerns remain (${pending.map((x) => x.concernLabel).join(', ')}). Resolve each concern first.`,
+      };
+    }
+  }
   switch (id) {
     // A recovery is only ever the OWNER's confirmation (in the app, or by phone / in person and recorded by the Leader): closing a case never says it
     case 'pet_recovered': return c.category === 'lost_pet' ? { ok: false, reason: 'Only the owner’s confirmation records a recovery. Use “Record owner confirmation” on the case.' } : { ok: false, reason: 'Only for lost-pet cases.' };

@@ -35,6 +35,19 @@ LinkTypeId = Literal["related", "duplicate", "same_animal", "same_incident"]
 ClaimDecisionId = Literal["under_review", "needs_info", "accepted", "rejected"]
 PublicationModeId = Literal["immediate", "review"]
 CategoryFamilyId = Literal["lost_pet", "found_animal", "nuisance", "safety", "injured", "other"]
+ConcernStatusId = Literal["ongoing_assessment", "in_progress", "resolved", "not_applicable"]
+
+
+class ConcernUpdateIn(BaseModel):
+    status: ConcernStatusId
+    outcome: Optional[str] = Field(None, max_length=160)
+    threat_ongoing: Optional[str] = Field(None, max_length=10)
+    resolution_notes: Optional[str] = Field(None, max_length=2000)
+    final_animal_condition: Optional[str] = Field(None, max_length=500)
+    assistance_provided: Optional[str] = Field(None, max_length=1000)
+    security_actions_performed: Optional[str] = Field(None, max_length=1000)
+    advisory_status: Optional[str] = Field(None, max_length=200)
+    referral_outcome: Optional[str] = Field(None, max_length=500)
 
 
 def _clean(value: Optional[str]) -> Optional[str]:

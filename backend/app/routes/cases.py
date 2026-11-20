@@ -30,10 +30,10 @@ from app.models.case_records import CaseContactLog, CaseFollowUp, OwnershipClaim
 from app.models.barangay_referral import BarangayReferral
 from app.models.report import ReportCategory
 from app.models.user import Barangay, Subdivision, User
-from app.schemas.case import (AssessmentIn, CaseSettings, CloseIn, ComplianceIn, ContactIn, ClaimReviewIn, DuplicateDecisionIn, FollowUpCancel, FollowUpDone,
+from app.schemas.case import (AssessmentIn, CaseSettings, CloseIn, ComplianceIn, ConcernUpdateIn, ContactIn, ClaimReviewIn, DuplicateDecisionIn, FollowUpCancel, FollowUpDone,
                               FollowUpIn, LinkIn, NoteIn, PriorityChange, ReferralIn, ReferralUpdateIn, ReopenIn, StatusMove,
                               UnlinkIn)
-from app.services import case_claims, case_compliance, case_lifecycle as L, case_notes, case_summaries, case_view, case_work
+from app.services import case_claims, case_compliance, case_concerns, case_lifecycle as L, case_notes, case_summaries, case_view, case_work
 from app.utils import case_policy, case_vocab as V
 from app.utils.auth import get_current_user, verify_subdivision_scope
 
@@ -171,6 +171,16 @@ def put_assessment(report_id: int, body: AssessmentIn, db: Session = Depends(get
 def put_priority(report_id: int, body: PriorityChange, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     report = L.case_for_staff(db, report_id, user, write=True)
     L.set_priority(db, report, user, body.priority, body.reason)
+    db.commit()
+    return _detail(db, report_id, user)
+
+
+@router.put("/{report_id}/concerns/{concern_id}")
+def put_concern(report_id: int, concern_id: int, body: ConcernUpdateIn, request: Request,
+                db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    report = L.case_for_staff(db, report_id, user, write=True)
+    meta = _meta(request)
+    case_concerns.update_concern(db, report, concern_id, user, body, ip=meta["ip"], user_agent=meta["user_agent"])
     db.commit()
     return _detail(db, report_id, user)
 

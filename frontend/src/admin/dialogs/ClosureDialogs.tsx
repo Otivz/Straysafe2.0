@@ -5,9 +5,9 @@ import { Dialog } from '../components/Dialog';
 import { Checkbox, Field, FieldGroup, Input, OptionGroup, Select, Textarea } from '../components/form';
 import { Callout, FormError, Kv } from '../components/layout';
 import { useToast } from '../components/toast';
-import { CATEGORIES, DISPOSITIONS, OFFERED_DISPOSITION_IDS, OUTCOME_GROUPS, PRIORITIES, VERIFICATION } from '../data/constants';
+import { CATEGORIES, DANGEROUS_OUTCOMES, DISPOSITIONS, OFFERED_DISPOSITION_IDS, OUTCOME_GROUPS, PRIORITIES, VERIFICATION, WELFARE_OUTCOMES } from '../data/constants';
 import { useAdminData } from '../data/context';
-import { dispositionAvailability, openItems } from '../data/selectors';
+import { dispositionAvailability, openItems, unresolvedConcernsOf } from '../data/selectors';
 import type { DispositionId, OutcomeGroup } from '../data/types';
 import { daysSince, fmtDate, fmtDateTime, plural } from '../../preview/lib/format';
 import { useSubmit } from '../lib/useSubmit';
@@ -16,24 +16,6 @@ import { FormFooter, type CaseDialogProps } from './BasicDialogs';
 const ACTION_KINDS = new Set(['follow_up', 'owner_contact', 'warning', 'compliance', 'referral', 'referral_update', 'notice', 'link']);
 const FOLLOW_UP_CHOICES = [['', 'No further follow-up needed'], ['3', 'Check again in 3 days'], ['7', 'Check again in 7 days'], ['14', 'Check again in 14 days'], ['30', 'Check again in 30 days']] as const;
 const GROUPS: OutcomeGroup[] = ['resolved', 'unresolved', 'invalid'];
-const WELFARE_OUTCOMES = [
-  'Treated and Released',
-  'Retrieved by Owner',
-  'Transferred to Veterinary Clinic',
-  'Transferred to Animal Shelter / Barangay',
-  'Under Continued Monitoring',
-  'Deceased / Humanely Handled',
-  'Other',
-] as const;
-const DANGEROUS_OUTCOMES = [
-  'Animal No Longer Present',
-  'Animal Behavior No Longer Threatening',
-  'Retrieved or Handled by Authorized Personnel',
-  'Referred to Appropriate Authorities',
-  'Owner Identified and Contacted',
-  'Under Continued Monitoring',
-  'Other',
-] as const;
 
 /**
  * Close case (A13). Closing needs a documented disposition and reason, and the interface keeps "closed" from being read
@@ -43,23 +25,29 @@ export function CloseCaseDialog({ c, onClose }: CaseDialogProps) {
   const { dispatch } = useAdminData();
   const toast = useToast();
   const { pending, error, run } = useSubmit();
+  const injuredConcern = (c.concerns ?? []).find((x) => x.concernFamily === 'injured' && x.status !== 'not_applicable');
+  const safetyConcern = (c.concerns ?? []).find((x) => x.concernFamily === 'safety' && x.status !== 'not_applicable');
+  const pendingConcerns = unresolvedConcernsOf(c);
+
   const [step, setStep] = useState<'form' | 'confirm'>('form');
   const [disposition, setDisposition] = useState<DispositionId | ''>('');
   const [reason, setReason] = useState('');
   const [followDays, setFollowDays] = useState('');
   const [ack, setAck] = useState(false);
-  const [welfareOutcome, setWelfareOutcome] = useState('');
-  const [finalCondition, setFinalCondition] = useState('');
-  const [assistanceProvided, setAssistanceProvided] = useState('');
-  const [referralOutcome, setReferralOutcome] = useState('');
-  const [dangerousOutcome, setDangerousOutcome] = useState('');
-  const [securityActions, setSecurityActions] = useState('');
-  const [advisoryStatus, setAdvisoryStatus] = useState('');
-  const [threatOngoing, setThreatOngoing] = useState('No');
+  const [welfareOutcome, setWelfareOutcome] = useState(injuredConcern?.outcome ?? '');
+  const [finalCondition, setFinalCondition] = useState(injuredConcern?.details?.final_animal_condition ?? '');
+  const [assistanceProvided, setAssistanceProvided] = useState(injuredConcern?.details?.assistance_provided ?? '');
+  const [referralOutcome, setReferralOutcome] = useState(
+    injuredConcern?.details?.referral_outcome ?? safetyConcern?.details?.referral_outcome ?? '',
+  );
+  const [dangerousOutcome, setDangerousOutcome] = useState(safetyConcern?.outcome ?? '');
+  const [securityActions, setSecurityActions] = useState(safetyConcern?.details?.security_actions_performed ?? '');
+  const [advisoryStatus, setAdvisoryStatus] = useState(safetyConcern?.details?.advisory_status ?? '');
+  const [threatOngoing, setThreatOngoing] = useState(safetyConcern?.threatOngoing || 'No');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const isInjuredCase = c.category === 'injured';
-  const isSafetyCase = c.category === 'safety';
+  const isInjuredCase = c.category === 'injured' || Boolean(injuredConcern);
+  const isSafetyCase = c.category === 'safety' || Boolean(safetyConcern);
   const requiresWelfare = isInjuredCase && disposition !== 'invalid_report' && disposition !== 'duplicate_report';
   const requiresSafetyOutcome = isSafetyCase && disposition !== 'invalid_report' && disposition !== 'duplicate_report';
 
@@ -144,6 +132,11 @@ export function CloseCaseDialog({ c, onClose }: CaseDialogProps) {
   return (
     <Dialog size="lg" title="Close case" description="Document how this case ended. You can reopen it later if the concern returns." onClose={onClose} dirty={disposition !== '' || reason !== ''} onSubmit={next} footer={({ requestClose }) => <FormFooter pending={false} label="Review and close" requestClose={requestClose} />}>
       {c.category === 'lost_pet' ? <Callout tone="info" title="Closing never says the pet is home.">If the owner told you the pet is home, cancel and use “Record owner confirmation” instead: it records who confirmed, how and when. Close here only when the search ends some other way.</Callout> : null}
+      {pendingConcerns.length > 0 ? (
+        <Callout tone="amber" title={`${plural(pendingConcerns.length, 'unresolved concern')} remaining`}>
+          This consolidated case cannot be closed as resolved/handed-off while <strong>{pendingConcerns.map((x) => x.concernLabel).join(', ')}</strong> remain active. Update and resolve each concern under <strong>Consolidated Concerns</strong> first.
+        </Callout>
+      ) : null}
       <section aria-label="Case summary">
         <p className="sa-label mb-2">Case summary</p>
         <Kv rows={[

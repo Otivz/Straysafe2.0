@@ -5753,12 +5753,16 @@ def _merge_group(db: Session, actor: User, report_ids: List[int], notes: str, re
         raise HTTPException(status_code=409, detail=conflict)
 
     if not commit:
+        from app.services import case_concerns
+        case_concerns.sync_concerns_on_merge(db, primary_report, duplicates)
         for rep in duplicates:
             _merge_one(db, actor, rep, primary_report, notes, req)
         db.flush()
         resync_case_pet_identity(db, primary_report, actor, req)
         return primary_report
     try:
+        from app.services import case_concerns
+        case_concerns.sync_concerns_on_merge(db, primary_report, duplicates)
         for rep in duplicates:
             _merge_one(db, actor, rep, primary_report, notes, req)
         db.flush()
@@ -5840,16 +5844,22 @@ def unmerge_duplicate_report(
         raise HTTPException(status_code=400, detail=f"Report #{report_id} is not currently merged.")
 
     prev_primary_id = report.duplicate_of_report_id
+    from app.services import case_concerns
+    from app.utils import case_vocab as V
+    orig_status_id = case_concerns.detach_concern_on_unmerge(db, report, prev_primary_id)
 
     # Revert merge fields
     report.duplicate_of_report_id = None
     report.merged_at = None
     report.merged_by = None
     report.merge_notes = None
-    # Reset status back to Verified (2) if assigned, else Reported (1)
-    new_status = 2 if report.assigned_leader_id else 1
+    # Restore pre-merge status when preserved, else Verified (2) if assigned, else Reported (1)
+    if orig_status_id in (1, 2, 4, 5, 6, 7, 8, 13, 15, 16):
+        new_status = orig_status_id
+    else:
+        new_status = 2 if report.assigned_leader_id else 1
     report.current_status_id = new_status
-    report.case_status = "under_review" if report.assigned_leader_id else "reported"
+    report.case_status = V.case_status_from_legacy(new_status)
     report.closure_disposition = None
     # Rule 7: it was seen through the main case; on its own it needs its own decision (Pending Review until then)
     report_visibility.reset_to_pending(db, report, f"Separated from Case #{prev_primary_id}: visibility must be decided again.")

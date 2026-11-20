@@ -113,14 +113,14 @@ export function LiveAdminDataProvider({ children }: { children: ReactNode }) {
     if (subdivisionId === null) return;           // shown as an error by the value below, without setting state here
     const token = ++loadToken.current;           // (the 'loading' state is set by reload(); the first load starts in it)
 
-    const [sum, queue, users, pets, alerts, anns, notifs, cs, cats, prefs, me, coverage, matchList] = await Promise.allSettled([
+    const [sum, queue, users, pets, alerts, anns, notifs, cs, cats, prefs, me, coverage, landmarkRows, matchList] = await Promise.allSettled([
       adminApi.caseSummaries(), adminApi.workQueue(), adminApi.users(), adminApi.pets(subdivisionId), adminApi.alerts(), adminApi.announcements(subdivisionId),
       adminApi.notifications(), adminApi.settings(subdivisionId), adminApi.categories(), adminApi.preferences(), adminApi.user(userId), adminApi.coverage(),
-      adminApi.lostFoundMatches(),
+      adminApi.landmarks(subdivisionId), adminApi.lostFoundMatches(),
     ]);
     if (token !== loadToken.current) return;                       // a newer load has started; this answer is out of date
 
-    for (const r of [sum, queue, users, pets, alerts, anns, notifs, cs, cats, prefs, me, coverage, matchList]) if (r.status === 'rejected' && sessionEnded(r.reason)) return;
+    for (const r of [sum, queue, users, pets, alerts, anns, notifs, cs, cats, prefs, me, coverage, landmarkRows, matchList]) if (r.status === 'rejected' && sessionEnded(r.reason)) return;
 
     // The case list is the heart of the interface: without it there is nothing to show, and nothing is invented in its place.
     if (sum.status === 'rejected') {
@@ -175,12 +175,14 @@ export function LiveAdminDataProvider({ children }: { children: ReactNode }) {
     if (csv) stored.current = csv;
     const meUser = part('profile', 'Your profile', me);
 
-    // The case maps draw the server's own reporting area. The Admin has no use for the landmark list, so none is offered.
     const area = part('area', 'The reporting area', coverage);
+    const marks = landmarkRows.status === 'fulfilled'
+      ? landmarkRows.value.filter((l) => !l.is_holding_facility).map((l) => ({ id: l.landmark_id, name: l.name, lat: l.latitude, lng: l.longitude }))
+      : null;
     if (area) {
       setLiveGeography({
         coverage: { id: 0, subdivision_id: subdivisionId, center_label: area.center_label, center_latitude: area.center_latitude, center_longitude: area.center_longitude, radius_meters: area.radius_meters, boundary_polygon: area.boundary_polygon, is_active: area.is_active },
-        landmarks: [],
+        landmarks: marks,
       });
     }
 
