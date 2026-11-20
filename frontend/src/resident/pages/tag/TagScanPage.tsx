@@ -2,9 +2,9 @@ import '../../../preview/styles/tokens.css';
 import '../../styles/resident.css';
 import { lazy, Suspense, useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
-import { Camera, CircleCheck, Clock, Eye, HeartHandshake, LocateFixed, MapPin, Maximize2, PawPrint, RefreshCw, Send, TriangleAlert } from 'lucide-react';
+import { Camera, CircleCheck, Eye, HeartHandshake, LocateFixed, MapPin, Maximize2, PawPrint, Send } from 'lucide-react';
 import { MediaLightbox } from '../../../admin/components/MediaLightbox';
-import { ApiDetailError, httpGet, httpPost } from '../../../live/http';
+import { httpGet, httpPost } from '../../../live/http';
 import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
 import { Checkbox, Field, Input, Textarea } from '../../components/form';
 import { Button, Callout, Skeleton } from '../../components/ui';
@@ -21,6 +21,33 @@ interface PublicTag {
   alert_id: number | null;
 }
 
+const TAG_MOUNT_DEDUPE_MS = 2000;
+const recentTagLoads = new Map<string, Promise<PublicTag>>();
+
+function fetchPublicTag(token: string, force = false): Promise<PublicTag> {
+  if (force) {
+    recentTagLoads.delete(token);
+  }
+  const existing = recentTagLoads.get(token);
+  if (existing) {
+    return existing;
+  }
+  const promise = httpGet<PublicTag>(`/t/${encodeURIComponent(token)}`);
+  recentTagLoads.set(token, promise);
+  const timer = window.setTimeout(() => {
+    if (recentTagLoads.get(token) === promise) {
+      recentTagLoads.delete(token);
+    }
+  }, TAG_MOUNT_DEDUPE_MS);
+  promise.catch(() => {
+    window.clearTimeout(timer);
+    if (recentTagLoads.get(token) === promise) {
+      recentTagLoads.delete(token);
+    }
+  });
+  return promise;
+}
+
 const errorText = (err: unknown, fallback: string) => {
   const e = err as { status?: number; message?: string; kind?: string };
   if (e?.status === 429) return 'Too many messages were sent just now. Please wait a while and try again.';
@@ -33,44 +60,25 @@ const errorText = (err: unknown, fallback: string) => {
  * pet's photo, name, type and subdivision, a safety note, and a "tell the owner" form. The finder never sees the owner's
  * details; the owner gets a notification. Phase 2 of docs/06-future-proposals/PET_QR_TAGS_PLAN_2026-11-17.md.
  */
-function formatCountdown(totalSeconds: number): string {
-  const s = Math.max(0, Math.floor(totalSeconds));
-  const mins = Math.floor(s / 60);
-  const secs = s % 60;
-  if (mins > 0) return `${mins}m ${String(secs).padStart(2, '0')}s`;
-  return `${secs}s`;
-}
-
 export default function TagScanPage() {
   const token = useParams().token ?? '';
   const [tag, setTag] = useState<PublicTag | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [cooldownSeconds, setCooldownSeconds] = useState<number | null>(null);
-  const [cooldownMessage, setCooldownMessage] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const [sentCoords, setSentCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
-  const loadTag = useCallback(() => {
-    setTag(null);
-    setLoadError(null);
-    setCooldownSeconds(null);
-    setCooldownMessage(null);
+  const loadTag = useCallback((force = false) => {
     let live = true;
-    httpGet<PublicTag>(`/t/${encodeURIComponent(token)}`).then(
-      (t) => { if (live) setTag(t); },
+    fetchPublicTag(token, force).then(
+      (t) => {
+        if (!live) return;
+        setLoadError(null);
+        setTag(t);
+      },
       (err: unknown) => {
         if (!live) return;
-        if (err instanceof ApiDetailError && err.data.code === 'QR_SCAN_COOLDOWN') {
-          const rem = typeof err.data.remaining_seconds === 'number' ? err.data.remaining_seconds : 3600;
-          setCooldownMessage(
-            typeof err.data.message === 'string'
-              ? err.data.message
-              : 'QR Code Already Scanned. Please try again after the 1-hour cooldown period.',
-          );
-          setCooldownSeconds(rem);
-          return;
-        }
+        setTag(null);
         const status = (err as { status?: number })?.status;
         setLoadError(status === 404 ? 'This tag is no longer active.' : errorText(err, 'This tag could not be opened right now.'));
       },
@@ -80,16 +88,8 @@ export default function TagScanPage() {
 
   useEffect(() => {
     document.title = 'Found a pet? · StraySafe';
-    return loadTag();
+    return loadTag(false);
   }, [loadTag]);
-
-  useEffect(() => {
-    if (cooldownSeconds === null || cooldownSeconds <= 0) return;
-    const timer = window.setInterval(() => {
-      setCooldownSeconds((prev) => (prev !== null && prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [cooldownSeconds]);
 
   return (
     <div className="sa-root rs-root">
@@ -97,24 +97,7 @@ export default function TagScanPage() {
         <main id="main" className="rs-main rs-content">
           <div className="rs-stack">
             <p className="rs-meta" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><PawPrint size={16} aria-hidden="true" /> StraySafe pet tag</p>
-            {cooldownMessage ? (
-              <Callout tone="amber" icon={Clock} title={cooldownMessage}>
-                <div className="rs-stack-sm">
-                  {cooldownSeconds !== null && cooldownSeconds > 0 ? (
-                    <p className="m-0 font-medium">
-                      Remaining cooldown time: <strong>{formatCountdown(cooldownSeconds)}</strong>
-                    </p>
-                  ) : (
-                    <p className="m-0 font-medium">The 1-hour cooldown period has ended. You can scan this QR code again now.</p>
-                  )}
-                  {cooldownSeconds === 0 ? (
-                    <Button size="sm" variant="primary" icon={RefreshCw} onClick={() => { loadTag(); }}>
-                      Scan QR code again
-                    </Button>
-                  ) : null}
-                </div>
-              </Callout>
-            ) : loadError ? (
+            {loadError ? (
               <Callout tone="amber" title={loadError}>
                 The owner may have replaced or turned off this tag. If the animal seems lost, tell the subdivision guardhouse.
               </Callout>
@@ -122,9 +105,6 @@ export default function TagScanPage() {
               <Skeleton h={240} />
             ) : (
               <>
-                <Callout tone="sage" icon={CircleCheck} title="QR code scanned successfully">
-                  Scan recorded. This QR tag is now in a 1-hour scan cooldown.
-                </Callout>
                 <div className="rs-pethero rs-pethero--center">
                   {tag.photo_url ? (
                     <div className="rs-tag-avatar__wrap">
@@ -171,10 +151,6 @@ export default function TagScanPage() {
                 {tag.is_lost ? (
                   <Callout tone="red" title="This pet is missing.">Its owner is looking for it. Please tell them where it is.</Callout>
                 ) : null}
-
-                <Callout tone="amber" icon={TriangleAlert} title="Stay safe">
-                  Keep your distance and do not chase or grab the animal. If it is frightened or aggressive, tell the subdivision guardhouse.
-                </Callout>
 
                 {tag.viewer === 'owner' ? (
                   <Callout tone="info">

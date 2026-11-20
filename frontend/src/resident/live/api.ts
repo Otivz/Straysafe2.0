@@ -322,9 +322,17 @@ export const residentApi = {
   disablePetTag: (id: number) => httpPost<ApiPetTag>(`/pets/${id}/tag/disable`),
   petTagQr: (id: number) => httpGetBlob(`/pets/${id}/tag/qr.png`),
   petTagScans: (id: number) => httpGet<ApiPetTagScans>(`/pets/${id}/tag/scans`),
-  resolvePetTagScan: (id: number, scanId: number) => httpPost<{ resolved: number }>(`/pets/${id}/tag/scans/${scanId}/resolve`),
+  resolvePetTagScan: (id: number, scanId: number, body?: { recovered?: boolean; note?: string }) =>
+    httpPost<{ resolved: number; recovered: boolean; pet_status: string; report_id?: number | null; alert_id?: number | null }>(
+      `/pets/${id}/tag/scans/${scanId}/resolve`,
+      body,
+    ),
   /** "Pet is back home": every open message resolved (and any shared phone number deleted). */
-  resolveAllPetTagScans: (id: number) => httpPost<{ resolved: number }>(`/pets/${id}/tag/scans/resolve`),
+  resolveAllPetTagScans: (id: number, body?: { recovered?: boolean; note?: string }) =>
+    httpPost<{ resolved: number; recovered: boolean; pet_status: string; report_id?: number | null; alert_id?: number | null }>(
+      `/pets/${id}/tag/scans/resolve`,
+      body,
+    ),
   qrCollarRequests: (petId?: number) =>
     httpGet<{ items: ApiQrCollarRequest[] }>('/qr-collar-requests/mine', petId ? { pet_id: petId } : undefined),
   requestQrCollar: (petId: number, notes?: string) =>

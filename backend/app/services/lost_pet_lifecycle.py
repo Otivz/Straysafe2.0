@@ -782,6 +782,11 @@ def confirm_recovery(db: Session, alert: LostPetAlert, *, source: str, actor: Us
         f.status, f.cancel_reason = "cancelled", "The pet was recovered."
     resolve_open_coordinations(db, locked.alert_id, actor, "The pet was recovered.")
     case_messaging.close_for_report(db, report.report_id, actor.user_id, "The owner confirmed the pet is safely home.")
+    if report.pet_id is not None:
+        pet = db.get(Pet, report.pet_id)
+        if pet is not None:
+            from app.services import pet_tags as T
+            T.resolve_scans(db, pet)
 
     # 6: who is told
     card = pet_card(db, locked)

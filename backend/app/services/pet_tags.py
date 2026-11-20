@@ -212,89 +212,30 @@ def public_card(db: Session, pet: Pet, viewer: Optional[User]) -> dict:
 
 
 def cooldown_remaining_seconds(tag: Optional[PetTag], now: Optional[datetime] = None) -> int:
-    """Remaining seconds in the 1-hour scan cooldown for this tag, or 0 if scannable."""
-    if not tag or not tag.last_scanned_at:
-        return 0
-    current = now or datetime.utcnow()
-    retry_at = tag.last_scanned_at + timedelta(minutes=SCAN_COOLDOWN_MINUTES)
-    if current >= retry_at:
-        return 0
-    return max(1, int((retry_at - current).total_seconds()))
+    """QR tag scans have no cooldown lockout."""
+    return 0
 
 
-def record_view(db: Session, tag: PetTag, pet: Pet, viewer: Optional[User], now: Optional[datetime] = None) -> PetTagScan:
+def record_view(db: Session, tag: PetTag, pet: Pet, viewer: Optional[User], now: Optional[datetime] = None) -> Optional[PetTagScan]:
     """
-    Record a successful QR code scan (`kind="view"`) and enforce the 1-hour per-tag cooldown.
-    Locks the PetTag row (`FOR UPDATE`) so concurrent scan requests cannot bypass the cooldown.
-    Repeated attempts within the cooldown never reset or extend `last_scanned_at`. Does not commit.
+    Record a QR code scan view (`kind="view"`) for non-owner scans without blocking repeated scans.
+    Deduplicates view log rows per tag within 10 minutes while always keeping the scan page accessible.
+    Does not commit.
     """
+    if viewer_kind(pet, viewer) == "owner":
+        return None
     current = now or datetime.utcnow()
-    locked_tag = db.query(PetTag).filter(PetTag.tag_id == tag.tag_id).with_for_update().first()
-    if not locked_tag or locked_tag.status != "active":
-        raise HTTPException(status_code=404, detail=NOT_ACTIVE)
-
-    last_at = locked_tag.last_scanned_at
-    if last_at is None:
-        latest = (
-            db.query(PetTagScan.created_at)
-            .filter(PetTagScan.tag_id == locked_tag.tag_id, PetTagScan.kind == "view")
-            .order_by(PetTagScan.created_at.desc(), PetTagScan.scan_id.desc())
-            .first()
-        )
-        if latest:
-            last_at = latest[0]
-
-    cooldown_delta = timedelta(minutes=SCAN_COOLDOWN_MINUTES)
-    cutoff = current - cooldown_delta
-    if last_at is not None and current < last_at + cooldown_delta:
-        retry_at = last_at + cooldown_delta
-        remaining_seconds = max(1, int((retry_at - current).total_seconds()))
-        remaining_minutes = max(1, (remaining_seconds + 59) // 60)
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "code": "QR_SCAN_COOLDOWN",
-                "message": COOLDOWN_MESSAGE,
-                "cooldown_minutes": SCAN_COOLDOWN_MINUTES,
-                "remaining_seconds": remaining_seconds,
-                "remaining_minutes": remaining_minutes,
-                "retry_after_at": retry_at.isoformat() + "Z",
-            },
-        )
-
-    # Atomic conditional update prevents concurrent requests from bypassing the cooldown even if FOR UPDATE is a no-op.
-    from sqlalchemy import or_
-    updated_rows = (
-        db.query(PetTag)
-        .filter(
-            PetTag.tag_id == locked_tag.tag_id,
-            PetTag.status == "active",
-            or_(PetTag.last_scanned_at.is_(None), PetTag.last_scanned_at <= cutoff),
-        )
-        .update({"last_scanned_at": current}, synchronize_session=False)
+    tag.last_scanned_at = current
+    cutoff = current - timedelta(minutes=10)
+    recent = (
+        db.query(PetTagScan)
+        .filter(PetTagScan.tag_id == tag.tag_id, PetTagScan.kind == "view", PetTagScan.created_at >= cutoff)
+        .first()
     )
-    if updated_rows == 0:
-        db.expire(locked_tag)
-        refreshed = db.query(PetTag).filter(PetTag.tag_id == locked_tag.tag_id).first()
-        ref_last = refreshed.last_scanned_at if refreshed and refreshed.last_scanned_at else current
-        retry_at = ref_last + cooldown_delta
-        remaining_seconds = max(1, int((retry_at - current).total_seconds()))
-        remaining_minutes = max(1, (remaining_seconds + 59) // 60)
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "code": "QR_SCAN_COOLDOWN",
-                "message": COOLDOWN_MESSAGE,
-                "cooldown_minutes": SCAN_COOLDOWN_MINUTES,
-                "remaining_seconds": remaining_seconds,
-                "remaining_minutes": remaining_minutes,
-                "retry_after_at": retry_at.isoformat() + "Z",
-            },
-        )
-
-    locked_tag.last_scanned_at = current
+    if recent is not None:
+        return recent
     scan = PetTagScan(
-        tag_id=locked_tag.tag_id,
+        tag_id=tag.tag_id,
         pet_id=pet.pet_id,
         kind="view",
         status="seen_by_owner",
