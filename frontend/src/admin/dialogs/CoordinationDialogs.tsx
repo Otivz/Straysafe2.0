@@ -234,18 +234,20 @@ const mapAgencyTypeToOrgId = (t: string): string => {
   }
 };
 
-export function ReferralDialog({ c, onClose }: { c: Case; onClose: () => void }) {
+export function ReferralDialog({ c, initialAgencyId, onClose }: { c: Case; initialAgencyId?: string; onClose: () => void }) {
   const { state, dispatch } = useAdminData();
   const toast = useToast();
   const agencies = state.settings.externalCoordination.agencies;
 
   const defaultOrg = ORGANIZATIONS[0];
-  const [selectedAgencyId, setSelectedAgencyId] = useState<string>(() => (agencies.length > 0 ? '' : 'manual'));
+  // Opened from a saved agency's button on the case: start with that agency (or 'manual' for another organization).
+  const startAgency = initialAgencyId && initialAgencyId !== 'manual' ? agencies.find((a) => a.id === initialAgencyId) ?? null : null;
+  const [selectedAgencyId, setSelectedAgencyId] = useState<string>(() => (startAgency ? startAgency.id : initialAgencyId === 'manual' || agencies.length === 0 ? 'manual' : ''));
   const selectedAgency = agencies.find((a) => a.id === selectedAgencyId) ?? null;
   const contactAutofill = useSubdivisionContactAutofill('phone', 'external', selectedAgency);
 
-  const [orgId, setOrgId] = useState<string>(defaultOrg.id);
-  const [orgName, setOrgName] = useState<string>('');
+  const [orgId, setOrgId] = useState<string>(() => (startAgency ? mapAgencyTypeToOrgId(startAgency.type) : initialAgencyId === 'manual' ? 'other' : defaultOrg.id));
+  const [orgName, setOrgName] = useState<string>(() => startAgency?.name ?? '');
   const [reason, setReason] = useState('');
   const [priorityLevel, setPriorityLevel] = useState<ReferralPriority>(
     c.priority === 'urgent' ? 'urgent' : c.priority === 'high' ? 'high' : 'normal',
@@ -1410,6 +1412,11 @@ export function CoordinationDialog({
  * Shared External Referrals Panel used in both CaseDetailPage ("Referrals" tab & "Actions & follow-ups" tab)
  * and MonitoredCasePage.
  */
+/** Short agency type labels for the "Refer to" buttons (the full labels are in Settings). */
+const AGENCY_SHORT: Record<string, string> = {
+  barangay: 'Barangay', veterinary_office: 'Vet office', municipal_vet: 'City vet', animal_welfare: 'Welfare group', animal_control: 'Animal control', other: 'Agency',
+};
+
 export function CaseReferralsSection({
   c,
   openDialog,
@@ -1418,7 +1425,7 @@ export function CaseReferralsSection({
   c: Case;
   openDialog: (
     d:
-      | { kind: 'referral' }
+      | { kind: 'referral'; agencyId?: string }
       | { kind: 'referralDetail'; referralId: string }
       | {
         kind: 'coordination';
@@ -1429,56 +1436,40 @@ export function CaseReferralsSection({
   ) => void;
   hideCreateButton?: boolean;
 }) {
+  const { state } = useAdminData();
+  const agencies = state.settings.externalCoordination.agencies;
   const closed = c.status === 'closed';
   const referrals = c.referrals;
+  const canCreate = !hideCreateButton && !closed;
 
   return (
     <div className="sa-card">
       <div className="sa-card__head">
-        <div>
-          <h3 className="sa-card__title flex items-center gap-2">
-            External Referrals
-            <span className="sa-pill">{referrals.length}</span>
-          </h3>
-          <p className="sa-card__sub">
-            Refer this case to external agencies (Barangay, Veterinary Office, Animal Control, Welfare Groups), monitor status, record responses, and document outcomes. The subdivision retains case closure control.
-          </p>
-        </div>
-        {!hideCreateButton && !closed ? (
-          <Button
-            size="sm"
-            variant="primary"
-            icon={Building2}
-            onClick={() => openDialog({ kind: 'referral' })}
-          >
-            Create Referral
-          </Button>
-        ) : null}
+        <h3 className="sa-card__title flex items-center gap-2">
+          External referrals
+          <span className="sa-pill">{referrals.length}</span>
+        </h3>
       </div>
 
       <div className="sa-card__body space-y-4">
-        {referrals.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-[var(--sa-border)] bg-[var(--sa-surface-2)] p-6 text-center space-y-2">
-            <Building2 size={24} className="mx-auto text-[var(--sa-text-3)]" />
-            <p className="text-sm font-semibold text-[var(--sa-text-1)]">
-              No external referrals have been created for this case yet.
-            </p>
-            <p className="sa-small sa-text-2 max-w-md mx-auto">
-              Create a referral when this case requires assistance from the Barangay, City Veterinary Office, Animal Control, or an animal welfare organization.
-            </p>
-            {!hideCreateButton && !closed ? (
-              <div className="pt-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  icon={Building2}
-                  onClick={() => openDialog({ kind: 'referral' })}
-                >
-                  Create Referral
-                </Button>
-              </div>
-            ) : null}
+        {canCreate ? (
+          // One tap per saved External Coordination agency (Settings): opens "Create Referral" with that organization filled in.
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="sa-small sa-text-2">Refer to:</span>
+            {agencies.map((a) => (
+              <Button key={a.id} size="sm" icon={Building2} onClick={() => openDialog({ kind: 'referral', agencyId: a.id })}>
+                {a.name}<span className="sa-text-3 font-normal"> · {AGENCY_SHORT[a.type] ?? 'Agency'}</span>
+              </Button>
+            ))}
+            <Button size="sm" variant="ghost" onClick={() => openDialog({ kind: 'referral', agencyId: 'manual' })}>+ Other organization</Button>
           </div>
+        ) : null}
+        {canCreate && agencies.length === 0 ? (
+          <p className="sa-hint">No agencies saved yet. Add the ones you work with in Settings, External Coordination, and they appear here.</p>
+        ) : null}
+
+        {referrals.length === 0 ? (
+          <p className="sa-small sa-text-2">No referrals for this case yet.</p>
         ) : (
           <div className="space-y-3">
             {referrals.map((r, idx) => {

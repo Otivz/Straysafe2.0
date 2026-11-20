@@ -14,9 +14,30 @@ export interface ApiPetConfirmedIncident {
   reference_code: string;
   category: string;
   incident_date: string | null;
+  reported_at?: string | null;
+  verified_at?: string | null;
+  closed_at?: string | null;
   status: 'reported' | 'under_review' | 'in_progress' | 'closed';
   status_label: string;
+  location_area?: string | null;
+  animal_summary?: string | null;
+  condition?: string | null;
+  verified_findings?: string[];
   summary: string;
+  outcome_group?: 'resolved' | 'unresolved' | 'invalid' | null;
+  outcome_label?: string | null;
+  photos?: string[];
+  warning_letters?: {
+    letter_id: number;
+    warning_reference: string;
+    warning_level: string;
+    issued_at: string | null;
+  }[];
+  milestones?: {
+    label: string;
+    at: string;
+    detail?: string | null;
+  }[];
   has_warning_letter: boolean;
 }
 

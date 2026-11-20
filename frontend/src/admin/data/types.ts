@@ -716,6 +716,7 @@ export interface Pet {
   registeredBy?: { name: string; byOwner: boolean; userId: string | null };
   vaccination: 'up_to_date' | 'overdue' | 'unknown';
   microchipped: boolean;
+  status?: string;
 }
 
 export type NoticeType = 'lost_pet' | 'found_animal' | 'safety_advisory';

@@ -488,7 +488,11 @@ def get_pet_confirmed_incidents(
 
     candidates = (
         db.query(Report)
-        .options(joinedload(Report.category), selectinload(Report.disputes))
+        .options(
+            joinedload(Report.category),
+            selectinload(Report.disputes),
+            selectinload(Report.media),
+        )
         .filter(
             Report.pet_id == pet_id,
             Report.duplicate_of_report_id.is_(None),
@@ -548,20 +552,27 @@ def get_pet_confirmed_incidents(
         kept.append(rep)
 
     kept_ids = [r.report_id for r in kept]
-    warned_report_ids = (
-        {
-            rid
-            for (rid,) in db.query(GeneratedWarningLetter.report_id)
+    warned_report_ids = set()
+    letters_by_report: dict[int, list[dict]] = {}
+    if kept_ids:
+        letters = (
+            db.query(GeneratedWarningLetter)
             .filter(
                 GeneratedWarningLetter.report_id.in_(kept_ids),
                 GeneratedWarningLetter.recipient_user_id == current_user.user_id,
             )
+            .order_by(GeneratedWarningLetter.issued_at.desc())
             .all()
-            if rid is not None
-        }
-        if kept_ids
-        else set()
-    )
+        )
+        for letter in letters:
+            if letter.report_id is not None:
+                warned_report_ids.add(letter.report_id)
+                letters_by_report.setdefault(letter.report_id, []).append({
+                    "letter_id": letter.letter_id,
+                    "warning_reference": letter.warning_reference,
+                    "warning_level": letter.warning_level,
+                    "issued_at": letter.issued_at.isoformat() if letter.issued_at else None,
+                })
 
     items = []
     for rep in kept:
@@ -585,14 +596,60 @@ def get_pet_confirmed_incidents(
             if findings
             else V.CATEGORY_DESCRIPTIONS.get(fam, "Verified subdivision incident involving this pet.")
         )
+
+        colors_list = [str(c).strip() for c in (rep.animal_colors or []) if str(c).strip()]
+        color_text = ", ".join(colors_list) if colors_list else ((rep.animal_color or "").strip() or None)
+        animal_parts = [
+            (getattr(rep, "custom_animal_type", None) or rep.animal_type or "").strip() or None,
+            (rep.animal_breed or "").strip() or None,
+            color_text,
+            (rep.estimated_size or "").strip() or None,
+        ]
+        animal_summary = " · ".join(p for p in animal_parts if p) or None
+
+        disp_info = V.DISPOSITIONS.get(rep.closure_disposition or "")
+        outcome_group = disp_info[0] if disp_info else None
+        outcome_label = disp_info[2] if disp_info else ("Closed" if status_key == V.CLOSED else None)
+
+        milestones = []
+        if rep.created_at:
+            milestones.append({"label": "Report filed", "at": rep.created_at.isoformat(), "detail": None})
+        if rep.verified_at:
+            milestones.append({"label": "Verified by Subdivision Leader", "at": rep.verified_at.isoformat(), "detail": None})
+        if status_key == V.CLOSED and rep.closed_at:
+            milestones.append({"label": "Case closed", "at": rep.closed_at.isoformat(), "detail": outcome_label})
+
+        hide_media = bool(rep.is_sensitive) or fam in V.PRIVATE_BY_DEFAULT_FAMILIES
+        photos = (
+            []
+            if hide_media
+            else [
+                m.file_url
+                for m in (rep.media or [])
+                if getattr(m, "file_url", None) and getattr(m, "media_type", None) == "Image"
+            ]
+        )
+
         items.append({
             "report_id": rep.report_id,
             "reference_code": case_ref_for(rep),
             "category": V.CATEGORY_FAMILIES.get(fam, cat_name or "Animal Concern"),
             "incident_date": when.isoformat() if when else None,
+            "reported_at": rep.created_at.isoformat() if rep.created_at else None,
+            "verified_at": rep.verified_at.isoformat() if rep.verified_at else None,
+            "closed_at": rep.closed_at.isoformat() if rep.closed_at else None,
             "status": status_key,
             "status_label": V.STATUS_LABELS.get(status_key, "Under review"),
+            "location_area": (rep.landmark or "").strip() or None,
+            "animal_summary": animal_summary,
+            "condition": (rep.condition or "").strip() or None,
+            "verified_findings": findings,
             "summary": summary,
+            "outcome_group": outcome_group,
+            "outcome_label": outcome_label,
+            "photos": photos,
+            "warning_letters": letters_by_report.get(rep.report_id, []),
+            "milestones": milestones,
             "has_warning_letter": rep.report_id in warned_report_ids,
         })
 

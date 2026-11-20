@@ -15,6 +15,7 @@ import { ago, dueInfo, fmtDate } from '../../../preview/lib/format';
 import { usePageTitle } from '../../lib/hooks';
 import { useNow } from '../../../preview/lib/hooks';
 import { useSubmit } from '../../lib/useSubmit';
+import { CaseReferralsSection } from '../../dialogs/CoordinationDialogs';
 import ActionsTab from './ActionsTab';
 import AssessmentTab from './AssessmentTab';
 import { CaseDialogs } from './CaseDialogs';
@@ -24,8 +25,8 @@ import MonitoredCasePage from './MonitoredCasePage';
 import ComplaintPage from '../complaints/ComplaintPage';
 import OverviewTab from './OverviewTab';
 
-type TabKey = 'overview' | 'assessment' | 'actions' | 'history';
-const TAB_KEYS: TabKey[] = ['overview', 'assessment', 'actions', 'history'];
+type TabKey = 'overview' | 'assessment' | 'actions' | 'referrals' | 'history';
+const TAB_KEYS: TabKey[] = ['overview', 'assessment', 'actions', 'referrals', 'history'];
 
 /**
  * A06 Case details: the primary case-management workspace. A missing pet and a found animal have their own, simpler page (MonitoredCasePage): they are
@@ -67,14 +68,14 @@ export default function CaseDetailPage() {
   const full = detail.status === 'ready';
 
   const rawRequested = params.get('tab');
-  const requested = (rawRequested === 'warnings' || rawRequested === 'referrals' ? 'actions' : rawRequested) as TabKey | null;
+  const requested = (rawRequested === 'warnings' ? 'actions' : rawRequested) as TabKey | null;
   const tab: TabKey = requested && TAB_KEYS.includes(requested) ? requested : 'overview';
   const setTab = (key: TabKey) => { const next = new URLSearchParams(params); if (key === 'overview') next.delete('tab'); else next.set('tab', key); setParams(next, { replace: true }); };
   const open = (d: CaseDialog) => setDialog(d);
 
   const items = openItems(c);
   const overdue = items.followUps.some((f) => dueInfo(f.dueAt, now).overdue);
-  const actionCount = items.followUps.length + items.warnings.length + items.referrals.length;
+  const actionCount = items.followUps.length + items.warnings.length;
   const CategoryIcon = CATEGORY_ICON[c.category];
   const publishable = !c.sensitive && c.category === 'safety';
   const moves = allowedStatusMoves(c);
@@ -133,6 +134,7 @@ export default function CaseDetailPage() {
           { key: 'overview', label: 'Overview' },
           { key: 'assessment', label: 'Assessment' },
           { key: 'actions', label: 'Actions & follow-ups', count: full ? actionCount : undefined, alert: full && overdue },
+          { key: 'referrals', label: 'Referrals', count: full ? c.referrals.length : undefined },
           { key: 'history', label: 'History', count: full ? c.timeline.length : undefined },
         ]}
       />
@@ -146,6 +148,7 @@ export default function CaseDetailPage() {
                 {tab === 'overview' ? <OverviewTab c={c} now={now} openDialog={open} /> : null}
                 {tab === 'assessment' ? <AssessmentTab c={c} openDialog={open} /> : null}
                 {tab === 'actions' ? <ActionsTab c={c} now={now} openDialog={open} /> : null}
+                {tab === 'referrals' ? <CaseReferralsSection c={c} openDialog={open} /> : null}
                 {tab === 'history' ? <HistoryTab c={c} now={now} /> : null}
               </>
             )}

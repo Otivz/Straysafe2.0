@@ -5,7 +5,8 @@ import { fromServer } from '../../../live/dates';
 import { fmtDate, fmtDateTime } from '../../../preview/lib/format';
 import { ANIMAL_ICON } from '../../components/icons';
 import { Screen } from '../../components/Screen';
-import { Button, Callout, IconButton, LinkButton, NotFoundState, Pill, Row, Section, Skeleton, StatusPill } from '../../components/ui';
+import { Sheet } from '../../components/Sheet';
+import { Button, Callout, IconButton, LinkButton, MediaThumbs, NotFoundState, Pill, Row, Section, Skeleton, StatusPill } from '../../components/ui';
 import { residentPath } from '../../config';
 import { parseColorTags } from '../../data/colors';
 import { ANIMAL_TYPES, SEX_LABEL } from '../../data/constants';
@@ -36,6 +37,9 @@ export default function PetDetailsPage() {
 
   const Icon = ANIMAL_ICON[pet.type];
   const missing = activeLostReport(state, pet.id);
+  const isLost = Boolean(missing) || pet.status === 'Lost';
+  const statusLabel = isLost ? 'Lost' : pet.status?.trim() || 'Active';
+  const statusTone = isLost ? 'amber' : statusLabel === 'Deceased' ? 'neutral' : 'sage';
   const colorTags = parseColorTags(pet.colors, pet.color);
 
   return (
@@ -56,6 +60,9 @@ export default function PetDetailsPage() {
         <div>
           <h2 className="rs-title rs-title--sm">{pet.name}</h2>
           <p className="rs-meta">{ANIMAL_TYPES[pet.type]}{pet.breed ? ` · ${pet.breed}` : ''}</p>
+          <div style={{ marginTop: 6 }}>
+            <Pill tone={statusTone} dot>{statusLabel}</Pill>
+          </div>
         </div>
       </div>
 
@@ -67,6 +74,7 @@ export default function PetDetailsPage() {
 
       <Section title="About">
         <dl className="rs-kv">
+          <div><dt>Status</dt><dd><Pill tone={statusTone} dot>{statusLabel}</Pill></dd></div>
           <div><dt>Colour or coat</dt><dd>{colorTags.length > 0 ? <ul className="rs-tags">{colorTags.map((c) => <li key={c}>{c}</li>)}</ul> : pet.color}</dd></div>
           {pet.sex !== 'unknown' ? <div><dt>Sex</dt><dd>{SEX_LABEL[pet.sex]}</dd></div> : null}
           {pet.ageText ? <div><dt>Age</dt><dd>{pet.ageText}</dd></div> : null}
@@ -104,6 +112,7 @@ function PetHistorySection({ petId, petName, doneScans }: { petId: string; petNa
 
   const [warnings, setWarnings] = useState<ApiGeneratedWarningLetter[]>([]);
   const [incidents, setIncidents] = useState<ApiPetConfirmedIncident[]>([]);
+  const [selectedIncident, setSelectedIncident] = useState<ApiPetConfirmedIncident | null>(null);
   const [loading, setLoading] = useState(canQueryLive);
   const [loadError, setLoadError] = useState(false);
 
@@ -235,12 +244,114 @@ function PetHistorySection({ petId, petName, doneScans }: { petId: string; petNa
                     </span>
                   </div>
                   <p className="rs-sub">{inc.summary}</p>
+                  <div>
+                    <Button size="sm" variant="secondary" onClick={() => setSelectedIncident(inc)}>
+                      View report
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
       </div>
+
+      {selectedIncident ? (
+        <Sheet
+          tall
+          title={`${selectedIncident.reference_code} · ${selectedIncident.category}`}
+          description={`Verified incident summary involving ${petName}`}
+          onClose={() => setSelectedIncident(null)}
+          footer={<Button variant="primary" onClick={() => setSelectedIncident(null)}>Close</Button>}
+        >
+          <div className="rs-stack">
+            {selectedIncident.status === 'closed' ? (
+              <Callout
+                tone={selectedIncident.outcome_group === 'resolved' ? 'sage' : 'info'}
+                title={selectedIncident.outcome_label ?? 'Case closed'}
+              >
+                {selectedIncident.closed_at ? `Closed on ${fmtDateTime(selectedIncident.closed_at)}.` : 'This case has concluded.'}
+              </Callout>
+            ) : (
+              <div className="rs-row-actions">
+                <StatusPill status={selectedIncident.status} />
+                <span className="rs-meta">{selectedIncident.status_label}</span>
+              </div>
+            )}
+
+            <Section title="Report summary">
+              <dl className="rs-kv">
+                <div><dt>Reference</dt><dd>{selectedIncident.reference_code}</dd></div>
+                <div><dt>Category</dt><dd>{selectedIncident.category}</dd></div>
+                {selectedIncident.reported_at ? <div><dt>Reported</dt><dd>{fmtDateTime(selectedIncident.reported_at)}</dd></div> : null}
+                {selectedIncident.incident_date ? <div><dt>Observed</dt><dd>{fmtDateTime(selectedIncident.incident_date)}</dd></div> : null}
+                <div><dt>Area</dt><dd>{selectedIncident.location_area || 'Within subdivision'}</dd></div>
+                {selectedIncident.animal_summary ? <div><dt>Animal</dt><dd>{selectedIncident.animal_summary}</dd></div> : null}
+                {selectedIncident.condition ? <div><dt>Observed condition</dt><dd>{selectedIncident.condition}</dd></div> : null}
+                <div>
+                  <dt>Verified findings</dt>
+                  <dd>
+                    {selectedIncident.verified_findings && selectedIncident.verified_findings.length > 0 ? (
+                      <ul className="rs-tags">
+                        {selectedIncident.verified_findings.map((f) => <li key={f}>{f}</li>)}
+                      </ul>
+                    ) : selectedIncident.summary}
+                  </dd>
+                </div>
+                {selectedIncident.outcome_label ? <div><dt>Outcome</dt><dd>{selectedIncident.outcome_label}</dd></div> : null}
+              </dl>
+
+              {selectedIncident.photos && selectedIncident.photos.length > 0 ? (
+                <div className="rs-stack-sm" style={{ marginTop: 12 }}>
+                  <h4 className="rs-label">Submitted photos</h4>
+                  <MediaThumbs
+                    media={selectedIncident.photos.map((url, idx) => ({
+                      id: `${selectedIncident.report_id}-photo-${idx}`,
+                      kind: 'photo',
+                      name: `${selectedIncident.reference_code} photo ${idx + 1}`,
+                      size: 0,
+                      url,
+                    }))}
+                  />
+                </div>
+              ) : null}
+            </Section>
+
+            {selectedIncident.milestones && selectedIncident.milestones.length > 0 ? (
+              <Section title="Progress timeline">
+                <dl className="rs-kv">
+                  {selectedIncident.milestones.map((m, idx) => (
+                    <div key={`${m.label}-${idx}`}>
+                      <dt>{m.label}</dt>
+                      <dd>{fmtDateTime(m.at)}{m.detail ? ` · ${m.detail}` : ''}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </Section>
+            ) : null}
+
+            {selectedIncident.warning_letters && selectedIncident.warning_letters.length > 0 ? (
+              <Section title="Warning letters">
+                <div className="rs-stack-sm">
+                  {selectedIncident.warning_letters.map((w) => (
+                    <Row
+                      key={w.letter_id}
+                      to={residentPath(`/warnings/${w.letter_id}`)}
+                      icon={ShieldAlert}
+                      title={`${w.warning_level} · ${w.warning_reference}`}
+                      meta={w.issued_at ? `Issued ${fmtDate(w.issued_at)} · Tap to view letter` : 'Tap to view letter'}
+                    />
+                  ))}
+                </div>
+              </Section>
+            ) : null}
+
+            <Callout tone="info">
+              Only verified facts and status milestones are shown here. Reporter details and internal subdivision notes remain private.
+            </Callout>
+          </div>
+        </Sheet>
+      ) : null}
     </Section>
   );
 }

@@ -202,6 +202,10 @@ def run_tests():
         item1 = by_id[r_confirmed_leader.report_id]
         assert item1["has_warning_letter"] is True
         assert "chasing" in item1["summary"].lower()
+        assert item1["verified_findings"] == ["chasing"], item1["verified_findings"]
+        assert len(item1["warning_letters"]) == 1, item1["warning_letters"]
+        assert item1["warning_letters"][0]["warning_reference"] == f"WARN-2026-{r_confirmed_leader.report_id:04d}"
+        assert len(item1["milestones"]) >= 1
         assert item1["reference_code"] == f"SS-2026-{r_confirmed_leader.report_id:04d}"
 
         # Privacy check: ensure no reporter identity or internal staff notes appear anywhere in payload
@@ -209,6 +213,7 @@ def run_tests():
         for forbidden_text in (
             "Reporter Secret Name",
             "09171234567",
+            "Private reporter text",
             "Internal leader-only note",
             "Internal verification note",
             "Suspected Neighbor",
