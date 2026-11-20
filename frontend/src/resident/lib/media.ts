@@ -3,6 +3,69 @@ import type { Media } from '../data/types';
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 
+const IMAGE_EXT_RE = /\.(jpe?g|png|webp|heic|heif|bmp|gif)$/i;
+const VIDEO_EXT_RE = /\.(mp4|mov|webm|m4v|3gp|avi|mkv)$/i;
+
+function inferMediaKind(file: File): 'photo' | 'video' | null {
+  const t = (file.type || '').toLowerCase();
+  if (t.startsWith('image/')) return 'photo';
+  if (t.startsWith('video/')) return 'video';
+  const name = file.name || '';
+  if (IMAGE_EXT_RE.test(name)) return 'photo';
+  if (VIDEO_EXT_RE.test(name)) return 'video';
+  return null;
+}
+
+function inferredMimeType(file: File, kind: 'photo' | 'video'): string {
+  const t = (file.type || '').toLowerCase();
+  if (t) return t;
+  const name = (file.name || '').toLowerCase();
+  if (kind === 'video') return 'video/mp4';
+  if (name.endsWith('.png')) return 'image/png';
+  if (name.endsWith('.webp')) return 'image/webp';
+  return 'image/jpeg';
+}
+
+async function readFileBytes(file: File, existingObjectUrl?: string): Promise<ArrayBuffer | null> {
+  try {
+    const buf = await file.arrayBuffer();
+    if (buf && buf.byteLength > 0) return buf;
+  } catch {
+    // Fallback below for Android WebView content:// URIs
+  }
+  try {
+    const buf = await new Response(file).arrayBuffer();
+    if (buf && buf.byteLength > 0) return buf;
+  } catch {
+    // Fallback below
+  }
+  try {
+    const buf = await new Promise<ArrayBuffer>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (reader.result instanceof ArrayBuffer) resolve(reader.result);
+        else reject(new Error('No buffer'));
+      };
+      reader.onerror = () => reject(reader.error ?? new Error('FileReader failed'));
+      reader.readAsArrayBuffer(file);
+    });
+    if (buf && buf.byteLength > 0) return buf;
+  } catch {
+    // Fallback below
+  }
+  const tempUrl = existingObjectUrl || URL.createObjectURL(file);
+  try {
+    const res = await fetch(tempUrl);
+    const buf = await res.arrayBuffer();
+    if (buf && buf.byteLength > 0) return buf;
+  } catch {
+    // Exhausted byte readers
+  } finally {
+    if (!existingObjectUrl && tempUrl) URL.revokeObjectURL(tempUrl);
+  }
+  return null;
+}
+
 /**
  * Validates a batch of picked files and turns the good ones into Media (with an object URL for the preview).
  * Problems are reported in plain language and never block the rest of the batch; evidence is always optional.
@@ -12,8 +75,9 @@ export function takeFiles(files: File[], existing: number, opts: { accept: 'phot
   const errors: string[] = [];
   for (const file of files) {
     if (existing + added.length >= opts.max) { errors.push(`You can add up to ${opts.max} files.`); break; }
-    const isImage = file.type.startsWith('image/');
-    const isVideo = file.type.startsWith('video/');
+    const kind = inferMediaKind(file);
+    const isImage = kind === 'photo';
+    const isVideo = kind === 'video';
     if (!isImage && !(isVideo && opts.accept === 'both')) { errors.push(`“${file.name}” is not ${opts.accept === 'both' ? 'a photo or video' : 'a photo'}.`); continue; }
     if (isImage && file.size > MAX_IMAGE_BYTES) { errors.push(`“${file.name}” is larger than 10 MB. Try a smaller photo.`); continue; }
     if (isVideo && file.size > MAX_VIDEO_BYTES) { errors.push(`“${file.name}” is larger than 50 MB. Try a shorter video.`); continue; }
@@ -37,21 +101,23 @@ export async function takeFilesInMemory(
     const raw = item.file;
     if (!raw) continue;
     let buffered: File | null = null;
-    try {
-      const bytes = await raw.arrayBuffer();
-      buffered = new File([bytes], raw.name, { type: raw.type, lastModified: raw.lastModified });
-    } catch {
-      if (item.kind === 'photo') {
-        const jpeg = await redrawAsJpeg(raw);
-        if (jpeg) {
-          const base = (raw.name || 'upload').replace(/\.[a-z0-9]{2,5}$/i, '') || 'upload';
-          buffered = new File([jpeg], `${base}.jpg`, { type: 'image/jpeg', lastModified: raw.lastModified });
-        }
+    const mime = inferredMimeType(raw, item.kind);
+    const bytes = await readFileBytes(raw, item.url);
+    if (bytes) {
+      buffered = new File([bytes], raw.name || (item.kind === 'video' ? 'video.mp4' : 'photo.jpg'), {
+        type: mime,
+        lastModified: raw.lastModified,
+      });
+    } else if (item.kind === 'photo') {
+      const jpeg = await redrawAsJpeg(raw);
+      if (jpeg) {
+        const base = (raw.name || 'upload').replace(/\.[a-z0-9]{2,5}$/i, '') || 'upload';
+        buffered = new File([jpeg], `${base}.jpg`, { type: 'image/jpeg', lastModified: raw.lastModified });
       }
     }
     if (item.url) URL.revokeObjectURL(item.url);
     if (!buffered) {
-      errors.push(`“${raw.name}” could not be read from your phone. Choose a local photo or take a new one.`);
+      errors.push(`“${raw.name}” could not be read from your phone. Choose a local photo or video, or take a new one.`);
       continue;
     }
     materialized.push({
@@ -79,10 +145,10 @@ const MAX_SIDE = 2048;
  * refuse to stream at send time) named with its extension (Android often gives names without one). Throws a plain-language Error.
  */
 export async function prepareForUpload(file: File): Promise<File> {
-  const type = (file.type || '').toLowerCase();
+  const kind = inferMediaKind(file);
+  const type = inferredMimeType(file, kind ?? 'photo');
   const base = (file.name || 'upload').replace(/\.[a-z0-9]{2,5}$/i, '') || 'upload';
-  if (type.startsWith('video/')) {
-    if (type !== 'video/mp4' && !/\.mp4$/i.test(file.name)) throw new Error('only MP4 videos can be sent. Record the video with the "Record video" button.');
+  if (kind === 'video' || type.startsWith('video/')) {
     return new File([await readBytes(file)], `${base}.mp4`, { type: 'video/mp4' });
   }
   const sendable = SENDABLE[type];
@@ -95,7 +161,9 @@ export async function prepareForUpload(file: File): Promise<File> {
 }
 
 async function readBytes(file: File): Promise<ArrayBuffer> {
-  try { return await file.arrayBuffer(); } catch { throw new Error('the file could not be read from your phone. Choose it again, or take a new one.'); }
+  const buf = await readFileBytes(file);
+  if (buf) return buf;
+  throw new Error('the file could not be read from your phone. Choose it again, or take a new one.');
 }
 
 /** The photo redrawn as a JPEG (turned the right way up), or null when this web view cannot decode it (HEIC on some phones). */

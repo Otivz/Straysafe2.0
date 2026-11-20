@@ -96,9 +96,14 @@ def _rows(db: Session, reports: List[Report]) -> List[Dict[str, Any]]:
             entry = photos.setdefault(rid, {"count": 0, "thumbnail": None, "photos": []})
             entry["count"] += 1
             if url:
-                entry["photos"].append(url)
-                if entry["thumbnail"] is None:
-                    entry["thumbnail"] = url            # the first photo or video is the list thumbnail
+                thumb_url = url
+                if kind == "Video" or "/video/upload/" in url.lower():
+                    import re
+                    thumb_url = re.sub(r"\.(mp4|mov|webm|avi|mkv)(?=$|\?)", ".jpg", url, flags=re.IGNORECASE)
+                entry["photos"].append(thumb_url)
+                if entry["thumbnail"] is None or kind == "Image":
+                    if entry["thumbnail"] is None:
+                        entry["thumbnail"] = thumb_url            # first photo (or video poster frame) is the list thumbnail
 
     decided = identity_decision.decided_ids(db, reports)
     rows = []

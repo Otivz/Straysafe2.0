@@ -122,8 +122,8 @@ function DetailsForm({ draft }: { draft: Draft }) {
   const submit = (ev: FormEvent) => {
     ev.preventDefault();
     const found: Errors = {};
-    if (!draft.media.some((m) => m.kind === 'photo' && Boolean(m.file || m.url))) {
-      found.media = 'Please upload at least one photo of the animal before submitting your report.';
+    if (!draft.media.some((m) => (m.kind === 'photo' || m.kind === 'video') && Boolean(m.file || m.url))) {
+      found.media = 'Please upload at least one photo or video of the animal before submitting your report.';
     }
     if (isInjured) {
       if (selectedConditions.length === 0) found.injuredConditions = 'Select at least one observed condition.';
@@ -179,15 +179,15 @@ function DetailsForm({ draft }: { draft: Draft }) {
       <form id="report-details" className="rs-stack" onSubmit={submit} noValidate>
         <div ref={ref} className="rs-stack">
           <FieldGroup
-            label={kind === 'incident' ? 'Animal photo (required)' : 'Animal photo'}
+            label={kind === 'incident' ? 'Animal photo or video (required)' : 'Animal photo or video'}
             required
             error={errors.media}
-            hint="For accurate animal identification and verification, please upload a clear photo of the animal."
+            hint="For accurate animal identification and verification, please upload a clear photo or video of the animal."
           >
             <MediaPicker
               value={draft.media}
               onChange={(media) => { patch({ media }); clear('media'); }}
-              accept={kind === 'incident' ? 'both' : 'photo'}
+              accept="both"
               max={kind === 'incident' ? 5 : 3}
               invalid={Boolean(errors.media)}
             />

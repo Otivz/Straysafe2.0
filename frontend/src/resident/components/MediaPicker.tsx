@@ -29,7 +29,7 @@ export function MediaPicker({
   const [previewIdx, setPreviewIdx] = useState(0);
   const [dragging, setDragging] = useState(false);
 
-  const photoItems = value.filter((m) => m.url && m.kind === 'photo');
+  const previewItems = value.filter((m) => Boolean(m.url));
 
   const pick = async (files: FileList | null) => {
     const picked = Array.from(files ?? []);
@@ -79,7 +79,7 @@ export function MediaPicker({
     }
   };
 
-  const currentPhoto = photoItems.length > 0 ? photoItems[((previewIdx % photoItems.length) + photoItems.length) % photoItems.length] : null;
+  const currentMedia = previewItems.length > 0 ? previewItems[((previewIdx % previewItems.length) + previewItems.length) % previewItems.length] : null;
 
   return (
     <div
@@ -94,19 +94,23 @@ export function MediaPicker({
             : ''
       }`}
     >
-      {/* Single photo preview card with Replace and Remove controls */}
-      {photoItems.length === 1 && currentPhoto ? (
+      {/* Single photo or video preview card with Replace and Remove controls */}
+      {previewItems.length === 1 && currentMedia ? (
         <div className="mb-3 overflow-hidden rounded-xl border border-[#e7e2da] bg-[#faf6f0]">
           <div className="relative flex max-h-56 items-center justify-center bg-stone-900">
-            <img src={currentPhoto.url} alt={currentPhoto.name} className="max-h-56 w-full object-contain" />
+            {currentMedia.kind === 'video' ? (
+              <video src={currentMedia.url} controls playsInline preload="metadata" className="max-h-56 w-full object-contain" />
+            ) : (
+              <img src={currentMedia.url} alt={currentMedia.name} className="max-h-56 w-full object-contain" />
+            )}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs">
-            <span className="truncate font-medium text-[#292524]">{currentPhoto.name}</span>
+            <span className="truncate font-medium text-[#292524]">{currentMedia.name}</span>
             <div className="flex items-center gap-1.5">
               <Button size="sm" variant="ghost" icon={RefreshCw} onClick={() => replaceInput.current?.click()}>
                 Replace
               </Button>
-              <Button size="sm" variant="ghost" icon={X} onClick={() => remove(currentPhoto)}>
+              <Button size="sm" variant="ghost" icon={X} onClick={() => remove(currentMedia)}>
                 Remove
               </Button>
             </div>
@@ -114,14 +118,24 @@ export function MediaPicker({
         </div>
       ) : null}
 
-      {/* Interactive < image > preview slider when two or more photos are uploaded */}
-      {photoItems.length >= 2 && currentPhoto && (
+      {/* Interactive < media > preview slider when two or more photos/videos are uploaded */}
+      {previewItems.length >= 2 && currentMedia && (
         <div className="relative mb-3 flex aspect-video max-h-56 items-center justify-center overflow-hidden rounded-xl border border-[var(--sa-line)] bg-stone-900 shadow-sm">
-          <img
-            src={currentPhoto.url}
-            alt={currentPhoto.name}
-            className="h-full w-full select-none object-contain"
-          />
+          {currentMedia.kind === 'video' ? (
+            <video
+              src={currentMedia.url}
+              controls
+              playsInline
+              preload="metadata"
+              className="h-full w-full select-none object-contain"
+            />
+          ) : (
+            <img
+              src={currentMedia.url}
+              alt={currentMedia.name}
+              className="h-full w-full select-none object-contain"
+            />
+          )}
 
           <button
             type="button"
@@ -129,9 +143,9 @@ export function MediaPicker({
               e.preventDefault();
               setPreviewIdx((i) => i - 1);
             }}
-            aria-label="Previous image"
+            aria-label="Previous media"
             className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white shadow transition-all hover:bg-black/90 focus:outline-none"
-            title="Previous image (<)"
+            title="Previous media (<)"
           >
             <ChevronLeft size={18} />
           </button>
@@ -142,15 +156,15 @@ export function MediaPicker({
               e.preventDefault();
               setPreviewIdx((i) => i + 1);
             }}
-            aria-label="Next image"
+            aria-label="Next media"
             className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white shadow transition-all hover:bg-black/90 focus:outline-none"
-            title="Next image (>)"
+            title="Next media (>)"
           >
             <ChevronRight size={18} />
           </button>
 
           <span className="absolute bottom-2 right-2 rounded-full border border-white/10 bg-black/70 px-2.5 py-0.5 text-xs font-semibold text-white/90 shadow">
-            {(((previewIdx % photoItems.length) + photoItems.length) % photoItems.length) + 1} of {photoItems.length}
+            {(((previewIdx % previewItems.length) + previewItems.length) % previewItems.length) + 1} of {previewItems.length}
           </span>
         </div>
       )}
@@ -177,7 +191,7 @@ export function MediaPicker({
       ) : <p className="rs-hint">You have added the most files you can ({max}).</p>}
 
       <input ref={input} type="file" hidden multiple={max > 1} accept={accept === 'both' ? 'image/jpeg,image/png,image/webp,image/*,video/*' : 'image/jpeg,image/png,image/webp,image/*'} onChange={(e) => pick(e.target.files)} />
-      <input ref={replaceInput} type="file" hidden accept="image/jpeg,image/png,image/webp,image/*" onChange={(e) => replaceFirst(e.target.files)} />
+      <input ref={replaceInput} type="file" hidden accept={accept === 'both' ? 'image/jpeg,image/png,image/webp,image/*,video/*' : 'image/jpeg,image/png,image/webp,image/*'} onChange={(e) => replaceFirst(e.target.files)} />
       <input ref={photoCam} type="file" hidden accept="image/*" capture="environment" onChange={(e) => pick(e.target.files)} />
       {accept === 'both' ? <input ref={videoCam} type="file" hidden accept="video/*" capture="environment" onChange={(e) => pick(e.target.files)} /> : null}
       {errors.length > 0 ? <ul className="rs-errorlist" role="alert">{errors.map((e) => <li key={e}>{e}</li>)}</ul> : null}

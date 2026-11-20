@@ -2206,24 +2206,24 @@ def create_report(
         media_urls = [u.strip() for u in (report_data.pop("media_urls", None) or []) if isinstance(u, str) and u.strip()]
 
         validated_media: list[tuple[str, str]] = []
-        has_valid_photo = False
+        has_valid_media = False
         for m_url in media_urls:
             validate_cloudinary_url(m_url, allowed={"Image", "Video"})
             is_vid = any(m_url.lower().split("?")[0].endswith(ext) for ext in (".mp4", ".mov", ".webm", ".avi", ".mkv")) or "/video/upload/" in m_url.lower()
             if not is_vid:
                 validate_cloudinary_url(m_url, allowed={"Image"})
-                has_valid_photo = True
+            has_valid_media = True
             validated_media.append((m_url, "Video" if is_vid else "Image"))
 
-        if not has_valid_photo and report_data.get("pet_id"):
+        if not has_valid_media and report_data.get("pet_id"):
             pet_for_photo = db.query(Pet).filter(Pet.pet_id == report_data["pet_id"]).first()
             if pet_for_photo and (pet_for_photo.photo_url or "").strip():
-                has_valid_photo = True
+                has_valid_media = True
 
-        if not has_valid_photo:
+        if not has_valid_media:
             raise HTTPException(
                 status_code=422,
-                detail="Please upload at least one photo of the animal before submitting your report.",
+                detail="Please upload at least one photo or video of the animal before submitting your report.",
             )
 
         # Any kind of animal can be reported (dog, cat, bird, small mammal, reptile, livestock, wildlife, other): the
