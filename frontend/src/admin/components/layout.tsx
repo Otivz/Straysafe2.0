@@ -77,7 +77,7 @@ export function ErrorState({ onRetry, message }: { onRetry: () => void; message?
 }
 
 export const Skeleton = ({ h = 16, w = '100%', className }: { h?: number; w?: number | string; className?: string }) => (
-  <div className={cx('sa-skel', className)} style={{ height: h, width: w }} aria-hidden="true" />
+  <div className={cx('sa-skel', className)} style={{ height: h, width: w, maxWidth: '100%' }} aria-hidden="true" />
 );
 
 export function PageSkeleton() {

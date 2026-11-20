@@ -188,7 +188,7 @@ export default function WarningTemplatesPage() {
                   : 'Create a template in the editor or import an existing Word (.docx) document with placeholders.'}
             </EmptyState>
           ) : (
-            <ul className="m-0 grid list-none gap-3 p-0 lg:grid-cols-2">
+            <ul className="m-0 grid list-none grid-cols-[minmax(0,1fr)] gap-3 p-0 lg:grid-cols-2">
               {shown.map((t) => {
                 const active = t.status === 'active';
                 const sameName = templates.some((o) => o.template_id !== t.template_id && o.name.trim().toLowerCase() === t.name.trim().toLowerCase());

@@ -376,7 +376,7 @@ export default function ComplaintsPage() {
                   type="button"
                   onClick={() => setViewMode('cards')}
                   className={cx(
-                    'px-2.5 py-1 text-xs font-medium rounded flex items-center gap-1.5 transition-colors cursor-pointer',
+                    'px-3 py-2.5 text-xs font-medium rounded flex items-center gap-1.5 transition-colors cursor-pointer lg:px-2.5 lg:py-1',
                     viewMode === 'cards' ? 'bg-[var(--sa-brand)] text-white shadow-xs' : 'text-[var(--sa-ink-2)] hover:text-[var(--sa-ink)]'
                   )}
                   aria-pressed={viewMode === 'cards'}
@@ -387,7 +387,7 @@ export default function ComplaintsPage() {
                   type="button"
                   onClick={() => setViewMode('table')}
                   className={cx(
-                    'px-2.5 py-1 text-xs font-medium rounded flex items-center gap-1.5 transition-colors cursor-pointer',
+                    'px-3 py-2.5 text-xs font-medium rounded flex items-center gap-1.5 transition-colors cursor-pointer lg:px-2.5 lg:py-1',
                     viewMode === 'table' ? 'bg-[var(--sa-brand)] text-white shadow-xs' : 'text-[var(--sa-ink-2)] hover:text-[var(--sa-ink)]'
                   )}
                   aria-pressed={viewMode === 'table'}
