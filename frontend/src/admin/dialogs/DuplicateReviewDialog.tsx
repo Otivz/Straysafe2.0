@@ -145,8 +145,8 @@ export function DuplicateReviewDialog({
           </>
         )}
       >
-        <Callout tone="info" title={`Primary incident record: ${c.id}.`}>
-          <strong>{candidate.reference}</strong> will be recorded as a <strong>Linked Report ({c.id})</strong>. Its original reporter, description, photographs, and history remain preserved.
+        <Callout tone="info" title={`Primary master case: ${c.id}.`}>
+          <strong>{candidate.reference}</strong> will be marked as <strong>Merged into Case #{c.id}</strong> under <strong>Merged Reports</strong>. Its original reporter, description, photographs, location, and concern workflow remain independently tracked and preserved.
         </Callout>
 
         <div className="rounded-lg border border-[var(--sa-line)] bg-[var(--sa-sand)] p-3.5">

@@ -81,6 +81,15 @@ def reports_of(db: Session, t: CaseMessageThread) -> List[Report]:
     return [r for r in (db.get(Report, i) for i in ids) if r is not None]
 
 
+def _governing_report(db: Session, report: Report) -> Report:
+    """When a report is merged into a primary master case, follow the merge link to its governing case."""
+    if report.duplicate_of_report_id:
+        master = db.get(Report, report.duplicate_of_report_id)
+        if master is not None:
+            return master
+    return report
+
+
 def report_ref(report: Optional[Report]) -> Optional[str]:
     """The reference residents and staff see (frontend live/refs.ts caseRef): SS-<year>-<report id padded to 4>."""
     if report is None:
@@ -124,7 +133,7 @@ def ended_reason(db: Session, t: CaseMessageThread) -> Optional[str]:
     """Why nobody can write in this thread any more, or None while it is open. A thread ends when it is closed or when a report of it is."""
     if t.status == "closed":
         return t.close_reason or "This conversation is closed."
-    closed = [r for r in reports_of(db, t) if case_state.is_closed(r)]
+    closed = [gov for gov in (_governing_report(db, r) for r in reports_of(db, t)) if case_state.is_closed(gov)]
     if closed:
         return case_closed_reason(closed[0])
     return None
@@ -208,26 +217,36 @@ def resident_of(db: Session, report: Report, party: str) -> Tuple[User, str]:
     if user is None:
         raise HTTPException(status_code=422, detail="That person has no account here, so they cannot be messaged.")
     if not lost:
-        return user, FINDER
+        return user, FINDER if V.category_family(_category(report)) == V.FOUND_ANIMAL else REPORTER
     return user, OWNER if (party == "owner" or user.user_id == owner_id) else REPORTER
 
 
 # ------------------------------------------------------------------------------------------------------------- opening
 def open_direct(db: Session, report: Report, actor: User, party: str) -> CaseMessageThread:
     """The Leader's conversation with one resident of a report. One per resident and report: opening it again returns the same one."""
-    report = L.case_for_staff(db, report.report_id, actor, write=True)
-    report = LP.lock_case(db, report.report_id)
-    L.require_open(report, "message the people on it")
+    target_id = report.report_id
+    gov_id = report.duplicate_of_report_id or target_id
+    locked = {rid: LP.lock_case(db, rid) for rid in sorted({target_id, gov_id})}
+    report = locked[target_id]
+    gov = locked.get(report.duplicate_of_report_id or target_id) or _governing_report(db, report)
+    L.case_for_staff(db, gov.report_id, actor, write=True)
+    L.require_open(gov, "message the people on it")
     resident, role = resident_of(db, report, party)
     t = (db.query(CaseMessageThread).join(CaseMessageMember, CaseMessageMember.thread_id == CaseMessageThread.thread_id)
          .filter(CaseMessageThread.kind == "direct", CaseMessageThread.report_id == report.report_id, CaseMessageThread.status == "open",
                  CaseMessageMember.user_id == resident.user_id).first())
     if t is None:
-        t = CaseMessageThread(subdivision_id=report.subdivision_id, kind="direct", report_id=report.report_id, created_by=actor.user_id)
+        t = CaseMessageThread(subdivision_id=report.subdivision_id, kind="direct", report_id=report.report_id,
+                              subject=_report_subject(report), created_by=actor.user_id)
         db.add(t)
         db.flush()
         _add_member(db, t, resident.user_id, role, report.report_id)
-        L.history(db, report, actor, f"The Subdivision Leader opened a conversation with the {ROLE_LABEL[role].lower()}.")
+        if gov.report_id != report.report_id:
+            L.history(db, gov, actor, f"The Subdivision Leader opened a conversation with the {ROLE_LABEL[role].lower()} of merged report {report_ref(report)}.")
+        else:
+            L.history(db, report, actor, f"The Subdivision Leader opened a conversation with the {ROLE_LABEL[role].lower()}.")
+    elif not t.subject:
+        t.subject = _report_subject(report)
     _add_member(db, t, actor.user_id, LEADER)
     return t
 
@@ -266,10 +285,14 @@ def open_for_resident(db: Session, report_id: int, resident: User) -> CaseMessag
         raise HTTPException(status_code=404, detail="Report not found.")
     if not report.subdivision_id:
         raise HTTPException(status_code=422, detail="This report has no subdivision, so there is no Subdivision Administration to message.")
-    report = LP.lock_case(db, report.report_id)      # serializes two taps on the button: one conversation, not two
-    if report.duplicate_of_report_id:
+    target_id = report.report_id
+    gov_id = report.duplicate_of_report_id or target_id
+    locked = {rid: LP.lock_case(db, rid) for rid in sorted({target_id, gov_id})}
+    report = locked[target_id]
+    gov = locked.get(report.duplicate_of_report_id or target_id) or _governing_report(db, report)
+    if gov.duplicate_of_report_id:
         raise HTTPException(status_code=409, detail="This report was merged into another report. Message the administration from that report instead.")
-    if case_state.is_closed(report):
+    if case_state.is_closed(gov):
         raise HTTPException(status_code=409, detail="This report is closed, so its conversation is read-only. "
                                                     "If you have a new concern, start a new conversation or file a new report.")
     t = (db.query(CaseMessageThread).join(CaseMessageMember, CaseMessageMember.thread_id == CaseMessageThread.thread_id)
@@ -284,7 +307,10 @@ def open_for_resident(db: Session, report_id: int, resident: User) -> CaseMessag
     db.add(t)
     db.flush()
     _add_member(db, t, resident.user_id, role, report.report_id)
-    L.history(db, report, None, "The resident started a conversation with the Subdivision Administration.")
+    if gov.report_id != report.report_id:
+        L.history(db, gov, None, f"The resident of merged report {report_ref(report)} started a conversation with the Subdivision Administration.")
+    else:
+        L.history(db, report, None, "The resident started a conversation with the Subdivision Administration.")
     _audit(db, resident.user_id, "CONVERSATION_CREATED", t, f"Resident started a conversation about report #{report.report_id}.",
            new={"kind": "direct", "status": "open", "associated_report": report_ref(report)})
     return t
@@ -397,8 +423,10 @@ def close_for_report(db: Session, report_id: int, actor_id: Optional[int] = None
     now = db_now(db)
     closed = 0
     with db.no_autoflush:
+        child_ids = [cid for (cid,) in db.query(Report.report_id).filter(Report.duplicate_of_report_id == report_id).all()]
+        all_ids = [report_id, *child_ids]
         rows = (db.query(CaseMessageThread)
-                .filter(or_(CaseMessageThread.report_id == report_id, CaseMessageThread.related_report_id == report_id),
+                .filter(or_(CaseMessageThread.report_id.in_(all_ids), CaseMessageThread.related_report_id.in_(all_ids)),
                         CaseMessageThread.status == "open")
                 .all())
         for t in rows:
@@ -461,7 +489,11 @@ def _log_contact(db: Session, t: CaseMessageThread, leader: User, text: str) -> 
     for r in reports_of(db, t):
         db.add(CaseContactLog(report_id=r.report_id, subdivision_id=r.subdivision_id, method="message", with_whom=with_whom, summary=text,
                               outcome="other", contact_at=now, logged_by=leader.user_id))
-        L.history(db, r, leader, f"The Subdivision Leader sent a message to the {who_label}.")
+        gov = _governing_report(db, r)
+        if gov.report_id != r.report_id:
+            L.history(db, gov, leader, f"The Subdivision Leader sent a message to the {who_label} of merged report {report_ref(r)}.")
+        else:
+            L.history(db, r, leader, f"The Subdivision Leader sent a message to the {who_label}.")
 
 
 def _notify_once(db: Session, user_id: int, ntype: str, related_id: int, title: str, message: str) -> None:
@@ -488,7 +520,7 @@ def _notify_after(db: Session, t: CaseMessageThread, sender: User, text: str) ->
     regarding = f" regarding Report {report_ref(report)}" if report is not None else ""
     if t.kind in STAFF_KINDS and not staff:
         leaders = [m.user_id for m in members if m.role == LEADER and m.user_id != sender.user_id]
-        assigned = report.assigned_leader_id if report is not None else None
+        assigned = _governing_report(db, report).assigned_leader_id if report is not None else None
         if assigned and assigned != sender.user_id:
             leaders = [assigned]             # an assigned case is the assigned officer's to answer
         elif not leaders:
@@ -595,8 +627,9 @@ def send(db: Session, t: CaseMessageThread, sender: User, body: str, client_requ
         raise HTTPException(status_code=422, detail=f"A message can be at most {MAX_BODY} characters.")
     if mode == "staff":
         for r in reports_of(db, t):
-            L.require_case_handler(r, sender)
-            L.require_not_merged(r)
+            gov = _governing_report(db, r)
+            L.require_case_handler(gov, sender)
+            L.require_not_merged(gov)
         text = _append_report_link(db, t, text)
     if client_request_id:
         existing = db.query(CaseMessage).filter(CaseMessage.client_request_id == client_request_id).with_for_update().first()
@@ -706,8 +739,9 @@ def summary(db: Session, t: CaseMessageThread, viewer: User, mode: Optional[str]
     if staff:
         can_reply = (t.kind in STAFF_KINDS
                      and can_reply
-                     and all((viewer.role_id != 2 or not r.assigned_leader_id or r.assigned_leader_id == viewer.user_id)
-                             and not r.duplicate_of_report_id for r in reports_of(db, t)))
+                     and all((viewer.role_id != 2 or not gov.assigned_leader_id or gov.assigned_leader_id == viewer.user_id)
+                             and not gov.duplicate_of_report_id
+                             for gov in (_governing_report(db, r) for r in reports_of(db, t))))
     mine = next((m for m in members if m.user_id == viewer.user_id), None)
     if mine is not None and last is not None and (getattr(mine, "last_delivered_message_id", 0) or 0) < last.message_id:
         mine.last_delivered_message_id = last.message_id
@@ -725,7 +759,7 @@ def summary(db: Session, t: CaseMessageThread, viewer: User, mode: Optional[str]
     return {
         "thread_id": t.thread_id, "kind": t.kind, "status": "closed" if why else "open", "can_reply": can_reply, "ended_reason": why,
         "subject": t.subject, "report_ref": report_ref(report), "report_category": _category(report),
-        "case_status": case_status_label(report), "closed_at": (t.closed_at or (report.closed_at if report is not None else None)) if why else None,
+        "case_status": case_status_label(_governing_report(db, report) if report is not None else None), "closed_at": (t.closed_at or (report.closed_at if report is not None else None)) if why else None,
         "close_trigger": (t.close_trigger or CLOSED_BY_CASE) if why else None,
         "started_by_resident": bool(t.created_by and any(m.user_id == t.created_by and m.role != LEADER for m in members)),
         "report_id": t.report_id, "related_report_id": t.related_report_id, "match_id": t.match_id, "link_id": t.link_id,
@@ -782,7 +816,10 @@ def view(db: Session, t: CaseMessageThread, viewer: User, mode: Optional[str] = 
 
 def threads_for_report(db: Session, report: Report, viewer: User) -> List[Dict[str, Any]]:
     """The conversations of a case, for the Leader's case screen (staff only): who is in each, how many messages, how many are unread."""
-    rows = (db.query(CaseMessageThread).filter(or_(CaseMessageThread.report_id == report.report_id, CaseMessageThread.related_report_id == report.report_id))
+    child_ids = [cid for (cid,) in db.query(Report.report_id).filter(Report.duplicate_of_report_id == report.report_id).all()]
+    all_ids = [report.report_id, *child_ids]
+    rows = (db.query(CaseMessageThread)
+            .filter(or_(CaseMessageThread.report_id.in_(all_ids), CaseMessageThread.related_report_id.in_(all_ids)))
             .order_by(CaseMessageThread.thread_id).all())
     return [summary(db, t, viewer, "staff") for t in rows]
 

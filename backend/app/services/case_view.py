@@ -16,7 +16,7 @@ from app.models.pet import Pet
 from app.models.report import Report
 from app.models.user import User
 from app.models.warning import OwnerWarning
-from app.services import case_alerts, case_claims, case_compliance, case_lifecycle as L, case_messaging, case_work
+from app.services import case_alerts, case_claims, case_compliance, case_concerns, case_lifecycle as L, case_messaging, case_work
 from app.utils import case_policy, case_state, identity_decision, lost_pet_rules
 from app.utils import case_vocab as V
 from app.utils.warning_rules import report_family, warning_blocker
@@ -212,8 +212,15 @@ def case_detail(db: Session, report: Report, viewer: User) -> Dict[str, Any]:
     claims = case_claims.claims_of(db, report, viewer)
     links = case_work.active_links(db, rid)
     merged_rows = db.query(Report).filter(Report.duplicate_of_report_id == rid).order_by(Report.report_id.asc()).all()
+    concern_rows = case_concerns.concerns_for_case(db, report)
+    concern_by_src = {cc.source_report_id: cc for cc in concern_rows}
+    reporters_by_id = {
+        u.user_id: u
+        for u in db.query(User).filter(User.user_id.in_({m.user_id for m in merged_rows if m.user_id})).all()
+    } if merged_rows else {}
     names = _names(db, [report.user_id, report.assigned_leader_id, report.assessed_by, report.ownership_owner_id, report.closed_by,
                         *[m.user_id for m in merged_rows], *[m.merged_by for m in merged_rows],
+                        *[cc.resolved_by for cc in concern_rows], *[cc.updated_by for cc in concern_rows],
                         *[r.referred_by for r in referrals], *[r.status_updated_by for r in referrals], *[r.outcome_recorded_by for r in referrals],
                         *[u.recorded_by for r in referrals for u in r.updates],
                         *[f.created_by for f in followups], *[c.logged_by for c in contacts],
@@ -262,16 +269,44 @@ def case_detail(db: Session, report: Report, viewer: User) -> Dict[str, Any]:
         "links": [{"link_id": l.link_id, "report_id": l.related_report_id if l.report_id == rid else l.report_id,
                    "link_type": l.link_type, "note": l.note, "linked_at": l.linked_at} for l in links],
         "duplicate_of_report_id": report.duplicate_of_report_id,
+        "concerns": case_concerns.concerns_view(db, report, names),
+        "open_concerns_count": len(case_concerns.unresolved_concerns(db, report)),
         "merged_reports": [{
             "report_id": m.report_id,
             "reference": f"SS-{(m.created_at or report.created_at).year}-{m.report_id:04d}",
+            "category_family": report_family(m),
+            "category_label": V.CATEGORY_FAMILIES.get(report_family(m), m.category.category_name if m.category else "Report"),
+            "reporter_id": m.user_id,
             "reporter_name": names.get(m.user_id),
+            "reporter_phone": reporters_by_id[m.user_id].phone if m.user_id in reporters_by_id else None,
+            "reporter_email": reporters_by_id[m.user_id].email if m.user_id in reporters_by_id else None,
+            "reporter_unit": reporters_by_id[m.user_id].address if m.user_id in reporters_by_id else None,
             "created_at": m.created_at,
             "merged_at": m.merged_at,
             "merged_by_name": names.get(m.merged_by),
             "merge_notes": m.merge_notes,
+            "merged_into_label": f"Merged into Case #SS-{report.created_at.year}-{rid:04d}",
             "description": m.description,
+            "condition": m.condition,
+            "location_landmark": m.landmark,
+            "latitude": float(m.latitude) if m.latitude is not None else None,
+            "longitude": float(m.longitude) if m.longitude is not None else None,
+            "original_status_id": (
+                concern_by_src[m.report_id].original_status_id
+                if m.report_id in concern_by_src
+                else case_concerns.capture_original_status(db, m)[0]
+            ),
+            "original_status_label": (
+                concern_by_src[m.report_id].original_status_label
+                if m.report_id in concern_by_src
+                else case_concerns.capture_original_status(db, m)[1]
+            ),
             "photo_count": len(m.media or []),
+            "media": [
+                {"media_id": med.media_id, "file_url": med.file_url, "media_type": med.media_type}
+                for med in (m.media or [])
+                if med.file_url and not getattr(med, "history_id", None)
+            ],
         } for m in merged_rows],
         # the Leader's conversations on this case (who is in each, how many messages, how many are new): what the Leader wrote is in "contacts" above
         "threads": case_messaging.threads_for_report(db, report, viewer),

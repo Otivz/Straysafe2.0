@@ -14,15 +14,15 @@ if TYPE_CHECKING:
 
 class ReportCategory(Base):
     __tablename__ = "report_categories"
-    category_id = Column(Integer, primary_key=True, index=True)
-    category_name = Column(String(100), unique=True, nullable=False)
+    category_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    category_name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
 
 
 # DB table is "report_status" (not "report_statuses")
-class ReportStatus(Base):   
+class ReportStatus(Base):
     __tablename__ = "report_status"
-    status_id = Column(Integer, primary_key=True, index=True)
-    status_name = Column(String(50), unique=True, nullable=False)
+    status_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    status_name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
 
 
 class Report(Base):
@@ -212,8 +212,8 @@ class Report(Base):
     merged_reports: Mapped[List["Report"]] = relationship("Report", foreign_keys=[duplicate_of_report_id], back_populates="primary_report")
     merged_by_user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[merged_by])
     visibility_decider: Mapped[Optional["User"]] = relationship("User", foreign_keys=[visibility_decided_by])
-    category = relationship("ReportCategory")
-    status = relationship("ReportStatus")
+    category: Mapped[Optional["ReportCategory"]] = relationship("ReportCategory")
+    status: Mapped[Optional["ReportStatus"]] = relationship("ReportStatus")
     subdivision = relationship("Subdivision")
     media: Mapped[List["ReportMedia"]] = relationship("ReportMedia", back_populates="report", cascade="all, delete-orphan")
     history: Mapped[List["StatusHistory"]] = relationship("StatusHistory", back_populates="report", cascade="all, delete-orphan", order_by="StatusHistory.created_at")

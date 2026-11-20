@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Banknote, Bell, CalendarDays, Camera, ChevronLeft, ChevronRight, CircleCheck, ClipboardCheck, Copy, FileText, Landmark, Link2, Lock, Map, MapPin, Maximize2, Megaphone, Play, Printer, RotateCcw,
+  Banknote, Bell, CalendarDays, Camera, ChevronLeft, ChevronRight, CircleCheck, ClipboardCheck, Copy, FileText, Landmark, Link2, Lock, Map, MapPin, Maximize2, Megaphone, MessageSquare, Play, Printer, RotateCcw,
   ShieldCheck, UserCheck, XCircle, type LucideIcon,
 } from 'lucide-react';
 import { adminPath } from '../../config';
@@ -256,7 +256,29 @@ export default function ComplaintPage({ c }: { c: Case }) {
           <blockquote className="sa-mc-quote">“{c.description}”</blockquote>
         </div>
         <aside className="sa-mc-hero__people" aria-label="People">
-          <div className="sa-mc-person"><p className="sa-mc-kicker">Complainant · private</p><p className="sa-mc-person__name">{c.reporter.name}</p>{c.reporter.unit ? <p className="sa-small sa-text-2">{c.reporter.unit}</p> : null}</div>
+          <div className="sa-mc-person">
+            <p className="sa-mc-kicker">Complainant · private</p>
+            <p className="sa-mc-person__name">{c.reporter.name}</p>
+            {c.reporter.unit ? <p className="sa-small sa-text-2">{c.reporter.unit}</p> : null}
+            {c.reporter.residentId ? (
+              <p className="sa-mc-person__acts">
+                {!closed ? (
+                  <Button
+                    variant="link"
+                    size="sm"
+                    icon={MessageSquare}
+                    onClick={() => {
+                      const name = c.reporter.name.trim().split(/\s+/)[0] || 'complainant';
+                      setCaseDialog({ kind: 'messages', target: { kind: 'direct', party: 'reporter', name: c.reporter.name, label: `Contact ${name}` } });
+                    }}
+                  >
+                    Contact {c.reporter.name.trim().split(/\s+/)[0] || 'complainant'}
+                  </Button>
+                ) : null}
+                <Link className="sa-small" to={adminPath(`/residents/${c.reporter.residentId}`)}>View profile</Link>
+              </p>
+            ) : null}
+          </div>
           {d.suspect ? (
             <div className="sa-mc-person sa-cm-suspect">
               <p className="sa-mc-kicker">Suggested by the complainant</p>

@@ -219,3 +219,38 @@ export const RESIDENT_STATUS: Record<'active' | 'pending' | 'suspended', { label
 export const VACCINATION = { up_to_date: 'Up to date', overdue: 'Overdue', unknown: 'Not recorded' } as const;
 
 export const SIZE_LABEL = { small: 'Small', medium: 'Medium', large: 'Large' } as const;
+
+export const LANDMARK_CATEGORIES: { value: string; label: string }[] = [
+  { value: 'gate', label: 'Main Gate / Entrance' },
+  { value: 'park', label: 'Park / Clubhouse' },
+  { value: 'street', label: 'Street / Block Corner' },
+  { value: 'office', label: 'Guardhouse / Admin Office' },
+  { value: 'general', label: 'General Landmark' },
+];
+
+export const WELFARE_OUTCOMES = [
+  'Treated and Released',
+  'Retrieved by Owner',
+  'Transferred to Veterinary Clinic',
+  'Transferred to Animal Shelter / Barangay',
+  'Under Continued Monitoring',
+  'Deceased / Humanely Handled',
+  'Other',
+] as const;
+
+export const DANGEROUS_OUTCOMES = [
+  'Animal No Longer Present',
+  'Animal Behavior No Longer Threatening',
+  'Retrieved or Handled by Authorized Personnel',
+  'Referred to Appropriate Authorities',
+  'Owner Identified and Contacted',
+  'Under Continued Monitoring',
+  'Other',
+] as const;
+
+export const CONCERN_STATUS_META: Record<'ongoing_assessment' | 'in_progress' | 'resolved' | 'not_applicable', { label: string; tone: Tone }> = {
+  ongoing_assessment: { label: 'Ongoing Assessment', tone: 'amber' },
+  in_progress: { label: 'In Progress', tone: 'brand' },
+  resolved: { label: 'Resolved', tone: 'sage' },
+  not_applicable: { label: 'Dismissed / N/A', tone: 'neutral' },
+};

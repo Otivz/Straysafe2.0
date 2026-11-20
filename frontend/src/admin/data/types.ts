@@ -345,16 +345,60 @@ export interface DangerousAssessment {
   securityRequired?: string;
 }
 
+export type ConcernStatus = 'ongoing_assessment' | 'in_progress' | 'resolved' | 'not_applicable';
+
+export interface CaseConcern {
+  concernId: number;
+  masterReportId: number;
+  sourceReportId: number;
+  sourceReference: string;
+  isPrimary: boolean;
+  concernFamily: CategoryId;
+  concernLabel: string;
+  originalStatusId?: number | null;
+  originalStatusLabel?: string | null;
+  status: ConcernStatus;
+  statusLabel: string;
+  outcome?: string | null;
+  threatOngoing?: string | null;
+  details: Record<string, string>;
+  resolutionNotes?: string | null;
+  resolvedAt?: string | null;
+  resolvedByName?: string | null;
+  updatedAt?: string | null;
+  updatedByName?: string | null;
+}
+
+export interface MergedReportMedia {
+  mediaId: number;
+  fileUrl: string;
+  mediaType?: string | null;
+}
+
 export interface MergedReportInfo {
   reportId: number;
   reference: string;
+  categoryFamily?: CategoryId;
+  categoryLabel?: string | null;
+  reporterId?: number | null;
   reporterName: string | null;
+  reporterPhone?: string | null;
+  reporterEmail?: string | null;
+  reporterUnit?: string | null;
   createdAt: string | null;
   mergedAt: string | null;
   mergedByName: string | null;
   mergeNotes: string | null;
+  mergedIntoLabel?: string | null;
   description: string | null;
+  condition?: string | null;
+  locationLandmark?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  originalStatusId?: number | null;
+  originalStatusLabel?: string | null;
   photoCount: number;
+  media?: MergedReportMedia[];
 }
 
 export interface Case {
@@ -366,6 +410,8 @@ export interface Case {
   description: string;
   animal: { type: AnimalType; customType?: string | null; description: string; count: number; condition?: string | null; breed?: string | null; color?: string | null };
   duplicateOfReportId?: number | null;
+  concerns?: CaseConcern[];
+  openConcernsCount?: number;
   mergedReports?: MergedReportInfo[];
   /** Words for the place, plus the pin when the reporter placed one. */
   location: { area: string; detail: string; lat?: number; lng?: number };

@@ -191,7 +191,13 @@ def create_landmark(
 
     # If Subd Leader, lock to their subdivision; if Barangay Head, lock to barangay level (subdivision_id = None)
     target_subd_id = current_user.subdivision_id if (is_subd_leader and not is_admin) else (None if is_brgy_head and not is_admin else data.subdivision_id)
-    target_brgy_id = current_user.barangay_id if ((is_brgy_head or current_user.role_id == 3) and not is_admin) else (data.barangay_id or 1)
+    if (is_brgy_head or current_user.role_id == 3) and not is_admin:
+        target_brgy_id = current_user.barangay_id
+    elif is_subd_leader and not is_admin and target_subd_id:
+        own_subd = db.get(Subdivision, target_subd_id)
+        target_brgy_id = own_subd.barangay_id if own_subd and own_subd.barangay_id else (data.barangay_id or 1)
+    else:
+        target_brgy_id = data.barangay_id or 1
 
     new_landmark = Landmark(
         name=data.name.strip(),

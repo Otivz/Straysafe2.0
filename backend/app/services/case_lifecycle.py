@@ -114,6 +114,7 @@ def _notify_reporter(db: Session, report: Report, actor: Optional[User], title: 
 
 # ----------------------------------------------------------------------------------------------- open items
 def open_items(db: Session, report: Report) -> Dict[str, int]:
+    from app.services import case_concerns
     rid = report.report_id
     return {
         "followups": db.query(CaseFollowUp).filter(CaseFollowUp.report_id == rid, CaseFollowUp.status == "pending").count(),
@@ -123,6 +124,7 @@ def open_items(db: Session, report: Report) -> Dict[str, int]:
         ).filter(BarangayReferral.final_outcome.is_(None)).count(),
         "claims": _active_claims(db, rid),
         "observations": db.query(OwnerFollowUp).filter(OwnerFollowUp.report_id == rid, OwnerFollowUp.status == "observing").count(),
+        "concerns": len(case_concerns.unresolved_concerns(db, report)),
     }
 
 
@@ -362,9 +364,15 @@ def set_priority(db: Session, report: Report, actor: User, priority: str, reason
 # ------------------------------------------------------------------------------------------------ closing
 def disposition_availability(db: Session, report: Report, disposition: str) -> Tuple[bool, Optional[str]]:
     """Whether the case can be closed with this disposition, and if not, why (same rules as the Admin screen)."""
+    from app.services import case_concerns
     from app.utils.warning_rules import report_family
     rid = report.report_id
     family = report_family(report)
+    if disposition not in ("invalid_report", "duplicate_report", "withdrawn_by_reporter"):
+        pending_concerns = case_concerns.unresolved_concerns(db, report)
+        if pending_concerns:
+            labels = ", ".join(c.concern_label for c in pending_concerns)
+            return False, f"Unresolved concerns remain ({labels}). Resolve each concern independently before closing this consolidated case."
     if disposition == "withdrawn_by_reporter":
         return False, "Set when the person who filed the report withdraws it."
     if disposition == "pet_recovered":
@@ -407,19 +415,28 @@ def close_case(db: Session, report: Report, actor: User, data: CloseIn, ip: Opti
     if not ok:
         raise HTTPException(status_code=409, detail=f"This outcome is not available: {why}")
 
+    from app.services import case_concerns
     from app.utils.warning_rules import report_family
+    concerns = case_concerns.concerns_for_case(db, report)
     family = report_family(report)
-    is_injured_case = family == V.INJURED
-    is_safety_case = family == V.SAFETY
-    welfare_outcome = (data.welfare_outcome or "").strip() or None
-    dangerous_outcome = (data.dangerous_outcome or "").strip() or None
+    is_injured_case = family == V.INJURED or any(c.concern_family == V.INJURED and c.status != "not_applicable" for c in concerns)
+    is_safety_case = family == V.SAFETY or any(c.concern_family == V.SAFETY and c.status != "not_applicable" for c in concerns)
+    welfare_outcome = (data.welfare_outcome or "").strip() or next(
+        (c.outcome for c in concerns if c.concern_family == V.INJURED and c.outcome), None
+    )
+    dangerous_outcome = (data.dangerous_outcome or "").strip() or next(
+        (c.outcome for c in concerns if c.concern_family == V.SAFETY and c.outcome), None
+    )
+    safety_threat_ongoing = (data.threat_ongoing or "").strip() or next(
+        (c.threat_ongoing for c in concerns if c.concern_family == V.SAFETY and c.threat_ongoing), ""
+    )
     if is_injured_case and data.disposition not in ("invalid_report", "duplicate_report", "withdrawn_by_reporter"):
         if not welfare_outcome:
             raise HTTPException(status_code=422, detail="Please document the Animal Welfare Outcome before closing an injured or sick animal case.")
     if is_safety_case and data.disposition not in ("invalid_report", "duplicate_report", "withdrawn_by_reporter"):
         if not dangerous_outcome:
             raise HTTPException(status_code=422, detail="Please document the Dangerous Animal Incident Outcome before closing this case.")
-        if (data.threat_ongoing or "").strip().lower() == "yes" and data.disposition in ("resolved_intervention", "owner_compliance"):
+        if safety_threat_ongoing.lower() == "yes" and data.disposition in ("resolved_intervention", "owner_compliance"):
             raise HTTPException(status_code=422, detail="Cannot mark a Dangerous Animal case as resolved while the threat is still ongoing.")
 
     now = _now()

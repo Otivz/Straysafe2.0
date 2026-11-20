@@ -10,18 +10,24 @@ import { Field, FieldGroup, Input, OptionGroup, Select, Switch } from '../compon
 import { Block, Callout, EmptyState, FormError, Kv, PageHeader, Panel } from '../components/layout';
 import { SaveBar } from '../components/SaveBar';
 import { useToast } from '../components/toast';
-import { CATEGORIES, CATEGORY_IDS } from '../data/constants';
+import { CATEGORIES, CATEGORY_IDS, LANDMARK_CATEGORIES } from '../data/constants';
 import { useAdminData } from '../data/context';
 import type { CategoryId, ExternalAgency, ExternalAgencyType, Policy, PublicationMode, Settings } from '../data/types';
+import { LandmarkDialog, type LandmarkFormValues } from '../dialogs/LandmarkDialog';
 import { PolicyDialog } from '../dialogs/PolicyDialog';
+import { adminApi, type ApiLandmark } from '../live/api';
+import { reportingCoverage, setLiveGeography } from '../../preview/geo';
+import { LocationMapPreview } from '../../preview/map/LocationMapPreview';
+import { MapLegend } from '../../preview/map/MapLegend';
 import { fmtDateTime } from '../../preview/lib/format';
 import { usePageTitle } from '../lib/hooks';
 import { useGuardedNavigate, useUnsavedGuard } from '../lib/navGuard';
 import { useSubmit } from '../lib/useSubmit';
 
-type SectionKey = 'profile' | 'external' | 'account' | 'notifications' | 'categories' | 'policies' | 'privacy';
+type SectionKey = 'profile' | 'landmarks' | 'external' | 'account' | 'notifications' | 'categories' | 'policies' | 'privacy';
 const SECTIONS: { key: SectionKey; label: string; icon: typeof Bell }[] = [
   { key: 'profile', label: 'Subdivision info & contact', icon: Building2 },
+  { key: 'landmarks', label: 'Subdivision landmarks', icon: MapPin },
   { key: 'external', label: 'External coordination', icon: Landmark },
   { key: 'account', label: 'Administrator account', icon: UserRound },
   { key: 'notifications', label: 'Notifications', icon: Bell },
@@ -277,6 +283,216 @@ function ProfileSection() {
       </Panel>
       <SaveBar dirty={dirty} pending={pending} label="Save Changes" onDiscard={handleCancel} />
     </form>
+  );
+}
+
+// ----------------------------------------------------------------------------------------- subdivision landmarks
+const landmarkCategoryLabel = (category: string): string =>
+  LANDMARK_CATEGORIES.find((c) => c.value === category)?.label ?? (category || 'General Landmark');
+
+function LandmarksSection() {
+  const { session } = useAuth();
+  const subdivisionId = session?.subdivisionId ?? null;
+  const toast = useToast();
+  const submit = useSubmit();
+
+  const [landmarks, setLandmarks] = useState<ApiLandmark[]>([]);
+  const [loading, setLoading] = useState(subdivisionId !== null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<'new' | ApiLandmark | null>(null);
+  const [removing, setRemoving] = useState<ApiLandmark | null>(null);
+
+  const syncGeo = (rows: ApiLandmark[]) => {
+    setLiveGeography({
+      coverage: reportingCoverage(),
+      landmarks: rows
+        .filter((l) => !l.is_holding_facility)
+        .map((l) => ({ id: l.landmark_id, name: l.name, lat: l.latitude, lng: l.longitude })),
+    });
+  };
+
+  useEffect(() => {
+    if (subdivisionId === null) return;
+    let active = true;
+    void (async () => {
+      try {
+        const rows = await adminApi.landmarks(subdivisionId);
+        if (!active) return;
+        setLandmarks(rows);
+        setLoadError(null);
+        syncGeo(rows);
+      } catch (err) {
+        if (!active) return;
+        setLoadError((err as Error)?.message || 'Could not load subdivision landmarks right now.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [subdivisionId]);
+
+  const reloadLandmarks = async () => {
+    if (subdivisionId === null) return;
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const rows = await adminApi.landmarks(subdivisionId);
+      setLandmarks(rows);
+      syncGeo(rows);
+    } catch (err) {
+      setLoadError((err as Error)?.message || 'Could not load subdivision landmarks right now.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async (values: LandmarkFormValues) => {
+    if (subdivisionId === null) return;
+    const isNew = editing === 'new';
+    const current = isNew ? null : editing;
+    await submit.run(async () => {
+      if (isNew) {
+        await adminApi.createLandmark({ ...values, subdivision_id: subdivisionId });
+        toast.success(`${values.name} added to subdivision landmarks`);
+      } else if (current) {
+        await adminApi.updateLandmark(current.landmark_id, values);
+        toast.success(`${values.name} position & details updated`);
+      }
+      const rows = await adminApi.landmarks(subdivisionId);
+      setLandmarks(rows);
+      syncGeo(rows);
+      setEditing(null);
+    });
+  };
+
+  const handleRemove = async () => {
+    if (!removing || subdivisionId === null) return;
+    await adminApi.deleteLandmark(removing.landmark_id);
+    toast.success(`${removing.name} removed`);
+    const rows = await adminApi.landmarks(subdivisionId);
+    setLandmarks(rows);
+    syncGeo(rows);
+  };
+
+  return (
+    <>
+      <Panel>
+        <Block
+          title="Subdivision Landmarks & Map Pins"
+          description="Set exact map pins for gates, parks, streets, and common areas in your subdivision. Residents use these pins when filing reports and sightings."
+          action={
+            subdivisionId !== null ? (
+              <Button size="sm" variant="primary" icon={Plus} onClick={() => { submit.clearError(); setEditing('new'); }}>
+                Add landmark
+              </Button>
+            ) : null
+          }
+        >
+          {subdivisionId === null ? (
+            <Callout tone="amber">This administrator account has no assigned subdivision, so subdivision landmarks cannot be edited here.</Callout>
+          ) : loading ? (
+            <p className="sa-small sa-text-2">Loading subdivision landmarks…</p>
+          ) : loadError ? (
+            <div className="space-y-3">
+              <FormError message={loadError} />
+              <Button size="sm" onClick={() => { void reloadLandmarks(); }}>Retry</Button>
+            </div>
+          ) : landmarks.length === 0 ? (
+            <EmptyState
+              icon={MapPin}
+              title="No subdivision landmarks configured yet"
+              action={<Button size="sm" variant="primary" icon={Plus} onClick={() => { submit.clearError(); setEditing('new'); }}>Add landmark</Button>}
+            >
+              Add your main entrance gates, parks, clubhouses, or corners so residents can select accurate positions on the map.
+            </EmptyState>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <LocationMapPreview
+                  numbered={landmarks.map((l, idx) => ({ lat: l.latitude, lng: l.longitude, n: idx + 1 }))}
+                  height={240}
+                  interactive
+                  label="Map of all registered subdivision landmarks"
+                />
+                <MapLegend
+                  items={[
+                    { kind: 'dot', label: 'Numbered pins match the landmarks listed below' },
+                    { kind: 'outline', label: 'Approximate subdivision outline' },
+                  ]}
+                />
+              </div>
+
+              <div className="space-y-3">
+                {landmarks.map((lm, idx) => (
+                  <div
+                    key={lm.landmark_id}
+                    className="rounded-xl border border-[#e7e2da] bg-gradient-to-b from-white to-[#fcfaf6] p-4 shadow-xs transition-all duration-150 hover:border-[#d6cfc7]"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[#1c1917] px-1.5 text-xs font-bold text-white">
+                            {idx + 1}
+                          </span>
+                          <span className="text-sm font-semibold text-[#1c1917]">{lm.name}</span>
+                          <Badge tone="neutral">{landmarkCategoryLabel(lm.category)}</Badge>
+                          {lm.is_holding_facility ? <Badge tone="amber">Holding facility</Badge> : null}
+                        </div>
+                        {lm.description ? (
+                          <p className="sa-small sa-text-2">{lm.description}</p>
+                        ) : null}
+                        <p className="sa-meta">
+                          Coordinates: {lm.latitude.toFixed(6)}, {lm.longitude.toFixed(6)}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Button
+                          size="sm"
+                          icon={Pencil}
+                          onClick={() => { submit.clearError(); setEditing(lm); }}
+                        >
+                          Move / Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={Trash2}
+                          onClick={() => setRemoving(lm)}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Block>
+      </Panel>
+
+      {editing ? (
+        <LandmarkDialog
+          landmark={editing === 'new' ? undefined : editing}
+          otherLandmarks={landmarks.filter((l) => editing === 'new' || l.landmark_id !== editing.landmark_id)}
+          pending={submit.pending}
+          submitError={submit.error ?? undefined}
+          onSave={handleSave}
+          onClose={() => { submit.clearError(); setEditing(null); }}
+        />
+      ) : null}
+
+      {removing ? (
+        <ConfirmDialog
+          title={`Remove ${removing.name}?`}
+          tone="danger"
+          confirmLabel="Remove landmark"
+          onClose={() => setRemoving(null)}
+          message={<>Residents will no longer see “{removing.name}” as a quick-pick landmark when placing a report pin. Existing closed reports keep their stored location.</>}
+          onConfirm={handleRemove}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -743,6 +959,7 @@ export default function SettingsPage() {
         </nav>
         <div className="min-w-0 max-w-[820px]">
           {section === 'profile' ? <ProfileSection /> : null}
+          {section === 'landmarks' ? <LandmarksSection /> : null}
           {section === 'external' ? <ExternalCoordinationSection /> : null}
           {section === 'account' ? <AccountSection /> : null}
           {section === 'notifications' ? <NotificationsSection /> : null}

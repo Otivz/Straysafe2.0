@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Lock, Megaphone, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Lock, Megaphone, MessageSquare, Plus } from 'lucide-react';
 import { isValidLatLng } from '../../../preview/geo';
 import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
 import { MapLegend } from '../../../preview/map/MapLegend';
@@ -16,6 +16,7 @@ import { currentActivity, pendingFollowUpsOf } from '../../data/selectors';
 import type { Case } from '../../data/types';
 import { ago, dueInfo, fmtDateTime, plural } from '../../../preview/lib/format';
 import type { OpenCaseDialog } from './dialogState';
+import ConcernsSection from './ConcernsSection';
 import PossibleOwnersBlock from './PossibleOwnersBlock';
 import RegisteredPetPanel from './RegisteredPetPanel';
 import RelatedReportsBlock from './RelatedReportsBlock';
@@ -147,6 +148,8 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
           )}
         </Block>
 
+        <ConcernsSection c={c} />
+
         <RelatedReportsBlock c={c} openDialog={openDialog} />
 
         {c.animal.type !== 'wildlife' && c.category !== 'lost_pet' ? <PossibleOwnersBlock c={c} /> : null}
@@ -182,7 +185,24 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
             <Kv stack rows={[
               ['Name', c.reporter.name], ['Unit', c.reporter.unit], ['Phone', c.reporter.phone], ['Email', <span className="break-all">{c.reporter.email}</span>],
             ]} />
-            {c.reporter.residentId ? <p className="sa-small mt-3"><Link to={adminPath(`/residents/${c.reporter.residentId}`)} className="font-semibold">View resident profile</Link></p> : null}
+            {c.reporter.residentId ? (
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                {!closed ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={MessageSquare}
+                    onClick={() => openDialog({
+                      kind: 'messages',
+                      target: { kind: 'direct', party: 'reporter', name: c.reporter.name, label: `Message ${c.reporter.name}` },
+                    })}
+                  >
+                    Message reporter
+                  </Button>
+                ) : null}
+                <Link to={adminPath(`/residents/${c.reporter.residentId}`)} className="sa-small font-semibold">View resident profile</Link>
+              </div>
+            ) : null}
           </Block>
         </Panel>
 

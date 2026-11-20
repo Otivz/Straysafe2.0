@@ -166,7 +166,7 @@ def open_match_thread(match_id: int, db: Session = Depends(get_db), user: User =
 
 @router.post("/reports/{report_id}/threads")
 def open_report_thread(report_id: int, body: PartyIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> Dict[str, Any]:
-    report = L.case_for_staff(db, report_id, user, write=True)
+    report = L.case_for_staff(db, report_id, user, write=False)
     t = CM.open_direct(db, report, user, body.party)
     db.commit()
     return CM.view(db, t, user, "staff")
