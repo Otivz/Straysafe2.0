@@ -9,6 +9,7 @@ Usage:
     cd backend
     python seed_demo_residents_and_pets.py
 """
+import json
 import os
 import sys
 from datetime import date
@@ -22,7 +23,6 @@ from sqlalchemy.orm import Session
 from app.models.notification_preference import UserNotificationPreference
 from app.models.pet import Pet
 from app.models.pet_tag import PetTag
-from app.models.report import Report, ReportMedia
 from app.models.user import Barangay, Role, Subdivision, User
 from app.services import pet_tags as pet_tag_service
 from app.utils.auth import get_password_hash
@@ -32,6 +32,7 @@ from app.utils.phone import normalize_ph_phone
 
 DEMO_PASSWORD_PLAIN = "SeleraResident#2026!"
 DEMO_EMAIL_DOMAIN = "selerahomes.demo"
+MANIFEST_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo_pet_photos_manifest.json")
 
 # 50 realistic fictional Filipino residents in Selera Homes, plus 1-2 pets each (65 pets total).
 # Format of each entry:
@@ -603,44 +604,31 @@ RESIDENT_SEED_DATA: List[Tuple[str, str, str, str, str, str, str, str, List[Tupl
 ]
 
 
-def _discover_photo_pools(db: Session) -> Dict[str, List[str]]:
+def _load_photo_manifest() -> Dict[str, Dict[str, Any]]:
     """
-    Find existing valid https:// image URLs in the database (from Pets and ReportMedia)
-    so seeded pets reuse real working Cloudinary image URLs when present.
-    Falls back to valid Cloudinary URLs for empty test databases.
+    Load the dedicated 65-pet Cloudinary photo manifest (`demo_pet_photos_manifest.json`).
+    Never reuses personal user-uploaded photos from existing database records.
     """
+    if os.path.exists(MANIFEST_PATH):
+        try:
+            with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+        except Exception:
+            pass
+    return {}
+
+
+def _photo_for_demo_pet(manifest: Dict[str, Dict[str, Any]], email_local: str, pet_name: str, pet_index: int) -> Tuple[str, Optional[float]]:
+    key = f"{email_local}:{pet_name}"
+    entry = manifest.get(key)
+    if entry and isinstance(entry.get("photo_url"), str) and entry["photo_url"].startswith("https://"):
+        conf = entry.get("yolo_confidence")
+        return entry["photo_url"], float(conf) if isinstance(conf, (int, float)) else None
     cloud_name = (os.getenv("CLOUDINARY_CLOUD_NAME") or "").strip() or "demo"
-    pools: Dict[str, List[str]] = {"Dog": [], "Cat": []}
-
-    for p in db.query(Pet).filter(Pet.photo_url.isnot(None)).all():
-        url = (p.photo_url or "").strip()
-        if url.startswith("https://") and p.pet_type in pools and url not in pools[p.pet_type]:
-            pools[p.pet_type].append(url)
-
-    media_rows = (
-        db.query(ReportMedia.file_url, Report.animal_type)
-        .join(Report, Report.report_id == ReportMedia.report_id)
-        .filter(ReportMedia.media_type == "Image", ReportMedia.file_url.isnot(None))
-        .all()
-    )
-    for file_url, animal_type in media_rows:
-        url = (file_url or "").strip()
-        species = "Cat" if (animal_type or "").strip().lower() == "cat" else "Dog"
-        if url.startswith("https://") and url not in pools[species]:
-            pools[species].append(url)
-
-    # If one species has photos in DB and the other doesn't, only fall back for the empty one
-    if not pools["Dog"]:
-        pools["Dog"] = [
-            f"https://res.cloudinary.com/{cloud_name}/image/upload/v1/straysafe/demo_pets/dog_{i:02d}.jpg"
-            for i in range(1, 11)
-        ]
-    if not pools["Cat"]:
-        pools["Cat"] = [
-            f"https://res.cloudinary.com/{cloud_name}/image/upload/v1/straysafe/demo_pets/cat_{i:02d}.jpg"
-            for i in range(1, 11)
-        ]
-    return pools
+    slug = f"{email_local}_{pet_name}".lower().replace(" ", "_").replace(".", "_")
+    return f"https://res.cloudinary.com/{cloud_name}/image/upload/v1/straysafe/demo_pets/demo_pet_{pet_index:02d}_{slug}.jpg", None
 
 
 def _ensure_selera_homes(db: Session) -> Subdivision:
@@ -686,8 +674,8 @@ def seed_demo_residents_and_pets(db: Session) -> Dict[str, Any]:
     password_hash = get_password_hash(DEMO_PASSWORD_PLAIN)
 
     selera = _ensure_selera_homes(db)
-    photo_pools = _discover_photo_pools(db)
-    photo_idx = {"Dog": 0, "Cat": 0}
+    manifest = _load_photo_manifest()
+    pet_counter = 0
 
     residents_created = 0
     residents_existing = 0
@@ -768,9 +756,10 @@ def seed_demo_residents_and_pets(db: Session) -> Dict[str, Any]:
             health_cond,
             notes,
         ) in pet_defs:
-            pool = photo_pools[pet_type]
-            chosen_photo = pool[photo_idx[pet_type] % len(pool)]
-            photo_idx[pet_type] += 1
+            pet_counter += 1
+            chosen_photo, yolo_conf = _photo_for_demo_pet(manifest, email_local, pet_name, pet_counter)
+            manifest_entry = manifest.get(f"{email_local}:{pet_name}") or {}
+            effective_colors = manifest_entry.get("colors") or list(colors_list)
 
             pet = (
                 db.query(Pet)
@@ -782,7 +771,7 @@ def seed_demo_residents_and_pets(db: Session) -> Dict[str, Any]:
                 .first()
             )
             if pet is None:
-                color_payload: Dict[str, Any] = {"colors": list(colors_list)}
+                color_payload: Dict[str, Any] = {"colors": list(effective_colors)}
                 apply_pet_color_payload(color_payload)
 
                 pet = Pet(
@@ -801,6 +790,7 @@ def seed_demo_residents_and_pets(db: Session) -> Dict[str, Any]:
                     weight=Decimal(weight_str),
                     size_category=size_cat,
                     photo_url=chosen_photo,
+                    ai_detection_confidence=yolo_conf,
                     health_condition=health_cond,
                     is_vaccinated=True,
                     vaccination_date=vax_date,
@@ -830,6 +820,10 @@ def seed_demo_residents_and_pets(db: Session) -> Dict[str, Any]:
                 db.flush()
                 pets_created += 1
             else:
+                if pet.photo_url != chosen_photo:
+                    pet.photo_url = chosen_photo
+                if yolo_conf is not None:
+                    pet.ai_detection_confidence = yolo_conf
                 pets_existing += 1
 
             seeded_pet_ids.append(pet.pet_id)
@@ -839,6 +833,13 @@ def seed_demo_residents_and_pets(db: Session) -> Dict[str, Any]:
                 tags_ensured += 1
 
     db.commit()
+
+    # Ensure confirmed realistic subdivision pet policies are seeded
+    try:
+        from seed_subdivision_policies import seed_policies
+        seed_policies(selera.subdivision_id)
+    except Exception as e:
+        print(f"[WARN] Could not seed subdivision policies: {e}")
 
     return {
         "subdivision_id": selera.subdivision_id,

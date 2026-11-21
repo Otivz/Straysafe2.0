@@ -64,6 +64,7 @@ def run_tests() -> None:
             assert sample_user.password != DEMO_PASSWORD_PLAIN
             assert verify_password(DEMO_PASSWORD_PLAIN, sample_user.password)
 
+        all_photo_urls = set()
         for u in demo_users:
             assert u.role_id == 1
             assert u.is_verified is True
@@ -85,8 +86,12 @@ def run_tests() -> None:
                 assert p.is_vaccinated is True
                 assert p.vaccination_date is not None and p.vaccine_expiry is not None
                 assert p.photo_url and p.photo_url.startswith("https://")
+                all_photo_urls.add(p.photo_url)
                 tag = db.query(PetTag).filter(PetTag.pet_id == p.pet_id, PetTag.status == "active").first()
                 assert tag is not None and len(tag.token) >= 16
+
+        # Every single one of the 65 demo pets must have a unique photo URL (no duplicate photos)
+        assert len(all_photo_urls) == 65, f"Expected 65 unique pet photo URLs, got {len(all_photo_urls)}"
 
         # 4. Verify visibility through Admin/Subdivision Leader and Resident endpoints
         leader = db.get(User, ids["leader"])

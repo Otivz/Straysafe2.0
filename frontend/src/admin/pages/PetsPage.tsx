@@ -20,6 +20,7 @@ import { fmtDate, fmtDateTime, plural } from '../../preview/lib/format';
 import { usePageTitle } from '../lib/hooks';
 
 type CollarFilter = 'all' | 'pending' | 'accepted' | 'ready_for_pickup' | 'completed';
+const PAGE_SIZE = 15;
 
 const STATUS_TONE: Record<ApiQrCollarRequest['status'], 'amber' | 'brand' | 'sage' | 'neutral'> = {
   pending: 'amber',
@@ -69,9 +70,16 @@ export default function PetsPage() {
   const typesPresent = (Object.keys(ANIMAL_TYPES) as AnimalType[]).filter((t) => state.pets.some((p) => p.type === t));
   const requested = params.get('type') as AnimalType | null;
   const type: AnimalType | 'all' = requested && typesPresent.includes(requested) ? requested : 'all';
+  const page = Math.max(1, Number(params.get('page')) || 1);
   const set = (patch: Record<string, string>) => {
     const next = new URLSearchParams(params);
     for (const [k, v] of Object.entries(patch)) { if (!v || v === 'all' || (k === 'tab' && v === 'registry')) next.delete(k); else next.set(k, v); }
+    next.delete('page');
+    setParams(next, { replace: true });
+  };
+  const setPage = (p: number) => {
+    const next = new URLSearchParams(params);
+    if (p <= 1) next.delete('page'); else next.set('page', String(p));
     setParams(next, { replace: true });
   };
 
@@ -80,6 +88,9 @@ export default function PetsPage() {
     .filter((p) => type === 'all' || p.type === type)
     .filter((p) => !needle || [p.name, p.breed, p.color, residentById(state, p.ownerId)?.name ?? ''].some((t) => t.toLowerCase().includes(needle)))
     .sort((a, b) => a.name.localeCompare(b.name));
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const current = Math.min(page, pages);
+  const pagedRows = rows.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
   const clear = () => setParams(new URLSearchParams(), { replace: true });
 
   const handleAccept = async (req: ApiQrCollarRequest) => {
@@ -218,7 +229,7 @@ export default function PetsPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {rows.map((p) => {
+                        {pagedRows.map((p) => {
                           const owner = residentById(state, p.ownerId);
                           return (
                             <tr key={p.id} onClick={() => navigate(adminPath(`/pets/${p.id}`))}>
@@ -238,7 +249,18 @@ export default function PetsPage() {
                       </tbody>
                     </table>
                   </div>
-                  <div className="sa-pager"><span>{plural(rows.length, 'pet')}{type !== 'all' || needle ? ' match' : ' registered'}</span></div>
+                  <div className="sa-pager">
+                    <span>
+                      Showing {(current - 1) * PAGE_SIZE + 1}–{Math.min(current * PAGE_SIZE, rows.length)} of {plural(rows.length, 'pet')}{type !== 'all' || needle ? ' match' : ' registered'}
+                    </span>
+                    {pages > 1 ? (
+                      <span className="flex items-center gap-2">
+                        <Button size="sm" disabled={current <= 1} onClick={() => setPage(current - 1)}>Previous</Button>
+                        <span className="sa-num">Page {current} of {pages}</span>
+                        <Button size="sm" disabled={current >= pages} onClick={() => setPage(current + 1)}>Next</Button>
+                      </span>
+                    ) : null}
+                  </div>
                 </>
               )}
             </Panel>

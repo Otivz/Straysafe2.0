@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Check,
   CheckCircle2,
   Download,
   ExternalLink,
+  Eye,
   History,
   Mail,
+  MapPin,
   MessageSquare,
   Paperclip,
   PawPrint,
@@ -14,6 +17,7 @@ import {
   ShieldAlert,
   Trash2,
   Upload,
+  User,
   UserRoundSearch,
 } from 'lucide-react';
 import { adminPath } from '../../config';
@@ -22,6 +26,7 @@ import { Button, LinkButton } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
 import { Field, Input, Select, Textarea } from '../../components/form';
 import { Block, Callout, FormError, Kv } from '../../components/layout';
+import { useMediaViewer } from '../../components/MediaLightbox';
 import {
   SubdivisionContactFields,
   useSubdivisionContactAutofill,
@@ -42,8 +47,9 @@ import { useSubmit } from '../../lib/useSubmit';
 import { reportIdOf } from '../../../live/refs';
 import { fromServer } from '../../../live/dates';
 import { errorMessage } from '../../../preview/lib/errors';
-import { fmtDateTime, fromLocalInput, toLocalInput } from '../../../preview/lib/format';
+import { fmtDateTime, fromLocalInput, plural, toLocalInput } from '../../../preview/lib/format';
 
+const PAGE_SIZE = 5;
 const MAX_MESSAGE = 2000;
 const STATUS_TONE: Record<ApiOwnerStatus, Tone> = {
   identified: 'neutral',
@@ -95,6 +101,7 @@ const DEFAULT_OWNERSHIP_VERIFICATION_MESSAGE =
   'Hello! The Subdivision Administration received a report involving an animal that may match your registered pet. We would like to verify whether this animal belongs to you. Please review the details and select Confirm Ownership or Decline Ownership.';
 
 type Open =
+  | { kind: 'details'; owner: ApiPossibleOwner; rank: number; isTopMatch: boolean }
   | { kind: 'message'; owner: ApiPossibleOwner; initialType?: 'ownership_verification' | 'direct_message' }
   | { kind: 'warning'; owner: ApiPossibleOwner }
   | { kind: 'unable'; owner: ApiPossibleOwner }
@@ -133,6 +140,7 @@ export default function PossibleOwnersBlock({
   const [data, setData] = useState<ApiPossibleOwners | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [open, setOpen] = useState<Open | null>(null);
+  const [page, setPage] = useState(1);
 
   const load = useCallback(() => {
     if (!rid) return;
@@ -150,8 +158,18 @@ export default function PossibleOwnersBlock({
     load();
   }, [load, c.status]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [rid]);
+
   if (!rid || (data && !data.applicable)) return null;
   if (!data && !loadError) return null;
+
+  const candidates = data?.candidates ?? [];
+  const total = candidates.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const current = Math.min(page, totalPages);
+  const pagedCandidates = candidates.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
 
   const body =
     loadError && !data ? (
@@ -166,16 +184,57 @@ export default function PossibleOwnersBlock({
         {data.blocked_reason && data.candidates.length > 0 ? (
           <Callout className="mb-3">{data.blocked_reason}</Callout>
         ) : null}
-        {data.candidates.length === 0 ? (
+        {total === 0 ? (
           <p className="sa-small sa-text-2">
             No registered pet matches this report yet. When the Pet Registry matching finds one, its owner appears here so you can message them or send an official warning.
           </p>
         ) : (
-          <ul className="sa-po-list">
-            {data.candidates.map((o) => (
-              <OwnerCard key={o.pet_id} c={c} o={o} onOpen={setOpen} />
-            ))}
-          </ul>
+          <>
+            <ul className="sa-po-list">
+              {pagedCandidates.map((o, idx) => {
+                const overallIdx = (current - 1) * PAGE_SIZE + idx;
+                return (
+                  <OwnerCard
+                    key={o.pet_id}
+                    c={c}
+                    o={o}
+                    rank={o.rank ?? overallIdx + 1}
+                    isTopMatch={Boolean(
+                      o.is_top_match ?? (overallIdx === 0 && (o.matching?.score ?? 0) > 0),
+                    )}
+                    onOpen={setOpen}
+                  />
+                );
+              })}
+            </ul>
+            {total > PAGE_SIZE ? (
+              <div className="sa-pager mt-3">
+                <span>
+                  Showing {(current - 1) * PAGE_SIZE + 1}–{Math.min(current * PAGE_SIZE, total)} of{' '}
+                  {plural(total, 'candidate')}
+                </span>
+                <span className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    disabled={current <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <span className="sa-num">
+                    Page {current} of {totalPages}
+                  </span>
+                  <Button
+                    size="sm"
+                    disabled={current >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    Next
+                  </Button>
+                </span>
+              </div>
+            ) : null}
+          </>
         )}
         <p className="sa-hint mt-3">
           A possible match is not proof of ownership. The owner's Confirm or Decline is supporting evidence only: review it with the photos and registered pet details, then make the final ownership decision.
@@ -185,7 +244,27 @@ export default function PossibleOwnersBlock({
 
   const dialog =
     open && data ? (
-      open.kind === 'warning' ? (
+      open.kind === 'details' ? (
+        <OwnerDetailsDialog
+          c={c}
+          o={open.owner}
+          rank={open.rank}
+          isTopMatch={open.isTopMatch}
+          animal={data.animal}
+          onClose={() => setOpen(null)}
+          onOpenMessage={() =>
+            setOpen({
+              kind: 'message',
+              owner: open.owner,
+              initialType:
+                open.owner.status === 'identified' || open.owner.status === 'unable_to_contact'
+                  ? 'ownership_verification'
+                  : 'direct_message',
+            })
+          }
+          onOpenWarning={() => setOpen({ kind: 'warning', owner: open.owner })}
+        />
+      ) : open.kind === 'warning' ? (
         <SendOwnerWarningDialog
           c={c}
           target={{
@@ -250,10 +329,14 @@ export default function PossibleOwnersBlock({
 function OwnerCard({
   c,
   o,
+  rank,
+  isTopMatch,
   onOpen,
 }: {
   c: Case;
   o: ApiPossibleOwner;
+  rank: number;
+  isTopMatch: boolean;
   onOpen: (open: Open) => void;
 }) {
   const r = o.request;
@@ -261,10 +344,16 @@ function OwnerCard({
   const facts = [
     o.pet.species ? `Species: ${o.pet.species}` : null,
     o.pet.breed ? `Breed: ${o.pet.breed}` : null,
-    o.pet.colour ? `Colours: ${o.pet.colour}` : null,
+    o.pet.colour ? `Colors: ${o.pet.colour}` : null,
   ]
     .filter(Boolean)
     .join(' · ');
+  const reasons =
+    m?.reasons && m.reasons.length > 0
+      ? m.reasons
+      : m?.explanation
+        ? [m.explanation]
+        : [];
   const history = [...o.earlier_requests]
     .reverse()
     .flatMap((x) => x.events)
@@ -289,7 +378,14 @@ function OwnerCard({
         )}
         <div className="min-w-0 flex-1">
           <p className="flex flex-wrap items-center gap-2">
-            <span className="sa-semibold">{o.resident.name}</span>
+            <span className="sa-semibold">
+              {rank}. {o.resident.name} – {o.pet.name}
+            </span>
+            {isTopMatch ? (
+              <Badge tone="sage" dot>
+                Highest-ranked candidate
+              </Badge>
+            ) : null}
             <Badge tone={STATUS_TONE[o.status]} dot>
               {o.status_label}
             </Badge>
@@ -300,8 +396,15 @@ function OwnerCard({
             {o.pet.reference_code ? (
               <span className="sa-text-3"> · {o.pet.reference_code}</span>
             ) : null}
+            <span className="sa-text-3"> · Pet ID #{o.pet_id}</span>
           </p>
           {facts ? <p className="sa-meta mt-0.5">{facts}</p> : null}
+          {reasons.length > 0 ? (
+            <p className="sa-small mt-1">
+              <span className="sa-semibold">Reasons: </span>
+              <span className="sa-text-2">{reasons.join(' ')}</span>
+            </p>
+          ) : null}
           <div className="sa-meta mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
             {o.resident.phone ? (
               <span className="inline-flex items-center gap-1">
@@ -357,87 +460,98 @@ function OwnerCard({
 
       {r ? <RequestLine r={r} /> : null}
 
-      {hasValidOwner ? (
-        <div className="sa-po__actions">
-          {!closed ? (
-            <>
-              <Button
-                variant="primary"
-                size="sm"
-                icon={MessageSquare}
-                onClick={() =>
-                  onOpen({
-                    kind: 'message',
-                    owner: o,
-                    initialType:
-                      o.status === 'identified' || o.status === 'unable_to_contact'
-                        ? 'ownership_verification'
-                        : 'direct_message',
-                  })
-                }
-              >
-                Message Owner
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={ShieldAlert}
-                onClick={() => onOpen({ kind: 'warning', owner: o })}
-              >
-                Send Warning
-              </Button>
-            </>
-          ) : null}
+      <div className="sa-po__actions">
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={Eye}
+          onClick={() => onOpen({ kind: 'details', owner: o, rank, isTopMatch })}
+        >
+          View Details
+        </Button>
 
-          {r?.thread_id ? (
-            <LinkButton size="sm" icon={MessageSquare} to={adminPath(`/messages/${r.thread_id}`)}>
-              Open conversation
-              {r.unread > 0 ? <Badge tone="brand">{r.unread} new</Badge> : null}
-            </LinkButton>
-          ) : null}
+        {hasValidOwner ? (
+          <>
+            {!closed ? (
+              <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={MessageSquare}
+                  onClick={() =>
+                    onOpen({
+                      kind: 'message',
+                      owner: o,
+                      initialType:
+                        o.status === 'identified' || o.status === 'unable_to_contact'
+                          ? 'ownership_verification'
+                          : 'direct_message',
+                    })
+                  }
+                >
+                  Message Owner
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={ShieldAlert}
+                  onClick={() => onOpen({ kind: 'warning', owner: o })}
+                >
+                  Send Warning
+                </Button>
+              </>
+            ) : null}
 
-          {o.actions.finalize ? (
-            <>
-              <Button
-                variant="primary"
-                size="sm"
-                icon={CheckCircle2}
-                onClick={() =>
-                  onOpen({ kind: 'decide', owner: o, decision: 'CONFIRMED_MATCH' })
-                }
-              >
-                Verify ownership
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => onOpen({ kind: 'decide', owner: o, decision: 'NOT_A_MATCH' })}
-              >
-                Not the owner
-              </Button>
+            {r?.thread_id ? (
+              <LinkButton size="sm" icon={MessageSquare} to={adminPath(`/messages/${r.thread_id}`)}>
+                Open conversation
+                {r.unread > 0 ? <Badge tone="brand">{r.unread} new</Badge> : null}
+              </LinkButton>
+            ) : null}
+
+            {o.actions.finalize ? (
+              <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={CheckCircle2}
+                  onClick={() =>
+                    onOpen({ kind: 'decide', owner: o, decision: 'CONFIRMED_MATCH' })
+                  }
+                >
+                  Verify ownership
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => onOpen({ kind: 'decide', owner: o, decision: 'NOT_A_MATCH' })}
+                >
+                  Not the owner
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    onOpen({ kind: 'decide', owner: o, decision: 'UNABLE_TO_VERIFY' })
+                  }
+                >
+                  Needs more information
+                </Button>
+              </>
+            ) : null}
+
+            {o.actions.mark_unable ? (
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() =>
-                  onOpen({ kind: 'decide', owner: o, decision: 'UNABLE_TO_VERIFY' })
-                }
+                icon={PhoneOff}
+                onClick={() => onOpen({ kind: 'unable', owner: o })}
               >
-                Needs more information
+                Unable to contact
               </Button>
-            </>
-          ) : null}
-
-          {o.actions.mark_unable ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              icon={PhoneOff}
-              onClick={() => onOpen({ kind: 'unable', owner: o })}
-            >
-              Unable to contact
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
+            ) : null}
+          </>
+        ) : null}
+      </div>
 
       {history.length > 0 ? (
         <details className="sa-po__history">
@@ -531,6 +645,375 @@ const DECISION_COPY: Record<
   },
 };
 
+function OwnerDetailsDialog({
+  c,
+  o,
+  rank,
+  isTopMatch,
+  animal,
+  onClose,
+  onOpenMessage,
+  onOpenWarning,
+}: {
+  c: Case;
+  o: ApiPossibleOwner;
+  rank: number;
+  isTopMatch: boolean;
+  animal: ApiPossibleOwners['animal'];
+  onClose: () => void;
+  onOpenMessage: () => void;
+  onOpenWarning: () => void;
+}) {
+  const { openMedia } = useMediaViewer();
+  const m = o.matching;
+  const hasValidOwner = Boolean(o.resident?.user_id);
+  const closed = c.status === 'closed';
+
+  const casePhotoUrl =
+    c.evidence?.find((e) => e.kind === 'photo' && e.url)?.url ||
+    c.evidence?.find((e) => Boolean(e.url))?.url ||
+    null;
+  const petPhotoUrl = o.pet.photo_url || null;
+
+  const reasons =
+    m?.reasons && m.reasons.length > 0
+      ? m.reasons
+      : m?.explanation
+        ? [m.explanation]
+        : [];
+
+  const history = [...o.earlier_requests]
+    .reverse()
+    .flatMap((x) => x.events)
+    .concat(o.request?.events ?? []);
+
+  return (
+    <Dialog
+      size="lg"
+      title={`Candidate #${rank}: ${o.resident.name} – ${o.pet.name}`}
+      description={
+        <span className="flex flex-wrap items-center gap-2 mt-1">
+          {isTopMatch ? (
+            <Badge tone="sage" dot>
+              Highest-ranked candidate
+            </Badge>
+          ) : null}
+          <Badge tone={STATUS_TONE[o.status]} dot>
+            {o.status_label}
+          </Badge>
+          <span className="sa-ref text-xs">Case {c.id}</span>
+          {m?.score !== null && m?.score !== undefined ? (
+            <Badge tone={CLASS_TONE[m.classification ?? ''] ?? 'neutral'}>
+              {m.score}% · {m.classification_label ?? 'Match'}
+            </Badge>
+          ) : null}
+        </span>
+      }
+      onClose={onClose}
+      footer={
+        <div className="flex items-center justify-between w-full">
+          <Button onClick={onClose}>Close</Button>
+          <div className="flex items-center gap-2">
+            {hasValidOwner && !closed ? (
+              <>
+                <Button
+                  variant="secondary"
+                  icon={ShieldAlert}
+                  onClick={() => {
+                    onClose();
+                    onOpenWarning();
+                  }}
+                >
+                  Send Warning
+                </Button>
+                <Button
+                  variant="primary"
+                  icon={MessageSquare}
+                  onClick={() => {
+                    onClose();
+                    onOpenMessage();
+                  }}
+                >
+                  Message Owner
+                </Button>
+              </>
+            ) : null}
+          </div>
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {/* Side-by-side Photo & Profile Header */}
+        <div className="sa-cmp__heads">
+          <div className="sa-cmp__head p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-sand/20">
+            <div className="flex items-start gap-3">
+              {casePhotoUrl ? (
+                <img
+                  src={casePhotoUrl}
+                  alt={`Photo of animal in Case ${c.id}`}
+                  className="w-20 h-20 rounded-lg object-cover border border-gray-200 dark:border-gray-700 cursor-zoom-in hover:scale-105 transition-transform shrink-0"
+                  onClick={() =>
+                    openMedia([
+                      {
+                        url: casePhotoUrl,
+                        kind: 'photo',
+                        title: `Reported Animal (Case ${c.id})`,
+                        caption: [c.animal?.type, c.animal?.breed, c.animal?.color]
+                          .filter(Boolean)
+                          .join(' · '),
+                      },
+                    ])
+                  }
+                />
+              ) : (
+                <span className="w-20 h-20 rounded-lg border border-gray-200 dark:border-gray-700 bg-sand flex items-center justify-center text-gray-400 shrink-0">
+                  <PawPrint size={28} />
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <Badge tone="brand">Reported Animal</Badge>
+                  <span className="sa-ref text-xs">Case {c.id}</span>
+                </div>
+                <p className="font-semibold text-base mt-1 truncate">
+                  {c.title || [c.animal?.type, c.animal?.breed].filter(Boolean).join(' · ') || `Case ${c.id}`}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {c.reporter?.name ? `Reported by ${c.reporter.name}` : 'Community Report'} · {when(c.reportedAt)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="sa-cmp__head p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-sand/20">
+            <div className="flex items-start gap-3">
+              {petPhotoUrl ? (
+                <img
+                  src={petPhotoUrl}
+                  alt={`Registered photo of ${o.pet.name}`}
+                  className="w-20 h-20 rounded-lg object-cover border border-gray-200 dark:border-gray-700 cursor-zoom-in hover:scale-105 transition-transform shrink-0"
+                  onClick={() =>
+                    openMedia([
+                      {
+                        url: petPhotoUrl,
+                        kind: 'photo',
+                        title: `Registered Pet: ${o.pet.name}`,
+                        caption: `${o.pet.species || ''} · ${o.pet.breed || ''}`,
+                      },
+                    ])
+                  }
+                />
+              ) : (
+                <span className="w-20 h-20 rounded-lg border border-gray-200 dark:border-gray-700 bg-sand flex items-center justify-center text-gray-400 shrink-0">
+                  <PawPrint size={28} />
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <Badge tone="sage">Registered Pet</Badge>
+                  <span className="sa-ref text-xs">Pet #{o.pet_id}</span>
+                </div>
+                <p className="font-semibold text-base mt-1 truncate">
+                  {o.pet.name} {o.pet.reference_code ? `(${o.pet.reference_code})` : ''}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Owner: <span className="font-medium text-gray-700 dark:text-gray-300">{o.resident.name}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Side-by-Side Comparison Table */}
+        <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-800">
+          <table className="sa-cmp__table">
+            <thead>
+              <tr>
+                <th scope="col" className="w-[140px]">
+                  Attribute
+                </th>
+                <th scope="col">Reported Animal (Case {c.id})</th>
+                <th scope="col">Registered Pet ({o.pet.name})</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Species</th>
+                <td>{c.animal?.type || animal?.animal_type || '—'}</td>
+                <td>{o.pet.species || '—'}</td>
+              </tr>
+              <tr>
+                <th scope="row">Breed</th>
+                <td>{c.animal?.breed || animal?.breed || 'Not specified'}</td>
+                <td>{o.pet.breed || 'Not recorded'}</td>
+              </tr>
+              <tr>
+                <th scope="row">Color & Coat</th>
+                <td>{c.animal?.color || animal?.colour || 'Not specified'}</td>
+                <td>{o.pet.colour || 'Not recorded'}</td>
+              </tr>
+              <tr>
+                <th scope="row">Size & Condition</th>
+                <td>
+                  {[c.animal?.customType || animal?.size, c.animal?.condition]
+                    .filter(Boolean)
+                    .join(' · ') || 'Not specified'}
+                </td>
+                <td>{o.pet.size || 'Not recorded'}</td>
+              </tr>
+              <tr>
+                <th scope="row">Physical Details</th>
+                <td>{c.animal?.description || c.description || 'Not specified'}</td>
+                <td>{o.pet.markings || 'None recorded'}</td>
+              </tr>
+              <tr>
+                <th scope="row">Location</th>
+                <td>{[c.location?.detail, c.location?.area].filter(Boolean).join(' · ') || 'Not specified'}</td>
+                <td>{o.registered_address || o.resident.address || o.resident.subdivision || 'Not recorded'}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Accuracy Scoring & Multi-Attribute Breakdown */}
+        {m ? (
+          <div className="sa-mscore">
+            <div className="sa-mscore__head">
+              <span className="sa-mscore__total">{m.score}%</span>
+              <span className="sa-text-2">Matching Accuracy</span>
+              {m.classification_label ? (
+                <Badge tone={CLASS_TONE[m.classification ?? ''] ?? 'neutral'}>
+                  {m.classification_label}
+                </Badge>
+              ) : null}
+              {m.coverage !== null ? (
+                <span className="sa-small sa-text-3">
+                  {m.coverage}% of information compared
+                </span>
+              ) : null}
+            </div>
+
+            {reasons.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {reasons.map((r, i) => (
+                  <Badge key={i} tone="sage" icon={Check}>
+                    {r}
+                  </Badge>
+                ))}
+              </div>
+            ) : null}
+
+            {m.attributes && m.attributes.length > 0 ? (
+              <ul className="sa-mscore__attrs" aria-label="Matching details">
+                {m.attributes.map((a) => {
+                  const score = a.score;
+                  const verdict =
+                    a.verdict ||
+                    (score !== null && score >= 80
+                      ? 'match'
+                      : score !== null && score >= 40
+                        ? 'similar'
+                        : 'differs');
+                  return (
+                    <li key={a.key} className="sa-mscore__attr" data-available={a.available}>
+                      <span className="sa-mscore__name">{a.label}</span>
+                      <span className="sa-mscore__num">
+                        {a.available && score !== null ? `${score}%` : '—'}
+                      </span>
+                      <span className="sa-mscore__text">
+                        {a.explanation || 'No details'}
+                        {a.weight ? <span className="sa-text-3"> · weight {a.weight}%</span> : null}
+                      </span>
+                      {a.available && score !== null ? (
+                        <span
+                          className="sa-mscore__bar"
+                          data-verdict={verdict}
+                          role="img"
+                          aria-label={`${a.label}: ${score}%`}
+                        >
+                          <span style={{ width: `${Math.min(100, Math.max(0, score))}%` }} />
+                        </span>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* Registered Owner & Household Information */}
+        <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-sand/30 flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h4 className="font-semibold text-base flex items-center gap-2">
+                <User size={16} className="text-gray-500" />
+                {o.resident.name}
+              </h4>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Registered Owner · User ID #{o.resident.user_id} · Pet #{o.pet_id} ({o.pet.name})
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <LinkButton
+                size="sm"
+                to={adminPath(`/pets/${o.pet_id}`)}
+                target="_blank"
+                rel="noopener noreferrer"
+                icon={ExternalLink}
+              >
+                Pet Profile
+              </LinkButton>
+              {o.resident.user_id ? (
+                <LinkButton
+                  size="sm"
+                  to={adminPath(`/residents/${o.resident.user_id}`)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  icon={ExternalLink}
+                >
+                  Resident Profile
+                </LinkButton>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm pt-2 border-t border-gray-200 dark:border-gray-800">
+            <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+              <Phone size={14} className="text-gray-400 shrink-0" />
+              <span>{o.resident.phone || 'No phone recorded'}</span>
+            </div>
+            <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+              <Mail size={14} className="text-gray-400 shrink-0" />
+              <span className="truncate">{o.resident.email || 'No email recorded'}</span>
+            </div>
+            <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+              <MapPin size={14} className="text-gray-400 shrink-0" />
+              <span className="truncate">
+                {o.registered_address || o.resident.address || o.resident.subdivision || 'No address recorded'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Verification & Communication History */}
+        {history.length > 0 ? (
+          <details className="sa-po__history">
+            <summary>
+              <History size={13} aria-hidden="true" /> Verification & communication history ({history.length})
+            </summary>
+            <ol>
+              {history.map((e, i) => (
+                <EventRow key={`${e.at}-${e.kind}-${i}`} e={e} />
+              ))}
+            </ol>
+          </details>
+        ) : null}
+      </div>
+    </Dialog>
+  );
+}
+
 function OwnerDialog({
   open,
   data,
@@ -539,7 +1022,7 @@ function OwnerDialog({
   onClose,
   onDone,
 }: {
-  open: Exclude<Open, { kind: 'warning' }>;
+  open: Exclude<Open, { kind: 'warning' | 'details' }>;
   data: ApiPossibleOwners;
   reportId: number;
   caseId: string;

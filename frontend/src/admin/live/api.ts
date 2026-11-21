@@ -547,15 +547,17 @@ export interface ApiOwnerRequest {
   final_decision: string | null; final_label: string | null; final_by_name: string | null; final_at: string | null; cancel_reason: string | null;
   thread_id: number | null; thread_status: 'open' | 'closed' | null; unread: number; events: ApiOwnerEvent[];
 }
-export interface ApiOwnerMatchAttribute { key: string; label: string; score: number | null; available: boolean; explanation: string | null }
+export interface ApiOwnerMatchAttribute { key: string; label: string; score: number | null; available: boolean; verdict?: string | null; weight?: number | null; explanation: string | null }
 export interface ApiPossibleOwner {
   pet_id: number; match_id: number | null;
+  rank?: number;
+  is_top_match?: boolean;
   resident: { user_id: number; name: string; phone?: string | null; email?: string | null; address?: string | null; subdivision: string | null };
   pet: { name: string; reference_code: string | null; species: string | null; breed: string | null; colour: string | null; size: string | null; markings: string | null; photo_url: string | null; status: string | null };
   registered_address: string | null;
   matching: {
     method: 'multi_attribute' | 'registry' | 'manual'; label: string; score: number | null; classification: string | null; classification_label: string | null;
-    coverage: number | null; attributes: ApiOwnerMatchAttribute[]; explanation: string | null
+    coverage: number | null; attributes: ApiOwnerMatchAttribute[]; reasons?: string[]; explanation: string | null
   } | null;
   status: ApiOwnerStatus; status_label: string;
   request: ApiOwnerRequest | null; earlier_requests: ApiOwnerRequest[];
