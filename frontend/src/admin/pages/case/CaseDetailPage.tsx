@@ -243,7 +243,7 @@ export default function CaseDetailPage() {
 
       {dupCandidates.length > 0 && c.status !== 'closed' && !c.duplicateOfReportId ? (() => {
         const top = dupCandidates[0];
-        const topPct = top && typeof top.overall_score === 'number' ? Math.round(top.overall_score * 100) : null;
+        const topPct = top && typeof top.combined_score === 'number' ? Math.round(top.combined_score * 100) : null;
         return (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#d97706]/35 bg-gradient-to-r from-[#fffbeb] to-[#fef3c7]/45 px-3.5 py-2.5 shadow-xs">
             <div className="flex items-center gap-2.5 min-w-0">

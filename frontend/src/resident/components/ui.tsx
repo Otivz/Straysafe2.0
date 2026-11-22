@@ -53,10 +53,10 @@ export function Callout({ tone = 'info', icon, title, children, className }: { t
 export const FormError = ({ message }: { message: string }) => <Callout tone="red">{message}</Callout>;
 
 /** `tone="sage"` is for a success (verified, saved, recovered); the default is the quiet neutral used for empty and error states. */
-export function EmptyState({ icon: Icon, title, children, action, tone }: { icon: LucideIcon; title: string; children?: ReactNode; action?: ReactNode; tone?: 'sage' }) {
+export function EmptyState({ icon: Icon, title, children, action, tone }: { icon: LucideIcon; title: string; children?: ReactNode; action?: ReactNode; tone?: 'sage' | 'amber' }) {
   return (
     <div className="rs-empty">
-      <span className={cx('rs-empty__icon', tone === 'sage' && 'rs-empty__icon--sage')}><Icon size={22} aria-hidden="true" /></span>
+      <span className={cx('rs-empty__icon', tone === 'sage' && 'rs-empty__icon--sage', tone === 'amber' && 'rs-empty__icon--amber')}><Icon size={22} aria-hidden="true" /></span>
       <p className="rs-empty__title">{title}</p>
       {children ? <p className="rs-empty__text">{children}</p> : null}
       {action ? <div className="rs-empty__action">{action}</div> : null}

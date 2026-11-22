@@ -1,4 +1,4 @@
-import { Fragment, type KeyboardEvent, type ReactNode } from 'react';
+import { Fragment, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, CircleAlert, CircleCheck, Info, TriangleAlert, WifiOff, type LucideIcon } from 'lucide-react';
 import { cx } from '../../preview/lib/cx';
@@ -20,7 +20,7 @@ export function PageHeader({ title, description, actions, back }: { title: React
   );
 }
 
-export const Panel = ({ className, children }: { className?: string; children: ReactNode }) => <div className={cx('sa-panel', className)}>{children}</div>;
+export const Panel = ({ className, style, children }: { className?: string; style?: CSSProperties; children: ReactNode }) => <div className={cx('sa-panel', className)} style={style}>{children}</div>;
 
 /** A titled section inside a panel. Sections are separated by hairlines instead of being nested cards. */
 export function Block({ title, description, action, tight, children, className }: { title?: ReactNode; description?: ReactNode; action?: ReactNode; tight?: boolean; children: ReactNode; className?: string }) {

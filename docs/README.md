@@ -38,6 +38,7 @@ Status values: **Current** (matches the code when last checked), **Reference** (
 
 | Document | Status | Notes |
 |---|---|---|
+| [Fix the 11 TypeScript Errors That Stopped the GitHub APK Build](05-operations/agents/feature-updates/2026-11-22_2013_fix-apk-build-type-errors.md) | Current | Low-priority map style, `users()` call, `combined_score` in the duplicate banner, `Panel` style, a table for the case-location map, amber resident empty state, unused import; `tsc -b` and the Android debug web build pass |
 | [Case Management Verification & Implementation Report (2026-11-22)](03-development/implementation-reports/CASE_MANAGEMENT_VERIFICATION_2026-11-22.md) | Current | Complete regression verification report covering Case Management Features 1–16 (TypeScript, ESLint, Vite build, and backend service regression tests) |
 | [Seed Realistic Subdivision Animal Policies](05-operations/agents/feature-updates/2026-11-21_0206_seed-subdivision-animal-policies.md) | Current | Seeded 5 confirmed realistic HOA animal policies (leash & roaming, barking nuisance, waste sanitation, aggressive bite protocol, QR pet registration & rabies) for Selera Homes in system_settings |
 | [View Details Modal for Possible Pet Owners](05-operations/agents/feature-updates/2026-11-21_0135_possible-owners-view-details-modal.md) | Current | Added "View Details" button to each Possible Pet Owner candidate card opening a comprehensive modal with side-by-side comparison, photo preview, accuracy breakdown, and owner profile shortcuts |

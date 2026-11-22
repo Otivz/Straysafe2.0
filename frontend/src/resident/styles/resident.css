@@ -125,6 +125,7 @@
   .rs-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 36px 20px; text-align: center; }
   .rs-empty__icon { display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 6px; border-radius: 50%; background: var(--sa-sand); color: var(--sa-ink-3); }
   .rs-empty__icon--sage { background: var(--sa-sage-soft); color: var(--sa-sage-ink); }
+  .rs-empty__icon--amber { background: var(--sa-amber-soft); color: var(--sa-amber-ink); }
   .rs-empty__title { font-size: 17px; font-weight: 650; }
   .rs-empty__text { max-width: 36ch; color: var(--sa-ink-2); font-size: 15px; line-height: 22px; }
   .rs-empty__action { margin-top: 10px; }
