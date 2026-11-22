@@ -19,6 +19,8 @@ _TYPE_CATEGORY = {
     "comment": REPORTS, "report_claimed": REPORTS, "report_takeover": REPORTS, "report_transfer_request": REPORTS,
     "report_transfer_accepted": REPORTS, "report_transfer_rejected": REPORTS, "unassigned_report_alert": REPORTS,
     "enforcement": REPORTS, "warning": REPORTS, "warning_letter": REPORTS,
+    # A self-registered resident is waiting for the Leader's residency decision (related id = the application)
+    "resident_application": REPORTS,
     # Case activity (preference column push_rescues)
     "alert": RESCUES,
     # Pet matches
@@ -127,6 +129,8 @@ def notification_link(role_id: int, ntype: Optional[str], related_id: Optional[i
             return f"{LEADER_APP}/pets"
         if t in ("lost_pet_alert", "lost_pet_sighting", "lost_pet_alert_request"):
             return f"{LEADER_APP}/community"
+        if t == "resident_application":      # a registration waiting for a residency decision: the Applications tab
+            return f"{LEADER_APP}/residents/applications"
         if t == "resident_message":          # a resident wrote to the administration: its related id is the THREAD's
             return f"{LEADER_APP}/messages/{rid}" if rid else f"{LEADER_APP}/messages"
         # lost_pet_leader carries the REPORT id: the Leader's case screen (the default below)

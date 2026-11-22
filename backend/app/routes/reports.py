@@ -2204,26 +2204,33 @@ def create_report(
         rabies_symptoms = report_data.pop("rabies_symptoms", None)
         movement_direction = report_data.pop("movement_direction", None)
         media_urls = [u.strip() for u in (report_data.pop("media_urls", None) or []) if isinstance(u, str) and u.strip()]
+        # Who reported it and how: only a Subdivision Leader / Admin filing a report sets these (a resident's values are dropped)
+        staff_filed = current_user.role_id in (2, 4)
+        report_channel = report_data.pop("report_channel", None)
+        reported_by_name = report_data.pop("reported_by_name", None)
+        reported_by_contact = report_data.pop("reported_by_contact", None)
+        reported_on_behalf_of = report_data.pop("reported_on_behalf_of", None)
 
         validated_media: list[tuple[str, str]] = []
-        has_valid_photo = False
+        has_valid_media = False
         for m_url in media_urls:
             validate_cloudinary_url(m_url, allowed={"Image", "Video"})
             is_vid = any(m_url.lower().split("?")[0].endswith(ext) for ext in (".mp4", ".mov", ".webm", ".avi", ".mkv")) or "/video/upload/" in m_url.lower()
             if not is_vid:
                 validate_cloudinary_url(m_url, allowed={"Image"})
-                has_valid_photo = True
+            has_valid_media = True
             validated_media.append((m_url, "Video" if is_vid else "Image"))
 
-        if not has_valid_photo and report_data.get("pet_id"):
+        if not has_valid_media and report_data.get("pet_id"):
             pet_for_photo = db.query(Pet).filter(Pet.pet_id == report_data["pet_id"]).first()
             if pet_for_photo and (pet_for_photo.photo_url or "").strip():
-                has_valid_photo = True
+                has_valid_media = True
 
-        if not has_valid_photo:
+        # A report a Leader files from a phone call or a visit often has no photo yet: it can be added to the case afterwards
+        if not has_valid_media and not staff_filed:
             raise HTTPException(
                 status_code=422,
-                detail="Please upload at least one photo of the animal before submitting your report.",
+                detail="Please upload at least one photo or video of the animal before submitting your report.",
             )
 
         # Any kind of animal can be reported (dog, cat, bird, small mammal, reptile, livestock, wildlife, other): the
@@ -2263,6 +2270,27 @@ def create_report(
         # The report always belongs to the logged-in user (never a user_id sent by the browser)
         user_obj = current_user
         report_data["user_id"] = current_user.user_id
+
+        if staff_filed:
+            # A Leader files for their own subdivision only
+            if current_user.role_id == 2 and current_user.subdivision_id:
+                report_data["subdivision_id"] = current_user.subdivision_id
+            channel = report_channel or "self"
+            name, contact, behalf = None, None, None
+            if channel != "self":
+                resident = None
+                if reported_on_behalf_of:
+                    resident = db.query(User).filter(User.user_id == reported_on_behalf_of).first()
+                    if (resident is None or resident.role_id != 1
+                            or (current_user.role_id == 2 and resident.subdivision_id != current_user.subdivision_id)):
+                        raise HTTPException(status_code=400, detail="Choose a resident of your subdivision, or type the person's name.")
+                name = (reported_by_name or "").strip() or (resident.name if resident else "")
+                if len(name) < 2:
+                    raise HTTPException(status_code=400, detail="Enter the name of the person who reported it.")
+                contact = ((reported_by_contact or "").strip() or (resident.phone or "" if resident else "")).strip()[:30] or None
+                behalf = resident.user_id if resident else None
+            report_data.update(report_channel=channel, reported_by_name=name[:150] if name else None,
+                               reported_by_contact=contact, reported_on_behalf_of=behalf)
 
         # Validate subdivision_id exists in DB, fallback to user's subdivision or default (1)
         raw_subd_id = report_data.get("subdivision_id")

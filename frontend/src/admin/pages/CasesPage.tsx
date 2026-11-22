@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowRight, ChevronLeft, ChevronRight, Clock, FolderOpen, MapPin, PawPrint, Play, SearchX } from 'lucide-react';
+import { AlertTriangle, ArrowRight, FilePlus2, UserRound, ChevronLeft, ChevronRight, CircleCheck, Clock, FolderOpen, Layers, LayoutGrid, Map as MapIcon, MapPin, PawPrint, Play, SearchX } from 'lucide-react';
 import { adminPath } from '../config';
 import { LinkButton, Button } from '../components/Button';
 import { CaseStatusBadge, ClosureOutcome, PriorityMark } from '../components/Badge';
-import { Segmented, Select, SearchInput } from '../components/form';
-import { EmptyState, PageHeader, Panel } from '../components/layout';
+import { Select, SearchInput } from '../components/form';
+import { EmptyState } from '../components/layout';
 import { ANIMAL_ICON } from '../components/icons';
 import { ANIMAL_TYPES, CATEGORIES, CATEGORY_IDS, PRIORITY_IDS } from '../data/constants';
 import { useAdminData } from '../data/context';
@@ -14,8 +14,10 @@ import { DEFAULT_FILTERS, filterCases, type CaseFilters, type StatusFilter } fro
 import { ago, fmtDate, plural } from '../../preview/lib/format';
 import { usePageTitle } from '../lib/hooks';
 import { useNow } from '../../preview/lib/hooks';
-import { cx } from '../../preview/lib/cx';
 import { useMediaViewer } from '../components/MediaLightbox';
+import { reportedByText } from '../live/adapters';
+
+const CasesMap = lazy(() => import('../components/CasesMap'));
 
 const PAGE_SIZE = 12;
 const STATUS_VALUES: StatusFilter[] = ['all', 'open', 'reported', 'under_review', 'in_progress', 'closed'];
@@ -36,167 +38,92 @@ function CaseCard({ c, now, onNavigate }: { c: Case; now: Date; onNavigate: (id:
     });
   const allMedia = [...evidenceMedia, ...petPhotos];
   const mediaList = allMedia.filter((m, i, arr) => arr.findIndex((x) => x.url === m.url) === i);
-  const currentMedia = mediaList.length > 0 && !imgFailed ? mediaList[((photoIndex % mediaList.length) + mediaList.length) % mediaList.length] : null;
+  const index = mediaList.length > 0 ? ((photoIndex % mediaList.length) + mediaList.length) % mediaList.length : 0;
+  const currentMedia = mediaList.length > 0 && !imgFailed ? mediaList[index] : null;
 
   const AnimalIcon = ANIMAL_ICON[c.animal.type] ?? PawPrint;
-  const isUrgent = c.status !== 'closed' && c.priority === 'urgent';
-  const isHigh = c.status !== 'closed' && c.priority === 'high';
+  const open = c.status !== 'closed';
+  const tone = open && c.priority === 'urgent' ? 'red' : open && c.priority === 'high' ? 'amber' : undefined;
+  const view = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    openMedia(mediaList.map((m, i) => ({ url: m.url, kind: m.kind, title: `${c.title} · ${m.kind === 'video' ? 'Video' : 'Photo'} ${i + 1}` })), index);
+  };
+  const ago_ = ago(c.reportedAt, now);
 
   return (
     <article
       tabIndex={0}
       role="button"
       aria-label={`Case ${c.id}: ${c.title}`}
+      className="sa-kcard"
+      data-tone={tone}
       onClick={() => onNavigate(c.id)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(c.id); } }}
-      className={cx(
-        'group relative flex flex-col justify-between rounded-xl border border-[var(--sa-line)] bg-[var(--sa-surface)] p-4 sm:p-4.5 transition-all duration-150',
-        'hover:border-[var(--sa-brand-tint)] hover:shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--sa-brand-tint)]',
-        isUrgent && 'border-l-4 border-l-[var(--sa-red)]',
-        isHigh && 'border-l-4 border-l-[var(--sa-amber)]'
-      )}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onNavigate(c.id); } }}
     >
-      <div>
-        {/* Card Header: Reference ID + Category and Status / Priority */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <span className="sa-ref text-xs font-semibold">{c.id}</span>
-            <p className="sa-meta mt-0.5 text-xs truncate">
-              {CATEGORIES[c.category].label} · {ANIMAL_TYPES[c.animal.type]}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
-            <PriorityMark priority={c.priority} />
-            <CaseStatusBadge c={c} />
-            <ClosureOutcome c={c} />
-          </div>
+      {/* Reference, category and animal; priority on the right */}
+      <div className="sa-kcard__top">
+        <div className="sa-kcard__ref">
+          <span className="sa-id">{c.id}</span>
+          <span>{CATEGORIES[c.category].label} · {ANIMAL_TYPES[c.animal.type]}</span>
         </div>
+        <PriorityMark priority={c.priority} />
+      </div>
 
-        {/* Card Body: Thumbnail / Icon with Previous & Next controls + Title and Description */}
-        <div className="flex gap-3.5 my-3">
+      {/* Photo or video (with previous / next), title and description */}
+      <div className="sa-kcard__body">
+        <div className="sa-kcard__media">
           {currentMedia ? (
-            <div className="relative w-18 h-18 sm:w-20 sm:h-20 rounded-lg overflow-hidden shrink-0 border border-[var(--sa-line)] bg-[var(--sa-sand)] group/img">
-              {currentMedia.kind === 'video' ? (
-                <div
-                  className="w-full h-full relative flex items-center justify-center bg-black cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openMedia(
-                      mediaList.map((m, i) => ({ url: m.url, kind: m.kind, title: `${c.title} · ${m.kind === 'video' ? 'Video' : 'Photo'} ${i + 1}` })),
-                      ((photoIndex % mediaList.length) + mediaList.length) % mediaList.length
-                    );
-                  }}
-                  title="Play video"
-                >
-                  <video
-                    src={currentMedia.url}
-                    preload="metadata"
-                    className="w-full h-full object-cover opacity-80 group-hover/img:opacity-100 transition-opacity"
-                  />
-                  <span className="absolute flex h-6 w-6 items-center justify-center rounded-full bg-black/65 text-white pointer-events-none">
-                    <Play size={12} fill="currentColor" className="translate-x-0.5" />
-                  </span>
-                </div>
-              ) : (
-                <img
-                  src={currentMedia.url}
-                  alt=""
-                  className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-200 cursor-zoom-in"
-                  loading="lazy"
-                  onError={() => setImgFailed(true)}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openMedia(
-                      mediaList.map((m, i) => ({ url: m.url, kind: m.kind, title: `${c.title} · Photo ${i + 1}` })),
-                      ((photoIndex % mediaList.length) + mediaList.length) % mediaList.length
-                    );
-                  }}
-                />
-              )}
-
-              {mediaList.length >= 2 && (
-                <>
-                  {/* Previous < button */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPhotoIndex((i) => i - 1);
-                    }}
-                    className="absolute left-1 top-1/2 -translate-y-1/2 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-black/65 hover:bg-black/90 text-white shadow transition-all focus:outline-none"
-                    title="Previous image"
-                    aria-label="Previous image"
-                  >
-                    <ChevronLeft size={13} />
-                  </button>
-
-                  {/* Next > button */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPhotoIndex((i) => i + 1);
-                    }}
-                    className="absolute right-1 top-1/2 -translate-y-1/2 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-black/65 hover:bg-black/90 text-white shadow transition-all focus:outline-none"
-                    title="Next image"
-                    aria-label="Next image"
-                  >
-                    <ChevronRight size={13} />
-                  </button>
-
-                  {/* Counter: e.g. 1/3 */}
-                  <span
-                    className="absolute bottom-1 right-1 rounded bg-black/75 px-1 py-0.5 text-[9px] font-semibold text-white leading-none shadow-sm"
-                    title={`${mediaList.length} media`}
-                  >
-                    {(((photoIndex % mediaList.length) + mediaList.length) % mediaList.length) + 1}/{mediaList.length}
-                  </span>
-                </>
-              )}
-            </div>
+            currentMedia.kind === 'video' ? (
+              <>
+                <video src={currentMedia.url} preload="metadata" />
+                <button type="button" className="sa-kcard__play" onClick={view} aria-label="Play video"><span><Play size={13} fill="currentColor" aria-hidden="true" /></span></button>
+              </>
+            ) : (
+              <img src={currentMedia.url} alt="" loading="lazy" onError={() => setImgFailed(true)} onClick={view} />
+            )
           ) : (
-            <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-lg shrink-0 flex items-center justify-center bg-[var(--sa-sand)] border border-[var(--sa-line)] text-[var(--sa-ink-3)] group-hover:text-[var(--sa-brand-ink)] group-hover:bg-[var(--sa-brand-soft)] transition-colors" aria-hidden="true">
-              <AnimalIcon size={24} strokeWidth={1.7} />
-            </div>
+            <span className="sa-kcard__noimg" aria-hidden="true"><AnimalIcon size={26} strokeWidth={1.7} /></span>
           )}
-
-          <div className="min-w-0 flex-1">
-            <h2 className="sa-rowtitle text-[15px] font-semibold leading-snug line-clamp-2 group-hover:text-[var(--sa-brand-ink)] transition-colors">
-              <Link to={adminPath(`/cases/${c.id}`)} onClick={(e) => e.stopPropagation()}>
-                {c.title}
-              </Link>
-            </h2>
-            <p className="sa-small sa-text-2 line-clamp-2 mt-1 text-xs leading-relaxed">
-              {c.description || (c.animal.description ? c.animal.description : 'No description provided.')}
-            </p>
-          </div>
+          {currentMedia && mediaList.length >= 2 ? (
+            <>
+              <button type="button" className="sa-kcard__nav" data-side="prev" aria-label="Previous image" title="Previous image"
+                onClick={(e) => { e.stopPropagation(); setPhotoIndex((i) => i - 1); }}><ChevronLeft size={14} aria-hidden="true" /></button>
+              <button type="button" className="sa-kcard__nav" data-side="next" aria-label="Next image" title="Next image"
+                onClick={(e) => { e.stopPropagation(); setPhotoIndex((i) => i + 1); }}><ChevronRight size={14} aria-hidden="true" /></button>
+              <span className="sa-kcard__count" title={`${mediaList.length} media`}>{index + 1}/{mediaList.length}</span>
+            </>
+          ) : null}
+        </div>
+        <div className="min-w-0">
+          <h2 className="sa-kcard__title">
+            <Link to={adminPath(`/cases/${c.id}`)} onClick={(e) => e.stopPropagation()}>{c.title}</Link>
+          </h2>
+          <p className="sa-kcard__desc">{c.description || c.animal.description || 'No description provided.'}</p>
         </div>
       </div>
 
-      {/* Card Footer: Location & Date + View Action */}
-      <div className="pt-3 mt-auto border-t border-[var(--sa-line-soft)] flex items-center justify-between gap-2 text-xs">
-        <div className="min-w-0 flex flex-col gap-1 text-[var(--sa-ink-2)]">
-          <span className="flex items-center gap-1.5 truncate" title={c.location.area}>
-            <MapPin size={13} className="shrink-0 text-[var(--sa-ink-3)]" aria-hidden="true" />
-            <span className="truncate">{c.location.area || 'Location not named'}</span>
-          </span>
-          <span className="flex items-center gap-1.5 text-[var(--sa-ink-3)]">
-            <Clock size={13} className="shrink-0" aria-hidden="true" />
-            <span>{fmtDate(c.reportedAt)}{ago(c.reportedAt, now) ? ` · ${ago(c.reportedAt, now)}` : ''}</span>
-          </span>
-        </div>
+      {/* Where the case stands */}
+      <div className="sa-kcard__status">
+        <CaseStatusBadge c={c} />
+        <ClosureOutcome c={c} />
+      </div>
 
-        <div className="shrink-0">
-          <LinkButton size="sm" to={adminPath(`/cases/${c.id}`)} aria-label={`View ${c.id}`} onClick={(e) => e.stopPropagation()}>
-            View <ArrowRight size={13} aria-hidden="true" />
-          </LinkButton>
+      {/* Where and when; open the case */}
+      <div className="sa-kcard__foot">
+        <div className="sa-kcard__facts">
+          <span title={c.location.area}><MapPin size={13} aria-hidden="true" /><span>{c.location.area || 'Location not named'}</span></span>
+          <span><Clock size={13} aria-hidden="true" /><span>{fmtDate(c.reportedAt)}{ago_ ? ` · ${ago_}` : ''}</span></span>
+          <span title={reportedByText(c.reporter)}><UserRound size={13} aria-hidden="true" /><span>{reportedByText(c.reporter)}</span></span>
         </div>
+        <LinkButton size="sm" to={adminPath(`/cases/${c.id}`)} aria-label={`View ${c.id}`} onClick={(e) => e.stopPropagation()}>
+          View <ArrowRight size={13} aria-hidden="true" />
+        </LinkButton>
       </div>
     </article>
   );
 }
 
-/** A05 — Cases list: the central workspace for incident management in a modern card-grid style. */
+/** A05 — Cases list: the central workspace for incident management in a card grid. */
 export default function CasesPage() {
   usePageTitle('Cases');
   const { state } = useAdminData();
@@ -232,90 +159,168 @@ export default function CasesPage() {
   const current = Math.min(page, pages);
   const rows = results.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
 
+  const [view, setView] = useState<'list' | 'map'>(() => (params.get('view') === 'map' ? 'map' : 'list'));
   const currentTab = filters.status === 'closed' ? 'closed' : filters.status === 'all' ? 'all' : 'active';
   const hasActiveFilters = filters.q !== '' || filters.category !== 'all' || filters.priority !== 'all' || (filters.status !== 'all' && filters.status !== 'open');
   const clear = () => setParams(new URLSearchParams(), { replace: true });
 
+  const totalCount = state.cases.length;
+  const activeCount = state.cases.filter((c) => c.status !== 'closed').length;
+  const urgentCount = state.cases.filter((c) => c.status !== 'closed' && c.priority === 'urgent').length;
+  const closedCount = state.cases.filter((c) => c.status === 'closed').length;
+
+  const stats = [
+    { label: 'Total cases', value: totalCount, hint: 'Everything reported', icon: Layers, tone: 'neutral', alert: false,
+      pressed: filters.status === 'all' && filters.priority === 'all', onClick: () => update({ status: 'all', priority: 'all' }) },
+    { label: 'Active', value: activeCount, hint: 'Being handled now', icon: FolderOpen, tone: 'brand', alert: false,
+      pressed: filters.status === 'open' && filters.priority === 'all', onClick: () => update({ status: 'open', priority: 'all' }) },
+    { label: 'Urgent open', value: urgentCount, hint: urgentCount > 0 ? 'Needs immediate action' : 'No urgent cases', icon: AlertTriangle,
+      tone: urgentCount > 0 ? 'red' : 'neutral', alert: urgentCount > 0, pressed: filters.priority === 'urgent', onClick: () => update({ status: 'open', priority: 'urgent' }) },
+    { label: 'Closed', value: closedCount, hint: 'Resolved or ended', icon: CircleCheck, tone: 'neutral', alert: false,
+      pressed: filters.status === 'closed' && filters.priority === 'all', onClick: () => update({ status: 'closed', priority: 'all' }) },
+  ] as const;
+
+  const tabs = [
+    { value: 'active', label: 'Active', count: activeCount },
+    { value: 'closed', label: 'Closed', count: closedCount },
+    { value: 'all', label: 'All', count: totalCount },
+  ] as const;
+
   return (
-    <div>
-      <PageHeader title="Cases" description="Every animal concern reported in the subdivision. Open a case to assess it, coordinate action, monitor and document the outcome." />
-
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <Segmented
-          label="Case status"
-          value={currentTab}
-          onChange={(tab) => {
-            if (tab === 'active') update({ status: 'open' });
-            else if (tab === 'closed') update({ status: 'closed' });
-            else update({ status: 'all' });
-          }}
-          options={[
-            { value: 'active', label: 'Active' },
-            { value: 'closed', label: 'Closed' },
-            { value: 'all', label: 'All' },
-          ]}
-        />
-
-        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-          <SearchInput
-            className="w-full sm:w-[260px]"
-            placeholder="Search cases..."
-            aria-label="Search cases"
-            value={filters.q}
-            onChange={(e) => update({ q: e.target.value })}
-          />
-          <Select
-            className="w-auto min-w-[150px] sa-input--sm"
-            aria-label="Category"
-            value={filters.category}
-            onChange={(e) => update({ category: e.target.value as CaseFilters['category'] })}
-          >
-            <option value="all">All categories</option>
-            {CATEGORY_IDS.map((id) => <option key={id} value={id}>{CATEGORIES[id].label}</option>)}
-          </Select>
-          <Select
-            className="w-auto min-w-[150px] sa-input--sm"
-            aria-label="Sort by"
-            value={filters.sort}
-            onChange={(e) => update({ sort: e.target.value as CaseFilters['sort'] })}
-          >
-            {(Object.keys(SORT_LABEL) as CaseFilters['sort'][]).map((k) => (
-              <option key={k} value={k}>{SORT_LABEL[k]}</option>
-            ))}
-          </Select>
-          {hasActiveFilters ? (
-            <Button variant="ghost" size="sm" onClick={clear}>Clear</Button>
-          ) : null}
+    <div className="sa-dash">
+      <style>{`
+        @keyframes saFadeUp {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .sa-fade-up {
+          animation: saFadeUp 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+      `}</style>
+      <header className="sa-fade-up flex flex-col gap-3 border-b border-[#e7e2da] pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="sa-dash-head__eyebrow"><span>{state.settings.subdivision.name}</span><span>{plural(activeCount, 'active case')}</span></p>
+          <h1 className="sa-dash-head__title">Cases</h1>
+          <p className="sa-dash-head__line">Every animal concern reported in the subdivision. Open a case to assess it, coordinate action, monitor and document the outcome.</p>
         </div>
-      </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <LinkButton size="sm" variant="primary" to={adminPath('/cases/new')}><FilePlus2 size={14} aria-hidden="true" />File a report</LinkButton>
+        </div>
+      </header>
 
-      <Panel className="overflow-hidden">
-        {state.cases.length === 0 ? (
-          <EmptyState icon={FolderOpen} title="No cases yet">When residents report an animal concern it will appear here for assessment.</EmptyState>
-        ) : rows.length === 0 ? (
-          <EmptyState icon={SearchX} title="No cases match these filters" action={<Button onClick={clear}>Clear filters</Button>}>Try a different search, or remove a filter to see more cases.</EmptyState>
-        ) : (
-          <>
-            <div className="p-4 sm:p-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" role="list" aria-label="Cases grid">
-                {rows.map((c) => (
-                  <CaseCard key={c.id} c={c} now={now} onNavigate={(id) => navigate(adminPath(`/cases/${id}`))} />
-                ))}
+      {totalCount > 0 ? (
+        <ul className="sa-kpis sa-fade-up [animation-delay:50ms]" aria-label="Case summary">
+          {stats.map((s) => {
+            const Icon = s.icon;
+            return (
+              <li key={s.label}>
+                <button type="button" className="sa-kpi transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm" data-alert={s.alert} aria-pressed={s.pressed} onClick={s.onClick}>
+                  <span className="sa-kpi__top">
+                    <span className="sa-kpi__label">{s.label}</span>
+                    <span className="sa-kpi__icon" data-tone={s.tone}><Icon size={16} aria-hidden="true" /></span>
+                  </span>
+                  <span className="sa-kpi__value">{s.value}</span>
+                  <span className="sa-kpi__hint">{s.hint}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+
+      <div className="sa-fade-up flex flex-col gap-4 [animation-delay:100ms]">
+        <div className="rounded-xl border border-[#e7e2da] bg-[#faf7f2]/85 p-3 shadow-2xs">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="sa-ctabs" role="group" aria-label="Case status">
+              {tabs.map((t) => (
+                <button key={t.value} type="button" className="sa-ctab" aria-pressed={currentTab === t.value}
+                  onClick={() => update({ status: t.value === 'active' ? 'open' : t.value })}>
+                  {t.label}<span className="sa-ctab__count">{t.count}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {hasActiveFilters ? <Button variant="ghost" size="sm" onClick={clear}>Clear filters</Button> : null}
+              <div className="inline-flex rounded-lg border border-[#e7e2da] bg-white p-0.5 shadow-2xs" role="group" aria-label="View mode">
+                <button
+                  type="button"
+                  aria-pressed={view === 'list'}
+                  onClick={() => setView('list')}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12.5px] font-medium transition-colors ${
+                    view === 'list' ? 'bg-[var(--sa-brand)] text-white shadow-2xs' : 'text-[var(--sa-ink-2)] hover:text-[var(--sa-ink)]'
+                  }`}
+                >
+                  <LayoutGrid size={13} aria-hidden="true" />
+                  <span>List</span>
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={view === 'map'}
+                  onClick={() => setView('map')}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12.5px] font-medium transition-colors ${
+                    view === 'map' ? 'bg-[var(--sa-brand)] text-white shadow-2xs' : 'text-[var(--sa-ink-2)] hover:text-[var(--sa-ink)]'
+                  }`}
+                >
+                  <MapIcon size={13} aria-hidden="true" />
+                  <span>Map</span>
+                </button>
               </div>
             </div>
-            <div className="sa-pager">
+          </div>
+
+          <div className="mt-2.5 flex flex-wrap items-center gap-2.5 border-t border-[#e7e2da]/80 pt-2.5">
+            <SearchInput className="w-full sm:w-[280px] lg:flex-1 lg:max-w-[360px]" placeholder="Search by ID, title or place" aria-label="Search cases" value={filters.q}
+              onChange={(e) => update({ q: e.target.value })} />
+            <div className="flex flex-wrap items-center gap-2.5 sm:ml-auto">
+              <label className="sa-ctoolbar__select">
+                <span>Category</span>
+                <Select className="sa-input--sm w-auto" value={filters.category} onChange={(e) => update({ category: e.target.value as CaseFilters['category'] })}>
+                  <option value="all">All categories</option>
+                  {CATEGORY_IDS.map((id) => <option key={id} value={id}>{CATEGORIES[id].label}</option>)}
+                </Select>
+              </label>
+              <label className="sa-ctoolbar__select">
+                <span>Sort</span>
+                <Select className="sa-input--sm w-auto" value={filters.sort} onChange={(e) => update({ sort: e.target.value as CaseFilters['sort'] })}>
+                  {(Object.keys(SORT_LABEL) as CaseFilters['sort'][]).map((k) => <option key={k} value={k}>{SORT_LABEL[k]}</option>)}
+                </Select>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {state.cases.length === 0 ? (
+          <div className="sa-cempty"><EmptyState icon={FolderOpen} title="No cases yet">When residents report an animal concern it will appear here for assessment.</EmptyState></div>
+        ) : rows.length === 0 ? (
+          <div className="sa-cempty"><EmptyState icon={SearchX} title="No cases match these filters" action={<Button onClick={clear}>Clear filters</Button>}>Try a different search, or remove a filter to see more cases.</EmptyState></div>
+        ) : view === 'map' ? (
+          <Suspense fallback={<div className="pv-map pv-map--loading" style={{ height: 460 }} role="status" aria-label="Loading map" />}>
+            <CasesMap cases={results} onSelect={(id) => navigate(adminPath(`/cases/${id}`))} />
+          </Suspense>
+        ) : (
+          <>
+            <p className="sa-ctoolbar__result" aria-live="polite">
               <span>Showing {(current - 1) * PAGE_SIZE + 1}–{Math.min(current * PAGE_SIZE, results.length)} of {plural(results.length, 'case')}</span>
-              {pages > 1 ? (
+              {filters.priority !== 'all' ? <span>Priority: {filters.priority}</span> : null}
+            </p>
+            <ul className="sa-cgrid" aria-label="Cases">
+              {rows.map((c) => (
+                <li key={c.id}><CaseCard c={c} now={now} onNavigate={(id) => navigate(adminPath(`/cases/${id}`))} /></li>
+              ))}
+            </ul>
+            {pages > 1 ? (
+              <nav className="sa-cpager" aria-label="Pages">
+                <span>Page {current} of {pages}</span>
                 <span className="flex items-center gap-2">
                   <Button size="sm" disabled={current <= 1} onClick={() => setPage(current - 1)}>Previous</Button>
-                  <span className="sa-num">Page {current} of {pages}</span>
                   <Button size="sm" disabled={current >= pages} onClick={() => setPage(current + 1)}>Next</Button>
                 </span>
-              ) : null}
-            </div>
+              </nav>
+            ) : null}
           </>
         )}
-      </Panel>
+      </div>
     </div>
   );
 }

@@ -88,6 +88,11 @@ class ReportCreate(ReportBase):
     rabies_symptoms: Optional[List[str]] = Field(None, max_length=20)
     movement_direction: Optional[str] = Field(None, max_length=300)
     media_urls: Optional[List[str]] = Field(None, max_length=10)
+    # Filed by a Subdivision Leader / Admin only (ignored for residents): who reported it and how
+    report_channel: Optional[Literal["self", "call", "walk_in", "message", "other"]] = None
+    reported_by_name: Optional[str] = Field(None, max_length=150)
+    reported_by_contact: Optional[str] = Field(None, max_length=40)
+    reported_on_behalf_of: Optional[int] = None
 
 
 class ReportMediaResponse(BaseModel):

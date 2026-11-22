@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Lock, Megaphone, MessageSquare, Plus } from 'lucide-react';
+import { Activity, ArrowRight, Camera, ChevronLeft, ChevronRight, FileText, Lock, Megaphone, MessageSquare, NotebookPen, Plus } from 'lucide-react';
 import { isValidLatLng } from '../../../preview/geo';
 import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
 import { MapLegend } from '../../../preview/map/MapLegend';
@@ -21,6 +21,8 @@ import PossibleOwnersBlock from './PossibleOwnersBlock';
 import RegisteredPetPanel from './RegisteredPetPanel';
 import RelatedReportsBlock from './RelatedReportsBlock';
 
+const upperFirst = (t: string) => (t ? t[0].toUpperCase() + t.slice(1) : t);
+
 export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date; openDialog: OpenCaseDialog }) {
   const { state } = useAdminData();
   const { openMedia } = useMediaViewer();
@@ -29,6 +31,7 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
   const notice = state.notices.find((n) => n.caseId === c.id && n.status !== 'archived');
   const publishable = !c.sensitive && (c.category === 'lost_pet' || c.category === 'found_animal' || c.category === 'safety');
   const next = pendingFollowUpsOf(c).filter((f) => f.dueAt).sort((a, b) => a.dueAt!.localeCompare(b.dueAt!))[0];
+  const recentNotes = [...c.notes].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 3);
   const closed = c.status === 'closed';
   // Administrators are authorized to see the exact spot. A case with no pin shows only its words.
   const pin = isValidLatLng(c.location.lat, c.location.lng) ? { lat: c.location.lat as number, lng: c.location.lng as number } : null;
@@ -44,11 +47,37 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
       caption: e.note,
     }));
 
+  const reportText =
+    c.description.trim() ||
+    (c.category === 'lost_pet'
+      ? 'The owner reported this pet missing and added no further details. The registered pet, and when and where it was last seen, are beside this report.'
+      : '');
+
   return (
     <div className="sa-case">
-      <Panel>
-        <Block title="What was reported">
-          <p className="sa-prose">{c.description.trim() || (c.category === 'lost_pet' ? 'The owner reported this pet missing and added no further details. The registered pet, and when and where it was last seen, are beside this report.' : '')}</p>
+      <style>{`
+        @keyframes saFadeUp {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .sa-fade-up {
+          animation: saFadeUp 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+      `}</style>
+      <Panel className="sa-fade-up border-[#e7e2da] shadow-xs">
+        <Block
+          title={
+            <span className="inline-flex items-center gap-2">
+              <FileText size={17} className="text-[var(--sa-brand)]" aria-hidden="true" />
+              <span>What was reported</span>
+            </span>
+          }
+        >
+          {reportText ? (
+            <div className="rounded-xl border border-[#e7e2da] bg-[#faf7f2] px-4 py-3 text-[15px] leading-relaxed text-[#1c1917] whitespace-pre-wrap">
+              {reportText}
+            </div>
+          ) : null}
           <dl className="sa-facts mt-5">
             <div><dt>Observed</dt><dd>{fmtDateTime(c.observedAt)}</dd></div>
             <div><dt>Reported</dt><dd>{fmtDateTime(c.reportedAt)}{ago(c.reportedAt, now) ? <span className="sa-text-3"> · {ago(c.reportedAt, now)}</span> : null}</dd></div>
@@ -64,7 +93,15 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
           ) : null}
         </Block>
 
-        <Block title="Evidence" description={c.evidence.length ? `${plural(c.evidence.length, 'item')} submitted` : undefined}>
+        <Block
+          title={
+            <span className="inline-flex items-center gap-2">
+              <Camera size={17} className="text-[var(--sa-brand)]" aria-hidden="true" />
+              <span>Evidence</span>
+            </span>
+          }
+          description={c.evidence.length ? `${plural(c.evidence.length, 'item')} submitted` : undefined}
+        >
           {c.evidence.length === 0 ? (
             <p className="sa-small sa-text-2">{c.noPhotoReason ?? 'No photos or videos were submitted. A photo is never required, especially when it is not safe to take one.'}</p>
           ) : (
@@ -165,8 +202,16 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
       </Panel>
 
       <aside className="sa-case__aside" aria-label="Case details">
-        <Panel>
-          <Block tight title="Where things stand">
+        <Panel className="sa-fade-up border-[#e7e2da] shadow-xs">
+          <Block
+            tight
+            title={
+              <span className="inline-flex items-center gap-2">
+                <Activity size={15} className="text-[var(--sa-brand)]" aria-hidden="true" />
+                <span>Where things stand</span>
+              </span>
+            }
+          >
             <Kv stack rows={[
               ['Incident', VERIFICATION[c.assessment.incident].label],
               // identity and ownership do not apply to wild animals
@@ -174,20 +219,27 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
               ['Right now', currentActivity(c, now)],
               ['Next follow-up', next ? <span className={dueInfo(next.dueAt, now).overdue ? 'sa-text-red' : ''}>{dueInfo(next.dueAt, now).label}<span className="sa-text-3 block">{next.title}</span></span> : '—'],
             ]} />
-            <p className="sa-small mt-4"><Link to="?tab=assessment" className="font-semibold">Open assessment</Link></p>
+            <p className="sa-small mt-4">
+              <Link to="?tab=assessment" className="inline-flex items-center gap-1 font-semibold text-[var(--sa-brand)] hover:underline">
+                Open assessment <ArrowRight size={13} aria-hidden="true" />
+              </Link>
+            </p>
           </Block>
         </Panel>
 
         <RegisteredPetPanel c={c} />
 
-        <Panel>
-          <Block tight title={<span className="flex items-center gap-2"><Lock size={14} aria-hidden="true" />Reporter</span>} description="Visible to authorized administrators only.">
+        <Panel className="sa-fade-up border-[#e7e2da] shadow-xs">
+          <Block tight title={<span className="flex items-center gap-2"><Lock size={14} className="text-[var(--sa-brand)]" aria-hidden="true" />Reporter</span>} description="Visible to authorized administrators only.">
             <Kv stack rows={[
-              ['Name', c.reporter.name], ['Unit', c.reporter.unit], ['Phone', c.reporter.phone], ['Email', <span className="break-all">{c.reporter.email}</span>],
+              ['Name', c.reporter.name],
+              ['Reported', c.reporter.channel === 'self' ? 'Filed by the Subdivision Leader' : c.reporter.channelLabel ? upperFirst(c.reporter.channelLabel) : 'Via app'],
+              ...(c.reporter.channel && c.reporter.channel !== 'self' && c.reporter.filedBy ? [['Filed by', c.reporter.filedBy] as [string, string]] : []),
+              ['Unit', c.reporter.unit], ['Phone', c.reporter.phone], ['Email', <span className="break-all">{c.reporter.email}</span>],
             ]} />
             {c.reporter.residentId ? (
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                {!closed ? (
+                {!closed && !c.reporter.channel ? (
                   <Button
                     variant="secondary"
                     size="sm"
@@ -200,9 +252,36 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
                     Message reporter
                   </Button>
                 ) : null}
-                <Link to={adminPath(`/residents/${c.reporter.residentId}`)} className="sa-small font-semibold">View resident profile</Link>
+                <Link to={adminPath(`/residents/${c.reporter.residentId}`)} className="inline-flex items-center gap-1 sa-small font-semibold text-[var(--sa-brand)] hover:underline">
+                  View resident profile <ArrowRight size={12} aria-hidden="true" />
+                </Link>
               </div>
             ) : null}
+          </Block>
+        </Panel>
+
+        <Panel className="sa-fade-up border-[#e7e2da] shadow-xs">
+          <Block tight title={<span className="flex items-center gap-2"><NotebookPen size={14} className="text-[var(--sa-brand)]" aria-hidden="true" />Recent internal notes</span>} description="Staff-only notes. Never shown to residents.">
+            {recentNotes.length === 0 ? (
+              <p className="sa-small sa-text-2">No internal notes recorded yet.</p>
+            ) : (
+              <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+                {recentNotes.map((n) => (
+                  <li key={n.id} className="rounded-lg border border-[var(--sa-line-soft)] bg-[var(--sa-sand)]/45 px-3 py-2">
+                    <p className="m-0 text-xs font-medium text-[var(--sa-ink)] whitespace-pre-line">{n.text}</p>
+                    <p className="sa-meta mt-1">{n.by} · {fmtDateTime(n.at)}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <Button size="sm" variant="secondary" icon={NotebookPen} onClick={() => openDialog({ kind: 'note' })}>
+                Add internal note
+              </Button>
+              {c.notes.length > 3 ? (
+                <Link to="?tab=history" className="sa-small font-semibold">View all {c.notes.length}</Link>
+              ) : null}
+            </div>
           </Block>
         </Panel>
 

@@ -6,6 +6,7 @@ map need. The whole case (assessment text, referrals, follow-ups, warnings, clai
 STAFF ONLY, like every /cases route: it carries the reporter's name and internal assessment state. Residents never get this
 shape (what a resident may see of a report is decided by utils/report_visibility.redact_response).
 """
+from app.utils.report_channel import reporter_block
 from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
@@ -96,9 +97,14 @@ def _rows(db: Session, reports: List[Report]) -> List[Dict[str, Any]]:
             entry = photos.setdefault(rid, {"count": 0, "thumbnail": None, "photos": []})
             entry["count"] += 1
             if url:
-                entry["photos"].append(url)
-                if entry["thumbnail"] is None:
-                    entry["thumbnail"] = url            # the first photo or video is the list thumbnail
+                thumb_url = url
+                if kind == "Video" or "/video/upload/" in url.lower():
+                    import re
+                    thumb_url = re.sub(r"\.(mp4|mov|webm|avi|mkv)(?=$|\?)", ".jpg", url, flags=re.IGNORECASE)
+                entry["photos"].append(thumb_url)
+                if entry["thumbnail"] is None or kind == "Image":
+                    if entry["thumbnail"] is None:
+                        entry["thumbnail"] = thumb_url            # first photo (or video poster frame) is the list thumbnail
 
     decided = identity_decision.decided_ids(db, reports)
     rows = []
@@ -120,7 +126,7 @@ def _rows(db: Session, reports: List[Report]) -> List[Dict[str, Any]]:
                        "count": r.animal_count, "description": _clip(r.description), "condition": _clip(r.condition)},
             "location": {"landmark": r.landmark, "latitude": float(r.latitude) if r.latitude is not None else None,
                          "longitude": float(r.longitude) if r.longitude is not None else None},
-            "reporter": {"user_id": r.user_id, "name": names.get(r.user_id) if r.user_id is not None else None},
+            "reporter": reporter_block(r, names),
             "assigned_leader_id": r.assigned_leader_id, "assigned_leader_name": names.get(r.assigned_leader_id) if r.assigned_leader_id is not None else None,
             "assessment": {"incident": case_state.incident_of(r), "evidence_sufficiency": case_state.sufficiency_of(r),
                            "urgency": case_state.urgency_of(r), "urgency_note": _clip(r.urgency_note, 200), "saved_at": r.assessed_at},

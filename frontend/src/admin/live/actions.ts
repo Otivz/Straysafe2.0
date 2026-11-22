@@ -34,6 +34,8 @@ export interface ActionResult {
   profile?: boolean;
   /** The pet registry was touched. */
   pets?: boolean;
+  /** Resident account statuses or profiles were touched. */
+  residents?: boolean;
   /** The possible matches between missing-pet and found-animal reports changed. */
   matches?: boolean;
   /** Things that did not go as hoped although the change itself was saved (for example a photo that would not upload). */
@@ -332,8 +334,16 @@ export async function runAction(a: AdminAction, ctx: ActionContext): Promise<Act
       await adminApi.assignPetOwner(numeric(a.petId, 'pet'), numeric(a.residentId, 'resident'), a.evidence.trim());
       return done({ pets: true });
 
-    case 'resident/setStatus':
-      return fail('Only the system administrator can suspend or reactivate an account. Ask them to make this change.', 403);
+    case 'resident/setStatus': {
+      const target =
+        a.status === 'suspended'
+          ? 'Suspended'
+          : a.status === 'inactive'
+            ? 'Inactive'
+            : 'Active';
+      await adminApi.updateUserStatus(numeric(a.id, 'resident'), target);
+      return done({ residents: true });
+    }
 
     case 'settings/set': {
       const stored = ctx.storedSettings() ?? fail('The settings have not loaded yet. Reload the page and try again.');

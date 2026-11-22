@@ -22,7 +22,10 @@ import WarningLetterPage from './pages/account/WarningLetterPage';
 import OwnershipVerificationPage from './pages/reports/OwnershipVerificationPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import LoginPage from './pages/auth/LoginPage';
+import ActivatePage from './pages/auth/ActivatePage';
 import RegisterPage from './pages/auth/RegisterPage';
+import RegistrationStatusPage from './pages/auth/RegistrationStatusPage';
+import { residentPath } from './config';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import VerifyPage from './pages/auth/VerifyPage';
 import WelcomePage from './pages/auth/WelcomePage';
@@ -82,7 +85,9 @@ export default function ResidentApp({ mode }: { mode: ResidentMode }) {
             ) : null}
             <Route element={<GuestLayout />}>
               <Route path="welcome" element={<WelcomePage />} />
+              <Route path="activate" element={<ActivatePage />} />
               <Route path="register" element={<RegisterPage />} />
+              <Route path="registration-status" element={<RegistrationStatusPage />} />
               <Route path="verify" element={<VerifyPage />} />
               <Route path="login" element={<LoginPage />} />
               <Route path="forgot-password" element={<ForgotPasswordPage />} />

@@ -12,10 +12,10 @@ import { fmtDay } from '../../preview/lib/format.ts';
 import type {
   AdminNotification, AdminProfile, AnimalType, Case, CategoryId, ClaimStatus, Closure, ComplianceObservation, ContactMethod, DispositionId, EventKind, Evidence,
   FollowUp, LostPetCase, LostPetConversation, LostPetPerson, LostPetSighting, MatchSide, Note, Notice, NoticeStatus, OwnerContact, OwnershipClaim, Pet, PetFacts, Policy, PossibleMatch, Referral, ReferralNote,
-  RegisteredPet, Resident, Settings, TimelineEvent, Warning, CaseThread, ThreadView, CaseAlert, MatchAnalysis,
+  RegisteredPet, Resident, Settings, TimelineChange, TimelineEvent, Warning, CaseThread, ThreadView, CaseAlert, MatchAnalysis,
 } from '../data/types.ts';
 import type {
-  ApiAlert, ApiAnalytics, ApiAnnouncement, ApiCasePet, ApiCaseDetail, ApiCaseSettings, ApiCaseSummary, ApiCategories, ApiClosure, ApiHistory, ApiLostCoordination, ApiLostParty,
+  ApiAlert, ApiAnalytics, ApiAnnouncement, ApiAuditEvent, ApiCasePet, ApiCaseDetail, ApiCaseSettings, ApiCaseSummary, ApiCategories, ApiClosure, ApiHistory, ApiLostCoordination, ApiLostParty,
   ApiLostSighting, ApiMatch, ApiMatchAnalysis, ApiMatchSide, ApiMedia, ApiNote, ApiNotification, ApiNotificationPrefs, ApiPet, ApiPetFacts, ApiQueue, ApiReport, ApiUser, ApiThread, ApiThreadView,
   ApiCaseAlert,
 } from './api.ts';
@@ -87,6 +87,114 @@ export function eventKindOf(text: string): EventKind {
 /** The line the server writes when a report is filed. The case timeline already has that event (made from `reported_at`), so it is shown once. */
 export const isOriginalSubmission = (remarks: string | null | undefined): boolean => /^initial report submitted/i.test((remarks ?? '').trim());
 
+const STATUS_CHANGE_LABEL: Record<string, string> = {
+  reported: 'Reported',
+  under_review: 'Under review',
+  in_progress: 'In progress',
+  closed: 'Closed',
+};
+const PRIORITY_CHANGE_LABEL: Record<string, string> = {
+  urgent: 'Urgent',
+  high: 'High',
+  normal: 'Normal',
+  medium: 'Medium',
+  low: 'Low',
+};
+const INCIDENT_CHANGE_LABEL: Record<string, string> = {
+  not_reviewed: 'Not Reviewed',
+  verified: 'Verified',
+  partial: 'Partly Verified',
+  unverified: 'Could Not Be Verified',
+  invalid: 'Invalid Report',
+};
+const SUFFICIENCY_CHANGE_LABEL: Record<string, string> = {
+  not_assessed: 'Not Assessed',
+  sufficient: 'Enough',
+  needs_more: 'Need More',
+};
+const URGENCY_CHANGE_LABEL: Record<string, string> = {
+  not_assessed: 'Not Assessed',
+  immediate: 'Immediate Risk',
+  possible: 'Possible Risk',
+  none: 'No Immediate Risk',
+};
+const IDENTITY_CHANGE_LABEL: Record<string, string> = {
+  unidentified: 'Unidentified',
+  possible_match: 'Possible Match',
+  identified: 'Identified',
+};
+const OWNERSHIP_CHANGE_LABEL: Record<string, string> = {
+  unknown: 'Unknown',
+  claimed: 'Claimed',
+  under_review: 'Under Review',
+  confirmed: 'Confirmed',
+  disputed: 'Disputed',
+  unconfirmed: 'Unconfirmed',
+};
+
+function labelForAuditValue(map: Record<string, string>, raw: unknown): string | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  const key = raw.trim().toLowerCase();
+  return map[key] ?? raw.trim();
+}
+
+function changesFromAudit(a: ApiAuditEvent): TimelineChange[] {
+  const oldV = a.old_values ?? {};
+  const newV = a.new_values ?? {};
+  const out: TimelineChange[] = [];
+  const pushPair = (field: string, map: Record<string, string>, key: string) => {
+    const after = labelForAuditValue(map, newV[key]);
+    if (!after) return;
+    const before = labelForAuditValue(map, oldV[key]);
+    if (before !== after) out.push({ field, before, after });
+  };
+  if (a.action === 'CASE_PRIORITY_CHANGED') pushPair('Priority', PRIORITY_CHANGE_LABEL, 'priority');
+  if (a.action === 'CASE_STATUS_CHANGED' || a.action === 'CASE_STATUS_ADVANCED' || a.action === 'CASE_CLOSED' || a.action === 'CASE_REOPENED' || a.action === 'CASE_WITHDRAWN') {
+    pushPair('Status', STATUS_CHANGE_LABEL, 'case_status');
+  }
+  if (a.action === 'CASE_ASSESSMENT_SAVED') {
+    pushPair('Incident', INCIDENT_CHANGE_LABEL, 'incident');
+    pushPair('Evidence', SUFFICIENCY_CHANGE_LABEL, 'evidence_sufficiency');
+    pushPair('Urgency', URGENCY_CHANGE_LABEL, 'urgency');
+    pushPair('Identity', IDENTITY_CHANGE_LABEL, 'identity');
+    pushPair('Ownership', OWNERSHIP_CHANGE_LABEL, 'ownership');
+  }
+  return out;
+}
+
+function parseInlineChanges(title: string): TimelineChange[] {
+  const out: TimelineChange[] = [];
+  const urgencyAdj = /^Urgency adjusted from ([^ ]+) to ([^:.]+)/i.exec(title);
+  if (urgencyAdj) {
+    out.push({
+      field: 'Priority',
+      before: labelForAuditValue(PRIORITY_CHANGE_LABEL, urgencyAdj[1]) ?? urgencyAdj[1],
+      after: labelForAuditValue(PRIORITY_CHANGE_LABEL, urgencyAdj[2]) ?? urgencyAdj[2],
+    });
+    return out;
+  }
+  const statusMoved = /^Case (?:status changed|moved) to ([^.]+)\.?$/i.exec(title);
+  if (statusMoved) {
+    out.push({ field: 'Status', before: null, after: statusMoved[1].trim() });
+    return out;
+  }
+  const identityRec = /^Animal identity recorded:\s*([^.]+)\.?$/i.exec(title);
+  if (identityRec) {
+    out.push({ field: 'Identity', before: null, after: identityRec[1].trim() });
+    return out;
+  }
+  const ownershipRec = /^Ownership review recorded:\s*([^.]+)\.?$/i.exec(title);
+  if (ownershipRec) {
+    out.push({ field: 'Ownership', before: null, after: ownershipRec[1].trim() });
+    return out;
+  }
+  const assessmentRec = /^Assessment (?:Submitted|Updated):\s*([^.]+)\.?$/i.exec(title);
+  if (assessmentRec) {
+    out.push({ field: 'Incident', before: null, after: assessmentRec[1].trim() });
+  }
+  return out;
+}
+
 export function eventFromHistory(h: Pick<ApiHistory, 'history_id' | 'remarks' | 'created_at' | 'updater_name'>): TimelineEvent {
   const text = (h.remarks ?? '').trim() || 'Update recorded';
   const kind = eventKindOf(text);
@@ -94,6 +202,7 @@ export function eventFromHistory(h: Pick<ApiHistory, 'history_id' | 'remarks' | 
     const newlineIndex = text.indexOf('\n');
     const title = text.slice(0, newlineIndex).trim();
     const detail = text.slice(newlineIndex + 1).trim();
+    const changes = parseInlineChanges(title);
     return {
       id: `h${h.history_id}`,
       at: fromServer(h.created_at),
@@ -101,9 +210,19 @@ export function eventFromHistory(h: Pick<ApiHistory, 'history_id' | 'remarks' | 
       kind,
       title: clip(title, 220),
       detail: detail || undefined,
+      ...(changes.length > 0 ? { changes } : {}),
     };
   }
-  return { id: `h${h.history_id}`, at: fromServer(h.created_at), actor: h.updater_name?.trim() || 'System', kind, title: clip(text, 220) };
+  const title = clip(text, 220);
+  const changes = parseInlineChanges(title);
+  return {
+    id: `h${h.history_id}`,
+    at: fromServer(h.created_at),
+    actor: h.updater_name?.trim() || 'System',
+    kind,
+    title,
+    ...(changes.length > 0 ? { changes } : {}),
+  };
 }
 
 // ------------------------------------------------------------------------------------------------------------ cases
@@ -120,12 +239,25 @@ export function closureOf(c: ApiClosure, lookup: Pick<Lookup, 'nameOf'>, followU
 
 const NO_REPORTER_DETAIL = '—';
 
-function reporterOf(userId: number | null, name: string | null, lookup: Lookup): Case['reporter'] {
+function reporterOf(rep: ApiCaseSummary['reporter'], lookup: Lookup): Case['reporter'] {
+  const channel = rep.channel ?? null;
+  // A report the Leader filed as their own has no resident behind it; one filed for someone else names that person (and their
+  // account only when they have one). Older and in-app reports are the resident's own.
+  const userId = channel === 'self' ? null : rep.user_id;
   const r = lookup.resident(userId);
+  const name = channel === 'self' ? 'Subdivision Leader' : (r && !channel ? r.name : null) ?? rep.name ?? r?.name ?? 'Unknown reporter';
   return {
-    residentId: idOf(userId), name: r?.name ?? name ?? 'Unknown reporter', unit: r ? [r.unit, r.street].filter(Boolean).join(', ') || NO_REPORTER_DETAIL : NO_REPORTER_DETAIL,
-    phone: r?.phone || NO_REPORTER_DETAIL, email: r?.email || NO_REPORTER_DETAIL, preferredContact: 'phone',
+    residentId: r ? idOf(userId) : channel ? null : idOf(userId), name,
+    unit: r ? [r.unit, r.street].filter(Boolean).join(', ') || NO_REPORTER_DETAIL : NO_REPORTER_DETAIL,
+    phone: rep.contact?.trim() || r?.phone || NO_REPORTER_DETAIL, email: r?.email || NO_REPORTER_DETAIL, preferredContact: 'phone',
+    channel, channelLabel: rep.channel_label ?? (channel ? undefined : 'via app'), filedBy: rep.filed_by_name ?? null,
   };
+}
+
+/** "Reported by Kyla Santos · via call", "Reported by Subdivision Leader", "Reported by Maria · via app". */
+export function reportedByText(rep: Case['reporter']): string {
+  if (rep.channel === 'self') return rep.filedBy ? `Reported by Subdivision Leader (${rep.filedBy})` : 'Reported by Subdivision Leader';
+  return `Reported by ${rep.name}${rep.channelLabel ? ` · ${rep.channelLabel}` : ''}`;
 }
 
 // ------------------------------------------------------------------------------------------------ the registered pet of a case
@@ -240,7 +372,7 @@ export function caseFromSummary(s: ApiCaseSummary, lookup: Lookup): Case {
     reportedAt,
     updatedAt: fromServer(s.updated_at) || reportedAt,
     sensitive: s.is_sensitive,
-    reporter: reporterOf(s.reporter.user_id, s.reporter.name, lookup),
+    reporter: reporterOf(s.reporter, lookup),
     assignedTo: s.assigned_leader_name?.trim() || 'Unassigned',
     evidence: (() => {
       const urls = s.photo_urls && s.photo_urls.length > 0 ? s.photo_urls : (s.thumbnail_url ? [s.thumbnail_url] : []);
@@ -467,6 +599,58 @@ export function applyDetail(base: Case, d: ApiCaseDetail, report: ApiReport | nu
   const hasPin = d.location.latitude !== null && d.location.longitude !== null;
   const noteList = notes.map(noteFromApi);
   const history = (report?.history ?? []).filter((h) => !isOriginalSubmission(h.remarks)).map(eventFromHistory);
+  const auditEvents = d.audit_events ?? [];
+  const usedAuditIds = new Set<number>();
+
+  // Enrich StatusHistory events with exact before/after values from matching AuditLog records (without inventing missing history).
+  const enrichedHistory: TimelineEvent[] = history.map((ev) => {
+    const evTime = new Date(ev.at).getTime();
+    const match = auditEvents.find((a) => {
+      if (usedAuditIds.has(a.log_id) || !a.created_at) return false;
+      const diff = Math.abs(new Date(fromServer(a.created_at)).getTime() - evTime);
+      if (diff > 5000) return false;
+      if (ev.kind === 'status' && (a.action === 'CASE_STATUS_CHANGED' || a.action === 'CASE_STATUS_ADVANCED')) return true;
+      if (ev.kind === 'closure' && (a.action === 'CASE_CLOSED' || a.action === 'CASE_WITHDRAWN')) return true;
+      if (ev.kind === 'reopen' && a.action === 'CASE_REOPENED') return true;
+      if ((ev.kind === 'assessment' || ev.kind === 'identity' || ev.kind === 'ownership') && a.action === 'CASE_ASSESSMENT_SAVED') return true;
+      return false;
+    });
+    if (!match) return ev;
+    usedAuditIds.add(match.log_id);
+    const auditChanges = changesFromAudit(match);
+    if (auditChanges.length === 0) return ev;
+    // Keep only the changes relevant to this specific history line (or all for assessment)
+    const filtered =
+      ev.kind === 'identity'
+        ? auditChanges.filter((ch) => ch.field === 'Identity')
+        : ev.kind === 'ownership'
+          ? auditChanges.filter((ch) => ch.field === 'Ownership')
+          : ev.kind === 'assessment'
+            ? auditChanges.filter((ch) => ch.field === 'Incident' || ch.field === 'Evidence' || ch.field === 'Urgency')
+            : auditChanges;
+    return filtered.length > 0 ? { ...ev, changes: filtered } : ev;
+  });
+
+  // Include explicit priority changes from AuditLog (set_priority records AuditLog without writing a StatusHistory line).
+  const priorityEvents: TimelineEvent[] = auditEvents
+    .filter((a) => a.action === 'CASE_PRIORITY_CHANGED' && a.created_at && !usedAuditIds.has(a.log_id))
+    .map((a) => {
+      const changes = changesFromAudit(a);
+      const prioChange = changes.find((ch) => ch.field === 'Priority');
+      const reason = typeof a.new_values?.reason === 'string' ? a.new_values.reason.trim() : '';
+      return {
+        id: `au-${a.log_id}`,
+        at: fromServer(a.created_at),
+        actor: a.actor_name?.trim() || 'System',
+        kind: 'priority' as const,
+        title: prioChange
+          ? `Priority changed: ${prioChange.before ?? 'Previous value not recorded'} → ${prioChange.after}`
+          : 'Case priority updated',
+        ...(reason ? { detail: `Reason: ${reason}` } : {}),
+        ...(changes.length > 0 ? { changes } : {}),
+      };
+    });
+
   const noteEvents: TimelineEvent[] = noteList.map((n) => ({ id: `ev-${n.id}`, at: n.at, actor: n.by, kind: 'note', title: 'Internal note added', detail: clip(n.text) }));
   const followUpLabels: Record<string, string> = {
     follow_up: 'Follow-up',
@@ -491,7 +675,7 @@ export function applyDetail(base: Case, d: ApiCaseDetail, report: ApiReport | nu
     }));
   const reportedAt = fromServer(d.reported_at) || base.reportedAt;
   const first: TimelineEvent = { id: 'reported', at: reportedAt, actor: d.reporter.name ?? 'Reporter', kind: 'reported', title: 'Report submitted' };
-  const timeline = [...history, ...noteEvents, ...followUpEvents, first].sort((a, b) => b.at.localeCompare(a.at));
+  const timeline = [...enrichedHistory, ...priorityEvents, ...noteEvents, ...followUpEvents, first].sort((a, b) => b.at.localeCompare(a.at));
   const confirmedPet = matchesOf(d.identity.status, d.identity.pet_id);
   const closureWithCheck = closure ? { ...closure, followUpCheck: followUps.find((f) => f.kind === 'post_closure' && f.status === 'pending')?.dueAt ?? null } : null;
 
@@ -504,7 +688,7 @@ export function applyDetail(base: Case, d: ApiCaseDetail, report: ApiReport | nu
     location: { area: d.location.landmark?.trim() || 'Location not named', detail: '', ...(hasPin ? { lat: d.location.latitude as number, lng: d.location.longitude as number } : {}) },
     observedAt: reportedAt, reportedAt,
     updatedAt: timeline[0]?.at ?? base.updatedAt,
-    reporter: reporterOf(d.reporter.user_id, d.reporter.name, lookup),
+    reporter: reporterOf(d.reporter, lookup),
     assignedTo: d.assigned_leader_name?.trim() || 'Unassigned',
     evidence: evidenceFromMedia(report?.media ?? []),
     assessment: {
@@ -739,7 +923,15 @@ export function splitAddress(address: string | null | undefined): { unit: string
 
 export function residentFromUser(u: ApiUser, petIds: string[]): Resident {
   const { unit, street } = splitAddress(u.address);
-  const status = (u.status ?? 'Active').toLowerCase() !== 'active' ? 'suspended' : u.is_verified ? 'active' : 'pending';
+  const raw = (u.status ?? 'Active').trim().toLowerCase();
+  const status: Resident['status'] =
+    raw === 'suspended'
+      ? 'suspended'
+      : !u.is_verified || raw === 'pending'
+        ? 'pending'
+        : raw === 'inactive'
+          ? 'inactive'
+          : 'active';
   const joinedAt = fromServer(u.created_at);
   return { id: String(u.user_id), name: u.name, unit, street, phone: u.phone?.trim() || '—', email: u.email, status, joinedAt, lastActiveAt: fromServer(u.last_login) || joinedAt, petIds };
 }
@@ -840,6 +1032,13 @@ export function notificationFromApi(n: ApiNotification): AdminNotification {
     return {
       id: String(n.notification_id), kind: 'case_activity', title: n.title, body: n.message ?? '', at: fromServer(n.created_at), read: n.is_read,
       to: n.related_id !== null ? `/messages/${n.related_id}` : '/messages'
+    };
+  }
+  // A self-registered resident is waiting for a residency decision: its related id is the APPLICATION's; opened in Residents > Applications.
+  if ((n.type ?? '').toLowerCase() === 'resident_application') {
+    return {
+      id: String(n.notification_id), kind: 'case_activity', title: n.title, body: n.message ?? '', at: fromServer(n.created_at), read: n.is_read,
+      to: '/residents/applications',
     };
   }
   if ((n.type ?? '').toLowerCase() === 'qr_collar_request') {

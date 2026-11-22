@@ -10,15 +10,16 @@ const TOKEN = /^[A-Za-z0-9_-]{16,32}$/;
 export function tokenFromQr(raw: string): string | null {
   const text = (raw ?? '').trim();
   if (!text) return null;
-  let path: string;
+  if (TOKEN.test(text)) return text;
+  let path = text;
   try {
     const url = new URL(text);
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
     path = url.pathname;
   } catch {
-    return null;
+    // Allow relative paths such as /t/<token>
   }
-  const match = /^\/t\/([^/]+)\/?$/.exec(path);
+  const match = /(?:^|\/)t\/([^/?#]+)\/?$/.exec(path);
   if (!match) return null;
   const token = decodeURIComponent(match[1]);
   return TOKEN.test(token) ? token : null;

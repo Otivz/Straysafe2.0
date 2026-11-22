@@ -1,48 +1,226 @@
 import { useRef, useState } from 'react';
 import {
+  AlertTriangle,
   Building2,
   Calendar,
+  Check,
   CheckCircle2,
+  ClipboardCopy,
   Clock,
+  Copy,
   ExternalLink,
   FileText,
   MessageSquarePlus,
   Paperclip,
   Phone,
+  Plus,
+  Share2,
   Trash2,
   Upload,
   User,
 } from 'lucide-react';
 import { errorMessage } from '../../preview/lib/errors';
-import { fmtDate, fmtDateTime, fromLocalInput, toLocalInput } from '../../preview/lib/format';
+import { dueInfo, fmtDate, fmtDateTime, fromLocalInput, plural, toLocalInput } from '../../preview/lib/format';
+import { useNow } from '../../preview/lib/hooks';
 import { reportIdOf } from '../../live/refs';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
 import { Field, Input, Select, Textarea } from '../components/form';
-import { Callout, Kv } from '../components/layout';
+import { Block, Callout, Kv, Panel } from '../components/layout';
 import {
   SubdivisionContactFields,
   useSubdivisionContactAutofill,
 } from '../components/SubdivisionContactFields';
 import { useToast } from '../components/toast';
 import {
+  ANIMAL_TYPES,
+  CATEGORIES,
   CONTACT_METHODS,
   ORGANIZATIONS,
   PRIMARY_REFERRAL_STATUS_IDS,
+  PRIORITIES,
   REFERRAL_PRIORITY_LABELS,
   REFERRAL_STATUS,
+  SUFFICIENCY,
 } from '../data/constants';
 import { useAdminData } from '../data/context';
 import type {
   Case,
+  ExternalAgency,
+  Referral,
   ReferralAttachment,
   ReferralPriority,
   ReferralStatus,
 } from '../data/types';
 import { adminApi } from '../live/api';
+import { referralReason } from '../lib/autofill';
+import { AutoTag } from '../components/AutoTag';
 
 const TERMINAL_REFERRAL_STATUSES: ReferralStatus[] = ['resolved', 'completed', 'declined', 'cancelled'];
+
+function extractValidPhone(raw: string | null | undefined): string | null {
+  const text = (raw ?? '').trim();
+  if (!text || text.includes('@')) return null;
+  const digits = text.replace(/\D/g, '');
+  if (digits.length < 7 || digits.length > 15) return null;
+  if (!/^[+\d][\d\s().-]{5,}$/.test(text)) return null;
+  return text.replace(/[^\d+]/g, '');
+}
+
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Fall back to execCommand below
+  }
+  try {
+    if (typeof document !== 'undefined') {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+interface ResolvedReferralContact {
+  phone: string | null;
+  dialHref: string | null;
+  contactPerson: string | null;
+  contactDetail: string | null;
+  email: string | null;
+  address: string | null;
+  hasCopyableContact: boolean;
+  copyText: string;
+}
+
+function resolveReferralContact(r: Referral, agencies: ExternalAgency[]): ResolvedReferralContact {
+  const matched =
+    agencies.find((a) => a.name.trim().toLowerCase() === r.orgName.trim().toLowerCase()) ?? null;
+  const rawPerson = (r.contactPerson || '').trim();
+  const person =
+    rawPerson && rawPerson.toLowerCase() !== 'not recorded' && rawPerson.toLowerCase() !== 'not specified'
+      ? rawPerson
+      : (matched?.contactPerson || '').trim() || null;
+
+  const rawDetail = (r.contactDetail || '').trim();
+  const methodLabel = (CONTACT_METHODS[r.contactMethod] || '').trim().toLowerCase();
+  const distinctDetail =
+    rawDetail && rawDetail.toLowerCase() !== methodLabel && rawDetail.toLowerCase() !== 'not specified'
+      ? rawDetail
+      : null;
+
+  const detailPhone = extractValidPhone(distinctDetail);
+  const agencyPhone = extractValidPhone(matched?.phone);
+  const dialNumber = detailPhone ?? agencyPhone;
+  const displayPhone =
+    detailPhone && distinctDetail
+      ? distinctDetail
+      : agencyPhone && matched?.phone
+        ? matched.phone.trim()
+        : null;
+
+  const email =
+    distinctDetail && distinctDetail.includes('@')
+      ? distinctDetail
+      : (matched?.email || '').trim() || null;
+  const address =
+    r.contactMethod === 'in_person' && distinctDetail
+      ? distinctDetail
+      : (matched?.address || '').trim() || null;
+
+  const otherDetail =
+    distinctDetail && distinctDetail !== displayPhone && distinctDetail !== email && distinctDetail !== address
+      ? distinctDetail
+      : null;
+
+  const hasCopyableContact = Boolean(person || displayPhone || email || address || otherDetail);
+
+  const lines: string[] = [`Organization: ${r.orgName}`];
+  if (person) lines.push(`Contact Person: ${person}`);
+  if (displayPhone) lines.push(`Phone: ${displayPhone}`);
+  if (email) lines.push(`Email: ${email}`);
+  if (address) lines.push(`Address: ${address}`);
+  if (otherDetail) lines.push(`Contact Details (${CONTACT_METHODS[r.contactMethod]}): ${otherDetail}`);
+
+  return {
+    phone: displayPhone,
+    dialHref: dialNumber ? `tel:${dialNumber}` : null,
+    contactPerson: person,
+    contactDetail: distinctDetail,
+    email,
+    address,
+    hasCopyableContact,
+    copyText: lines.join('\n'),
+  };
+}
+
+function buildReferralSummaryText(c: Case, r: Referral, now: Date): string {
+  const animalTypeLabel = c.animal.customType || ANIMAL_TYPES[c.animal.type];
+  const countSuffix = c.animal.count > 1 ? ` (×${c.animal.count})` : '';
+  const animalDesc = c.animal.description?.trim() ? ` — ${c.animal.description.trim()}` : '';
+  const conditionText = c.animal.condition?.trim()
+    ? c.animal.condition.trim().replace(/\s*\n\s*/g, '; ')
+    : 'No specific condition or behavior details recorded.';
+  const locationParts = [c.location.area, c.location.detail].map((x) => (x ?? '').trim()).filter(Boolean);
+  const locationText = locationParts.join(' · ') || 'Location not specified';
+  const casePriorityLabel = PRIORITIES[c.priority]?.label ?? c.priority;
+  const refPriorityLabel = REFERRAL_PRIORITY_LABELS[r.priorityLevel ?? 'normal']?.label ?? 'Normal';
+  const referralStatusLabel = REFERRAL_STATUS[r.status]?.label ?? r.status;
+
+  const evidenceSummary =
+    c.evidence.length === 0
+      ? 'No photos or files attached'
+      : `${plural(c.evidence.length, 'item')} (${c.assessment.evidenceReviewed.length} reviewed · ${SUFFICIENCY[c.assessment.evidenceSufficiency]})`;
+
+  const isTerminal = TERMINAL_REFERRAL_STATUSES.includes(r.status);
+  const followUpParts: string[] = [];
+  if (r.followUpAt && r.followUpAt.trim()) {
+    const due = dueInfo(r.followUpAt, now);
+    followUpParts.push(
+      isTerminal ? `Scheduled: ${fmtDateTime(r.followUpAt)}` : `Scheduled: ${fmtDateTime(r.followUpAt)} (${due.label})`,
+    );
+  }
+  if (r.remainingFollowUp && r.remainingFollowUp.trim()) {
+    followUpParts.push(`Instructions: ${r.remainingFollowUp.trim()}`);
+  }
+  const latestNote = r.notes[0];
+  if (latestNote?.followUpInstructions?.trim() && latestNote.followUpInstructions.trim() !== r.remainingFollowUp?.trim()) {
+    followUpParts.push(`Agency Follow-up Note: ${latestNote.followUpInstructions.trim()}`);
+  }
+  const followUpText = followUpParts.length > 0 ? followUpParts.join(' | ') : 'None scheduled';
+
+  const lines: string[] = [
+    `STRAYSAFE EXTERNAL REFERRAL SUMMARY`,
+    `Case Reference: ${c.id} (${CATEGORIES[c.category].label})`,
+    `Referral Reference: ${r.referenceNo} (${referralStatusLabel})`,
+    `Referral Organization: ${r.orgName}`,
+    `Priority: Case ${casePriorityLabel} / Referral ${refPriorityLabel}`,
+    `Location: ${locationText}`,
+    `Animal: ${animalTypeLabel}${countSuffix}${animalDesc}`,
+    `Incident Description: ${c.description.trim() || c.title}`,
+    `Animal Condition: ${conditionText}`,
+    `Evidence Summary: ${evidenceSummary}`,
+    `Reason for Referral: ${r.reason.trim() || 'Not specified'}`,
+    `Follow-up Information: ${followUpText}`,
+  ];
+  if (r.externalOutcome && r.externalOutcome.trim()) {
+    lines.push(`Documented Outcome: ${r.externalOutcome.trim()}`);
+  }
+  return lines.join('\n');
+}
 
 function LocalDateTimeField({
   label,
@@ -234,7 +412,17 @@ const mapAgencyTypeToOrgId = (t: string): string => {
   }
 };
 
-export function ReferralDialog({ c, initialAgencyId, onClose }: { c: Case; initialAgencyId?: string; onClose: () => void }) {
+export function ReferralDialog({
+  c,
+  initialAgencyId,
+  initialReason,
+  onClose,
+}: {
+  c: Case;
+  initialAgencyId?: string;
+  initialReason?: string;
+  onClose: () => void;
+}) {
   const { state, dispatch } = useAdminData();
   const toast = useToast();
   const agencies = state.settings.externalCoordination.agencies;
@@ -248,7 +436,8 @@ export function ReferralDialog({ c, initialAgencyId, onClose }: { c: Case; initi
 
   const [orgId, setOrgId] = useState<string>(() => (startAgency ? mapAgencyTypeToOrgId(startAgency.type) : initialAgencyId === 'manual' ? 'other' : defaultOrg.id));
   const [orgName, setOrgName] = useState<string>(() => startAgency?.name ?? '');
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState(() => initialReason ?? referralReason(c));
+  const [reasonAuto, setReasonAuto] = useState(() => initialReason === undefined);
   const [priorityLevel, setPriorityLevel] = useState<ReferralPriority>(
     c.priority === 'urgent' ? 'urgent' : c.priority === 'high' ? 'high' : 'normal',
   );
@@ -461,13 +650,13 @@ export function ReferralDialog({ c, initialAgencyId, onClose }: { c: Case; initi
             <Field
               label="Referral Reason"
               required
-              hint="Describe why this case requires external agency assistance."
+              hint={reasonAuto ? <><AutoTag /> Drafted from the case. Edit it to say what you need from them.</> : "Describe why this case requires external agency assistance."}
               error={tried && !validReason ? 'Please describe why external assistance is needed.' : undefined}
             >
               <Textarea
                 rows={3}
                 value={reason}
-                onChange={(e) => setReason(e.target.value)}
+                onChange={(e) => { setReason(e.target.value); setReasonAuto(false); }}
                 placeholder="e.g. Injured stray dog near main gate needing veterinary evaluation and municipal pickup…"
               />
             </Field>
@@ -554,6 +743,9 @@ export function ReferralDetailsDialog({
   referralId: string;
   onClose: () => void;
 }) {
+  const { state } = useAdminData();
+  const toast = useToast();
+  const now = useNow();
   const r = c.referrals.find((x) => x.id === referralId);
   const [subAction, setSubAction] = useState<'status' | 'response' | 'outcome' | null>(null);
 
@@ -574,6 +766,30 @@ export function ReferralDetailsDialog({
   const pr = REFERRAL_PRIORITY_LABELS[r.priorityLevel ?? 'normal'];
   const isTerminal = TERMINAL_REFERRAL_STATUSES.includes(r.status);
   const caseClosed = c.status === 'closed';
+  const followUpDue = r.followUpAt ? dueInfo(r.followUpAt, now) : null;
+  const isOverdue = Boolean(followUpDue?.overdue && !isTerminal);
+  const contactInfo = resolveReferralContact(r, state.settings.externalCoordination.agencies);
+
+  const handleCopyContact = async () => {
+    if (!contactInfo.hasCopyableContact) {
+      toast.error(`No contact details recorded for ${r.orgName}`);
+      return;
+    }
+    if (await copyTextToClipboard(contactInfo.copyText)) {
+      toast.success(`Copied contact information for ${r.orgName}`);
+    } else {
+      toast.error('Unable to copy contact information to clipboard');
+    }
+  };
+
+  const handleCopySummary = async () => {
+    const summary = buildReferralSummaryText(c, r, now);
+    if (await copyTextToClipboard(summary)) {
+      toast.success(`Copied referral summary (${r.referenceNo})`);
+    } else {
+      toast.error('Unable to copy referral summary to clipboard');
+    }
+  };
 
   // Aggregate all supporting documents from the referral and its updates
   const allDocs: (ReferralAttachment & { sourceLabel: string })[] = [
@@ -639,6 +855,11 @@ export function ReferralDetailsDialog({
                 {st.label}
               </Badge>
               <Badge tone={pr.tone}>{pr.label} Priority</Badge>
+              {isOverdue && followUpDue ? (
+                <Badge tone="red" icon={AlertTriangle}>
+                  Follow-up {followUpDue.label.toLowerCase()}
+                </Badge>
+              ) : null}
             </div>
             {st.description ? <p className="sa-small sa-text-2">{st.description}</p> : null}
           </div>
@@ -650,7 +871,43 @@ export function ReferralDetailsDialog({
 
         {/* Original Referral Information & Contact Info */}
         <div className="rounded-xl border border-[var(--sa-border)] p-4 space-y-3">
-          <h4 className="sa-eyebrow">Referral & Organization Information</h4>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h4 className="sa-eyebrow m-0">Referral & Organization Information</h4>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {contactInfo.dialHref ? (
+                <a
+                  href={contactInfo.dialHref}
+                  className="sa-btn sa-btn--secondary sa-btn--sm no-underline"
+                  title={`Call ${r.orgName} (${contactInfo.phone})`}
+                >
+                  <Phone size={15} strokeWidth={1.9} aria-hidden="true" />
+                  Call
+                </a>
+              ) : null}
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={Copy}
+                disabled={!contactInfo.hasCopyableContact}
+                title={
+                  contactInfo.hasCopyableContact
+                    ? `Copy contact information for ${r.orgName}`
+                    : 'No contact details recorded for this referral'
+                }
+                onClick={() => void handleCopyContact()}
+              >
+                Copy Contact
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={ClipboardCopy}
+                onClick={() => void handleCopySummary()}
+              >
+                Copy Referral Summary
+              </Button>
+            </div>
+          </div>
           <Kv
             wide
             rows={[
@@ -659,6 +916,16 @@ export function ReferralDetailsDialog({
               ['Receiving Organization', r.orgName],
               ['Priority Level', pr.label],
               ['Referral Date', fmtDateTime(r.referredAt)],
+              ...(r.followUpAt
+                ? [
+                    [
+                      'Follow-up Date',
+                      isTerminal
+                        ? fmtDateTime(r.followUpAt)
+                        : `${fmtDateTime(r.followUpAt)}${followUpDue ? ` (${followUpDue.label})` : ''}`,
+                    ] as [string, string],
+                  ]
+                : []),
               ['Contact Method', CONTACT_METHODS[r.contactMethod] ?? r.contactChannel ?? 'Phone'],
               ['Contact Person', r.contactPerson || 'Not specified'],
               ['Contact Details', r.contactDetail || r.contactChannel || 'Not specified'],
@@ -1436,151 +1703,339 @@ export function CaseReferralsSection({
   ) => void;
   hideCreateButton?: boolean;
 }) {
-  const { state } = useAdminData();
+  const { state, dispatch } = useAdminData();
+  const toast = useToast();
+  const now = useNow();
+  const [quickBusy, setQuickBusy] = useState<{ referralId: string; status: ReferralStatus } | null>(null);
   const agencies = state.settings.externalCoordination.agencies;
   const closed = c.status === 'closed';
   const referrals = c.referrals;
   const canCreate = !hideCreateButton && !closed;
 
+  const handleQuickStatus = async (r: Case['referrals'][number], nextStatus: 'acknowledged' | 'resolved') => {
+    if (quickBusy) return;
+    setQuickBusy({ referralId: r.id, status: nextStatus });
+    try {
+      const note =
+        nextStatus === 'acknowledged'
+          ? `${r.orgName} acknowledged receipt of the referral.`
+          : (r.externalOutcome && r.externalOutcome.trim().length >= 3)
+            ? r.externalOutcome.trim()
+            : `Referral to ${r.orgName} marked as resolved.`;
+      await dispatch({
+        type: 'case/updateReferral',
+        id: c.id,
+        referralId: r.id,
+        status: nextStatus,
+        note,
+        updateType: nextStatus === 'resolved' ? 'outcome' : 'status_change',
+        ...(nextStatus === 'resolved'
+          ? {
+              externalOutcome: (r.externalOutcome && r.externalOutcome.trim().length >= 3) ? r.externalOutcome.trim() : note,
+              completionDate: new Date().toISOString(),
+            }
+          : {}),
+      });
+      toast.success(
+        nextStatus === 'acknowledged'
+          ? `Referral to ${r.orgName} marked as Acknowledged`
+          : `Referral to ${r.orgName} marked as Resolved`,
+      );
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setQuickBusy(null);
+    }
+  };
+
   return (
-    <div className="sa-card">
-      <div className="sa-card__head">
-        <h3 className="sa-card__title flex items-center gap-2">
-          External referrals
-          <span className="sa-pill">{referrals.length}</span>
-        </h3>
-      </div>
-
-      <div className="sa-card__body space-y-4">
-        {canCreate ? (
-          // One tap per saved External Coordination agency (Settings): opens "Create Referral" with that organization filled in.
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="sa-small sa-text-2">Refer to:</span>
-            {agencies.map((a) => (
-              <Button key={a.id} size="sm" icon={Building2} onClick={() => openDialog({ kind: 'referral', agencyId: a.id })}>
-                {a.name}<span className="sa-text-3 font-normal"> · {AGENCY_SHORT[a.type] ?? 'Agency'}</span>
-              </Button>
-            ))}
-            <Button size="sm" variant="ghost" onClick={() => openDialog({ kind: 'referral', agencyId: 'manual' })}>+ Other organization</Button>
-          </div>
-        ) : null}
-        {canCreate && agencies.length === 0 ? (
-          <p className="sa-hint">No agencies saved yet. Add the ones you work with in Settings, External Coordination, and they appear here.</p>
-        ) : null}
-
-        {referrals.length === 0 ? (
-          <p className="sa-small sa-text-2">No referrals for this case yet.</p>
-        ) : (
-          <div className="space-y-3">
-            {referrals.map((r, idx) => {
-              const st = REFERRAL_STATUS[r.status] ?? {
-                label: r.status,
-                tone: 'neutral' as const,
-                open: true,
-              };
-              const pr = REFERRAL_PRIORITY_LABELS[r.priorityLevel ?? 'normal'];
-              const isTerminal = TERMINAL_REFERRAL_STATUSES.includes(r.status);
-              const latestNote = r.notes[0];
-              const resolved = r.status === 'resolved' || r.status === 'completed';
-
-              return (
-                <div
-                  key={r.id}
-                  style={{ animationDelay: `${idx * 55}ms` }}
-                  className={`sa-fade-up rounded-xl border border-[#e7e2da] border-l-[3.5px] ${resolved ? 'border-l-emerald-600' : isTerminal ? 'border-l-stone-400' : 'border-l-[#b45309]'
-                    } bg-gradient-to-b from-white to-[#fcfaf6] p-4 space-y-3 shadow-xs transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-[#d6cfc7] hover:shadow-sm`}
+    <>
+      <style>{`
+        @keyframes saFadeUp {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .sa-fade-up {
+          animation: saFadeUp 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+      `}</style>
+      <Panel className="sa-fade-up border-[#e7e2da] shadow-xs">
+        <Block
+          title={
+            <span className="inline-flex items-center gap-2">
+              <Share2 size={17} className="text-[var(--sa-brand)]" aria-hidden="true" />
+              <span>External referrals</span>
+              <Badge tone="neutral">{referrals.length}</Badge>
+            </span>
+          }
+          description="Coordinate with barangay officials, veterinary partners, or external agencies handling this case."
+        >
+          <div className="space-y-4">
+            {canCreate ? (
+              // One tap per saved External Coordination agency (Settings): opens "Create Referral" with that organization filled in.
+              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[#e7e2da] bg-[var(--sa-surface-2)]/70 px-3.5 py-2.5">
+                <span className="text-xs font-semibold uppercase tracking-wide text-[var(--sa-text-2)] mr-1">
+                  Refer to
+                </span>
+                {agencies.map((a) => (
+                  <Button
+                    key={a.id}
+                    size="sm"
+                    variant="secondary"
+                    icon={Building2}
+                    onClick={() => openDialog({ kind: 'referral', agencyId: a.id })}
+                  >
+                    {a.name}
+                    <span className="sa-text-3 font-normal"> · {AGENCY_SHORT[a.type] ?? 'Agency'}</span>
+                  </Button>
+                ))}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={Plus}
+                  onClick={() => openDialog({ kind: 'referral', agencyId: 'manual' })}
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="sa-ref font-semibold text-xs">{r.referenceNo}</span>
-                        <span className="font-semibold text-base text-[var(--sa-text-1)]">
-                          {r.orgName}
-                        </span>
-                        <Badge tone={st.tone} dot>
-                          {st.label}
-                        </Badge>
-                        <Badge tone={pr.tone}>{pr.label} Priority</Badge>
-                      </div>
-                      <div className="sa-meta flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <span className="inline-flex items-center gap-1">
-                          <Calendar size={12} /> Referred: {fmtDateTime(r.referredAt)}
-                        </span>
-                        <span className="inline-flex items-center gap-1">
-                          <User size={12} /> Contact: {r.contactPerson || 'Not specified'}
-                        </span>
-                        <span className="inline-flex items-center gap-1">
-                          <Phone size={12} /> {r.contactChannel || CONTACT_METHODS[r.contactMethod]}
-                        </span>
-                        <span className="inline-flex items-center gap-1">
-                          <Clock size={12} /> Last Updated: {fmtDateTime(r.updatedAt)}
-                        </span>
-                      </div>
-                    </div>
+                  Other organization
+                </Button>
+              </div>
+            ) : null}
+            {canCreate && agencies.length === 0 ? (
+              <p className="sa-hint">
+                No agencies saved yet. Add the ones you work with in Settings, External Coordination, and they appear here.
+              </p>
+            ) : null}
 
-                    <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => openDialog({ kind: 'referralDetail', referralId: r.id })}
-                      >
-                        View Details
-                      </Button>
-                      {!closed && !isTerminal ? (
+            {referrals.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-[#dfd8ce] bg-[var(--sa-surface-2)]/40 px-4 py-8 text-center">
+                <Share2 size={20} className="mx-auto mb-2 text-[var(--sa-text-3)]" aria-hidden="true" />
+                <p className="text-sm font-medium text-[var(--sa-text-1)]">No external referrals yet</p>
+                <p className="mt-1 text-xs text-[var(--sa-text-2)]">
+                  Use the organizations above to send a referral and track their response here.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {referrals.map((r, idx) => {
+                  const st = REFERRAL_STATUS[r.status] ?? {
+                    label: r.status,
+                    tone: 'neutral' as const,
+                    open: true,
+                  };
+                  const pr = REFERRAL_PRIORITY_LABELS[r.priorityLevel ?? 'normal'];
+                  const isTerminal = TERMINAL_REFERRAL_STATUSES.includes(r.status);
+                  const latestNote = r.notes[0];
+                  const resolved = r.status === 'resolved' || r.status === 'completed';
+                  const hasFollowUp = Boolean(r.followUpAt && r.followUpAt.trim());
+                  const followUpDue = hasFollowUp ? dueInfo(r.followUpAt!, now) : null;
+                  const isOverdue = Boolean(followUpDue?.overdue && !isTerminal);
+                  const isDueToday = Boolean(followUpDue?.today && !isTerminal);
+                  const contactInfo = resolveReferralContact(r, agencies);
+
+                  const handleCopyContact = async () => {
+                    if (!contactInfo.hasCopyableContact) {
+                      toast.error(`No contact details recorded for ${r.orgName}`);
+                      return;
+                    }
+                    if (await copyTextToClipboard(contactInfo.copyText)) {
+                      toast.success(`Copied contact information for ${r.orgName}`);
+                    } else {
+                      toast.error('Unable to copy contact information to clipboard');
+                    }
+                  };
+
+                  const handleCopySummary = async () => {
+                    const summary = buildReferralSummaryText(c, r, now);
+                    if (await copyTextToClipboard(summary)) {
+                      toast.success(`Copied referral summary (${r.referenceNo})`);
+                    } else {
+                      toast.error('Unable to copy referral summary to clipboard');
+                    }
+                  };
+
+                  return (
+                    <div
+                      key={r.id}
+                      style={{ animationDelay: `${idx * 55}ms` }}
+                      className={`sa-fade-up rounded-xl border border-[#e7e2da] border-l-[3.5px] ${
+                        resolved
+                          ? 'border-l-emerald-600'
+                          : isTerminal
+                            ? 'border-l-stone-400'
+                            : isOverdue
+                              ? 'border-l-red-600'
+                              : 'border-l-[#b45309]'
+                      } bg-gradient-to-b from-white to-[#fcfaf6] p-4 space-y-3.5 shadow-xs transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-[#d6cfc7] hover:shadow-sm`}
+                    >
+                      {/* Tier 1: Header row (Identity + Badges on left, Status & Detail actions on right) */}
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1.5 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-md border border-[#e7e2da] bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-[var(--sa-text-2)]">
+                              {r.referenceNo}
+                            </span>
+                            <span className="font-semibold text-[15px] text-[var(--sa-text-1)]">
+                              {r.orgName}
+                            </span>
+                            <Badge tone={st.tone} dot>
+                              {st.label}
+                            </Badge>
+                            <Badge tone={pr.tone}>{pr.label} Priority</Badge>
+                            {isOverdue && followUpDue ? (
+                              <Badge tone="red" icon={AlertTriangle}>
+                                Follow-up {followUpDue.label.toLowerCase()}
+                              </Badge>
+                            ) : isDueToday && followUpDue ? (
+                              <Badge tone="amber" dot>
+                                Follow-up {followUpDue.label.toLowerCase()}
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                          {!closed &&
+                          !isTerminal &&
+                          (r.status === 'pending' ||
+                            r.status === 'to_contact' ||
+                            r.status === 'sent' ||
+                            r.status === 'awaiting_response' ||
+                            r.status === 'no_response') ? (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              icon={Check}
+                              loading={quickBusy?.referralId === r.id && quickBusy.status === 'acknowledged'}
+                              disabled={quickBusy !== null}
+                              onClick={() => void handleQuickStatus(r, 'acknowledged')}
+                            >
+                              Mark Acknowledged
+                            </Button>
+                          ) : null}
+                          {!closed && !isTerminal ? (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              icon={CheckCircle2}
+                              loading={quickBusy?.referralId === r.id && quickBusy.status === 'resolved'}
+                              disabled={quickBusy !== null}
+                              onClick={() => void handleQuickStatus(r, 'resolved')}
+                            >
+                              Mark Resolved
+                            </Button>
+                          ) : null}
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon={ExternalLink}
+                            disabled={quickBusy?.referralId === r.id}
+                            onClick={() => openDialog({ kind: 'referralDetail', referralId: r.id })}
+                          >
+                            View Details
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Tier 2: Body (Reason + Metadata strip + Latest Update / Outcome) */}
+                      <div className="space-y-2.5">
+                        <p className="text-sm leading-relaxed text-[var(--sa-text-1)]">{r.reason}</p>
+
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-[var(--sa-text-2)]">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Calendar size={13} className="text-[var(--sa-text-3)]" aria-hidden="true" />
+                            <span>Referred: {fmtDateTime(r.referredAt)}</span>
+                          </span>
+                          {hasFollowUp ? (
+                            <span
+                              className={`inline-flex items-center gap-1.5 ${
+                                isOverdue
+                                  ? 'sa-text-red sa-semibold'
+                                  : isDueToday
+                                    ? 'sa-text-amber sa-semibold'
+                                    : ''
+                              }`}
+                            >
+                              <Calendar size={13} aria-hidden="true" />
+                              <span>
+                                Follow-up: {fmtDateTime(r.followUpAt!)}
+                                {!isTerminal && followUpDue ? ` (${followUpDue.label})` : ''}
+                              </span>
+                            </span>
+                          ) : null}
+                          <span className="inline-flex items-center gap-1.5">
+                            <User size={13} className="text-[var(--sa-text-3)]" aria-hidden="true" />
+                            <span>Contact: {r.contactPerson || 'Not specified'}</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <Phone size={13} className="text-[var(--sa-text-3)]" aria-hidden="true" />
+                            <span>{r.contactChannel || CONTACT_METHODS[r.contactMethod]}</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <Clock size={13} className="text-[var(--sa-text-3)]" aria-hidden="true" />
+                            <span>Last Updated: {fmtDateTime(r.updatedAt)}</span>
+                          </span>
+                        </div>
+
+                        {r.externalOutcome ? (
+                          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs leading-relaxed">
+                            <span className="font-semibold text-emerald-900 dark:text-emerald-200">
+                              Documented Outcome:
+                            </span>{' '}
+                            {r.externalOutcome}
+                            {r.assistanceProvided ? ` · Assistance: ${r.assistanceProvided}` : ''}
+                          </div>
+                        ) : latestNote ? (
+                          <div className="rounded-lg border border-[#e7e2da] bg-[var(--sa-surface-2)]/75 px-3 py-2 text-xs leading-relaxed text-[var(--sa-text-2)]">
+                            <span className="font-semibold text-[var(--sa-text-1)]">
+                              Latest Update ({fmtDateTime(latestNote.at)}):
+                            </span>{' '}
+                            {latestNote.text}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {/* Tier 3: Footer coordination utility bar */}
+                      <div className="flex flex-wrap items-center gap-2 border-t border-[#e7e2da]/80 pt-2.5">
+                        {contactInfo.dialHref ? (
+                          <a
+                            href={contactInfo.dialHref}
+                            className="sa-btn sa-btn--secondary sa-btn--sm no-underline"
+                            title={`Call ${r.orgName} (${contactInfo.phone})`}
+                          >
+                            <Phone size={14} strokeWidth={1.9} aria-hidden="true" />
+                            Call
+                          </a>
+                        ) : null}
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() =>
-                            openDialog({
-                              kind: 'coordination',
-                              referralId: r.id,
-                              mode: 'response',
-                            })
+                          icon={Copy}
+                          disabled={!contactInfo.hasCopyableContact}
+                          title={
+                            contactInfo.hasCopyableContact
+                              ? `Copy contact information for ${r.orgName}`
+                              : 'No contact details recorded for this referral'
                           }
+                          onClick={() => void handleCopyContact()}
                         >
-                          Record Response
+                          Copy Contact
                         </Button>
-                      ) : null}
-                      {!closed && r.status !== 'resolved' && r.status !== 'completed' ? (
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() =>
-                            openDialog({
-                              kind: 'coordination',
-                              referralId: r.id,
-                              mode: 'outcome',
-                            })
-                          }
+                          icon={ClipboardCopy}
+                          onClick={() => void handleCopySummary()}
                         >
-                          Record Outcome
+                          Copy Referral Summary
                         </Button>
-                      ) : null}
+                      </div>
                     </div>
-                  </div>
-
-                  <p className="text-sm text-[var(--sa-text-1)]">{r.reason}</p>
-
-                  {r.externalOutcome ? (
-                    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs">
-                      <span className="font-semibold text-emerald-900 dark:text-emerald-200">
-                        Documented Outcome:
-                      </span>{' '}
-                      {r.externalOutcome}
-                      {r.assistanceProvided ? ` · Assistance: ${r.assistanceProvided}` : ''}
-                    </div>
-                  ) : latestNote ? (
-                    <div className="rounded-lg border border-[var(--sa-border)] bg-[var(--sa-surface-2)] px-3 py-2 text-xs text-[var(--sa-text-2)]">
-                      <span className="font-semibold">Latest Update ({fmtDateTime(latestNote.at)}):</span>{' '}
-                      {latestNote.text}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
-      </div>
-    </div>
+        </Block>
+      </Panel>
+    </>
   );
 }

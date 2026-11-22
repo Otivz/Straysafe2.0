@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Camera, Download, FileText, FolderOpen, Image as ImageIcon, Images, Maximize2, PawPrint, Play, Upload, UserRound, X } from 'lucide-react';
+import { Camera, Clock, Download, FileText, FolderOpen, Image as ImageIcon, Images, MapPin, Maximize2, PawPrint, Play, Upload, User, UserRound, X } from 'lucide-react';
 import { WarningLetterDocument } from '../../../components/WarningLetterDocument';
+import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
 import { Checkbox, Field, FieldGroup, Input, OptionGroup, Select, Textarea } from '../../components/form';
@@ -379,11 +380,15 @@ function SameOccurrenceDialog(p: Props) {
       {error ? <FormError message={error} /> : null}
 
       {allCompareMedia.length > 0 ? (
-        <div className="sa-cm-compare__bar">
-          <span className="sa-small sa-text-2 font-medium">Compare reports & evidence photos</span>
+        <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#e7e2da] bg-[#faf7f2] px-3.5 py-2.5">
+          <span className="inline-flex items-center gap-2 text-xs font-medium text-[#57534e]">
+            <Images size={15} className="text-[var(--sa-brand)]" aria-hidden="true" />
+            <span>Compare reports &amp; evidence photos side by side</span>
+          </span>
           <Button
             type="button"
-            variant="ghost"
+            size="sm"
+            variant="secondary"
             icon={Images}
             onClick={() => openMedia(allCompareMedia, 0)}
           >
@@ -392,121 +397,156 @@ function SameOccurrenceDialog(p: Props) {
         </div>
       ) : null}
 
-      <div className="sa-cm-compare">
-        <div>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="sa-ref">{p.refOf(o.report_id)}</span>
-              {o.animal_type ? <span className="sa-mc__chip text-xs">{o.animal_type.charAt(0).toUpperCase() + o.animal_type.slice(1)}</span> : null}
-              {o.animal_breed ? <span className="sa-mc__chip text-xs">{o.animal_breed}</span> : null}
-              {(o.animal_colors ?? []).map((col) => <span key={col} className="sa-mc__chip text-xs">{col}</span>)}
-            </div>
-            <span className="sa-small sa-text-3 font-medium">Earlier complaint</span>
-          </div>
-          <span className="sa-small sa-text-2">Seen {fmt(o.incident_at)} · filed {fmt(o.created_at)}</span>
-          {o.landmark ? <span className="sa-small sa-text-2 font-medium">{o.landmark}</span> : null}
-          <div className="sa-cm-compare__quote">“{o.description}”</div>
-          {o.reporter ? <span className="sa-small sa-text-3">From {o.reporter}</span> : null}
+      <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
+        {[
+          {
+            key: 'earlier',
+            refCode: p.refOf(o.report_id),
+            roleLabel: 'Earlier complaint',
+            roleTone: 'neutral' as const,
+            accentClass: 'border-l-[3.5px] border-l-stone-400',
+            animalType: o.animal_type,
+            breed: o.animal_breed,
+            colors: o.animal_colors ?? [],
+            timeText: `Seen ${fmt(o.incident_at)} · filed ${fmt(o.created_at)}`,
+            locationText: o.landmark || null,
+            quote: o.description,
+            reporter: o.reporter,
+            media: oMedia,
+            mediaOffset: 0,
+          },
+          {
+            key: 'current',
+            refCode: p.c.id,
+            roleLabel: 'This complaint',
+            roleTone: 'brand' as const,
+            accentClass: 'border-l-[3.5px] border-l-[var(--sa-brand)]',
+            animalType: p.c.animal?.type,
+            breed: p.d.animal_breed,
+            colors: p.d.animal_colors ?? [],
+            timeText: `Seen ${fmt(p.d.incident_at)}`,
+            locationText: p.c.location.area || null,
+            quote: p.c.description,
+            reporter: p.c.reporter.name,
+            media: cMedia,
+            mediaOffset: oMedia.length,
+          },
+        ].map((side) => {
+          const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+          const tags = [
+            side.animalType ? cap(side.animalType) : null,
+            side.breed || null,
+            ...side.colors.map(cap),
+          ].filter((v): v is string => Boolean(v));
 
-          <div className="sa-cm-compare__media">
-            <div className="sa-cm-compare__media-header">
-              <span className="flex items-center gap-1.5"><Camera size={13} aria-hidden="true" />Evidence media ({oMedia.length})</span>
-            </div>
-            {oMedia.length > 0 ? (
-              <div className="sa-cm-compare__thumbs">
-                {oMedia.map((m, i) => (
-                  <button
-                    key={m.url + i}
-                    type="button"
-                    className="sa-cm-thumb-btn"
-                    onClick={() => openMedia(allCompareMedia, i)}
-                    title={`View ${m.title}`}
-                    aria-label={`View ${m.title}`}
-                  >
-                    {m.kind === 'video' ? (
-                      <div className="sa-cm-thumb-video">
-                        <Play size={16} fill="currentColor" />
-                        <span>Video</span>
-                      </div>
-                    ) : (
-                      <img src={m.url} alt={m.title || 'Evidence photo'} className="sa-cm-thumb-img" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                    )}
-                    <span className="sa-cm-thumb-zoom">
-                      <Maximize2 size={12} />
-                    </span>
-                  </button>
-                ))}
+          return (
+            <div
+              key={side.key}
+              className={`flex flex-col justify-between rounded-xl border border-[#e7e2da] ${side.accentClass} bg-gradient-to-b from-white to-[#fcfaf6] p-4 shadow-xs`}
+            >
+              <div className="space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="rounded-md border border-[#e7e2da] bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-[var(--sa-text-1)]">
+                    {side.refCode}
+                  </span>
+                  <Badge tone={side.roleTone}>{side.roleLabel}</Badge>
+                </div>
+
+                {tags.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center rounded-full border border-[#e7e2da] bg-[#faf7f2] px-2.5 py-0.5 text-[11px] font-medium text-[#44403c]"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="space-y-1 text-xs text-[var(--sa-text-2)]">
+                  <p className="m-0 flex items-center gap-1.5">
+                    <Clock size={12} className="shrink-0 text-[var(--sa-text-3)]" aria-hidden="true" />
+                    <span>{side.timeText}</span>
+                  </p>
+                  {side.locationText ? (
+                    <p className="m-0 flex items-center gap-1.5 font-medium text-[var(--sa-text-1)]">
+                      <MapPin size={12} className="shrink-0 text-[var(--sa-text-3)]" aria-hidden="true" />
+                      <span>{side.locationText}</span>
+                    </p>
+                  ) : null}
+                  {side.reporter ? (
+                    <p className="m-0 flex items-center gap-1.5 text-[var(--sa-text-3)]">
+                      <User size={12} className="shrink-0" aria-hidden="true" />
+                      <span>From {side.reporter}</span>
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="rounded-lg border border-[#ede7de] bg-[#faf7f2] px-3 py-2 text-xs italic leading-relaxed text-[#1c1917] break-words [overflow-wrap:anywhere]">
+                  “{side.quote}”
+                </div>
               </div>
-            ) : (
-              <p className="sa-cm-compare__no-media">
-                <ImageIcon size={13} aria-hidden="true" />
-                <span>No photos or videos attached</span>
-              </p>
-            )}
-          </div>
-        </div>
 
-        <div>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="sa-ref">{p.c.id}</span>
-              {p.c.animal?.type ? <span className="sa-mc__chip text-xs">{p.c.animal.type.charAt(0).toUpperCase() + p.c.animal.type.slice(1)}</span> : null}
-              {p.d.animal_breed ? <span className="sa-mc__chip text-xs">{p.d.animal_breed}</span> : null}
-              {(p.d.animal_colors ?? []).map((col) => <span key={col} className="sa-mc__chip text-xs">{col}</span>)}
-            </div>
-            <span className="sa-small sa-text-3 font-medium">This complaint</span>
-          </div>
-          <span className="sa-small sa-text-2">Seen {fmt(p.d.incident_at)}</span>
-          <span className="sa-small sa-text-2 font-medium">{p.c.location.area}</span>
-          <div className="sa-cm-compare__quote">“{p.c.description}”</div>
-          <span className="sa-small sa-text-3">From {p.c.reporter.name}</span>
-
-          <div className="sa-cm-compare__media">
-            <div className="sa-cm-compare__media-header">
-              <span className="flex items-center gap-1.5"><Camera size={13} aria-hidden="true" />Evidence media ({cMedia.length})</span>
-            </div>
-            {cMedia.length > 0 ? (
-              <div className="sa-cm-compare__thumbs">
-                {cMedia.map((m, i) => (
-                  <button
-                    key={m.url + i}
-                    type="button"
-                    className="sa-cm-thumb-btn"
-                    onClick={() => openMedia(allCompareMedia, oMedia.length + i)}
-                    title={`View ${m.title}`}
-                    aria-label={`View ${m.title}`}
-                  >
-                    {m.kind === 'video' ? (
-                      <div className="sa-cm-thumb-video">
-                        <Play size={16} fill="currentColor" />
-                        <span>Video</span>
-                      </div>
-                    ) : (
-                      <img src={m.url} alt={m.title || 'Evidence photo'} className="sa-cm-thumb-img" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                    )}
-                    <span className="sa-cm-thumb-zoom">
-                      <Maximize2 size={12} />
-                    </span>
-                  </button>
-                ))}
+              <div className="mt-3 border-t border-[#ede7de] pt-2.5">
+                <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--sa-text-2)]">
+                  <Camera size={12} aria-hidden="true" />
+                  <span>Evidence media ({side.media.length})</span>
+                </div>
+                {side.media.length > 0 ? (
+                  <div className="sa-cm-compare__thumbs">
+                    {side.media.map((m, i) => (
+                      <button
+                        key={m.url + i}
+                        type="button"
+                        className="sa-cm-thumb-btn"
+                        onClick={() => openMedia(allCompareMedia, side.mediaOffset + i)}
+                        title={`View ${m.title}`}
+                        aria-label={`View ${m.title}`}
+                      >
+                        {m.kind === 'video' ? (
+                          <div className="sa-cm-thumb-video">
+                            <Play size={16} fill="currentColor" />
+                            <span>Video</span>
+                          </div>
+                        ) : (
+                          <img
+                            src={m.url}
+                            alt={m.title || 'Evidence photo'}
+                            className="sa-cm-thumb-img"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        )}
+                        <span className="sa-cm-thumb-zoom">
+                          <Maximize2 size={12} />
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="sa-cm-compare__no-media m-0">
+                    <ImageIcon size={13} aria-hidden="true" />
+                    <span>No photos or videos attached</span>
+                  </p>
+                )}
               </div>
-            ) : (
-              <p className="sa-cm-compare__no-media">
-                <ImageIcon size={13} aria-hidden="true" />
-                <span>No photos or videos attached</span>
-              </p>
-            )}
-          </div>
-        </div>
+            </div>
+          );
+        })}
       </div>
 
-      <FieldGroup label="Your decision" required error={err}>
-        <OptionGroup name="cm-same" label="Your decision" value={decision} onChange={setDecision} options={[
-          { value: 'same', label: `The same occurrence: link it to ${p.refOf(o.report_id)}`, description: `Kept and shown with ${p.refOf(o.report_id)}, and counted once. Both complainants hear the outcome.` },
-          { value: 'separate', label: 'A separate incident', description: 'It stays its own complaint and counts only if you verify it on its own.' },
-        ]} />
-      </FieldGroup>
-      <Field label="Note" optional><Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+      <div className="mt-5 space-y-4 border-t border-[#e7e2da] pt-4">
+        <FieldGroup label="Your decision" required error={err}>
+          <OptionGroup name="cm-same" label="Your decision" value={decision} onChange={setDecision} options={[
+            { value: 'same', label: `The same occurrence: link it to ${p.refOf(o.report_id)}`, description: `Kept and shown with ${p.refOf(o.report_id)}, and counted once. Both complainants hear the outcome.` },
+            { value: 'separate', label: 'A separate incident', description: 'It stays its own complaint and counts only if you verify it on its own.' },
+          ]} />
+        </FieldGroup>
+        <Field label="Note" optional><Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional note explaining why these are linked or separate." /></Field>
+      </div>
     </Dialog>
   );
 }

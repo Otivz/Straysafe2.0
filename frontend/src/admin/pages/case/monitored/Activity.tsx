@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { House } from 'lucide-react';
+import { History, House } from 'lucide-react';
+import { Badge } from '../../../components/Badge';
 import { Button } from '../../../components/Button';
 import { EventTimeline } from '../../../components/Timeline';
 import { activityOf } from '../../../data/monitored';
@@ -18,9 +19,13 @@ export function Activity({ c, now }: { c: Case; now: Date }) {
   const shown = all ? events : events.slice(0, SHOWN);
 
   return (
-    <section className="sa-mc-sec" aria-labelledby="mc-activity" id="mc-activity">
+    <section className="sa-mc-sec rounded-xl border border-[#e7e2da] bg-white p-4 sm:p-5 shadow-xs" aria-labelledby="mc-activity" id="mc-activity">
       <div className="sa-mc-sec__head">
-        <h2 id="mc-activity" className="sa-mc-sec__title">Activity <span className="sa-text-3">{events.length}</span></h2>
+        <h2 id="mc-activity" className="sa-mc-sec__title inline-flex items-center gap-2">
+          <History size={16} className="text-[var(--sa-brand)]" aria-hidden="true" />
+          <span>Activity</span>
+          <Badge tone="neutral">{events.length}</Badge>
+        </h2>
       </div>
       <EventTimeline events={shown} now={now} label="Activity" />
       {!all && events.length > SHOWN ? <p className="mt-3"><Button size="sm" variant="ghost" onClick={() => setAll(true)}>Show all {events.length}</Button></p> : null}
@@ -36,8 +41,8 @@ export function Resolve({ c, openDialog }: { c: Case; openDialog: OpenCaseDialog
   if (c.status === 'closed') return null;
   const lost = c.category === 'lost_pet';
   return (
-    <details className="sa-mc-more sa-mc-more--section">
-      <summary>Resolve this report</summary>
+    <details className="sa-mc-more sa-mc-more--section rounded-xl border border-[#e7e2da] bg-white px-4 py-3 shadow-xs">
+      <summary className="cursor-pointer font-semibold text-[var(--sa-text-1)]">Resolve this report</summary>
       <ul className="sa-mc-list mt-3">
         {lost && c.lostPet?.alertId ? (
           <li className="sa-mc-row">

@@ -54,11 +54,11 @@ function ReviewForm({ draft, live, onSending }: { draft: Draft; /** false once t
   const pin = pointOf(draft.location);
 
   const hasPhoto = lost
-    ? Boolean(pet?.photoUrl || draft.media.some((m) => m.kind === 'photo' && Boolean(m.file || m.url)))
-    : draft.media.some((m) => m.kind === 'photo' && Boolean(m.file || m.url));
+    ? Boolean(pet?.photoUrl || draft.media.some((m) => (m.kind === 'photo' || m.kind === 'video') && Boolean(m.file || m.url)))
+    : draft.media.some((m) => (m.kind === 'photo' || m.kind === 'video') && Boolean(m.file || m.url));
   const missing: { text: string; to: string }[] = [];
   if (!hasPhoto) {
-    missing.push({ text: 'at least one photo of the animal', to: stepPath('details') });
+    missing.push({ text: 'at least one photo or video of the animal', to: stepPath('details') });
   }
   if (lost) {
     if (!pet) missing.push({ text: 'which pet is missing', to: stepPath('details') });
@@ -136,9 +136,9 @@ function ReviewForm({ draft, live, onSending }: { draft: Draft; /** false once t
       {error && !unavailable ? <FormError message={error} /> : null}
 
       {!hasPhoto ? (
-        <Callout tone="amber" icon={Camera} title="Please upload at least one photo of the animal before submitting your report.">
-          For accurate animal identification and verification, please upload a clear photo of the animal.
-          <span className="rs-row-actions rs-mt"><LinkButton size="sm" variant="primary" to={`${stepPath('details')}?from=review`}>Upload photo</LinkButton></span>
+        <Callout tone="amber" icon={Camera} title="Please upload at least one photo or video of the animal before submitting your report.">
+          For accurate animal identification and verification, please upload a clear photo or video of the animal.
+          <span className="rs-row-actions rs-mt"><LinkButton size="sm" variant="primary" to={`${stepPath('details')}?from=review`}>Upload photo or video</LinkButton></span>
         </Callout>
       ) : null}
 

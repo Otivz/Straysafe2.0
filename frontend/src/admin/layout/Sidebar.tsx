@@ -3,19 +3,20 @@ import { Link, NavLink } from 'react-router-dom';
 import { Bell, Building2, ChartColumn, ChevronsUpDown, FileText, FolderOpen, Inbox, LayoutDashboard, LogOut, Megaphone, MessageSquareWarning, PawPrint, Settings, UserRound, Users, type LucideIcon } from 'lucide-react';
 import { adminPath } from '../config';
 import { adminApi } from '../live/api';
+import { residentApplicationsApi } from '../live/residentApplications';
 import { NavGuardContext } from '../lib/navGuard';
 import { IconButton } from '../components/Button';
 import { Avatar } from '../components/layout';
 import { Menu } from '../components/Menu';
 
-const NAV: { to: string; label: string; icon: LucideIcon; badge?: 'newReports' | 'messages' }[] = [
+const NAV: { to: string; label: string; icon: LucideIcon; badge?: 'newReports' | 'messages' | 'applications' }[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/cases', label: 'Cases', icon: FolderOpen, badge: 'newReports' },
   { to: '/messages', label: 'Messages', icon: Inbox, badge: 'messages' },
   { to: '/complaints', label: 'Complaints', icon: MessageSquareWarning },
   { to: '/community', label: 'Community', icon: Megaphone },
   { to: '/pets', label: 'Pet Registry', icon: PawPrint },
-  { to: '/residents', label: 'Residents', icon: Users },
+  { to: '/residents', label: 'Residents', icon: Users, badge: 'applications' },
   { to: '/reports', label: 'Analytics', icon: ChartColumn },
   { to: '/warning-templates', label: 'Warning Templates', icon: FileText },
   { to: '/settings', label: 'Settings', icon: Settings },
@@ -38,6 +39,24 @@ function useUnreadMessages(): number {
   return count;
 }
 
+/** Self-registered residents waiting for a residency decision, for the Residents badge. Polled while the tab is visible; a failure shows no badge. */
+function usePendingApplications(): number {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    let live = true;
+    const load = () => {
+      if (document.visibilityState !== 'visible') return;
+      residentApplicationsApi.pendingCount().then((r) => { if (live) setCount(r.pending); }, () => undefined);
+    };
+    load();
+    const timer = setInterval(load, 60_000);
+    document.addEventListener('visibilitychange', load);
+    window.addEventListener('straysafe:applications-changed', load);
+    return () => { live = false; clearInterval(timer); document.removeEventListener('visibilitychange', load); window.removeEventListener('straysafe:applications-changed', load); };
+  }, []);
+  return count;
+}
+
 export function BellButton({ unread, onClick }: { unread: number; onClick: () => void }) {
   return (
     <span className="sa-bell">
@@ -53,6 +72,7 @@ export function Sidebar({ open, subdivision, adminName, unread, newReports, onCl
 }) {
   const guard = useContext(NavGuardContext);
   const unreadMessages = useUnreadMessages();
+  const pendingApplications = usePendingApplications();
   return (
     <>
       <div className="sa-scrim" data-open={open} onClick={onClose} aria-hidden="true" />
@@ -84,6 +104,7 @@ export function Sidebar({ open, subdivision, adminName, unread, newReports, onCl
               {label}
               {badge === 'newReports' && newReports > 0 ? <span className="sa-nav__count" aria-label={`${newReports} new reports`}>{newReports}</span> : null}
               {badge === 'messages' && unreadMessages > 0 ? <span className="sa-nav__count" aria-label={`${unreadMessages} conversations with unread messages`}>{unreadMessages}</span> : null}
+              {badge === 'applications' && pendingApplications > 0 ? <span className="sa-nav__count" aria-label={`${pendingApplications} registrations waiting for residency verification`}>{pendingApplications}</span> : null}
             </NavLink>
           ))}
         </nav>

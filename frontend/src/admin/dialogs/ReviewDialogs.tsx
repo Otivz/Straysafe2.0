@@ -1,8 +1,11 @@
 import { useState, type FormEvent } from 'react';
+import { Maximize2, PawPrint, Play, SearchX } from 'lucide-react';
 import { Badge, StatusBadge } from '../components/Badge';
 import { Dialog } from '../components/Dialog';
 import { Checkbox, Field, FieldGroup, OptionGroup, SearchInput, Textarea } from '../components/form';
+import { ANIMAL_ICON } from '../components/icons';
 import { Callout, EmptyState, FormError } from '../components/layout';
+import { useMediaViewer } from '../components/MediaLightbox';
 import { useToast } from '../components/toast';
 import { CLAIM_STATUS, CATEGORIES } from '../data/constants';
 import { useAdminData } from '../data/context';
@@ -10,7 +13,6 @@ import { petById, relatedCandidates, residentById } from '../data/selectors';
 import type { Case, ClaimStatus } from '../data/types';
 import { fmtDateTime, plural } from '../../preview/lib/format';
 import { useSubmit } from '../lib/useSubmit';
-import { SearchX } from 'lucide-react';
 import { FormFooter, type CaseDialogProps } from './BasicDialogs';
 
 /**
@@ -128,15 +130,12 @@ export function LinkReportsDialog({ c, onClose }: CaseDialogProps) {
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {rows.map(({ case: o, reasons }) => (
               <li key={o.id}>
-                <label className="sa-option">
-                  <input type="checkbox" checked={picked.includes(o.id)} onChange={() => toggle(o.id)} />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex flex-wrap items-center gap-2"><span className="sa-ref">{o.id}</span><StatusBadge status={o.status} /></span>
-                    <span className="sa-option__title mt-1">{o.title}</span>
-                    <span className="sa-option__desc">{o.location.area} · observed {fmtDateTime(o.observedAt)} · {CATEGORIES[o.category].label}</span>
-                    {reasons.length ? <span className="mt-1.5 flex flex-wrap gap-1.5">{reasons.map((r) => <Badge key={r}>{r}</Badge>)}</span> : null}
-                  </span>
-                </label>
+                <LinkReportOption
+                  o={o}
+                  reasons={reasons}
+                  picked={picked.includes(o.id)}
+                  onToggle={toggle}
+                />
               </li>
             ))}
           </ul>
@@ -144,5 +143,124 @@ export function LinkReportsDialog({ c, onClose }: CaseDialogProps) {
       </div>
       {error ? <FormError message={error} /> : null}
     </Dialog>
+  );
+}
+
+function LinkReportOption({
+  o,
+  reasons,
+  picked,
+  onToggle,
+}: {
+  o: Case;
+  reasons: string[];
+  picked: boolean;
+  onToggle: (id: string) => void;
+}) {
+  const { openMedia } = useMediaViewer();
+  const [imgFailed, setImgFailed] = useState(false);
+
+  const photo =
+    !imgFailed &&
+    (o.evidence?.find((e) => e.url && e.kind === 'photo')?.url ||
+      o.evidence?.find((e) => e.url)?.url ||
+      o.registeredPet?.current?.photos?.[0] ||
+      null);
+
+  const isVideo = Boolean(
+    photo && (photo.endsWith('.mp4') || photo.endsWith('.webm') || photo.includes('/video/upload/'))
+  );
+
+  const AnimalIcon = ANIMAL_ICON[o.animal.type] ?? PawPrint;
+
+  return (
+    <label className="sa-option items-center">
+      <input
+        type="checkbox"
+        checked={picked}
+        onChange={() => onToggle(o.id)}
+        className="flex-shrink-0"
+      />
+      <div className="group/thumb relative h-14 w-14 sm:h-16 sm:w-16 flex-shrink-0 overflow-hidden rounded-lg border border-[var(--sa-line)] bg-[var(--sa-sand)] flex items-center justify-center text-[var(--sa-ink-3)]">
+        {photo ? (
+          isVideo ? (
+            <div className="relative flex h-full w-full items-center justify-center bg-black">
+              <video
+                src={photo}
+                preload="metadata"
+                className="h-full w-full object-cover opacity-80"
+              />
+              <span className="absolute flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white pointer-events-none">
+                <Play size={10} fill="currentColor" className="translate-x-0.5" />
+              </span>
+            </div>
+          ) : (
+            <img
+              src={photo}
+              alt={`Photo for ${o.id}`}
+              loading="lazy"
+              onError={() => setImgFailed(true)}
+              className="h-full w-full object-cover"
+            />
+          )
+        ) : (
+          <AnimalIcon size={24} strokeWidth={1.6} aria-hidden="true" />
+        )}
+        {photo ? (
+          <span
+            role="button"
+            tabIndex={0}
+            className="absolute bottom-1 right-1 rounded bg-black/65 p-1 text-white opacity-0 group-hover/thumb:opacity-100 transition-opacity focus:opacity-100 cursor-zoom-in shadow-sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              openMedia([
+                {
+                  url: photo,
+                  kind: isVideo ? 'video' : 'photo',
+                  title: `${o.id}: ${o.title}`,
+                  caption: `${o.location.area} · observed ${fmtDateTime(o.observedAt)} · ${CATEGORIES[o.category].label}`,
+                },
+              ]);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.stopPropagation();
+                e.preventDefault();
+                openMedia([
+                  {
+                    url: photo,
+                    kind: isVideo ? 'video' : 'photo',
+                    title: `${o.id}: ${o.title}`,
+                    caption: `${o.location.area} · observed ${fmtDateTime(o.observedAt)} · ${CATEGORIES[o.category].label}`,
+                  },
+                ]);
+              }
+            }}
+            title="Click for full-screen preview"
+            aria-label={`Preview media of ${o.id}`}
+          >
+            <Maximize2 size={11} />
+          </span>
+        ) : null}
+      </div>
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="sa-ref">{o.id}</span>
+          <StatusBadge status={o.status} />
+        </span>
+        <span className="sa-option__title mt-1">{o.title}</span>
+        <span className="sa-option__desc">
+          {o.location.area} · observed {fmtDateTime(o.observedAt)} · {CATEGORIES[o.category].label}
+        </span>
+        {reasons.length ? (
+          <span className="mt-1.5 flex flex-wrap gap-1.5">
+            {reasons.map((r) => (
+              <Badge key={r}>{r}</Badge>
+            ))}
+          </span>
+        ) : null}
+      </span>
+    </label>
   );
 }

@@ -7,6 +7,7 @@ import { useToast } from '../../components/toast';
 import { Button, Callout, EmptyState, FormError, LinkButton } from '../../components/ui';
 import { residentPath } from '../../config';
 import { useCountdown, useSubmit } from '../../lib/hooks';
+import { ApiDetailError, errorCodeOf } from '../../../live/http';
 import { AuthShell } from './AuthShell';
 
 const maskEmail = (email: string) => {
@@ -43,8 +44,8 @@ export default function VerifyPage() {
   if (!signup) {
     return (
       <AuthShell title="Verify your account" back="/welcome">
-        <EmptyState icon={MailCheck} title="Nothing to verify yet" action={<LinkButton variant="primary" to={residentPath('/register')}>Create an account</LinkButton>}>
-          Start by creating an account, or sign in if you already have one: we will send you a code if it still needs verifying.
+        <EmptyState icon={MailCheck} title="Nothing to verify yet" action={<LinkButton variant="primary" to={residentPath('/login')}>Sign in</LinkButton>}>
+          Sign in to continue, or create an account if you don’t have one yet.
         </EmptyState>
         <p className="rs-center rs-sub">Already registered? <Link to={residentPath('/login')}>Sign in</Link></p>
       </AuthShell>
@@ -54,7 +55,14 @@ export default function VerifyPage() {
   const submit = async (ev: FormEvent) => {
     ev.preventDefault();
     if (code.length !== 6) { setCodeError('Enter the 6-digit code.'); return; }
-    const ok = await check.run(() => verify(code));
+    let residency: ApiDetailError | null = null;
+    const ok = await check.run(async () => {
+      try { await verify(code); } catch (e) {
+        if (errorCodeOf(e) === 'RESIDENCY_PENDING') { residency = e as ApiDetailError; return; }
+        throw e;
+      }
+    });
+    if (residency) { navigate(residentPath('/registration-status'), { replace: true, state: { detail: (residency as ApiDetailError).data, email: signup.email } }); return; }
     if (ok) setDone(true);
   };
 
@@ -64,7 +72,7 @@ export default function VerifyPage() {
   };
 
   return (
-    <AuthShell title="Verify your account" lead={<>Enter the 6-digit code we sent to <strong>{maskEmail(signup.email)}</strong>.</>} back="/register">
+    <AuthShell title="Verify your account" lead={<>Enter the 6-digit code we sent to <strong>{maskEmail(signup.email)}</strong>.</>} back="/welcome">
       <form className="rs-stack" onSubmit={(e) => void submit(e)} noValidate>
         {notice ? <Callout tone="amber">{notice}</Callout> : null}
         {check.error ? <FormError message={check.error} /> : null}
@@ -85,7 +93,7 @@ export default function VerifyPage() {
         <div className="rs-center">
           {left > 0 ? <p className="rs-sub">You can ask for a new code in {left}s.</p> : <Button variant="link" loading={resend.pending} onClick={() => void sendAgain()}>Send a new code</Button>}
         </div>
-        <p className="rs-center rs-sub">Wrong address? <Link to={residentPath('/register')}>Start again</Link></p>
+        <p className="rs-center rs-sub">Wrong address? <Link to={residentPath('/login')}>Back to sign in</Link></p>
       </form>
     </AuthShell>
   );

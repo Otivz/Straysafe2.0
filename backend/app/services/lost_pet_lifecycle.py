@@ -190,6 +190,11 @@ def pet_card(db: Session, alert: LostPetAlert, privileged: bool = True) -> Dict[
         photo = pet.photo_url or pet.photo_front_url
     if not photo and rep is not None:
         photo = next((m.file_url for m in (rep.media or []) if m.file_url and m.media_type in ("Image", None)), None)
+        if not photo:
+            vid_url = next((m.file_url for m in (rep.media or []) if m.file_url and m.media_type == "Video"), None)
+            if vid_url:
+                import re
+                photo = re.sub(r"\.(mp4|mov|webm|avi|mkv)(?=$|\?)", ".jpg", vid_url, flags=re.IGNORECASE)
     user_color = (pet.color_markings or "").strip() if pet else ""
     fallback_colors = [c for c in ((pet.primary_color if pet else None), (pet.secondary_color if pet else None)) if c]
     color_str = user_color or (", ".join(dict.fromkeys(fallback_colors)) if fallback_colors else None) or (rep.animal_color if rep else None)

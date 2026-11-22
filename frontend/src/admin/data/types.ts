@@ -42,6 +42,13 @@ export type EventKind =
   | 'follow_up' | 'owner_contact' | 'warning' | 'compliance' | 'referral' | 'referral_update'
   | 'link' | 'unlink' | 'notice' | 'closure' | 'reopen' | 'info';
 
+export interface TimelineChange {
+  field: string;
+  /** null when the historical event did not record the previous value (never invented). */
+  before: string | null;
+  after: string;
+}
+
 export interface TimelineEvent {
   id: string;
   at: string;
@@ -49,6 +56,7 @@ export interface TimelineEvent {
   kind: EventKind;
   title: string;
   detail?: string;
+  changes?: TimelineChange[];
 }
 
 export interface Evidence {
@@ -70,6 +78,12 @@ export interface Reporter {
   phone: string;
   email: string;
   preferredContact: 'phone' | 'email' | 'in_app';
+  /** How it was reported: null = the resident's app; 'self' = the Subdivision Leader saw it; otherwise a person told the Leader. */
+  channel?: 'self' | 'call' | 'walk_in' | 'message' | 'other' | null;
+  /** "via call", "walk-in", "via app"... */
+  channelLabel?: string;
+  /** The staff member who filed it (staff-filed reports only). */
+  filedBy?: string | null;
 }
 
 export interface Note {
@@ -736,7 +750,7 @@ export interface Resident {
   street: string;
   phone: string;
   email: string;
-  status: 'active' | 'pending' | 'suspended';
+  status: 'active' | 'inactive' | 'pending' | 'suspended';
   joinedAt: string;
   lastActiveAt: string;
   petIds: string[];

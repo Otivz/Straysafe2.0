@@ -107,17 +107,17 @@ function ComplaintCard({
         }
       }}
       className={cx(
-        'group relative flex flex-col justify-between rounded-xl border border-[var(--sa-line)] bg-[var(--sa-surface)] p-4 sm:p-4.5 transition-all duration-150',
-        'hover:border-[var(--sa-brand-tint)] hover:shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--sa-brand-tint)]',
+        'group relative flex flex-col justify-between rounded-xl border border-[#e7e2da] bg-gradient-to-b from-white to-[#fcfaf6] p-4 sm:p-4.5 shadow-xs transition-all duration-200',
+        'hover:-translate-y-0.5 hover:border-[var(--sa-brand-tint)] hover:shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--sa-brand-tint)]',
         need && 'border-l-4 border-l-[var(--sa-amber)]'
       )}
     >
       <div>
         {/* Header: Ref & Time + Badges */}
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
             <span className="sa-ref text-xs font-semibold">{refId}</span>
-            <p className="sa-meta mt-0.5 text-xs truncate">Seen {fmt(item.incident_at)}</p>
+            <p className="sa-meta mt-0.5 text-xs">Seen {fmt(item.incident_at)}</p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
             {need && (
@@ -308,16 +308,59 @@ export default function ComplaintsPage() {
   needs.sort((a, b) => (order[a.kind] ?? 3) - (order[b.kind] ?? 3));
   const rows = (seg === 'open' ? open : w.items).slice().sort((a, b) => (caseOf(b.report_id)?.reportedAt ?? '').localeCompare(caseOf(a.report_id)?.reportedAt ?? ''));
 
+  const verifiedCount = w.items.filter((x) => x.incident === 'verified').length;
+
   return (
     <div>
+      <style>{`
+        @keyframes saFadeUp {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .sa-fade-up {
+          animation: saFadeUp 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+      `}</style>
       <PageHeader
         title="Complaints"
         description="Animal complaints: what happened, who is responsible, and what the subdivision’s rules ask next. Each complaint is one of your cases; nothing is copied."
         actions={<LinkButton to={adminPath('/settings')} icon={Settings}>Complaint rules</LinkButton>}
       />
+
+      {w.items.length > 0 ? (
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4" role="group" aria-label="Complaints summary">
+          {[
+            { label: 'Active complaints', value: open.length, icon: Megaphone, iconClass: 'bg-[#fff7ed] text-[#b45309] border-[#fed7aa]/70', onClick: () => setSeg('open') },
+            { label: 'Needs you', value: needs.length, icon: Bell, iconClass: needs.length > 0 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-[#f5f0e8] text-[#57534e] border-[#e7e2da]', onClick: () => setSeg('open') },
+            { label: 'Verified', value: verifiedCount, icon: ShieldCheck, iconClass: 'bg-emerald-50 text-emerald-700 border-emerald-200', onClick: () => setSeg('all') },
+            { label: 'People responsible', value: w.people.length, icon: User, iconClass: 'bg-[#f5f0e8] text-[#57534e] border-[#e7e2da]', onClick: () => setSeg('people') },
+          ].map((s, idx) => {
+            const Icon = s.icon;
+            return (
+              <div
+                key={s.label}
+                role="button"
+                tabIndex={0}
+                onClick={s.onClick}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); s.onClick(); } }}
+                className={`sa-fade-up cursor-pointer rounded-xl border border-[#e7e2da] bg-gradient-to-b from-white to-[#fcfaf6] p-3.5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-[#d6cfc7] hover:shadow-sm ${['[animation-delay:0ms]', '[animation-delay:40ms]', '[animation-delay:80ms]', '[animation-delay:120ms]'][idx] ?? ''}`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="sa-meta m-0">{s.label}</span>
+                  <span className={`flex h-7 w-7 items-center justify-center rounded-lg border ${s.iconClass}`}>
+                    <Icon size={14} aria-hidden="true" />
+                  </span>
+                </div>
+                <p className="sa-h3 sa-num m-0 mt-1.5">{s.value}</p>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
       <div className="mt-5 flex flex-col gap-5">
         {needs.length ? (
-          <section className="sa-mc-lane" data-active aria-label="Needs you">
+          <section className="sa-mc-lane sa-fade-up rounded-2xl border border-[#e7e2da] shadow-xs [animation-delay:100ms]" data-active aria-label="Needs you">
             <h2 className="sa-mc-lane__head"><Bell size={15} aria-hidden="true" />Needs you</h2>
             <ul className="sa-mc-needs">
               {needs.map((n, i) => {
@@ -348,7 +391,7 @@ export default function ComplaintsPage() {
             </ul>
           </section>
         ) : (
-          <section className="sa-mc-lane" aria-label="Situation">
+          <section className="sa-mc-lane sa-fade-up rounded-2xl border border-[#e7e2da] shadow-xs [animation-delay:100ms]" aria-label="Situation">
             <div className="sa-mc-lane__calm">
               <p className="sa-mc-calm" role="status">
                 <CircleCheck size={18} aria-hidden="true" />Nothing needs you right now
@@ -358,8 +401,8 @@ export default function ComplaintsPage() {
           </section>
         )}
 
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="sa-fade-up flex flex-col gap-3 [animation-delay:140ms]">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e7e2da] bg-[#faf7f2]/85 px-3.5 py-2.5">
             <Segmented
               label="Show"
               value={seg}

@@ -25,7 +25,7 @@ import { adminApi, type ApiCaseSettings, type ApiUser } from './api';
 import { fromServer } from '../../live/dates';
 
 const LIVE_CAPABILITIES: AdminCapabilities = {
-  changeResidentStatus: false, editProfileTitle: false, editSubdivisionIdentity: false, petMatchDecisions: false, warningTerms: false, noticeWithoutCase: false,
+  changeResidentStatus: true, editProfileTitle: false, editSubdivisionIdentity: false, petMatchDecisions: false, warningTerms: false, noticeWithoutCase: false,
   acceptConfirmsOwnership: false,
 };
 
@@ -292,6 +292,19 @@ export function LiveAdminDataProvider({ children }: { children: ReactNode }) {
     } catch (err) { sessionEnded(err); }          // the change is saved; the next full load shows the registry as it is
   }, [sessionEnded, subdivisionId]);
 
+  /** Resident accounts again (a resident status was changed). */
+  const refreshResidents = useCallback(async () => {
+    if (subdivisionId === null) return;
+    try {
+      const users = await adminApi.users(subdivisionId);
+      const resList = users
+        .filter((u) => u.role_id === 1)
+        .map((u) => ad.residentFromUser(u, directory.current.residents.get(u.user_id)?.petIds ?? []));
+      directory.current.residents = new Map(resList.map((r) => [Number(r.id), r]));
+      setState((s) => ({ ...s, residents: resList }));
+    } catch (err) { sessionEnded(err); }
+  }, [sessionEnded, subdivisionId]);
+
   const refreshSettings = useCallback(async () => {
     if (subdivisionId === null) return;
     const [cs, cats, prefs, me] = await Promise.allSettled([adminApi.settings(subdivisionId), adminApi.categories(), adminApi.preferences(), adminApi.user(userId)]);
@@ -330,11 +343,12 @@ export function LiveAdminDataProvider({ children }: { children: ReactNode }) {
       result.notices ? refreshNotices() : undefined,
       result.notifications ? refreshNotifications() : undefined,
       result.pets ? refreshPets() : undefined,
+      result.residents ? refreshResidents() : undefined,
       result.matches ? refreshMatches() : undefined,
       result.settings || result.profile ? refreshSettings() : undefined,
     ]);
     if (result.warnings?.length) setIssue('after-save', `${result.warnings.join(' ')} What you saved is kept.`);
-  }, [loadCase, refreshMatches, refreshNotices, refreshNotifications, refreshPets, refreshSettings, sessionEnded, setIssue, subdivisionId, userId]);
+  }, [loadCase, refreshMatches, refreshNotices, refreshNotifications, refreshPets, refreshResidents, refreshSettings, sessionEnded, setIssue, subdivisionId, userId]);
 
   const reload = useCallback(() => {
     setStatus('loading');

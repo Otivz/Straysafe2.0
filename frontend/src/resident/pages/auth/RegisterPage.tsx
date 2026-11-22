@@ -2,89 +2,80 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { isPasswordValid } from '../../../utils/passwordPolicy';
 import { useAuth } from '../../auth/context';
-import { Checkbox, Field, Input, PasswordInput, Select } from '../../components/form';
-import { Button, FormError } from '../../components/ui';
+import { residentApplications } from '../../auth/applications';
+import { Field, Input, PasswordInput, Select } from '../../components/form';
+import { Button, Callout, FormError } from '../../components/ui';
 import { residentPath } from '../../config';
 import { useFormFocus, useSubmit } from '../../lib/hooks';
 import { AuthShell, PasswordRules } from './AuthShell';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PH_MOBILE = /^(?:\+?63|0)9\d{9}$/;
 
-interface Values { name: string; email: string; phone: string; unit: string; street: string; subdivision: string; password: string; confirm: string; agree: boolean }
-const EMPTY: Values = { name: '', email: '', phone: '', unit: '', street: '', subdivision: '', password: '', confirm: '', agree: false };
-
-function validate(v: Values, chooseSubdivision: boolean): Partial<Record<keyof Values, string>> {
-  const e: Partial<Record<keyof Values, string>> = {};
-  if (v.name.trim().length < 2) e.name = 'Enter your full name.';
-  if (!v.email.trim()) e.email = 'Enter your email address.';
-  else if (!EMAIL.test(v.email.trim())) e.email = 'Enter a valid email address, like name@example.com.';
-  if (!v.phone.trim()) e.phone = 'Enter your mobile number.';
-  else if (!PH_MOBILE.test(v.phone.replace(/[\s-]/g, ''))) e.phone = 'Enter a mobile number like 0917 123 4567.';
-  if (!v.unit.trim()) e.unit = 'Enter your block and lot, for example Block 4, Lot 21.';
-  if (!v.street.trim()) e.street = 'Enter your street.';
-  if (chooseSubdivision && !v.subdivision) e.subdivision = 'Choose your subdivision.';
-  if (!v.password) e.password = 'Create a password.';
-  else if (!isPasswordValid(v.password)) e.password = 'Your password does not meet all the requirements yet.';
-  if (!v.confirm) e.confirm = 'Type your password again.';
-  else if (v.confirm !== v.password) e.confirm = 'The two passwords do not match.';
-  if (!v.agree) e.agree = 'Please agree to continue.';
-  return e;
-}
+interface Form { name: string; email: string; contact: string; block: string; lot: string; subdivision: string; password: string; confirm: string }
+const EMPTY: Form = { name: '', email: '', contact: '', block: '', lot: '', subdivision: '', password: '', confirm: '' };
 
 /**
- * R02 — Create an account. The password is sent to the server and never kept in this tab; only the profile is kept until the
- * code is entered. The street is typed (there is no street list on the server), and the subdivision is asked for only when the
- * server offers more than one.
+ * R02 — Create an account. Three checks follow, all on the server: the 6-digit code e-mailed to this address, then the residency
+ * review by the Subdivision Leader or an Admin. Until that review approves it, the account cannot use resident features.
  */
 export default function RegisterPage() {
-  const { register, subdivisions } = useAuth();
+  const { subdivisions, signIn } = useAuth();
   const navigate = useNavigate();
   const origin = ((useLocation().state ?? null) as { from?: string } | null)?.from;
+  const [v, setV] = useState<Form>(EMPTY);
+  const [errors, setErrors] = useState<Partial<Record<keyof Form, string>>>({});
+  const [options, setOptions] = useState<{ id: number; name: string }[]>([]);
   const { pending, error, run } = useSubmit();
   const { ref, invalid } = useFormFocus();
-  const [v, setV] = useState<Values>(EMPTY);
-  const [errors, setErrors] = useState<Partial<Record<keyof Values, string>>>({});
-  const [options, setOptions] = useState<{ id: number; name: string }[]>([]);
   const chooseSubdivision = options.length > 1;
 
-  // The subdivisions a new resident can join.
   useEffect(() => {
     let cancelled = false;
-    subdivisions().then((list) => { if (!cancelled) setOptions(list); }, () => { /* the server will say if none is open when the form is sent */ });
+    subdivisions().then((list) => { if (!cancelled) setOptions(list); }, () => { /* the server picks the subdivision when there is one */ });
     return () => { cancelled = true; };
   }, [subdivisions]);
 
-  const set = <K extends keyof Values>(key: K, value: Values[K]) => {
-    setV((prev) => ({ ...prev, [key]: value }));
-    setErrors((prev) => ({ ...prev, [key]: undefined }));
-  };
+  const set = <K extends keyof Form>(key: K, value: Form[K]) => { setV((p) => ({ ...p, [key]: value })); setErrors((p) => ({ ...p, [key]: undefined })); };
 
   const submit = async (ev: FormEvent) => {
     ev.preventDefault();
-    const found = validate(v, chooseSubdivision);
-    setErrors(found);
-    if (Object.keys(found).length > 0) { invalid(); return; }
-    const ok = await run(() => register(
-      { name: v.name.trim(), email: v.email.trim(), phone: v.phone.trim(), unit: v.unit.trim(), street: v.street.trim(), ...(chooseSubdivision ? { subdivisionId: Number(v.subdivision) } : {}) },
-      v.password,
-    ));
-    if (ok) navigate(residentPath('/verify'), { state: { from: origin } });
+    const e: Partial<Record<keyof Form, string>> = {};
+    if (v.name.trim().length < 2) e.name = 'Enter your full name.';
+    if (!EMAIL.test(v.email.trim())) e.email = 'Enter a valid email address, like name@example.com.';
+    if (v.contact.trim() && v.contact.replace(/\D/g, '').length < 10) e.contact = 'Enter a mobile number like 0917 123 4567, or leave it empty.';
+    if (!v.block.trim()) e.block = 'Enter your block number.';
+    if (!v.lot.trim()) e.lot = 'Enter your lot number.';
+    if (chooseSubdivision && !v.subdivision) e.subdivision = 'Choose your subdivision.';
+    if (!v.password) e.password = 'Create a password.';
+    else if (!isPasswordValid(v.password)) e.password = 'Your password does not meet all the requirements yet.';
+    if (v.confirm !== v.password) e.confirm = 'The two passwords do not match.';
+    setErrors(e);
+    if (Object.keys(e).length > 0) { invalid(); return; }
+    let verifying = false;
+    const ok = await run(async () => {
+      await residentApplications.register({ fullName: v.name, email: v.email, contact: v.contact, block: v.block, lot: v.lot,
+        ...(chooseSubdivision ? { subdivisionId: Number(v.subdivision) } : {}) }, v.password, v.confirm);
+      // Signing in right away is what e-mails the verification code (the existing flow).
+      verifying = (await signIn(v.email.trim(), v.password)).status === 'verify';
+    });
+    if (!ok) { invalid(); return; }
+    navigate(residentPath(verifying ? '/verify' : '/login'), { replace: true, state: { from: origin } });
   };
 
   return (
-    <AuthShell title="Create your account" lead="Use your real name and the address where you live. Neighbours never see your name, phone or address." back="/welcome">
+    <AuthShell title="Create your account" lead="Register with your own details. After you verify your email, your Subdivision Leader confirms that you live in the subdivision before you can use StraySafe." back="/welcome">
       <form className="rs-stack" onSubmit={(e) => void submit(e)} noValidate>
+        <Callout tone="info">Your account needs residency verification. You can sign in to see its status, but reporting and the other resident features open only after it is approved.</Callout>
         {error ? <FormError message={error} /> : null}
         <div ref={ref} className="rs-stack">
           <Field label="Full name" error={errors.name}>
-            <Input value={v.name} onChange={(e) => set('name', e.target.value)} autoComplete="name" placeholder="Maria Santos" />
+            <Input value={v.name} onChange={(e) => set('name', e.target.value)} autoComplete="name" placeholder="Maria Santos" maxLength={100} />
           </Field>
-          <Field label="Email" error={errors.email}>
+          <Field label="Email address" hint="We send a verification code here." error={errors.email}>
             <Input type="email" inputMode="email" value={v.email} onChange={(e) => set('email', e.target.value)} autoComplete="email" placeholder="name@example.com" />
           </Field>
-          <Field label="Mobile number" hint="Used for verification and urgent updates." error={errors.phone}>
-            <Input type="tel" inputMode="tel" value={v.phone} onChange={(e) => set('phone', e.target.value)} autoComplete="tel" placeholder="0917 123 4567" />
+          <Field label="Contact number" optional error={errors.contact}>
+            <Input inputMode="tel" value={v.contact} onChange={(e) => set('contact', e.target.value)} autoComplete="tel" placeholder="0917 123 4567" maxLength={20} />
           </Field>
           {chooseSubdivision ? (
             <Field label="Subdivision" error={errors.subdivision}>
@@ -94,12 +85,10 @@ export default function RegisterPage() {
               </Select>
             </Field>
           ) : null}
-          <Field label="Block and lot" error={errors.unit}>
-            <Input value={v.unit} onChange={(e) => set('unit', e.target.value)} autoComplete="off" placeholder="Block 4, Lot 21" />
-          </Field>
-          <Field label="Street" error={errors.street}>
-            <Input value={v.street} onChange={(e) => set('street', e.target.value)} autoComplete="street-address" placeholder="Street name" />
-          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Block number" error={errors.block}><Input value={v.block} onChange={(e) => set('block', e.target.value)} placeholder="4" maxLength={30} /></Field>
+            <Field label="Lot number" error={errors.lot}><Input value={v.lot} onChange={(e) => set('lot', e.target.value)} placeholder="21" maxLength={30} /></Field>
+          </div>
           <Field label="Password" error={errors.password}>
             <PasswordInput value={v.password} onChange={(e) => set('password', e.target.value)} autoComplete="new-password" />
           </Field>
@@ -107,16 +96,10 @@ export default function RegisterPage() {
           <Field label="Confirm password" error={errors.confirm}>
             <PasswordInput value={v.confirm} onChange={(e) => set('confirm', e.target.value)} autoComplete="new-password" />
           </Field>
-          <Checkbox
-            checked={v.agree}
-            onChange={(e) => set('agree', e.target.checked)}
-            error={errors.agree}
-            label="I agree to the terms of use and the privacy notice."
-            hint="Administrators can see who sent a report. We do not offer anonymous reporting."
-          />
         </div>
         <Button type="submit" variant="primary" block loading={pending}>Create account</Button>
         <p className="rs-center rs-sub">Already have an account? <Link to={residentPath('/login')}>Sign in</Link></p>
+        <p className="rs-center rs-sub">Did your Subdivision Leader create your account? Open the activation link in the email we sent you instead.</p>
       </form>
     </AuthShell>
   );

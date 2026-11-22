@@ -137,8 +137,17 @@ export default function ComplaintPage({ c }: { c: Case }) {
 
   return (
     <div>
+      <style>{`
+        @keyframes saFadeUp {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .sa-fade-up {
+          animation: saFadeUp 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+      `}</style>
       <Link className="sa-back" to={adminPath('/complaints')}>← Complaints</Link>
-      <header className="sa-mc__top">
+      <header className="sa-mc__top sa-fade-up mb-3 mt-1">
         <p className="sa-mc__eyebrow">
           <span className="sa-ref" style={{ fontSize: 13.5 }}>{c.id}</span>
           <span className="sa-meta flex items-center gap-1.5"><Megaphone size={14} aria-hidden="true" />Animal complaint</span>
@@ -147,7 +156,7 @@ export default function ComplaintPage({ c }: { c: Case }) {
         {chip}
       </header>
 
-      <section className="sa-mc-hero" aria-label="What was reported">
+      <section className="sa-mc-hero sa-fade-up rounded-2xl border border-[#e7e2da] bg-gradient-to-b from-white to-[#fcfaf6] shadow-xs [animation-delay:40ms]" aria-label="What was reported">
         <div className="sa-mc-hero__photo">
           <div className="sa-mc-photo relative overflow-hidden group">
             {currentMedia ? (
@@ -253,7 +262,7 @@ export default function ComplaintPage({ c }: { c: Case }) {
               {pin ? 'View map pin' : 'View area map'}
             </button>
           </div>
-          <blockquote className="sa-mc-quote">“{c.description}”</blockquote>
+          <blockquote className="sa-mc-quote break-words [overflow-wrap:anywhere]">“{c.description}”</blockquote>
         </div>
         <aside className="sa-mc-hero__people" aria-label="People">
           <div className="sa-mc-person">
@@ -293,13 +302,13 @@ export default function ComplaintPage({ c }: { c: Case }) {
       </section>
 
       {closed ? (
-        <section className="sa-mc-lane" data-closed aria-label="How this complaint ended">
+        <section className="sa-mc-lane sa-fade-up rounded-2xl border border-[#e7e2da] shadow-xs [animation-delay:80ms]" data-closed aria-label="How this complaint ended">
           <p className="sa-mc-calm"><CircleCheck size={18} aria-hidden="true" />{d.same_as ? `Same occurrence as ${refOf(d.same_as.report_id)}` : c.closure ? DISPOSITIONS[c.closure.disposition].label : 'Closed'}</p>
           <p className="sa-small sa-text-2 mt-1">Its findings, decision and steps stay in the history.</p>
           {!d.same_as ? <p className="mt-3"><Button size="sm" icon={RotateCcw} onClick={() => setCaseDialog({ kind: 'reopen' })}>Reopen this complaint</Button></p> : null}
         </section>
       ) : needs.length ? (
-        <section className="sa-mc-lane" data-active aria-label="Needs you">
+        <section className="sa-mc-lane sa-fade-up rounded-2xl border border-[#e7e2da] shadow-xs [animation-delay:80ms]" data-active aria-label="Needs you">
           <h2 className="sa-mc-lane__head"><Bell size={15} aria-hidden="true" />Needs you</h2>
           <ul className="sa-mc-needs">
             {needs.map((n, i) => {
@@ -315,7 +324,7 @@ export default function ComplaintPage({ c }: { c: Case }) {
           </ul>
         </section>
       ) : (
-        <section className="sa-mc-lane" aria-label="Situation">
+        <section className="sa-mc-lane sa-fade-up rounded-2xl border border-[#e7e2da] shadow-xs [animation-delay:80ms]" aria-label="Situation">
           <div className="sa-mc-lane__calm"><p className="sa-mc-calm" role="status"><CircleCheck size={18} aria-hidden="true" />Nothing needs you right now</p><p className="sa-mc-lane__line">{waiting}</p></div>
         </section>
       )}
@@ -324,15 +333,22 @@ export default function ComplaintPage({ c }: { c: Case }) {
       <History d={d} refOf={refOf} self={id} />
       <Enforcement d={d} closed={closed} now={now} onOpen={setDialog} />
 
-      <section className="sa-mc-sec" aria-labelledby="cm-activity">
-        <div className="sa-mc-sec__head"><h2 id="cm-activity" className="sa-mc-sec__title">Activity <span className="sa-text-3">{activity.length}</span></h2><span className="sa-small sa-text-3">Writes itself</span></div>
+      <section className="sa-mc-sec sa-fade-up rounded-xl border border-[#e7e2da] bg-white p-4 sm:p-5 shadow-xs [animation-delay:160ms]" aria-labelledby="cm-activity">
+        <div className="sa-mc-sec__head">
+          <h2 id="cm-activity" className="sa-mc-sec__title inline-flex items-center gap-2">
+            <FileText size={16} className="text-[var(--sa-brand)]" aria-hidden="true" />
+            <span>Activity</span>
+            <Badge tone="neutral">{activity.length}</Badge>
+          </h2>
+          <span className="sa-small sa-text-3">Writes itself</span>
+        </div>
         <Timeline label="Activity" items={activity.map((a) => ({ id: a.id, icon: ICON[a.icon], tone: a.tone, title: a.title,
           meta: <>{a.at ? fmtActivity(a.at) : ''}{a.meta ? ` · ${a.meta}` : ''}</>, body: a.detail ? <p className="sa-small sa-text-2">{a.detail}</p> : undefined }))} />
       </section>
 
       {!closed ? (
-        <details className="sa-mc-more sa-mc-more--section">
-          <summary>Close this complaint</summary>
+        <details className="sa-mc-more sa-mc-more--section rounded-xl border border-[#e7e2da] bg-white px-4 py-3 shadow-xs">
+          <summary className="cursor-pointer font-semibold text-[var(--sa-ink)]">Close this complaint</summary>
           <p className="sa-small sa-text-2 mt-3">Closing records how it ended. It never removes a finding, a decision or a step.</p>
           <p className="mt-3"><Button size="sm" onClick={() => setCaseDialog({ kind: 'close' })}>Close the complaint</Button></p>
         </details>
@@ -383,7 +399,13 @@ const fmtActivity = (iso: string) => activityFmt.format(new Date(iso));
 function Findings({ c, d, closed, refOf, onOpen, leadCount }: { c: Case; d: ApiComplaint; closed: boolean; refOf: (id: number) => string; onOpen: (x: ComplaintDialogState) => void; leadCount?: number }) {
   if (d.same_as) {
     return (
-      <section className="sa-mc-sec"><div className="sa-mc-sec__head"><h2 className="sa-mc-sec__title">Findings</h2></div>
+      <section className="sa-mc-sec sa-fade-up rounded-xl border border-[#e7e2da] bg-white p-4 sm:p-5 shadow-xs [animation-delay:120ms]">
+        <div className="sa-mc-sec__head">
+          <h2 className="sa-mc-sec__title inline-flex items-center gap-2">
+            <ClipboardCheck size={16} className="text-[var(--sa-brand)]" aria-hidden="true" />
+            <span>Findings</span>
+          </h2>
+        </div>
         <dl className="sa-cm-find"><div><dt>Same occurrence</dt><dd><p>Linked to <Link to={adminPath(`/cases/${refOf(d.same_as.report_id)}`)}>{refOf(d.same_as.report_id)}</Link> on {fmtDay(d.same_as.linked_at)}.{d.same_as.note ? ` ${d.same_as.note}` : ''}</p><p className="sa-small sa-text-2">Counted once there. Both complainants hear the outcome.</p></dd><span /></div></dl>
       </section>
     );
@@ -393,7 +415,13 @@ function Findings({ c, d, closed, refOf, onOpen, leadCount }: { c: Case; d: ApiC
   const incLabel = inc.status === 'verified' ? 'Verified' : inc.status === 'unverified' ? 'Not verified' : inc.status === 'invalid' ? 'Invalid' : 'Can’t tell yet';
   const decided = !!d.offense;
   return (
-    <section className="sa-mc-sec"><div className="sa-mc-sec__head"><h2 className="sa-mc-sec__title">Findings</h2></div>
+    <section className="sa-mc-sec sa-fade-up rounded-xl border border-[#e7e2da] bg-white p-4 sm:p-5 shadow-xs [animation-delay:120ms]">
+      <div className="sa-mc-sec__head">
+        <h2 className="sa-mc-sec__title inline-flex items-center gap-2">
+          <ClipboardCheck size={16} className="text-[var(--sa-brand)]" aria-hidden="true" />
+          <span>Findings</span>
+        </h2>
+      </div>
       <dl className="sa-cm-find">
         <div><dt>What happened</dt>
           <dd>{inc.at ? <><p className="sa-cm-tagline"><Badge tone={incTone}>{incLabel}</Badge><span className="sa-small sa-text-3">{fmt(inc.at)}{inc.by ? ` · ${inc.by}` : ''}</span></p>{inc.basis ? <p className="sa-small sa-text-2">{inc.basis}</p> : null}</> : <span className="sa-text-3">Not decided yet</span>}</dd>
@@ -416,8 +444,26 @@ function Findings({ c, d, closed, refOf, onOpen, leadCount }: { c: Case; d: ApiC
               </>
             )}
             {d.corrections.map((k) => <p key={k.offense_id} className="sa-small sa-text-2 mt-1">Corrected {fmtDay(k.voided_at)}: it was not {k.respondent?.name ?? 'that person'}.{k.counted && k.number ? ` The ${ord(k.number)} offense confirmed for them no longer counts.` : ''}{k.void_reason ? ` “${k.void_reason}”` : ''}</p>)}
-            {d.ruled_out.length ? <p className="sa-small sa-text-2 mt-1">Ruled out: {d.ruled_out.map((r) => `${r.label}${r.reason ? ` (${r.reason})` : ''}`).join('; ')}</p> : null}
-            {!d.respondent && d.check ? <p className="sa-small sa-text-2 mt-1">Checked so far: {d.check.note}</p> : null}
+            {d.ruled_out.length ? (
+              <div className="mt-2">
+                <p className="sa-meta m-0 mb-1">Ruled out</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {d.ruled_out.map((r, i) => (
+                    <span
+                      key={`${r.label}-${i}`}
+                      className="inline-flex items-center rounded-md border border-[#e7e2da] bg-[#f7f4ee] px-2 py-0.5 text-[12px] text-[var(--sa-ink-2)]"
+                    >
+                      {r.label}{r.reason ? ` (${r.reason})` : ''}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {!d.respondent && d.check ? (
+              <p className="mt-2 rounded-lg border border-[#ede8df] bg-[#faf8f4] px-3 py-1.5 text-[12.5px] text-[var(--sa-ink-2)]">
+                <strong className="font-semibold text-[var(--sa-ink)]">Checked so far:</strong> {d.check.note}
+              </p>
+            ) : null}
           </dd>
           {!closed && d.respondent && !decided ? <Button size="sm" variant="link" onClick={() => onOpen({ kind: 'resp' })}>Change</Button>
             : d.respondent && decided ? <Button size="sm" variant="link" onClick={() => onOpen({ kind: 'resp', correcting: true })}>Correct</Button> : <span />}
@@ -441,7 +487,7 @@ function History({ d, refOf, self }: { d: ApiComplaint; refOf: (id: number) => s
   const pending = h.pending;
   const notCounted = h.not_counted.filter((x) => x.report_id !== self || x.kind === 'corrected');
   return (
-    <section className="sa-mc-sec">
+    <section className="sa-mc-sec sa-fade-up rounded-xl border border-[#e7e2da] bg-white p-4 sm:p-5 shadow-xs [animation-delay:120ms]">
       <div className="sa-mc-sec__head"><h2 className="sa-mc-sec__title">{d.respondent.name} · {h.policy_title ?? d.rule?.title}</h2><Link className="sa-small" to={adminPath(`/complaints/people/${d.respondent.respondent_id}`)}>Full history</Link></div>
       <p className="sa-hint mb-2">Counts only verified incidents of this rule where you confirmed {d.respondent.name} as responsible{h.count_window_days ? `, within ${h.count_window_days} days` : ''}. Each occurrence counts once.</p>
       <ol className="sa-cm-ladder">

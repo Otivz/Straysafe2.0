@@ -96,9 +96,9 @@ export function LostPetForm({ draft }: { draft: Draft }) {
     ev.preventDefault();
     const found: Errors = {};
     if (!chosen) found.pet = free.length === 0 && choices.length === 0 ? REGISTER_FIRST : 'Choose which pet is missing.';
-    const hasUploadedPhoto = draft.media.some((m) => m.kind === 'photo' && Boolean(m.file || m.url));
+    const hasUploadedPhoto = draft.media.some((m) => (m.kind === 'photo' || m.kind === 'video') && Boolean(m.file || m.url));
     if (chosen && !chosen.photoUrl && !hasUploadedPhoto) {
-      found.media = 'Please upload at least one photo of the animal before submitting your report.';
+      found.media = 'Please upload at least one photo or video of the animal before submitting your report.';
     }
     if (!isValidLocalInput(draft.observedAt)) found.observedAt = 'Choose when your pet was last seen.';
     else if (new Date(draft.observedAt).getTime() > Date.now() + 60_000) found.observedAt = 'The time cannot be in the future.';
@@ -162,17 +162,17 @@ export function LostPetForm({ draft }: { draft: Draft }) {
               </Field>
 
               <FieldGroup
-                label={chosen?.photoUrl ? 'A recent photo (optional)' : 'Animal photo'}
+                label={chosen?.photoUrl ? 'A recent photo or video (optional)' : 'Animal photo or video'}
                 required={!chosen?.photoUrl}
                 error={errors.media}
                 hint={chosen?.photoUrl
-                  ? 'Your pet’s registered photo is used already. For accurate animal identification and verification, you may also upload a recent photo.'
-                  : 'For accurate animal identification and verification, please upload a clear photo of the animal.'}
+                  ? 'Your pet’s registered photo is used already. For accurate animal identification and verification, you may also upload a recent photo or video.'
+                  : 'For accurate animal identification and verification, please upload a clear photo or video of the animal.'}
               >
                 <MediaPicker
                   value={draft.media}
                   onChange={(media) => { patch({ media }); clear('media'); }}
-                  accept="photo"
+                  accept="both"
                   max={3}
                   invalid={Boolean(errors.media)}
                 />

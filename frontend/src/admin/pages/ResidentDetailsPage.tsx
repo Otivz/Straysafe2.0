@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { EllipsisVertical, FileQuestion, Lock, ShieldCheck, ShieldOff, UserCheck } from 'lucide-react';
+import { EllipsisVertical, FileQuestion, Lock, ShieldCheck, ShieldOff } from 'lucide-react';
 import { adminPath } from '../config';
 import { Badge } from '../components/Badge';
 import { Button, LinkButton } from '../components/Button';
@@ -18,9 +18,53 @@ import { usePageTitle } from '../lib/hooks';
 import { useNow } from '../../preview/lib/hooks';
 
 const ACTIONS: Record<Resident['status'], { label: string; icon: typeof ShieldOff; next: Resident['status']; danger?: boolean; title: string; message: string; confirm: string; done: string }[]> = {
-  active: [{ label: 'Suspend account', icon: ShieldOff, next: 'suspended', danger: true, title: 'Suspend this account?', message: 'The resident will not be able to sign in or submit reports until you reactivate the account. Their existing reports and records are kept.', confirm: 'Suspend account', done: 'Account suspended' }],
-  pending: [{ label: 'Verify resident', icon: UserCheck, next: 'active', title: 'Verify this resident?', message: 'Confirm that this person lives in the subdivision. They will be able to submit reports and register pets.', confirm: 'Verify resident', done: 'Resident verified' }],
-  suspended: [{ label: 'Reactivate account', icon: ShieldCheck, next: 'active', title: 'Reactivate this account?', message: 'The resident will be able to sign in and submit reports again.', confirm: 'Reactivate account', done: 'Account reactivated' }],
+  active: [
+    {
+      label: 'Suspend account',
+      icon: ShieldOff,
+      next: 'suspended',
+      danger: true,
+      title: 'Suspend this account?',
+      message: 'The resident will be notified and will not be able to sign in or access protected features until an administrator activates the account again.',
+      confirm: 'Suspend account',
+      done: 'Account suspended and resident notified',
+    },
+  ],
+  inactive: [
+    {
+      label: 'Suspend account',
+      icon: ShieldOff,
+      next: 'suspended',
+      danger: true,
+      title: 'Suspend this account?',
+      message: 'The resident will be notified and will not be able to sign in until an administrator activates the account again.',
+      confirm: 'Suspend account',
+      done: 'Account suspended and resident notified',
+    },
+  ],
+  pending: [
+    {
+      label: 'Suspend account',
+      icon: ShieldOff,
+      next: 'suspended',
+      danger: true,
+      title: 'Suspend this account?',
+      message: 'The resident will be notified and prevented from signing in.',
+      confirm: 'Suspend account',
+      done: 'Account suspended and resident notified',
+    },
+  ],
+  suspended: [
+    {
+      label: 'Activate account',
+      icon: ShieldCheck,
+      next: 'active',
+      title: 'Activate this account?',
+      message: 'The resident will be allowed to sign in again. If they have not signed in yet, their status will remain Inactive until their first sign-in.',
+      confirm: 'Activate account',
+      done: 'Account activated',
+    },
+  ],
 };
 
 /** A19 — Resident details. Shows only what an administrator needs, and never who complained about a resident's animal. */

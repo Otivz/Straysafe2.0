@@ -1587,6 +1587,12 @@ require_complaint_schema(engine)
 # Resident-to-Administration messaging (2026-11-19): applied by backend/migrations/2026-11-19_resident_messaging.sql, never here. Same read-only check.
 from app.db_migrations.resident_messaging import require as require_resident_messaging_schema  # noqa: E402
 require_resident_messaging_schema(engine)
+# Official resident records, account invitations and claiming (2026-11-22): applied by backend/migrations/2026-11-22_resident_registry.sql and 2026-11-22_resident_invitations.sql, never here. Same read-only check.
+from app.db_migrations.resident_registry import require as require_resident_registry_schema  # noqa: E402
+require_resident_registry_schema(engine)
+# Who reported a case and how (2026-11-23): applied by backend/migrations/2026-11-23_report_channel.sql, never here. Same read-only check.
+from app.db_migrations.report_channel import require as require_report_channel_schema  # noqa: E402
+require_report_channel_schema(engine)
 
 async def backfill_ai_suggestions_background():
     """Run in background after startup to backfill missing AI suggestions without blocking HTTP requests."""
@@ -1752,6 +1758,12 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Include routes
 app.include_router(auth.router)
+from app.routes import resident_activation as resident_activation_routes  # noqa: E402  (a resident claims the account the import created)
+from app.routes import resident_records as resident_record_routes  # noqa: E402  (Leader: the official resident list)
+app.include_router(resident_activation_routes.router)
+from app.routes import resident_applications as resident_application_routes  # noqa: E402  (self-registration + residency review)
+app.include_router(resident_application_routes.router)
+app.include_router(resident_record_routes.router)
 app.include_router(users.router)
 app.include_router(reports.router)
 from app.routes import report_split as _report_split  # noqa: E402

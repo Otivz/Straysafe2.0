@@ -12,6 +12,8 @@ import type { DispositionId, OutcomeGroup } from '../data/types';
 import { daysSince, fmtDate, fmtDateTime, plural } from '../../preview/lib/format';
 import { useSubmit } from '../lib/useSubmit';
 import { FormFooter, type CaseDialogProps } from './BasicDialogs';
+import { suggestedClosure } from '../lib/autofill';
+import { AutoTag } from '../components/AutoTag';
 
 const ACTION_KINDS = new Set(['follow_up', 'owner_contact', 'warning', 'compliance', 'referral', 'referral_update', 'notice', 'link']);
 const FOLLOW_UP_CHOICES = [['', 'No further follow-up needed'], ['3', 'Check again in 3 days'], ['7', 'Check again in 7 days'], ['14', 'Check again in 14 days'], ['30', 'Check again in 30 days']] as const;
@@ -30,8 +32,11 @@ export function CloseCaseDialog({ c, onClose }: CaseDialogProps) {
   const pendingConcerns = unresolvedConcernsOf(c);
 
   const [step, setStep] = useState<'form' | 'confirm'>('form');
-  const [disposition, setDisposition] = useState<DispositionId | ''>('');
-  const [reason, setReason] = useState('');
+  // The outcome the record points to (invalid assessment, observed compliance, a referral that took over), with a draft reason.
+  const [suggested] = useState(() => suggestedClosure(c));
+  const [disposition, setDisposition] = useState<DispositionId | ''>(() => suggested?.disposition ?? '');
+  const [reason, setReason] = useState(() => suggested?.reason ?? '');
+  const [reasonAuto, setReasonAuto] = useState(() => suggested !== null);
   const [followDays, setFollowDays] = useState('');
   const [ack, setAck] = useState(false);
   const [welfareOutcome, setWelfareOutcome] = useState(injuredConcern?.outcome ?? '');
@@ -167,13 +172,17 @@ export function CloseCaseDialog({ c, onClose }: CaseDialogProps) {
         </Callout>
       ) : null}
 
+      {suggested ? (
+        <p className="sa-meta m-0 mb-2"><AutoTag /> Suggested from the case record: <strong>{DISPOSITIONS[suggested.disposition].label}</strong>. Choose another outcome if it does not fit.</p>
+      ) : null}
       <FieldGroup label="Final disposition" required error={errors.disposition}>
         <div className="flex flex-col gap-4">
           {GROUPS.map((g) => (
             <div key={g}>
               <p className="sa-meta mb-1.5" style={{ fontWeight: 600 }}>{OUTCOME_GROUPS[g].heading}</p>
               <OptionGroup
-                name="disposition" label={OUTCOME_GROUPS[g].heading} value={disposition} onChange={setDisposition}
+                name="disposition" label={OUTCOME_GROUPS[g].heading} value={disposition}
+                onChange={(d) => { setDisposition(d); if (reasonAuto) setReason(d === suggested?.disposition ? suggested.reason : ''); }}
                 options={OFFERED_DISPOSITION_IDS.filter((d) => DISPOSITIONS[d].group === g).map((d) => {
                   const a = dispositionAvailability(c, d);
                   return { value: d, label: DISPOSITIONS[d].label, description: a.ok ? DISPOSITIONS[d].description : a.reason, disabled: !a.ok };
@@ -236,7 +245,7 @@ export function CloseCaseDialog({ c, onClose }: CaseDialogProps) {
         </div>
       ) : null}
 
-      <Field label="Closure reason" required error={errors.reason} hint="Stays in the case record. Say what happened and why it is appropriate to close."><Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} /></Field>
+      <Field label="Closure reason" required error={errors.reason} hint={reasonAuto && reason ? <><AutoTag /> Drafted from the case record. Check it and add what happened.</> : 'Stays in the case record. Say what happened and why it is appropriate to close.'}><Textarea value={reason} onChange={(e) => { setReason(e.target.value); setReasonAuto(false); }} rows={3} /></Field>
       <Field label="Remaining follow-up check"><Select value={followDays} onChange={(e) => setFollowDays(e.target.value)}>{FOLLOW_UP_CHOICES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Field>
     </Dialog>
   );

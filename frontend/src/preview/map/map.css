@@ -32,6 +32,15 @@
     background: var(--sa-ink); color: #fff; font: 700 12px/1 var(--sa-font); box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
   }
   .pv-dot--latest span { box-shadow: 0 0 0 3px var(--sa-brand), 0 1px 4px rgb(0 0 0 / 0.4); }
+  .pv-landmark { background: none; border: 0; }
+  .pv-landmark span {
+    position: relative; display: grid; place-items: center; width: 24px; height: 24px; margin: 2px 0 0 1px;
+    border: 2.5px solid #fff; border-radius: 50% 50% 50% 0; background: var(--sa-sage, #2f6f4e);
+    box-shadow: 0 2px 6px rgb(0 0 0 / 0.35); transform: rotate(-45deg);
+  }
+  .pv-landmark span em {
+    font-style: normal; color: #fff; font: 700 11px/1 var(--sa-font); transform: rotate(45deg);
+  }
 
   /* Key under a map */
   .pv-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 12.5px; line-height: 18px; color: var(--sa-ink-3); }
