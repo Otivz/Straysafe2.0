@@ -210,10 +210,11 @@ export const NOTICE_STATUS: Record<NoticeStatus, { label: string; tone: Tone }> 
   archived: { label: 'Archived', tone: 'neutral' },
 };
 
-export const RESIDENT_STATUS: Record<'active' | 'pending' | 'suspended', { label: string; tone: Tone; description: string }> = {
-  active: { label: 'Active', tone: 'sage', description: 'Can sign in and use StraySafe.' },
-  pending: { label: 'Pending verification', tone: 'amber', description: 'Registered, but the account has not been verified yet.' },
-  suspended: { label: 'Suspended', tone: 'red', description: 'Cannot sign in until reactivated.' },
+export const RESIDENT_STATUS: Record<'active' | 'inactive' | 'pending' | 'suspended', { label: string; tone: Tone; description: string }> = {
+  active: { label: 'Active', tone: 'sage', description: 'Signed in and account is enabled.' },
+  inactive: { label: 'Inactive', tone: 'neutral', description: 'Approved by administrator; awaiting the resident’s first sign-in.' },
+  pending: { label: 'Pending', tone: 'amber', description: 'Awaiting administrator approval.' },
+  suspended: { label: 'Suspended', tone: 'red', description: 'Suspended by administrator; cannot sign in.' },
 };
 
 export const VACCINATION = { up_to_date: 'Up to date', overdue: 'Overdue', unknown: 'Not recorded' } as const;

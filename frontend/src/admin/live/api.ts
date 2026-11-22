@@ -35,7 +35,7 @@ export interface ApiCaseSummary {
   category: { category_id: number; name: string | null; family: CategoryId; label: string };
   animal: { type: string | null; breed: string | null; color: string | null; size: string | null; count: number | null; description: string | null; condition: string | null };
   location: { landmark: string | null; latitude: number | null; longitude: number | null };
-  reporter: { user_id: number | null; name: string | null };
+  reporter: { user_id: number | null; name: string | null; channel?: ReportChannel | null; channel_label?: string; contact?: string | null; filed_by_name?: string | null };
   assigned_leader_id: number | null;
   assigned_leader_name: string | null;
   assessment: { incident: IncidentVerification; evidence_sufficiency: EvidenceSufficiency; urgency: UrgencyLevel; urgency_note?: string | null; saved_at: string | null };
@@ -118,6 +118,16 @@ export interface ApiLostAlert {
   sightings?: ApiLostSighting[]; coordinations?: ApiLostCoordination[];
 }
 
+export interface ApiAuditEvent {
+  log_id: number;
+  action: string;
+  description: string | null;
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
+  actor_name: string | null;
+  created_at: string | null;
+}
+
 export interface ApiCaseDetail {
   report_id: number;
   case_status: CaseStatus;
@@ -128,7 +138,7 @@ export interface ApiCaseDetail {
   location: ApiCaseSummary['location'];
   reported_at: string;
   subdivision_id: number;
-  reporter: { user_id: number | null; name: string | null };
+  reporter: { user_id: number | null; name: string | null; channel?: ReportChannel | null; channel_label?: string; contact?: string | null; filed_by_name?: string | null };
   assigned_leader_id: number | null;
   assigned_leader_name: string | null;
   assessment: { incident: IncidentVerification; incident_basis: string | null; evidence_sufficiency: EvidenceSufficiency; evidence_reviewed: string[]; urgency: UrgencyLevel; urgency_note: string | null; notes: string | null; saved_at: string | null; saved_by: number | null; saved_by_name: string | null };
@@ -202,6 +212,7 @@ export interface ApiCaseDetail {
   allowed_moves: CaseStatus[];
   can_reopen: boolean;
   warning_eligibility: { ok: boolean; reason: string | null };
+  audit_events?: ApiAuditEvent[];
 }
 
 /** What identifies a pet in the registry (the backend's `pet_facts`, also frozen into the report when it was filed). */
@@ -448,7 +459,10 @@ export interface ApiCaseSettings {
     agencies?: ApiExternalAgency[];
   };
 }
-export interface ApiCategories { subdivision_id: number | null; subdivision: { name: string | null; city: string | null; office: ApiCaseSettings['office'] }; categories: { id: CategoryId; enabled: boolean }[] }
+/** How a case reached the subdivision: NULL = the resident's app; the rest were filed by staff (backend utils/report_channel.py). */
+export type ReportChannel = 'self' | 'call' | 'walk_in' | 'message' | 'other';
+
+export interface ApiCategories { subdivision_id: number | null; subdivision: { name: string | null; city: string | null; office: ApiCaseSettings['office'] }; categories: { id: CategoryId; enabled: boolean; category_id?: number | null; label?: string }[] }
 
 /** The reporting area the server holds (GET /reports/coverage-area): where the maps open, the outline they draw and the radius reports must fall in. */
 export interface ApiCoverage { center_label: string; center_latitude: number; center_longitude: number; radius_meters: number; boundary_polygon: { lat: number; lng: number }[]; is_active: boolean }
@@ -667,6 +681,14 @@ export const adminApi = {
   warningLetterDetail: (letterId: number) => httpGet<ApiGeneratedWarningLetter>(`/warning-letters/${letterId}`),
   retryWarningNotification: (letterId: number) => httpPost<ApiGeneratedWarningLetter>(`/warning-letters/${letterId}/retry-notification`),
   downloadWarningLetter: (letterId: number, ref: string, format: 'pdf' | 'docx') => httpDownloadBlob(`/warning-letters/${letterId}/download`, `${ref}.${format}`, { format }),
+  /** A report the Subdivision Leader files: their own sighting ('self') or for a person who called, walked in or sent a message. */
+  createReport: (body: Record<string, unknown>) => httpPost<{ report_id: number; created_at: string | null }>('/reports/', body),
+  uploadReportMedia: (reportId: number, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('is_evidence', 'true');
+    return httpUpload<ApiMedia>(`/reports/${reportId}/media`, form);
+  },
   uploadComplaintAttachment: (reportId: number, file: File) => {
     const form = new FormData();
     form.append('file', file);
@@ -677,6 +699,8 @@ export const adminApi = {
   users: () => httpGet<ApiUser[]>('/users/'),
   user: (id: number) => httpGet<ApiUser>(`/users/${id}`),
   updateUser: (id: number, patch: Record<string, unknown>) => httpPut<ApiUser>(`/users/${id}`, patch),
+  updateUserStatus: (id: number, status: 'Active' | 'Inactive' | 'Suspended') =>
+    httpPatch<ApiUser>(`/users/${id}/status?status_in=${encodeURIComponent(status)}`),
   pets: (subdivisionId: number) => httpGet<ApiPet[]>(`/pets/subdivision/${subdivisionId}`),
   /** Ask a resident to confirm that a pet record is theirs. Nothing moves until they say yes; the Leader must say how they checked (at least 10 characters). */
   assignPetOwner: (petId: number, ownerId: number, evidenceNote: string) => httpPost<ApiPet>(`/pets/${petId}/assign-owner?owner_id=${ownerId}`, { evidence_note: evidenceNote }),

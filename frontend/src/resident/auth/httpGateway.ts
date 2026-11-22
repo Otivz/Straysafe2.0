@@ -15,7 +15,7 @@
 import axios from 'axios';
 import { API_BASE_URL, clearAuthStorage, logoutUser, updateStoredSessionUser } from '../../utils/api';
 import { ROLE_RESIDENT } from '../../live/config';
-import { httpGet, httpPost, toApiError } from '../../live/http';
+import { ApiDetailError, httpGet, httpPost, toApiError } from '../../live/http';
 import { AdminApiError } from '../../preview/lib/errors';
 import { stopPush } from '../native/push';
 import type { ResidentGateway, ResidentSession, SignInResult, SignupProfile } from './gateway';
@@ -34,6 +34,7 @@ interface LoginResponse {
   requires_otp?: boolean;
   email_sent?: boolean;
   message?: string;
+  residency_status?: string | null;
 }
 
 const USER_KEY = 'resident_user';
@@ -196,6 +197,14 @@ export const httpGateway: ResidentGateway = {
   async verify(code) {
     if (!pending) throw new AdminApiError('server', 'Your sign-up expired. Please create the account again.');
     const data = await withPendingToken<LoginResponse>('/auth/verify-otp', { otp: code.trim() });
+    if (data.residency_status) {
+      // A self-registered applicant: the e-mail is verified, the residency review comes next, and no session was opened.
+      const email = pending.email;
+      pendingToken = null;
+      notice = null;
+      writePending(null);
+      throw new ApiDetailError(data.message ?? undefined, 200, { code: 'RESIDENCY_PENDING', message: data.message ?? '', email });
+    }
     if (!data.access_token) throw new AdminApiError('server', 'The account is verified, but the server did not start a session. Please sign in.');
     pendingToken = null;
     notice = null;

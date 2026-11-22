@@ -11,6 +11,7 @@ import sys
 import tempfile
 
 os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(tempfile.mkdtemp(), "account_self_edit_test.db")
+os.environ["OPEN_SELF_REGISTRATION"] = "true"   # these tests cover the legacy open sign-up (closed by default; see utils/registration_policy.py)
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-for-account-self-edit-0123456789")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -67,15 +68,16 @@ r = put(1, 1, {"role_id": 4})
 check("a resident can't make themselves an administrator (403)", r.status_code == 403 and user(1).role_id == 1, f"{r.status_code} {r.text[:120]}")
 for body, label in [({"is_head_officer": True}, "Head Officer"), ({"is_verified": False}, "verification"),
                     ({"status": "Inactive"}, "account status"), ({"subdivision_id": 99}, "subdivision"), ({"barangay_id": 2}, "barangay"),
-                    ({"position": "Barangay Captain"}, "position")]:
+                    ({"position": "Barangay Captain"}, "position"), ({"name": "Resident Renamed"}, "full name"),
+                    ({"email": "new-resident@test-mail.com"}, "email address"), ({"address": "Blk 99, Lot 99"}, "address")]:
     r = put(1, 1, body)
     check(f"a resident can't change their own {label} (403)", r.status_code == 403, f"{r.status_code} {r.text[:120]}")
-whole = {"name": "Resident Renamed", "email": "resident@test-mail.com", "phone": "09170000000", "role_id": 1, "status": "Active",
+whole = {"name": "Resident", "email": "resident@test-mail.com", "phone": "09170000000", "role_id": 1, "status": "Active",
          "is_verified": True, "subdivision_id": 1, "barangay_id": 1, "is_head_officer": False, "position_id": None}
 r = put(1, 1, whole)
-check("a whole-record save with only personal changes works (resident settings page)", r.status_code == 200 and user(1).name == "Resident Renamed",
+check("a whole-record save with only mobile number changed works (resident profile page)", r.status_code == 200 and user(1).phone == "09170000000",
       f"{r.status_code} {r.text[:160]}")
-check("...and nothing else changed", user(1).role_id == 1 and user(1).is_verified)
+check("...and nothing else changed", user(1).role_id == 1 and user(1).is_verified and user(1).name == "Resident")
 
 # ---- self-edit: barangay staff ----
 r = put(2, 2, {"position": "Barangay Captain"})

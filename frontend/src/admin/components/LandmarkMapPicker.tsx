@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import L from 'leaflet';
 import { Circle, MapContainer, Marker, Polygon, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet';
-import { Check, Maximize } from 'lucide-react';
+import { Check, Crosshair, Maximize } from 'lucide-react';
 import MapAutoResize from '../../components/MapControls/MapAutoResize';
 import { OSM_TILES, areaCenter, areaOutline, reportingCoverage } from '../../preview/geo';
-import { dotIcon, pinIcon } from '../../preview/map/icons';
+import { landmarkPinIcon, pinIcon } from '../../preview/map/icons';
 import { OUTLINE_STYLE, RADIUS_STYLE } from '../../preview/map/styles';
 import '../../preview/map/map.css';
 
@@ -23,12 +23,37 @@ function MapClicks({ onPick }: { onPick: (lat: number, lng: number) => void }) {
 
 function FollowPin({ lat, lng }: { lat: number | null; lng: number | null }) {
   const map = useMap();
+  const hadPin = useRef(false);
   useEffect(() => {
     if (lat !== null && lng !== null) {
+      hadPin.current = true;
       map.flyTo([lat, lng], Math.max(map.getZoom(), 17), { duration: 0.3 });
+    } else if (hadPin.current) {
+      hadPin.current = false;
+      map.flyTo(areaCenter(), 16, { duration: 0.3 });
     }
   }, [lat, lng, map]);
   return null;
+}
+
+function CenterSubdivisionButton() {
+  const map = useMap();
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        map.flyTo(areaCenter(), 16, { duration: 0.3 });
+      }}
+      aria-label="Center map on subdivision"
+      title="Center on subdivision"
+      style={{ position: 'absolute', left: 10, bottom: 10, zIndex: 400 }}
+      className="inline-flex items-center gap-1 rounded-md border border-[#e7e2da] bg-white/95 px-2.5 py-1 text-[12px] font-medium text-[#292524] shadow-sm hover:bg-[#fbf6ee]"
+    >
+      <Crosshair size={13} aria-hidden="true" />
+      <span>Center on subdivision</span>
+    </button>
+  );
 }
 
 function MapCanvas({
@@ -65,9 +90,9 @@ function MapCanvas({
         <Marker
           key={lm.landmark_id}
           position={[lm.latitude, lm.longitude]}
-          icon={dotIcon(idx + 1, false)}
+          icon={landmarkPinIcon(idx + 1)}
         >
-          <Tooltip direction="top" offset={[0, -10]}>{lm.name}</Tooltip>
+          <Tooltip direction="top" offset={[0, -28]}>{lm.name}</Tooltip>
         </Marker>
       ))}
       {pin ? (
@@ -86,6 +111,7 @@ function MapCanvas({
         </Marker>
       ) : null}
       <FollowPin lat={pin?.lat ?? null} lng={pin?.lng ?? null} />
+      <CenterSubdivisionButton />
     </MapContainer>
   );
 }

@@ -741,6 +741,10 @@ CREATE TABLE `reports` (
   `suspected_owner_name` varchar(150) DEFAULT NULL,                   -- [NEW] 2026-11-13: complaint management lead
   `suspected_owner_address` varchar(255) DEFAULT NULL,                -- [NEW] 2026-11-13: complaint management lead
   `suspected_owner_details` text,                                     -- [NEW] 2026-11-13: complaint management lead
+  `report_channel` varchar(10) DEFAULT NULL,                          -- [NEW] 2026-11-23: NULL = app; self / call / walk_in / message / other = filed by staff
+  `reported_by_name` varchar(150) DEFAULT NULL,                       -- [NEW] 2026-11-23: the person who told the Leader
+  `reported_by_contact` varchar(30) DEFAULT NULL,                     -- [NEW] 2026-11-23
+  `reported_on_behalf_of` int DEFAULT NULL,                           -- [NEW] 2026-11-23: their account, when they have one
   PRIMARY KEY (`report_id`),
   KEY `fk_reports_subdivision` (`subdivision_id`),
   KEY `fk_reports_category` (`category_id`),
@@ -766,6 +770,7 @@ CREATE TABLE `reports` (
   KEY `fk_reports_ownership_decided_by` (`ownership_decided_by`),
   KEY `fk_reports_closed_by` (`closed_by`),
   KEY `fk_reports_last_reopened_by` (`last_reopened_by`),
+  KEY `fk_reports_on_behalf_of` (`reported_on_behalf_of`),
   CONSTRAINT `fk_reports_assigned_leader` FOREIGN KEY (`assigned_leader_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_category` FOREIGN KEY (`category_id`) REFERENCES `report_categories` (`category_id`),
   CONSTRAINT `fk_reports_duplicate_of` FOREIGN KEY (`duplicate_of_report_id`) REFERENCES `reports` (`report_id`) ON DELETE SET NULL,
@@ -782,6 +787,7 @@ CREATE TABLE `reports` (
   CONSTRAINT `fk_reports_ownership_decided_by` FOREIGN KEY (`ownership_decided_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_closed_by` FOREIGN KEY (`closed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_last_reopened_by` FOREIGN KEY (`last_reopened_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_reports_on_behalf_of` FOREIGN KEY (`reported_on_behalf_of`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_subdivision` FOREIGN KEY (`subdivision_id`) REFERENCES `subdivisions` (`subdivision_id`),
   CONSTRAINT `fk_reports_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_reports_verified_by` FOREIGN KEY (`verified_by_user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
@@ -2413,6 +2419,140 @@ CREATE TABLE `generated_warning_letters` (
   CONSTRAINT `generated_warning_letters_ibfk_7` FOREIGN KEY (`template_id`) REFERENCES `warning_letter_templates` (`template_id`) ON DELETE SET NULL,
   CONSTRAINT `generated_warning_letters_ibfk_8` FOREIGN KEY (`template_version_id`) REFERENCES `warning_letter_template_versions` (`version_id`) ON DELETE SET NULL,
   CONSTRAINT `generated_warning_letters_ibfk_9` FOREIGN KEY (`issued_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- Official resident records, bulk account creation and account claiming (2026-11-22)
+-- backend/migrations/2026-11-22_resident_registry.sql and 2026-11-22_resident_invitations.sql
+-- -----------------------------------------------------------------------------
+
+DROP TABLE IF EXISTS `resident_import_batches`;
+CREATE TABLE resident_import_batches (
+  batch_id             INT NOT NULL AUTO_INCREMENT,
+  subdivision_id       INT NOT NULL,
+  uploaded_by          INT NULL,
+  filename             VARCHAR(255) NOT NULL,
+  file_sha256          VARCHAR(64) NOT NULL,
+  status               VARCHAR(20) NOT NULL DEFAULT 'Validated',
+  total_rows           INT NOT NULL DEFAULT 0,
+  valid_rows           INT NOT NULL DEFAULT 0,
+  duplicate_rows       INT NOT NULL DEFAULT 0,
+  invalid_rows         INT NOT NULL DEFAULT 0,
+  missing_rows         INT NOT NULL DEFAULT 0,
+  imported_rows        INT NOT NULL DEFAULT 0,
+  linked_existing_rows INT NOT NULL DEFAULT 0,
+  created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  confirmed_at         DATETIME NULL,
+  confirmed_by         INT NULL,
+  PRIMARY KEY (batch_id),
+  KEY ix_resident_import_batches_subdivision_id (subdivision_id),
+  KEY ix_resident_import_batches_status (status),
+  CONSTRAINT fk_rib_subdivision FOREIGN KEY (subdivision_id) REFERENCES subdivisions (subdivision_id),
+  CONSTRAINT fk_rib_uploaded_by FOREIGN KEY (uploaded_by) REFERENCES users (user_id) ON DELETE SET NULL,
+  CONSTRAINT fk_rib_confirmed_by FOREIGN KEY (confirmed_by) REFERENCES users (user_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP TABLE IF EXISTS `resident_import_rows`;
+CREATE TABLE resident_import_rows (
+  row_id           INT NOT NULL AUTO_INCREMENT,
+  batch_id         INT NOT NULL,
+  `row_number`     INT NOT NULL,
+  full_name        VARCHAR(150) NULL,
+  email            VARCHAR(100) NULL,
+  block_number     VARCHAR(30) NULL,
+  lot_number       VARCHAR(30) NULL,
+  contact_number   VARCHAR(20) NULL,
+  result           VARCHAR(12) NOT NULL,
+  reason           VARCHAR(255) NULL,
+  existing_user_id INT NULL,
+  PRIMARY KEY (row_id),
+  KEY ix_resident_import_rows_batch_result (batch_id, result, `row_number`),
+  CONSTRAINT fk_rir_batch FOREIGN KEY (batch_id) REFERENCES resident_import_batches (batch_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP TABLE IF EXISTS `official_resident_records`;
+CREATE TABLE official_resident_records (
+  record_id           INT NOT NULL AUTO_INCREMENT,
+  subdivision_id      INT NOT NULL,
+  full_name           VARCHAR(150) NOT NULL,
+  name_key            VARCHAR(150) NOT NULL,
+  email               VARCHAR(100) NOT NULL,
+  block_number        VARCHAR(30) NOT NULL,
+  block_key           VARCHAR(30) NOT NULL,
+  lot_number          VARCHAR(30) NOT NULL,
+  lot_key             VARCHAR(30) NOT NULL,
+  contact_number      VARCHAR(20) NULL,
+  registration_status VARCHAR(30) NOT NULL DEFAULT 'Pending Activation',
+  user_id             INT NULL,
+  imported_batch_id   INT NULL,
+  registered_at       DATETIME NULL,
+  deactivated_at      DATETIME NULL,
+  created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (record_id),
+  UNIQUE KEY uq_official_resident_email (subdivision_id, email),
+  UNIQUE KEY uq_official_resident_identity (subdivision_id, name_key, block_key, lot_key),
+  UNIQUE KEY uq_official_resident_user (user_id),
+  KEY ix_official_resident_lookup (subdivision_id, block_key, lot_key),
+  KEY ix_official_resident_records_subdivision_id (subdivision_id),
+  KEY ix_official_resident_records_registration_status (registration_status),
+  KEY ix_official_resident_records_imported_batch_id (imported_batch_id),
+  CONSTRAINT fk_orr_subdivision FOREIGN KEY (subdivision_id) REFERENCES subdivisions (subdivision_id),
+  CONSTRAINT fk_orr_user FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE SET NULL,
+  CONSTRAINT fk_orr_batch FOREIGN KEY (imported_batch_id) REFERENCES resident_import_batches (batch_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP TABLE IF EXISTS `resident_invitations`;
+CREATE TABLE resident_invitations (
+  invitation_id   INT NOT NULL AUTO_INCREMENT,
+  record_id       INT NOT NULL,
+  user_id         INT NULL,
+  token_hash      VARCHAR(64) NULL,
+  expires_at      DATETIME NULL,
+  delivery_status VARCHAR(20) NOT NULL DEFAULT 'Pending Delivery',
+  send_count      INT NOT NULL DEFAULT 0,
+  last_error      VARCHAR(255) NULL,
+  last_sent_at    DATETIME NULL,
+  claimed_at      DATETIME NULL,
+  created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (invitation_id),
+  UNIQUE KEY uq_resident_invitation_record (record_id),
+  UNIQUE KEY uq_resident_invitation_token (token_hash),
+  KEY ix_resident_invitations_status (delivery_status),
+  KEY ix_resident_invitations_user_id (user_id),
+  CONSTRAINT fk_ri_record FOREIGN KEY (record_id) REFERENCES official_resident_records (record_id) ON DELETE CASCADE,
+  CONSTRAINT fk_ri_user FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Individual self-registration with residency verification (2026-11-22)
+-- backend/migrations/2026-11-22_resident_applications.sql
+DROP TABLE IF EXISTS `resident_applications`;
+CREATE TABLE resident_applications (
+  application_id    INT NOT NULL AUTO_INCREMENT,
+  user_id           INT NOT NULL,
+  subdivision_id    INT NOT NULL,
+  full_name         VARCHAR(150) NOT NULL,
+  email             VARCHAR(100) NOT NULL,
+  contact_number    VARCHAR(20) NULL,
+  block_number      VARCHAR(30) NOT NULL,
+  lot_number        VARCHAR(30) NOT NULL,
+  status            VARCHAR(40) NOT NULL DEFAULT 'PENDING_EMAIL_VERIFICATION',
+  email_verified_at DATETIME NULL,
+  reviewed_by       INT NULL,
+  reviewed_at       DATETIME NULL,
+  rejection_reason  TEXT NULL,
+  resubmit_count    INT NOT NULL DEFAULT 0,
+  resubmitted_at    DATETIME NULL,
+  created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (application_id),
+  UNIQUE KEY uq_resident_application_user (user_id),
+  KEY ix_resident_applications_subdivision_status (subdivision_id, status),
+  KEY ix_resident_applications_email (email),
+  CONSTRAINT fk_ra_user FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE,
+  CONSTRAINT fk_ra_subdivision FOREIGN KEY (subdivision_id) REFERENCES subdivisions (subdivision_id),
+  CONSTRAINT fk_ra_reviewed_by FOREIGN KEY (reviewed_by) REFERENCES users (user_id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================================================

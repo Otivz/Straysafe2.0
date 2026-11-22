@@ -177,11 +177,17 @@ export default function RelatedReportsBlock({ c, openDialog }: { c: Case; openDi
     : `${candidateCount} potentially related ${candidateCount === 1 ? 'report' : 'reports'} found.`;
 
   return (
-    <Block
-      title="Related Reports"
-      description="Reports with similar incident details based on location, animal information, and incident date."
-      action={!closed ? <Button size="sm" icon={Link2} onClick={() => openDialog({ kind: 'link' })}>Link Reports</Button> : undefined}
-    >
+    <div id="related-reports">
+      <Block
+        title={
+          <span className="inline-flex items-center gap-2">
+            <Link2 size={17} className="text-[var(--sa-brand)]" aria-hidden="true" />
+            <span>Related Reports</span>
+          </span>
+        }
+        description="Reports with similar incident details based on location, animal information, and incident date."
+        action={!closed ? <Button size="sm" icon={Link2} onClick={() => openDialog({ kind: 'link' })}>Link Reports</Button> : undefined}
+      >
       {c.duplicateOfReportId ? (
         <Callout tone="amber" title={`Merged into Case #SS-${new Date(c.reportedAt).getFullYear()}-${String(c.duplicateOfReportId).padStart(4, '0')}`} className="mb-4">
           This report was merged into the master case while preserving its original details, reporter, media, location, and independent concern tracking.
@@ -190,9 +196,11 @@ export default function RelatedReportsBlock({ c, openDialog }: { c: Case; openDi
 
       {!closed && !c.duplicateOfReportId ? (
         <div className="mb-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="sa-small sa-text-2 m-0 font-medium">{countSummary}</p>
-          </div>
+          {dupLoading || candidateCount > 0 ? (
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="sa-small sa-text-2 m-0 font-medium">{countSummary}</p>
+            </div>
+          ) : null}
 
           {candidateCount === 0 && !dupLoading ? (
             <EmptyState
@@ -464,6 +472,7 @@ export default function RelatedReportsBlock({ c, openDialog }: { c: Case; openDi
           {unmergeError ? <FormError message={unmergeError} /> : null}
         </Dialog>
       ) : null}
-    </Block>
+      </Block>
+    </div>
   );
 }

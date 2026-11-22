@@ -12,6 +12,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 temp_dir = tempfile.TemporaryDirectory(prefix="straysafe-retired-users-")
 os.environ["DATABASE_URL"] = "sqlite:///" + (Path(temp_dir.name) / "test.db").as_posix()
+os.environ["OPEN_SELF_REGISTRATION"] = "true"   # these tests cover the legacy open sign-up (closed by default; see utils/registration_policy.py)
 os.environ.setdefault("JWT_SECRET_KEY", "synthetic-retired-users-test-secret-0123456789")
 os.environ.pop("BARANGAY_WORKFLOWS_ENABLED", None)
 

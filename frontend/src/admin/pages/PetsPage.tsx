@@ -8,7 +8,7 @@ import { adminPath } from '../config';
 import { Button, LinkButton } from '../components/Button';
 import { Callout, EmptyState, PageHeader, Panel, Tabs } from '../components/layout';
 import { PetAvatar } from '../components/PetAvatar';
-import { Field, Segmented, SearchInput, Textarea } from '../components/form';
+import { Field, Segmented, SearchInput, Select, Textarea } from '../components/form';
 import { useToast } from '../components/toast';
 import { ANIMAL_TYPES, SIZE_LABEL } from '../data/constants';
 import { useAdminData } from '../data/context';
@@ -20,7 +20,8 @@ import { fmtDate, fmtDateTime, plural } from '../../preview/lib/format';
 import { usePageTitle } from '../lib/hooks';
 
 type CollarFilter = 'all' | 'pending' | 'accepted' | 'ready_for_pickup' | 'completed';
-const PAGE_SIZE = 15;
+type PetSort = 'newest' | 'oldest' | 'name';
+const PAGE_SIZE = 10;
 
 const STATUS_TONE: Record<ApiQrCollarRequest['status'], 'amber' | 'brand' | 'sage' | 'neutral'> = {
   pending: 'amber',
@@ -62,18 +63,19 @@ export default function PetsPage() {
   useEffect(() => {
     let live = true;
     adminApi.taggedPetIds().then((r) => { if (live) setTagged(new Set(r.pet_ids.map(String))); }, () => undefined);
-    void loadCollarRequests();
+    adminApi.qrCollarRequests().then((res) => { if (live) setCollarData(res); }, () => undefined);
     return () => { live = false; };
-  }, [loadCollarRequests]);
+  }, []);
 
   const q = params.get('q') ?? '';
   const typesPresent = (Object.keys(ANIMAL_TYPES) as AnimalType[]).filter((t) => state.pets.some((p) => p.type === t));
   const requested = params.get('type') as AnimalType | null;
   const type: AnimalType | 'all' = requested && typesPresent.includes(requested) ? requested : 'all';
+  const sort: PetSort = params.get('sort') === 'oldest' ? 'oldest' : params.get('sort') === 'name' ? 'name' : 'newest';
   const page = Math.max(1, Number(params.get('page')) || 1);
   const set = (patch: Record<string, string>) => {
     const next = new URLSearchParams(params);
-    for (const [k, v] of Object.entries(patch)) { if (!v || v === 'all' || (k === 'tab' && v === 'registry')) next.delete(k); else next.set(k, v); }
+    for (const [k, v] of Object.entries(patch)) { if (!v || v === 'all' || (k === 'tab' && v === 'registry') || (k === 'sort' && v === 'newest')) next.delete(k); else next.set(k, v); }
     next.delete('page');
     setParams(next, { replace: true });
   };
@@ -87,7 +89,13 @@ export default function PetsPage() {
   const rows = state.pets
     .filter((p) => type === 'all' || p.type === type)
     .filter((p) => !needle || [p.name, p.breed, p.color, residentById(state, p.ownerId)?.name ?? ''].some((t) => t.toLowerCase().includes(needle)))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => {
+      if (sort === 'name') return a.name.localeCompare(b.name);
+      const timeDiff = Date.parse(a.registeredAt || '') - Date.parse(b.registeredAt || '');
+      const idDiff = (Number(a.id) || 0) - (Number(b.id) || 0);
+      const diff = Number.isFinite(timeDiff) && timeDiff !== 0 ? timeDiff : idDiff;
+      return sort === 'newest' ? -diff : diff;
+    });
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const current = Math.min(page, pages);
   const pagedRows = rows.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
@@ -154,9 +162,20 @@ export default function PetsPage() {
     .filter((r) => !needle || [r.reference, r.pet_name, r.pet_breed ?? '', r.resident_name, r.resident_unit ?? ''].some((t) => t.toLowerCase().includes(needle)));
 
   const pendingCount = collarData?.counts.pending ?? 0;
+  const dogCount = state.pets.filter((p) => p.type === 'dog').length;
+  const catCount = state.pets.filter((p) => p.type === 'cat').length;
 
   return (
     <div>
+      <style>{`
+        @keyframes saFadeUp {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .sa-fade-up {
+          animation: saFadeUp 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+      `}</style>
       <PageHeader
         title="Pet Registry"
         description="The pets registered in your subdivision and resident requests for physical QR collars. A registration is declared by whoever entered it and does not verify ownership."
@@ -173,8 +192,42 @@ export default function PetsPage() {
         ]}
       />
 
-      <div className="pt-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="pt-4">
+        {tab === 'registry' && state.pets.length > 0 ? (
+          <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4" role="group" aria-label="Pet registry summary">
+            {[
+              { label: 'Total registered', value: state.pets.length, icon: PawPrint, iconClass: 'bg-[#fff7ed] text-[#b45309] border-[#fed7aa]/70', onClick: () => set({ type: 'all' }) },
+              { label: 'Dogs', value: dogCount, icon: PawPrint, iconClass: 'bg-[#f5f0e8] text-[#57534e] border-[#e7e2da]', onClick: () => set({ type: 'dog' }) },
+              { label: 'Cats', value: catCount, icon: PawPrint, iconClass: 'bg-[#f5f0e8] text-[#57534e] border-[#e7e2da]', onClick: () => set({ type: 'cat' }) },
+              { label: 'QR tagged', value: tagged.size, icon: QrCode, iconClass: 'bg-emerald-50 text-emerald-700 border-emerald-200', onClick: undefined },
+            ].map((s, idx) => {
+              const Icon = s.icon;
+              return (
+                <div
+                  key={s.label}
+                  role={s.onClick ? 'button' : undefined}
+                  tabIndex={s.onClick ? 0 : undefined}
+                  onClick={s.onClick}
+                  onKeyDown={s.onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); s.onClick!(); } } : undefined}
+                  style={{ animationDelay: `${idx * 40}ms` }}
+                  className={`sa-fade-up rounded-xl border border-[#e7e2da] bg-gradient-to-b from-white to-[#fcfaf6] p-3.5 shadow-xs transition-all duration-200 ${
+                    s.onClick ? 'cursor-pointer hover:-translate-y-0.5 hover:border-[#d6cfc7] hover:shadow-sm' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="sa-meta m-0">{s.label}</span>
+                    <span className={`flex h-7 w-7 items-center justify-center rounded-lg border ${s.iconClass}`}>
+                      <Icon size={14} aria-hidden="true" />
+                    </span>
+                  </div>
+                  <p className="sa-h3 sa-num m-0 mt-1.5">{s.value}</p>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
+        <div className="sa-fade-up mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e7e2da] bg-[#faf7f2]/85 px-3.5 py-2.5" style={{ animationDelay: '100ms' }}>
           <SearchInput
             className="w-full sm:w-[340px]"
             aria-label={tab === 'registry' ? 'Search the registry' : 'Search QR collar requests'}
@@ -183,9 +236,21 @@ export default function PetsPage() {
             onChange={(e) => set({ q: e.target.value })}
           />
           {tab === 'registry' ? (
-            typesPresent.length > 1 || type !== 'all' ? (
-              <Segmented label="Animal type" value={type} onChange={(t) => set({ type: t })} options={[{ value: 'all', label: 'All' }, ...typesPresent.map((t) => ({ value: t, label: ANIMAL_TYPES[t] }))]} />
-            ) : null
+            <div className="flex flex-wrap items-center gap-2.5 sm:flex-nowrap">
+              {typesPresent.length > 1 || type !== 'all' ? (
+                <Segmented label="Animal type" value={type} onChange={(t) => set({ type: t })} options={[{ value: 'all', label: 'All' }, ...typesPresent.map((t) => ({ value: t, label: ANIMAL_TYPES[t] }))]} />
+              ) : null}
+              <Select
+                aria-label="Sort registered pets"
+                className="sa-input--sm w-auto shrink-0"
+                value={sort}
+                onChange={(e) => set({ sort: e.target.value })}
+              >
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="name">Name (A–Z)</option>
+              </Select>
+            </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
               <Segmented
@@ -209,14 +274,14 @@ export default function PetsPage() {
 
         {tab === 'registry' ? (
           <>
-            <Panel className="overflow-hidden">
+            <Panel className="sa-fade-up overflow-hidden border-[#e7e2da] shadow-xs [animation-delay:140ms]">
               {state.pets.length === 0 ? (
                 <EmptyState icon={PawPrint} title="No pets registered yet">Residents register their pets from their own account, and a registered pet is how they report it missing. Registered pets appear here.</EmptyState>
               ) : rows.length === 0 ? (
                 <EmptyState icon={SearchX} title="No pets match" action={<Button onClick={clear}>Clear filters</Button>}>Try another name, or choose a different animal type.</EmptyState>
               ) : (
                 <>
-                  <div className="sa-tablewrap">
+                  <div className="sa-tablewrap max-h-[440px] overflow-y-auto [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10">
                     <table className="sa-table sa-table--rows">
                       <caption className="sa-sr-only">Registered pets, {plural(rows.length, 'result')}</caption>
                       <thead>
@@ -264,12 +329,12 @@ export default function PetsPage() {
                 </>
               )}
             </Panel>
-            <Callout className="mt-5">Pets can appear in a case as a <strong>possible match</strong> for a reported animal. That is a comparison aid only: looking alike is not identity, and a registration is not proof of ownership.</Callout>
+            <Callout className="mt-4 shrink-0">Pets can appear in a case as a <strong>possible match</strong> for a reported animal. That is a comparison aid only: looking alike is not identity, and a registration is not proof of ownership.</Callout>
           </>
         ) : (
           <div className="space-y-4">
             {collarData ? (
-              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+              <div className="sa-fade-up grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                 <div className="rounded-xl border border-amber-200/80 bg-amber-50/55 px-3.5 py-2.5">
                   <div className="sa-eyebrow">Pending</div>
                   <div className="mt-0.5 text-xl font-bold text-amber-700">{collarData.counts.pending}</div>

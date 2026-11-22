@@ -202,6 +202,14 @@ class Report(Base):
     suspected_owner_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     suspected_owner_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Who reported it and how (backend/migrations/2026-11-23_report_channel.sql). NULL channel = the resident filed it in the app.
+    # Filed by staff: 'self' (the Leader saw it) or 'call' / 'walk_in' / 'message' / 'other' for a person who told the Leader; then
+    # reported_by_name is that person, and reported_on_behalf_of their account when they have one. user_id stays the staff member.
+    report_channel: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    reported_by_name: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
+    reported_by_contact: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    reported_on_behalf_of: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+
     # Relationships
     reporter: Mapped[Optional["User"]] = relationship("User", foreign_keys=[user_id], backref="reports")
     assigned_leader: Mapped[Optional["User"]] = relationship("User", foreign_keys=[assigned_leader_id])

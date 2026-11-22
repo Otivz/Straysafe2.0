@@ -69,6 +69,7 @@ export default function AdminLayout() {
               </Link>
               <BellButton unread={unread} onClick={() => setNotificationsOpen(true)} />
             </div>
+
             <main id="main" tabIndex={-1} className="sa-page outline-none">
               {status === 'ready' && issues.length > 0 ? (
                 <Callout tone="amber" title="Some information could not be loaded." className="mb-5">

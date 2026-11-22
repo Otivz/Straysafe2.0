@@ -6,6 +6,7 @@ import { Button, Callout, FormError } from '../../components/ui';
 import { residentPath } from '../../config';
 import { useFormFocus, useSubmit } from '../../lib/hooks';
 import { AuthShell } from './AuthShell';
+import { ApiDetailError, errorCodeOf } from '../../../live/http';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -23,7 +24,16 @@ export default function LoginPage() {
 
   const go = async (id: string, pw: string) => {
     let verifying = false;
-    const ok = await run(async () => { verifying = (await signIn(id, pw)).status === 'verify'; });
+    let residency: ApiDetailError | null = null;
+    const ok = await run(async () => {
+      try { verifying = (await signIn(id, pw)).status === 'verify'; } catch (e) {
+        const code = errorCodeOf(e);
+        if (code === 'RESIDENCY_PENDING' || code === 'RESIDENCY_REJECTED') { residency = e as ApiDetailError; return; }
+        throw e;
+      }
+    });
+    // A self-registered account still under residency review (or not approved) gets its status page, not a session.
+    if (residency) { navigate(residentPath('/registration-status'), { state: { detail: (residency as ApiDetailError).data, email: id } }); return; }
     // An account that was never verified is sent on to enter the code the server has just emailed.
     if (ok) navigate(verifying ? residentPath('/verify') : origin ?? residentPath('/home'), { replace: true, state: verifying ? { from: origin } : undefined });
   };
@@ -60,6 +70,7 @@ export default function LoginPage() {
         <div className="rs-right"><Link to={residentPath('/forgot-password')}>Forgot password?</Link></div>
         <Button type="submit" variant="primary" block loading={pending}>Sign in</Button>
         <p className="rs-center rs-sub">New to StraySafe? <Link to={residentPath('/register')} state={{ from: origin }}>Create an account</Link></p>
+        <p className="rs-center rs-sub">Did your Subdivision Leader create your account? Open the activation link in the email we sent you.</p>
       </form>
     </AuthShell>
   );

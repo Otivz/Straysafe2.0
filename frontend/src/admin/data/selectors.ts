@@ -135,6 +135,24 @@ export function attentionItems(cases: Case[], now: Date): AttentionItem[] {
     }
     const unsent = c.referrals.find((x) => x.orgId === 'barangay' && x.status === 'to_contact');
     if (unsent) reasons.push({ kind: 'barangay', label: `Help from ${unsent.orgName} is written down but nobody has contacted them yet`, tone: 'amber' });
+    const openReferrals = c.referrals.filter((x) => REFERRAL_STATUS[x.status]?.open);
+    const overdueRef = openReferrals
+      .filter((r) => Boolean(r.followUpAt) && dueInfo(r.followUpAt!, now).overdue)
+      .sort((a, b) => a.followUpAt!.localeCompare(b.followUpAt!))[0];
+    const todayRef = openReferrals.find((r) => Boolean(r.followUpAt) && dueInfo(r.followUpAt!, now).today);
+    if (overdueRef) {
+      reasons.push({
+        kind: 'overdue',
+        label: `Referral follow-up ${dueInfo(overdueRef.followUpAt!, now).label.toLowerCase()}: ${overdueRef.orgName}`,
+        tone: 'red',
+      });
+    } else if (todayRef) {
+      reasons.push({
+        kind: 'due_today',
+        label: `Referral follow-up due today: ${todayRef.orgName}`,
+        tone: 'amber',
+      });
+    }
     for (const r of c.referrals.filter((x) => x.orgId === 'barangay' && REFERRAL_STATUS[x.status].open && x.status !== 'to_contact')) {
       if (r.status === 'no_response' || ((r.status === 'sent' || r.status === 'acknowledged') && daysSince(r.updatedAt, now) >= 3)) {
         reasons.push({ kind: 'awaiting', label: `Awaiting an update from ${r.orgName}`, tone: 'neutral' });
@@ -160,14 +178,47 @@ export function pendingFollowUps(cases: Case[]): FollowUpRef[] {
   return out.sort((a, b) => a.followUp.dueAt!.localeCompare(b.followUp.dueAt!));
 }
 
+export interface DueReferralRef {
+  case: Case;
+  referral: Case['referrals'][number];
+  overdue: boolean;
+  today: boolean;
+  label: string;
+}
+
+/** Open referrals with a followUpAt that is overdue or due today, overdue/soonest first. */
+export function dueReferralItems(cases: Case[], now: Date): DueReferralRef[] {
+  const out: DueReferralRef[] = [];
+  for (const c of cases) {
+    if (!isOpen(c)) continue;
+    for (const r of c.referrals) {
+      if (!REFERRAL_STATUS[r.status]?.open || !r.followUpAt) continue;
+      const d = dueInfo(r.followUpAt, now);
+      if (d.overdue || d.today) {
+        out.push({ case: c, referral: r, overdue: d.overdue, today: d.today, label: d.label });
+      }
+    }
+  }
+  return out.sort((a, b) => {
+    if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+    return a.referral.followUpAt!.localeCompare(b.referral.followUpAt!);
+  });
+}
+
 export function dashboardCounts(cases: Case[], now: Date) {
   const endOfToday = addDays(startOfDay(now), 1).getTime();
+  const followUpsDueList = pendingFollowUps(cases).filter((x) => new Date(x.followUp.dueAt!).getTime() < endOfToday);
+  const referralsDueList = dueReferralItems(cases, now);
+  const overdueFollowUps = followUpsDueList.filter((x) => dueInfo(x.followUp.dueAt, now).overdue).length;
+  const overdueReferrals = referralsDueList.filter((x) => x.overdue).length;
   return {
     // A missing-pet or found-animal report is monitored from the start, so it is not a report waiting for review
     newReports: cases.filter((c) => c.status === 'reported' && !isLostOrFound(c)).length,
     active: cases.filter(isOpen).length,
     urgent: cases.filter((c) => isOpen(c) && c.priority === 'urgent').length,
-    followUpsDue: pendingFollowUps(cases).filter((x) => new Date(x.followUp.dueAt!).getTime() < endOfToday).length,
+    followUpsDue: followUpsDueList.length,
+    referralsDue: referralsDueList.length,
+    overdueTotal: overdueFollowUps + overdueReferrals,
     /** Owners and neighbours waiting for the Leader to help them get in touch. */
     mediation: cases.filter(isOpen).reduce((n, c) => n + mediationOf(c).length, 0),
     /** Missing pets still being looked for. */

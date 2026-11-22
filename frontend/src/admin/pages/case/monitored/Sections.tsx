@@ -167,8 +167,8 @@ export function BarangayHelp({ c, openDialog }: { c: Case; openDialog: OpenCaseD
 export function Ownership({ c, openDialog }: { c: Case; openDialog: OpenCaseDialog }) {
   const waiting = c.claims.filter((k) => k.status === 'submitted' || k.status === 'under_review' || k.status === 'needs_info').length;
   return (
-    <details className="sa-mc-more sa-mc-more--section">
-      <summary>Who does it belong to? <OwnershipBadge status={c.ownership.status} />{c.claims.length > 0 ? <span className="sa-text-3"> · {plural(c.claims.length, 'claim')}{waiting > 0 ? `, ${waiting} waiting` : ''}</span> : null}</summary>
+    <details className="sa-mc-more sa-mc-more--section rounded-xl border border-[#e7e2da] bg-white px-4 py-3 shadow-xs">
+      <summary className="cursor-pointer font-semibold text-[var(--sa-text-1)]">Who does it belong to? <OwnershipBadge status={c.ownership.status} />{c.claims.length > 0 ? <span className="sa-text-3 font-normal"> · {plural(c.claims.length, 'claim')}{waiting > 0 ? `, ${waiting} waiting` : ''}</span> : null}</summary>
       <div className="mt-3"><AssessmentTab c={c} openDialog={openDialog} ownershipOnly /></div>
     </details>
   );

@@ -285,6 +285,13 @@ def get_pending_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if user.status == "Suspended":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been suspended. Please contact your subdivision administrator for assistance.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     if user.status == "Inactive":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

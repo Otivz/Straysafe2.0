@@ -14,7 +14,7 @@ import { reportIdOf } from '../../live/refs';
 import { normalizeColorList } from '../data/colors';
 import type { ResidentAction } from '../data/reducer';
 import type { CategoryId, Draft, Media, Notice, ResidentState } from '../data/types';
-import { ANIMAL_LABEL, PINNED_LABEL, evidenceIdsFrom, joinAddress, joinExtra, noticeRef, petToApi, preferencesFrom } from './adapters';
+import { ANIMAL_LABEL, PINNED_LABEL, evidenceIdsFrom, joinExtra, noticeRef, petToApi, preferencesFrom } from './adapters';
 import { residentApi, type ApiResidentCategories } from './api';
 import { prepareForUpload } from '../lib/media';
 
@@ -320,11 +320,7 @@ export async function runAction(a: ResidentAction, ctx: ResidentActionContext): 
 
     case 'profile/update': {
       const patch: Record<string, unknown> = {};
-      const p = ctx.state().profile;
-      if (a.patch.name !== undefined) patch.name = a.patch.name;
-      if (a.patch.email !== undefined) patch.email = a.patch.email;
       if (a.patch.phone !== undefined) patch.phone = a.patch.phone;
-      if (a.patch.unit !== undefined || a.patch.street !== undefined) patch.address = joinAddress(a.patch.unit ?? p.unit, a.patch.street ?? p.street);
       await residentApi.updateUser(ctx.userId, patch);
       return done({ profile: true });
     }

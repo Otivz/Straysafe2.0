@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Check,
   CheckCircle2,
+  ChevronDown,
   Download,
   ExternalLink,
   Eye,
@@ -50,7 +51,15 @@ import { errorMessage } from '../../../preview/lib/errors';
 import { fmtDateTime, fromLocalInput, plural, toLocalInput } from '../../../preview/lib/format';
 
 const PAGE_SIZE = 5;
+const HIGH_CONFIDENCE_THRESHOLD = 70;
 const MAX_MESSAGE = 2000;
+
+function isHighConfidenceCandidate(o: ApiPossibleOwner): boolean {
+  if (o.status !== 'identified') return true;
+  const score = o.matching?.score;
+  if (score === null || score === undefined) return true;
+  return score >= HIGH_CONFIDENCE_THRESHOLD;
+}
 const STATUS_TONE: Record<ApiOwnerStatus, Tone> = {
   identified: 'neutral',
   awaiting: 'amber',
@@ -111,6 +120,13 @@ const when = (iso: string | null | undefined) => (iso ? fmtDateTime(fromServer(i
 const newKey = (prefix = 'ov') =>
   `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 
+function canSendOwnerWarning(c: Case, owner?: ApiPossibleOwner): boolean {
+  if (c.status === 'closed') return false;
+  if (c.identity.status !== 'identified' || c.ownership.status !== 'confirmed') return false;
+  if (owner && owner.status !== 'verified') return false;
+  return true;
+}
+
 export interface OwnerWarningTarget {
   userId: number;
   ownerName: string;
@@ -141,6 +157,7 @@ export default function PossibleOwnersBlock({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [open, setOpen] = useState<Open | null>(null);
   const [page, setPage] = useState(1);
+  const [showAllLower, setShowAllLower] = useState(false);
 
   const load = useCallback(() => {
     if (!rid) return;
@@ -165,7 +182,11 @@ export default function PossibleOwnersBlock({
   if (!rid || (data && !data.applicable)) return null;
   if (!data && !loadError) return null;
 
-  const candidates = data?.candidates ?? [];
+  const allCandidates = data?.candidates ?? [];
+  const highConfidenceCandidates = allCandidates.filter(isHighConfidenceCandidate);
+  const lowerScoringCount = allCandidates.length - highConfidenceCandidates.length;
+  const canFilterLower = lowerScoringCount > 0;
+  const candidates = canFilterLower && !showAllLower ? highConfidenceCandidates : allCandidates;
   const total = candidates.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const current = Math.min(page, totalPages);
@@ -184,12 +205,43 @@ export default function PossibleOwnersBlock({
         {data.blocked_reason && data.candidates.length > 0 ? (
           <Callout className="mb-3">{data.blocked_reason}</Callout>
         ) : null}
-        {total === 0 ? (
+        {allCandidates.length === 0 ? (
           <p className="sa-small sa-text-2">
             No registered pet matches this report yet. When the Pet Registry matching finds one, its owner appears here so you can message them or send an official warning.
           </p>
         ) : (
           <>
+            {canFilterLower ? (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e7e2da] bg-[#faf7f2] px-3 py-2 text-xs">
+                <span className="text-[var(--sa-text-2)]">
+                  {showAllLower
+                    ? `Showing all ${plural(allCandidates.length, 'candidate')} (including ${lowerScoringCount} under ${HIGH_CONFIDENCE_THRESHOLD}%)`
+                    : highConfidenceCandidates.length > 0
+                      ? `Showing ${plural(highConfidenceCandidates.length, 'high-confidence match')} (≥ ${HIGH_CONFIDENCE_THRESHOLD}%)`
+                      : `No high-confidence matches (≥ ${HIGH_CONFIDENCE_THRESHOLD}%) — ${plural(lowerScoringCount, 'lower-scoring candidate')} hidden`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAllLower((prev) => !prev);
+                    setPage(1);
+                  }}
+                  aria-expanded={showAllLower}
+                  className="inline-flex cursor-pointer items-center gap-1.5 font-semibold text-[var(--sa-brand)] hover:underline"
+                >
+                  <span>
+                    {showAllLower
+                      ? 'Hide lower-scoring candidates'
+                      : `Show lower-scoring candidates (${lowerScoringCount})`}
+                  </span>
+                  <ChevronDown
+                    size={14}
+                    aria-hidden="true"
+                    className={`transition-transform duration-200 ${showAllLower ? 'rotate-180' : ''}`}
+                  />
+                </button>
+              </div>
+            ) : null}
             <ul className="sa-po-list">
               {pagedCandidates.map((o, idx) => {
                 const overallIdx = (current - 1) * PAGE_SIZE + idx;
@@ -265,6 +317,7 @@ export default function PossibleOwnersBlock({
           onOpenWarning={() => setOpen({ kind: 'warning', owner: open.owner })}
         />
       ) : open.kind === 'warning' ? (
+        canSendOwnerWarning(c, open.owner) ? (
         <SendOwnerWarningDialog
           c={c}
           target={{
@@ -286,6 +339,7 @@ export default function PossibleOwnersBlock({
             setOpen(null);
           }}
         />
+        ) : null
       ) : (
         <OwnerDialog
           open={open}
@@ -317,7 +371,12 @@ export default function PossibleOwnersBlock({
   }
   return (
     <Block
-      title="Possible Pet Owners"
+      title={
+        <span className="inline-flex items-center gap-2">
+          <UserRoundSearch size={17} className="text-[var(--sa-brand)]" aria-hidden="true" />
+          <span>Possible Pet Owners</span>
+        </span>
+      }
       description="Registered pets that may be this animal, and their owners. Visible to authorized administrators only."
     >
       {body}
@@ -362,7 +421,7 @@ function OwnerCard({
   const closed = c.status === 'closed';
 
   return (
-    <li className="sa-po">
+    <li className="sa-po rounded-xl border border-[#e7e2da] bg-gradient-to-b from-white to-[#fcfaf6] p-4 shadow-xs transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-[#d6cfc7] hover:shadow-sm">
       <div className="sa-po__top">
         {o.pet.photo_url ? (
           <img
@@ -400,12 +459,12 @@ function OwnerCard({
           </p>
           {facts ? <p className="sa-meta mt-0.5">{facts}</p> : null}
           {reasons.length > 0 ? (
-            <p className="sa-small mt-1">
-              <span className="sa-semibold">Reasons: </span>
-              <span className="sa-text-2">{reasons.join(' ')}</span>
-            </p>
+            <div className="mt-2 rounded-lg border border-[#ede7de] bg-[#faf7f2]/85 px-3 py-1.5 text-xs leading-relaxed text-[var(--sa-text-2)]">
+              <span className="font-semibold text-[var(--sa-text-1)]">Reasons: </span>
+              {reasons.join(' ')}
+            </div>
           ) : null}
-          <div className="sa-meta mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+          <div className="sa-meta mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5">
             {o.resident.phone ? (
               <span className="inline-flex items-center gap-1">
                 <Phone size={11} /> {o.resident.phone}
@@ -417,8 +476,8 @@ function OwnerCard({
               </span>
             ) : null}
             {o.registered_address || o.resident.address || o.resident.subdivision ? (
-              <span>
-                {o.registered_address || o.resident.address || o.resident.subdivision}
+              <span className="inline-flex items-center gap-1">
+                <MapPin size={11} /> {o.registered_address || o.resident.address || o.resident.subdivision}
               </span>
             ) : null}
           </div>
@@ -441,17 +500,24 @@ function OwnerCard({
       </div>
 
       {m && m.attributes.some((a) => a.available) ? (
-        <ul className="sa-po-attrs" aria-label="Matching attributes">
+        <ul className="mt-3 grid list-none grid-cols-1 gap-1.5 p-0 sm:grid-cols-2" aria-label="Matching attributes">
           {m.attributes
             .filter((a) => a.available)
             .map((a) => (
-              <li key={a.key}>
-                <span className="sa-semibold">
-                  {a.label}
-                  {a.score !== null ? ` ${a.score}%` : ''}
-                </span>
+              <li
+                key={a.key}
+                className="flex flex-col gap-0.5 rounded-lg border border-[#ede7de] bg-white/80 px-2.5 py-1.5 text-xs"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-[var(--sa-text-1)]">{a.label}</span>
+                  {a.score !== null ? (
+                    <span className="rounded-full bg-[#f5f0e8] px-1.5 py-0.5 text-[11px] font-semibold text-[#57534e]">
+                      {a.score}%
+                    </span>
+                  ) : null}
+                </div>
                 {a.explanation ? (
-                  <span className="sa-text-2"> · {a.explanation}</span>
+                  <span className="text-[11px] leading-snug text-[var(--sa-text-2)]">{a.explanation}</span>
                 ) : null}
               </li>
             ))}
@@ -491,14 +557,16 @@ function OwnerCard({
                 >
                   Message Owner
                 </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={ShieldAlert}
-                  onClick={() => onOpen({ kind: 'warning', owner: o })}
-                >
-                  Send Warning
-                </Button>
+                {canSendOwnerWarning(c, o) ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={ShieldAlert}
+                    onClick={() => onOpen({ kind: 'warning', owner: o })}
+                  >
+                    Send Warning
+                  </Button>
+                ) : null}
               </>
             ) : null}
 
@@ -716,16 +784,18 @@ function OwnerDetailsDialog({
           <div className="flex items-center gap-2">
             {hasValidOwner && !closed ? (
               <>
-                <Button
-                  variant="secondary"
-                  icon={ShieldAlert}
-                  onClick={() => {
-                    onClose();
-                    onOpenWarning();
-                  }}
-                >
-                  Send Warning
-                </Button>
+                {canSendOwnerWarning(c, o) ? (
+                  <Button
+                    variant="secondary"
+                    icon={ShieldAlert}
+                    onClick={() => {
+                      onClose();
+                      onOpenWarning();
+                    }}
+                  >
+                    Send Warning
+                  </Button>
+                ) : null}
                 <Button
                   variant="primary"
                   icon={MessageSquare}
@@ -1072,24 +1142,14 @@ function OwnerDialog({
     let next: ApiPossibleOwners | null = null;
     const ok = await run(async () => {
       if (open.kind === 'message') {
-        const contactLine = contactAutofill.contactDetail.trim()
-          ? `\n\nSubdivision Office Contact (${contactAutofill.methodDisplayLabel}): ${contactAutofill.contactDetail.trim()}${contactAutofill.contactPerson.trim()
-            ? ` · Representative: ${contactAutofill.contactPerson.trim()}`
-            : ''
-          }`
-          : '';
-        const finalMessage =
-          contactLine && (text.trim().length + contactLine.length <= MAX_MESSAGE)
-            ? `${text.trim()}${contactLine}`
-            : text.trim();
         next = await adminApi.messagePossibleOwner(
           reportId,
           o.pet_id,
           msgType,
-          finalMessage,
+          text.trim(),
           key,
           contactAutofill.contactMethod,
-          contactAutofill.contactDetail.trim() || null,
+          null,
         );
         await loadCase(caseId);
       } else if (open.kind === 'unable' && o.request) {
@@ -1196,12 +1256,6 @@ function OwnerDialog({
                 </option>
               </Select>
             </Field>
-
-            <SubdivisionContactFields
-              autofill={contactAutofill}
-              methodLabel="Contact Method (Subdivision Office)"
-              compact
-            />
 
             <Callout>
               This message will be delivered directly to <strong>{o.resident.name}</strong>’s Resident Inbox and generate an automatic in-app notification for Case <strong>{caseId}</strong>
@@ -1736,7 +1790,6 @@ export function CaseWarningsSection({ c, hideSendButton = false }: { c: Case; hi
   }, [rid, c.registeredPet]);
 
   const warnings = c.warnings;
-  const closed = c.status === 'closed';
 
   const handleDownloadPdf = async (w: Warning) => {
     if (!w.letterId) return;
@@ -1752,18 +1805,19 @@ export function CaseWarningsSection({ c, hideSendButton = false }: { c: Case; hi
   };
 
   return (
-    <div className="sa-card">
-      <div className="sa-card__head">
+    <div className="rounded-xl border border-[#e7e2da] bg-white p-4 sm:p-5 shadow-xs space-y-3.5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="sa-card__title flex items-center gap-2">
-            Official Warnings
-            <span className="sa-pill">{warnings.length}</span>
+          <h3 className="text-[15px] font-semibold text-[var(--sa-text-1)] flex items-center gap-2 m-0">
+            <ShieldAlert size={16} className="text-[var(--sa-brand)]" aria-hidden="true" />
+            <span>Official Warnings</span>
+            <Badge tone="neutral">{warnings.length}</Badge>
           </h3>
-          <p className="sa-card__sub">
+          <p className="sa-small sa-text-2 mt-1 mb-0">
             Official warnings issued to registered pet owners on this case, including delivery, owner acknowledgment status, and owner responses.
           </p>
         </div>
-        {!hideSendButton && !closed && defaultTarget ? (
+        {!hideSendButton && canSendOwnerWarning(c) && defaultTarget ? (
           <Button
             size="sm"
             variant="primary"
@@ -1775,11 +1829,17 @@ export function CaseWarningsSection({ c, hideSendButton = false }: { c: Case; hi
         ) : null}
       </div>
 
-      <div className="sa-card__body space-y-3">
+      <div className="space-y-3">
         {warnings.length === 0 ? (
-          <p className="sa-small sa-text-2">
-            No official warnings have been issued for this case yet. Use <strong>Send Warning</strong> beside a registered pet owner to issue one.
-          </p>
+          <div className="rounded-lg border border-dashed border-[#dfd8ce] bg-[var(--sa-surface-2)]/45 px-3.5 py-3 text-xs text-[var(--sa-text-2)]">
+            {canSendOwnerWarning(c) ? (
+              <>
+                No official warnings have been issued for this case yet. Use <strong>Send Warning</strong> beside the confirmed owner to issue one.
+              </>
+            ) : (
+              'No official warnings have been issued for this case yet. Confirm the animal match and verify ownership before sending a warning.'
+            )}
+          </div>
         ) : (
           warnings.map((w) => {
             const wfStatus = w.workflowStatus || (w.acknowledgedAt ? 'Acknowledged' : 'Sent');

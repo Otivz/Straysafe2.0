@@ -216,6 +216,8 @@ def finish_login(request: Request, response: Response, db: Session, user: User) 
     })
     set_refresh_cookie(response, refresh_token)
 
+    if user.status == "Inactive":
+        user.status = "Active"
     user.last_login = datetime.now()
     db.commit()
 
@@ -298,23 +300,58 @@ def login(request: Request, login_request: LoginRequest, response: Response, db:
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Check if account is inactive
-    if user.status == "Inactive":
+    # Check if account is suspended
+    if user.status == "Suspended":
         log_activity(
             db=db,
             action="FAILED_LOGIN",
             target_table="auth",
             target_id=user.user_id,
-            description=f"Login blocked for inactive account: {user.name} ({user.email})",
+            description=f"Login blocked for suspended account: {user.name} ({user.email})",
             user_id=user.user_id,
             log_type="security",
             request=request
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account inactive. Please contact the administrator for assistance.",
+            detail="Your account has been suspended. Please contact your subdivision administrator for assistance.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Check if account is inactive
+    if user.status == "Inactive":
+        # A self-registered applicant (right password) learns where the residency review stands; no session is opened.
+        from app.routes.resident_applications import residency_refusal
+        residency = residency_refusal(db, user)
+        if residency is not None:
+            log_activity(
+                db=db,
+                action="FAILED_LOGIN",
+                target_table="auth",
+                target_id=user.user_id,
+                description=f"Login blocked for pending/rejected account: {user.name} ({user.email})",
+                user_id=user.user_id,
+                log_type="security",
+                request=request
+            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=residency)
+        # Approved resident logging in for the first time transitions Inactive -> Active in finish_login.
+        if not (user.role_id == 1 and user.is_verified):
+            log_activity(
+                db=db,
+                action="FAILED_LOGIN",
+                target_table="auth",
+                target_id=user.user_id,
+                description=f"Login blocked for inactive account: {user.name} ({user.email})",
+                user_id=user.user_id,
+                log_type="security",
+                request=request
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account inactive. Please contact the administrator for assistance.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
     # Subdivision-only: Barangay accounts can no longer sign in
     refuse_barangay_account(user)
@@ -438,6 +475,9 @@ def google_auth(request: Request, payload: GoogleAuthRequest, response: Response
     is_new = False
 
     if not user:
+        # A first Google sign-in no longer creates a resident account: residents register from the official list.
+        from app.utils.registration_policy import refuse_open_registration
+        refuse_open_registration()
         is_new = True
         default_name = google_name or email_clean.split('@')[0].capitalize()
         random_pass = secrets.token_urlsafe(24)
@@ -488,22 +528,54 @@ def google_auth(request: Request, payload: GoogleAuthRequest, response: Response
                 detail="This Google account belongs to a staff or admin account. Please use the staff or admin login.",
             )
 
-        if user.status == "Inactive":
+        if user.status == "Suspended":
             log_activity(
                 db=db,
                 action="FAILED_LOGIN",
                 target_table="auth",
                 target_id=user.user_id,
-                description=f"Google login blocked for inactive account: {user.name} ({user.email})",
+                description=f"Google login blocked for suspended account: {user.name} ({user.email})",
                 user_id=user.user_id,
                 log_type="security",
                 request=request
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Account inactive. Please contact administrator.",
+                detail="Your account has been suspended. Please contact your subdivision administrator for assistance.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+
+        if user.status == "Inactive":
+            from app.routes.resident_applications import residency_refusal
+            residency = residency_refusal(db, user)
+            if residency is not None:
+                log_activity(
+                    db=db,
+                    action="FAILED_LOGIN",
+                    target_table="auth",
+                    target_id=user.user_id,
+                    description=f"Google login blocked for pending/rejected account: {user.name} ({user.email})",
+                    user_id=user.user_id,
+                    log_type="security",
+                    request=request
+                )
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=residency)
+            if not (user.role_id == 1 and user.is_verified):
+                log_activity(
+                    db=db,
+                    action="FAILED_LOGIN",
+                    target_table="auth",
+                    target_id=user.user_id,
+                    description=f"Google login blocked for inactive account: {user.name} ({user.email})",
+                    user_id=user.user_id,
+                    log_type="security",
+                    request=request
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Account inactive. Please contact administrator.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
 
         if not user.profile_picture and google_picture:
             user.profile_picture = google_picture
@@ -763,8 +835,20 @@ def verify_otp(
 
     refuse_barangay_account(user)
 
-    # Success! Mark OTP as used and user as verified
+    # A self-registered applicant: the code proves the mailbox only. The account stays locked for the residency review.
+    from app.routes.resident_applications import PENDING_MESSAGE, mark_email_verified
     otp_record.is_used = True
+    application = mark_email_verified(db, user)
+    if application is not None:
+        log_activity(db=db, action="RESIDENT_EMAIL_VERIFIED", target_table="resident_applications", target_id=application.application_id,
+                     description=f"Email verified for registration #{application.application_id}; awaiting residency verification.",
+                     user_id=user.user_id, log_type="security", request=request, commit=False)
+        db.commit()
+        return {"user_id": user.user_id, "email": user.email, "name": user.name, "role_id": user.role_id,
+                "subdivision_id": user.subdivision_id, "status": user.status, "is_verified": True, "access_token": None,
+                "residency_status": application.status, "message": PENDING_MESSAGE}
+
+    # Success! Mark OTP as used and user as verified
     user.is_verified = True
     user.status = "Active"
     db.commit()
@@ -1131,6 +1215,14 @@ def refresh_session_token(request: Request, response: Response, db: Session = De
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Your password was changed. Please sign in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if user.status == "Suspended":
+        clear_refresh_cookie(response)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been suspended. Please contact your subdivision administrator for assistance.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 

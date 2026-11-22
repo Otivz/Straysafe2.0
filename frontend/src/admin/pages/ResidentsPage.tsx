@@ -10,10 +10,11 @@ import { useAdminData } from '../data/context';
 import type { Resident } from '../data/types';
 import { maskPhone, plural } from '../../preview/lib/format';
 import { usePageTitle } from '../lib/hooks';
+import { ResidentsTabs } from './ResidentsTabs';
 
 type Filter = Resident['status'] | 'all';
-const FILTERS: Filter[] = ['all', 'active', 'pending', 'suspended'];
-const PAGE_SIZE = 15;
+const FILTERS: Filter[] = ['all', 'active', 'inactive', 'pending', 'suspended'];
+const PAGE_SIZE = 10;
 
 /** A18 — Residents. General address and contact details for coordination; full details live in the profile. */
 export default function ResidentsPage() {
@@ -51,8 +52,37 @@ export default function ResidentsPage() {
   const clear = () => setParams(new URLSearchParams(), { replace: true });
 
   return (
-    <div>
+    <div className="lg:flex lg:h-[calc(100dvh-112px)] lg:flex-col lg:overflow-hidden">
+      <style>{`
+        @keyframes saFadeUp {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .sa-fade-up {
+          animation: saFadeUp 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+      `}</style>
       <PageHeader title="Residents" description="People registered in your subdivision. Contact details are visible to administrators only and are meant for coordinating cases." />
+      <ResidentsTabs />
+
+      {state.residents.length > 0 ? (
+        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4" role="group" aria-label="Resident summary">
+          {[
+            { label: 'Total registered', value: state.residents.length, accent: 'border-[#e7e2da]' },
+            { label: 'Active', value: count('active'), accent: 'border-emerald-500/30' },
+            { label: 'Inactive / Pending', value: count('inactive') + count('pending'), accent: 'border-[#e7e2da]' },
+            { label: 'Suspended', value: count('suspended'), accent: count('suspended') > 0 ? 'border-red-300' : 'border-[#e7e2da]' },
+          ].map((s, idx) => (
+            <Panel
+              key={s.label}
+              className={`sa-fade-up p-3.5 ${s.accent} ${['[animation-delay:0ms]', '[animation-delay:40ms]', '[animation-delay:80ms]', '[animation-delay:120ms]'][idx] ?? ''} bg-gradient-to-b from-white to-[#fcfaf6] shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm`}
+            >
+              <p className="sa-meta m-0">{s.label}</p>
+              <p className="sa-h3 sa-num m-0 mt-1">{s.value}</p>
+            </Panel>
+          ))}
+        </div>
+      ) : null}
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <SearchInput className="w-full sm:w-[340px]" aria-label="Search residents" placeholder="Search name, unit or email" value={q} onChange={(e) => set({ q: e.target.value })} />
@@ -69,14 +99,14 @@ export default function ResidentsPage() {
         ) : null}
       </div>
 
-      <Panel className="overflow-hidden">
+      <Panel className="sa-fade-up overflow-hidden border-[#e7e2da] shadow-xs [animation-delay:140ms] lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
         {state.residents.length === 0 ? (
           <EmptyState icon={Users} title="No residents yet">Residents appear here once they register for StraySafe.</EmptyState>
         ) : rows.length === 0 ? (
           <EmptyState icon={SearchX} title="No residents match" action={<Button onClick={clear}>Clear filters</Button>}>Try another name or unit, or change the status filter.</EmptyState>
         ) : (
           <>
-            <div className="sa-tablewrap">
+            <div className="sa-tablewrap lg:min-h-0 lg:flex-1 lg:overflow-y-auto [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10">
               <table className="sa-table sa-table--rows">
                 <caption className="sa-sr-only">Residents, {plural(rows.length, 'result')}</caption>
                 <thead>

@@ -23,11 +23,11 @@ export function CaseDialogs({ c, dialog, onClose }: { c: Case; dialog: CaseDialo
     case 'status': return <StatusDialog c={c} onClose={onClose} />;
     case 'priority': return <PriorityDialog c={c} onClose={onClose} />;
     case 'note': return <NoteDialog c={c} onClose={onClose} />;
-    case 'followUp': return <FollowUpDialog c={c} mode={dialog.mode} onClose={onClose} />;
+    case 'followUp': return <FollowUpDialog c={c} mode={dialog.mode} initialTitle={dialog.initialTitle} initialNotes={dialog.initialNotes} onClose={onClose} />;
     case 'completeFollowUp': return <CompleteFollowUpDialog c={c} followUpId={dialog.followUpId} onClose={onClose} />;
     case 'warning': return <WarningDialog c={c} onClose={onClose} />;
     case 'compliance': return <ComplianceDialog c={c} onClose={onClose} />;
-    case 'referral': return <ReferralDialog c={c} initialAgencyId={dialog.agencyId} onClose={onClose} />;
+    case 'referral': return <ReferralDialog c={c} initialAgencyId={dialog.agencyId} initialReason={dialog.initialReason} onClose={onClose} />;
     case 'referralDetail':
       return (
         <ReferralDetailsDialog

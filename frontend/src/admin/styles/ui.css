@@ -262,8 +262,8 @@
   .sa-tabs { display: flex; gap: 26px; overflow-x: auto; border-bottom: 1px solid var(--sa-line); }
   .sa-tab { position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 10px 2px 12px; border: 0; background: none; color: var(--sa-ink-2); font-size: 14px; font-weight: 500; white-space: nowrap; }
   .sa-tab:hover { color: var(--sa-ink); }
-  .sa-tab[aria-selected='true'] { color: var(--sa-ink); font-weight: 600; }
-  .sa-tab[aria-selected='true']::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 2px; background: var(--sa-brand); }
+  .sa-tab[aria-selected='true'], .sa-tab[aria-current='page'] { color: var(--sa-ink); font-weight: 600; text-decoration: none; }
+  .sa-tab[aria-selected='true']::after, .sa-tab[aria-current='page']::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 2px; background: var(--sa-brand); }
   .sa-tab__count { padding: 1px 7px; border-radius: 999px; background: var(--sa-sand); color: var(--sa-ink-2); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .sa-tab__count--alert { background: var(--sa-amber-tint); color: var(--sa-amber-ink); }
 

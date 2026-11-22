@@ -11,9 +11,10 @@ from typing import List, Optional
 from pydantic import BaseModel
 from app.database import get_db
 from app.models.user import User, Barangay, Position, Subdivision, Role
+from app.models.notification import Notification
 from app.schemas.user import UserCreate, AdminUserCreate, UserUpdate, UserResponse, PositionResponse
 from app.utils.auth import get_password_hash, get_current_user, get_optional_user
-from app.utils.mailer import send_account_invite_email
+from app.utils.mailer import send_account_invite_email, send_account_suspended_email
 from app.utils.password_policy import enforce_password_policy
 from app.utils.password_codes import INVITE_CODE_HOURS, INVITE_PURPOSE, create_password_code, pending_invite_user_ids
 from app.utils.cloudinary_config import upload_to_cloudinary
@@ -233,10 +234,16 @@ def create_user(
     db: Session = Depends(get_db),
     creator: Optional[User] = Depends(get_optional_user)
 ):
+    # The public may no longer create accounts here: residents register against the official resident list
+    # (routes/resident_registration.py). Administrators and Head Officers provisioning accounts are unaffected.
+    if not (creator and (creator.role_id == 4 or (creator.role_id == 3 and creator.is_head_officer))):
+        from app.utils.registration_policy import refuse_open_registration
+        refuse_open_registration()
+
     # Check if email exists
     if db.query(User).filter(User.email == user_in.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
-    
+
     enforce_password_policy(user_in.password)
     hashed_password = get_password_hash(user_in.password)
 
@@ -433,11 +440,13 @@ def resend_invite(
 # Who may change which account fields through PUT /users/{id}. Anything else is refused (403) when its value changes;
 # unchanged values are accepted because the profile pages send the whole record back.
 SELF_EDITABLE_FIELDS = {"name", "email", "phone", "address", "latitude", "longitude"}
+RESIDENT_SELF_EDITABLE_FIELDS = {"phone", "latitude", "longitude"}
 # A barangay Head Officer managing a staff member of their own barangay (Personnel page)
 HEAD_OFFICER_EDITABLE_FIELDS = {"name", "phone", "address", "position_id", "status", "is_head_officer"}
 FIELD_LABELS = {"role_id": "role", "is_head_officer": "Head Officer status", "barangay_id": "barangay",
                 "subdivision_id": "subdivision", "status": "account status", "is_verified": "verification",
-                "position_id": "position", "email": "email address", "latitude": "map pin", "longitude": "map pin"}
+                "position_id": "position", "email": "email address", "name": "full name", "address": "address",
+                "latitude": "map pin", "longitude": "map pin"}
 
 
 def is_subdivision_position(name: Optional[str]) -> bool:
@@ -529,8 +538,8 @@ def update_user(
         allowed = None  # the administrator manages every account field
     elif is_self:
         # Role, Head Officer status, barangay, subdivision, position, account status and verification are given by
-        # others; a person can't grant them to themselves
-        allowed = SELF_EDITABLE_FIELDS
+        # others; a person can't grant them to themselves. Residents also cannot change their official name, email, or address.
+        allowed = RESIDENT_SELF_EDITABLE_FIELDS if current_user.role_id == 1 else SELF_EDITABLE_FIELDS
     else:  # a Head Officer managing someone in their barangay
         if db_user.role_id != 3:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
@@ -538,7 +547,9 @@ def update_user(
         allowed = HEAD_OFFICER_EDITABLE_FIELDS
     refused = sorted({FIELD_LABELS.get(f, f) for f in changed if allowed is not None and f not in allowed})
     if refused:
-        who = "your Head Officer or the administrator" if is_self and current_user.role_id == 3 else "the administrator"
+        who = "your Subdivision Leader" if is_self and current_user.role_id == 1 else (
+            "your Head Officer or the administrator" if is_self and current_user.role_id == 3 else "the administrator"
+        )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                             detail=f"You can't change {', '.join(refused)} here. Ask {who}.")
     if "position_id" in changed and db_user.role_id == 3:
@@ -587,17 +598,25 @@ def update_user_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Only System Admin (role_id == 4) or Barangay Head Officer (role_id == 3 and is_head_officer)
+    # System Admin (role_id == 4), Subdivision Leader (role_id == 2), or Barangay Head Officer (role_id == 3 and is_head_officer)
     is_admin = current_user.role_id == 4
+    is_subd_leader = current_user.role_id == 2
     is_head_brgy = current_user.role_id == 3 and getattr(current_user, "is_head_officer", False)
-    if not (is_admin or is_head_brgy):
+    if not (is_admin or is_subd_leader or is_head_brgy):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Only System Administrators or Barangay Head Officers can change user statuses."
+            detail="Access denied: Only Subdivision Administrators or System Administrators can change user statuses."
+        )
+
+    norm = status_in.strip().lower()
+    if norm not in {"active", "inactive", "suspended"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid status. Allowed values: Active, Inactive, Suspended.",
         )
 
     # Prevent deactivating the primary admin account (user_id == 1)
-    if user_id == 1 and status_in.lower() in ["inactive", "deactivated", "suspended", "banned"]:
+    if user_id == 1 and norm in {"inactive", "suspended"}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot deactivate the primary system administrator account."
@@ -606,21 +625,52 @@ def update_user_status(
     db_user = db.query(User).filter(User.user_id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
+    if is_subd_leader:
+        if db_user.role_id != 1 or db_user.subdivision_id != current_user.subdivision_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Subdivision administrators can only manage resident accounts in their own subdivision."
+            )
+
     old_status = db_user.status
-    db_user.status = status_in
+    if norm == "suspended":
+        target_status = "Suspended"
+    elif norm == "inactive":
+        target_status = "Inactive"
+        db_user.is_verified = True
+    else:
+        # Rule 3: Approving/activating an account before the resident's first login keeps status as Inactive.
+        db_user.is_verified = True
+        target_status = "Active" if db_user.last_login is not None else "Inactive"
+
+    db_user.status = target_status
+
+    if target_status == "Suspended" and old_status != "Suspended":
+        db.add(
+            Notification(
+                user_id=db_user.user_id,
+                title="Account Suspended",
+                message="Your account has been suspended. Please contact your subdivision administrator for assistance.",
+                type="system",
+            )
+        )
+
     db.commit()
     db.refresh(db_user)
+
+    if target_status == "Suspended" and old_status != "Suspended" and db_user.email:
+        send_account_suspended_email(db_user.email, db_user.name)
 
     log_activity(
         db=db,
         action="UPDATE_STATUS",
         target_table="users",
         target_id=user_id,
-        description=f"Updated status for user {db_user.name} ({db_user.email}): {old_status} → {status_in}",
+        description=f"Updated status for user {db_user.name} ({db_user.email}): {old_status} → {target_status}",
         log_type="operation",
         old_values={"status": old_status},
-        new_values={"status": status_in},
+        new_values={"status": target_status},
         request=req
     )
     return _populate_user_fields(db_user)

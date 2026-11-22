@@ -1,6 +1,22 @@
 import { useState, type ElementType } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, CalendarPlus, Check, ClipboardCheck, Download, Eye, Landmark, Megaphone, MessageSquare, NotebookPen, RefreshCw, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  CalendarCheck2,
+  CalendarPlus,
+  Check,
+  ClipboardCheck,
+  Download,
+  Eye,
+  Lock,
+  MessageSquare,
+  NotebookPen,
+  RefreshCw,
+  ShieldAlert,
+  Sparkles,
+  X,
+} from 'lucide-react';
 import { adminPath } from '../../config';
 import { Badge } from '../../components/Badge';
 import { Button, LinkButton } from '../../components/Button';
@@ -229,34 +245,48 @@ function ActionTile({
     tone === 'primary'
       ? 'border-[#b45309]/35 bg-gradient-to-br from-[#fff7ed] to-[#ffedd5]/60 hover:border-[#b45309]/65'
       : tone === 'amber'
-        ? 'border-[#d97706]/30 bg-[#fffbeb]/55 hover:border-[#d97706]/55'
-        : 'border-[var(--sa-line,#e7e2da)] bg-white hover:border-[#c7bfb5]';
+        ? 'border-[#d97706]/30 bg-gradient-to-b from-[#fffdf7] to-[#fffbeb]/80 hover:border-[#d97706]/55'
+        : 'border-[#e7e2da] bg-gradient-to-b from-white to-[#fcfaf6] hover:border-[#c7bfb5]';
 
   const iconClasses =
     tone === 'primary'
       ? 'bg-[#b45309] text-white shadow-xs'
       : tone === 'amber'
-        ? 'bg-[#fef3c7] text-[#b45309]'
-        : 'bg-[#f5f0e8] text-[#57534e]';
+        ? 'bg-[#fef3c7] text-[#b45309] border border-[#fde68a]/70'
+        : 'bg-[#f5f0e8] text-[#57534e] border border-[#e7e2da]/80';
 
-  const baseClass = `group relative flex w-full items-start gap-3 rounded-xl border p-3.5 text-left transition-all duration-200 ease-out sa-fade-up ${disabled
-    ? 'cursor-not-allowed border-[var(--sa-line,#e7e2da)] bg-[#faf8f5] opacity-60'
-    : `${toneClasses} cursor-pointer hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0`
-    }`;
+  const baseClass = `group relative flex w-full items-start gap-3.5 rounded-xl border p-4 text-left transition-all duration-200 ease-out sa-fade-up ${
+    disabled
+      ? 'cursor-not-allowed border-[#e7e2da] bg-[#faf8f5] opacity-70'
+      : `${toneClasses} cursor-pointer shadow-xs hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0`
+  }`;
 
   const inner = (
     <>
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-transform duration-200 ${!disabled ? 'group-hover:scale-105' : ''} ${iconClasses}`}>
-        <Icon size={17} aria-hidden="true" />
+      <span
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 ${
+          !disabled ? 'group-hover:scale-105' : ''
+        } ${iconClasses}`}
+      >
+        <Icon size={18} aria-hidden="true" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="flex items-center justify-between gap-1.5">
+        <span className="flex items-center justify-between gap-2">
           <span className="text-sm font-semibold text-[#1c1917]">{title}</span>
-          {!disabled ? (
-            <ArrowRight size={14} className="shrink-0 text-[#78716c] opacity-60 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-[#b45309] group-hover:opacity-100" aria-hidden="true" />
-          ) : null}
+          {disabled ? (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#e7e2da] bg-white px-2 py-0.5 text-[10px] font-medium text-[#78716c]">
+              <Lock size={10} aria-hidden="true" />
+              Locked
+            </span>
+          ) : (
+            <ArrowRight
+              size={14}
+              className="shrink-0 text-[#78716c] opacity-55 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-[#b45309] group-hover:opacity-100"
+              aria-hidden="true"
+            />
+          )}
         </span>
-        <span className="mt-0.5 block text-xs leading-snug text-[#57534e]">{subtitle}</span>
+        <span className="mt-1 block text-xs leading-relaxed text-[#57534e]">{subtitle}</span>
       </span>
     </>
   );
@@ -295,9 +325,18 @@ export default function ActionsTab({ c, now, openDialog }: Props) {
   const warningRelevant = CATEGORIES[c.category].violation;
   const hasActive = c.warnings.some((w) => w.status === 'active');
   const ownerRelevant = c.animal.type !== 'wildlife';
-  const pending = pendingFollowUpsOf(c).sort((a, b) => (a.dueAt ?? '9').localeCompare(b.dueAt ?? '9'));
+  const pending = pendingFollowUpsOf(c).sort((a, b) => {
+    const aDue = dueInfo(a.dueAt, now);
+    const bDue = dueInfo(b.dueAt, now);
+    if (aDue.overdue !== bDue.overdue) return aDue.overdue ? -1 : 1;
+    if (aDue.today !== bDue.today) return aDue.today ? -1 : 1;
+    return (a.dueAt ?? '9').localeCompare(b.dueAt ?? '9');
+  });
+  const overdueCount = pending.filter((f) => dueInfo(f.dueAt, now).overdue).length;
+  const completedFollowUps = c.followUps
+    .filter((f) => f.status === 'done')
+    .sort((a, b) => (b.completedAt ?? b.createdAt).localeCompare(a.completedAt ?? a.createdAt));
   const warnings = [...c.warnings].sort((a, b) => (a.status === 'active' ? -1 : 0) - (b.status === 'active' ? -1 : 0) || b.issuedAt.localeCompare(a.issuedAt));
-  const advisory = state.notices.find((n) => n.caseId === c.id && n.status !== 'archived');
 
   const cancel = (id: string) => { dispatch({ type: 'case/cancelFollowUp', id: c.id, followUpId: id }).then(() => toast.success('Follow-up cancelled')).catch((e: unknown) => toast.error(errorMessage(e))); };
 
@@ -337,24 +376,6 @@ export default function ActionsTab({ c, now, openDialog }: Props) {
       onClick: () => openDialog({ kind: 'compliance' }),
     });
   }
-  if (!closed) {
-    actionTiles.push({
-      icon: Landmark,
-      title: 'Create Referral',
-      subtitle: 'Refer case to Barangay, Vet Office, Animal Control, or Welfare Agency',
-      tone: c.priority === 'urgent' ? 'primary' : 'neutral',
-      onClick: () => openDialog({ kind: 'referral' }),
-    });
-  }
-  if (!closed && c.category === 'safety') {
-    actionTiles.push({
-      icon: Megaphone,
-      title: advisory ? 'View / edit Safety Advisory' : 'Publish Safety Advisory',
-      subtitle: advisory ? 'Update the active community notice' : 'Alert residents about this safety concern',
-      tone: 'amber',
-      to: advisory ? adminPath(`/community/${advisory.id}`) : adminPath(`/community/new?fromCase=${c.id}`),
-    });
-  }
   actionTiles.push({
     icon: NotebookPen,
     title: 'Add internal note',
@@ -362,8 +383,15 @@ export default function ActionsTab({ c, now, openDialog }: Props) {
     onClick: () => openDialog({ kind: 'note' }),
   });
 
+  const tileGridClass =
+    actionTiles.length === 1
+      ? 'grid grid-cols-1 gap-3'
+      : actionTiles.length === 2 || actionTiles.length === 4
+        ? 'grid grid-cols-1 gap-3 sm:grid-cols-2'
+        : 'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3';
+
   return (
-    <div className="flex max-w-[920px] flex-col gap-5">
+    <div className="flex w-full flex-col gap-5">
       <style>{`
         @keyframes saFadeUp {
           from { opacity: 0; transform: translateY(8px); }
@@ -380,61 +408,128 @@ export default function ActionsTab({ c, now, openDialog }: Props) {
         </div>
       ) : null}
 
-      {c.priority === 'urgent' && !closed ? (
-        <div className="sa-fade-up rounded-xl border border-[#ef4444]/30 bg-gradient-to-r from-[#fef2f2] to-[#fff5f5] p-3.5 shadow-xs">
-          <div className="flex items-start gap-3">
-            <span className="relative mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#fee2e2] text-[#b91c1c]">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#ef4444]/35" />
-              <AlertTriangle size={15} aria-hidden="true" />
-            </span>
-            <div className="min-w-0">
-              <p className="m-0 text-sm font-semibold text-[#991b1b]">
-                {c.category === 'injured' ? 'Urgent injured / sick animal response' : 'Urgent safety concern'}
-              </p>
-              <p className="m-0 mt-0.5 text-xs leading-relaxed text-[#7f1d1d]">
-                {c.category === 'injured'
-                  ? 'Coordinate immediate on-site guardhouse check, veterinary care, or Barangay/animal welfare assistance.'
-                  : 'Begin safety coordination now. Routine warnings and observation periods must not delay it.'}
-              </p>
-            </div>
-          </div>
-        </div>
+      {pending.length > 0 || completedFollowUps.length > 0 ? (
+        <Panel className="sa-fade-up border-[#e7e2da] shadow-xs">
+          <Block
+            title={
+              <span className="flex flex-wrap items-center gap-2">
+                <CalendarCheck2 size={17} className="text-[var(--sa-brand)]" aria-hidden="true" />
+                <span>Follow-ups</span>
+                {pending.length > 0 ? <Badge tone="brand">{pending.length} pending</Badge> : null}
+                {overdueCount > 0 ? (
+                  <Badge tone="red" icon={AlertTriangle}>
+                    {overdueCount} overdue
+                  </Badge>
+                ) : null}
+              </span>
+            }
+            description={
+              pending.length > 0
+                ? 'Overdue tasks appear first, followed by upcoming scheduled follow-ups.'
+                : 'All scheduled follow-ups on this case have been completed.'
+            }
+          >
+            {pending.length > 0 ? (
+              <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+                {pending.map((f) => {
+                  const due = dueInfo(f.dueAt, now);
+                  return (
+                    <li
+                      key={f.id}
+                      className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 transition-colors ${
+                        due.overdue
+                          ? 'border-red-300 bg-red-50/60'
+                          : due.today
+                            ? 'border-amber-300 bg-amber-50/50'
+                            : 'border-[var(--sa-line-soft)] bg-white'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="m-0 font-medium text-[var(--sa-ink)]">{f.title}</p>
+                          {due.overdue ? (
+                            <Badge tone="red" icon={AlertTriangle}>
+                              {due.label}
+                            </Badge>
+                          ) : due.today ? (
+                            <Badge tone="amber" dot>
+                              {due.label}
+                            </Badge>
+                          ) : f.dueAt ? (
+                            <Badge tone="neutral">{due.label}</Badge>
+                          ) : null}
+                        </div>
+                        <p className="sa-meta mt-0.5">
+                          {FOLLOWUP_KINDS[f.kind]}
+                          {f.dueAt ? ` · Due ${fmtDateTime(f.dueAt)}` : ' · No due date set'}
+                          {f.notes ? ` · ${f.notes}` : ''}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" icon={Check} onClick={() => openDialog({ kind: 'completeFollowUp', followUpId: f.id })}>
+                          Mark done
+                        </Button>
+                        <Button size="sm" variant="ghost" icon={X} aria-label={`Cancel follow-up: ${f.title}`} onClick={() => cancel(f.id)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+            {completedFollowUps.length > 0 ? (
+              <details className={pending.length > 0 ? 'mt-4 border-t border-[var(--sa-line-soft)] pt-3' : ''}>
+                <summary className="cursor-pointer select-none text-xs font-semibold text-[var(--sa-ink-2)] hover:text-[var(--sa-ink)]">
+                  Completed follow-ups ({completedFollowUps.length})
+                </summary>
+                <ul className="m-0 mt-2.5 flex list-none flex-col gap-2 p-0">
+                  {completedFollowUps.map((f) => (
+                    <li key={f.id} className="rounded-lg border border-[var(--sa-line-soft)] bg-[var(--sa-sand)]/40 px-3 py-2">
+                      <p className="m-0 text-sm font-medium text-[var(--sa-ink)]">{f.title}</p>
+                      <p className="sa-meta mt-0.5">
+                        {FOLLOWUP_KINDS[f.kind]} · Completed {fmtDateTime(f.completedAt ?? f.createdAt)}
+                        {f.completionNote ? ` · ${f.completionNote}` : ''}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+          </Block>
+        </Panel>
       ) : null}
 
-      <Panel className="sa-fade-up" >
-        <Block title="Response actions" description="Choose an action to coordinate response, notify parties, or record progress.">
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+      <Panel className="sa-fade-up border-[#e7e2da] shadow-xs">
+        <Block
+          title={
+            <span className="inline-flex items-center gap-2">
+              <Sparkles size={17} className="text-[var(--sa-brand)]" aria-hidden="true" />
+              <span>Response actions</span>
+            </span>
+          }
+          description="Choose an action to coordinate response, notify parties, or record progress."
+        >
+          <div className={tileGridClass}>
             {actionTiles.map((tile, idx) => (
-              <ActionTile key={tile.title} {...tile} delayMs={idx * 35} />
+              <ActionTile key={tile.title} {...tile} delayMs={idx * 40} />
             ))}
           </div>
         </Block>
       </Panel>
 
-      {pending.length > 0 ? (
-        <Panel className="sa-fade-up">
-          <Block title="Follow-ups" description="What is still to be done on this case.">
-            <ul className="m-0 flex list-none flex-col p-0">
-              {pending.map((f) => {
-                const due = dueInfo(f.dueAt, now);
-                return (
-                  <li key={f.id} className="flex flex-wrap items-center justify-between gap-3 border-t border-solid py-3 transition-colors first:border-t-0 first:pt-0 last:pb-0" style={{ borderColor: 'var(--sa-line-soft)' }}>
-                    <div className="min-w-0">
-                      <p className="font-medium">{f.title}</p>
-                      <p className="sa-meta mt-0.5">{FOLLOWUP_KINDS[f.kind]} · <span className={due.overdue ? 'sa-text-red sa-semibold' : due.today ? 'sa-text-amber sa-semibold' : ''}>{due.label}</span>{f.notes ? ` · ${f.notes}` : ''}</p>
-                    </div>
-                    <div className="flex gap-2"><Button size="sm" icon={Check} onClick={() => openDialog({ kind: 'completeFollowUp', followUpId: f.id })}>Mark done</Button><Button size="sm" variant="ghost" icon={X} aria-label={`Cancel follow-up: ${f.title}`} onClick={() => cancel(f.id)}>Cancel</Button></div>
-                  </li>
-                );
-              })}
-            </ul>
-          </Block>
-        </Panel>
-      ) : null}
-
       {warnings.length > 0 ? (
-        <Panel className="sa-fade-up">
-          <Block title="Warning & compliance observations" description="Issued under a confirmed policy. The observation period comes from that policy.">
+        <Panel className="sa-fade-up border-[#e7e2da] shadow-xs">
+          <Block
+            title={
+              <span className="inline-flex items-center gap-2">
+                <ShieldAlert size={17} className="text-[var(--sa-brand)]" aria-hidden="true" />
+                <span>Warning & compliance observations</span>
+                <Badge tone="neutral">{warnings.length}</Badge>
+              </span>
+            }
+            description="Issued under a confirmed policy. The observation period comes from that policy."
+          >
             <div className="flex flex-col gap-3.5">{warnings.map((w, idx) => <WarningCard key={w.id} w={w} c={c} now={now} openDialog={openDialog} delayMs={idx * 55} />)}</div>
           </Block>
         </Panel>

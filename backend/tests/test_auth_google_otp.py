@@ -8,6 +8,7 @@ import tempfile
 
 _DB = os.path.join(tempfile.mkdtemp(), "auth_google_otp_test.db")
 os.environ["DATABASE_URL"] = f"sqlite:///{_DB}"
+os.environ["OPEN_SELF_REGISTRATION"] = "true"   # these tests cover the legacy open sign-up (closed by default; see utils/registration_policy.py)
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-for-google-otp-0123456789")
 os.environ["GOOGLE_CLIENT_ID"] = "test-client.apps.googleusercontent.com"
 os.environ["OTP_DEBUG"] = "false"

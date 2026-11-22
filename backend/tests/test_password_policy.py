@@ -9,6 +9,7 @@ import tempfile
 
 _DB = os.path.join(tempfile.mkdtemp(), "password_policy_test.db")
 os.environ["DATABASE_URL"] = f"sqlite:///{_DB}"
+os.environ["OPEN_SELF_REGISTRATION"] = "true"   # these tests cover the legacy open sign-up (closed by default; see utils/registration_policy.py)
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-for-password-policy-0123456789")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

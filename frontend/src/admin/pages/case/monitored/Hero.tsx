@@ -115,7 +115,10 @@ export default function HeroBlock({ c, hero, people, now, openDialog, canLog }: 
   const when = hero.when ? <><strong>{fmtDateTime(hero.when)}</strong>{ago(hero.when, now) ? <span className="sa-text-3"> · {ago(hero.when, now)}</span> : null}</> : <span className="sa-text-3">Time not given</span>;
 
   return (
-    <section className="sa-mc-hero" aria-label={`${hero.name}: the animal and what happened`}>
+    <section
+      className="sa-mc-hero rounded-2xl border border-[#e7e2da] bg-gradient-to-b from-white to-[#fcfaf6] shadow-xs"
+      aria-label={`${hero.name}: the animal and what happened`}
+    >
       <Photo hero={hero} />
 
       <div className="sa-mc-hero__head">

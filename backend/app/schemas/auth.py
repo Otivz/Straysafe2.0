@@ -36,6 +36,7 @@ class LoginResponse(BaseModel):
     expires_in: Optional[int] = None
     email_sent: Optional[bool] = None
     message: Optional[str] = None
+    residency_status: Optional[str] = None      # self-registered resident: PENDING_RESIDENCY_VERIFICATION after the e-mail code (no session)
 
     model_config = {
         "from_attributes": True

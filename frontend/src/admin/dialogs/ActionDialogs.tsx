@@ -7,15 +7,11 @@ import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
 import { Checkbox, Field, FieldGroup, Input, OptionGroup, Select, Textarea } from '../components/form';
 import { Callout, FormError, Kv } from '../components/layout';
-import {
-  SubdivisionContactFields,
-  useSubdivisionContactAutofill,
-} from '../components/SubdivisionContactFields';
 import { useToast } from '../components/toast';
-import { COMPLIANCE_RESULTS, CONTACT_OUTCOMES, FOLLOWUP_KINDS, FOLLOWUP_MANUAL_KINDS, WARNING_DELIVERY } from '../data/constants';
+import { COMPLIANCE_RESULTS, CONTACT_METHODS, CONTACT_OUTCOMES, FOLLOWUP_KINDS, FOLLOWUP_MANUAL_KINDS, WARNING_DELIVERY } from '../data/constants';
 import { useAdminData } from '../data/context';
 import { residentById } from '../data/selectors';
-import type { ComplianceResult, FollowUpKind, OwnerContact, WarningDelivery } from '../data/types';
+import type { ComplianceResult, ContactMethod, FollowUpKind, OwnerContact, WarningDelivery } from '../data/types';
 import { adminApi, type ApiTemplatePreviewResult, type ApiWarningTemplate } from '../live/api';
 import { reportIdOf } from '../../live/refs';
 import { errorMessage } from '../../preview/lib/errors';
@@ -23,24 +19,33 @@ import { fmtDateTime, fromLocalInput, isValidLocalInput, toLocalInput } from '..
 import { useSubmit } from '../lib/useSubmit';
 import { templateOptionLabel, templatesForLevel } from '../lib/warningTemplates';
 import { FormFooter, type CaseDialogProps } from './BasicDialogs';
+import { followUpTitle, incidentSummary } from '../lib/autofill';
+import { AutoTag } from '../components/AutoTag';
 
 /** What a contact can come to on a missing pet or a found animal (there is no ownership to deny): reached, no answer, or something else. */
 const PLAIN_OUTCOMES: OwnerContact['outcome'][] = ['cooperative', 'no_response', 'other'];
 const PLAIN_OUTCOME_LABEL: Record<OwnerContact['outcome'], string> = { cooperative: 'Reached them', no_response: 'No answer', other: 'Something else', denied_ownership: 'Denies ownership' };
 
 /** Record completed follow-up and Record owner coordination share one dialog; only the fields differ. */
-export function FollowUpDialog({ c, mode, onClose }: CaseDialogProps & { mode: 'follow_up' | 'owner' }) {
+export function FollowUpDialog({
+  c,
+  mode,
+  initialTitle,
+  initialNotes,
+  onClose,
+}: CaseDialogProps & { mode: 'follow_up' | 'owner'; initialTitle?: string; initialNotes?: string }) {
   const { state, dispatch } = useAdminData();
   const toast = useToast();
   const { pending, error, run } = useSubmit();
   const owner = residentById(state, c.ownership.ownerResidentId);
   const plain = c.category === 'lost_pet' || c.category === 'found_animal';
-  const contactAutofill = useSubdivisionContactAutofill(mode === 'owner' ? 'phone' : 'in_person');
+  const [contactMethod, setContactMethod] = useState<ContactMethod>('phone');
 
   // completed follow-up
   const [kind, setKind] = useState<FollowUpKind>('follow_up');
-  const [title, setTitle] = useState('');
-  const [notes, setNotes] = useState('');
+  const [title, setTitle] = useState(() => initialTitle ?? followUpTitle('follow_up', c));
+  const [titleAuto, setTitleAuto] = useState(() => initialTitle === undefined);
+  const [notes, setNotes] = useState(() => initialNotes ?? '');
   const [recordedAt] = useState(() => new Date().toISOString());
   // owner coordination
   const [withWhom, setWithWhom] = useState(owner ? `${owner.name} (owner)` : '');
@@ -50,7 +55,7 @@ export function FollowUpDialog({ c, mode, onClose }: CaseDialogProps & { mode: '
   const [nextStep, setNextStep] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const dirty = mode === 'owner' ? summary !== '' || withWhom !== (owner ? `${owner.name} (owner)` : '') : title !== '' || notes !== '';
+  const dirty = mode === 'owner' ? summary !== '' || withWhom !== (owner ? `${owner.name} (owner)` : '') : (!titleAuto && title !== '') || notes !== '';
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -65,31 +70,27 @@ export function FollowUpDialog({ c, mode, onClose }: CaseDialogProps & { mode: '
     setErrors(next);
     if (Object.keys(next).length) return;
 
-    const contactSuffix = contactAutofill.contactDetail.trim()
-      ? `\n[Subdivision Office Contact (${contactAutofill.methodDisplayLabel}): ${contactAutofill.contactDetail.trim()}${contactAutofill.contactPerson.trim() ? ` · Rep: ${contactAutofill.contactPerson.trim()}` : ''}]`
-      : '';
-
     const ok = await run(() =>
       mode === 'follow_up'
         ? dispatch({
-            type: 'case/recordFollowUp',
-            id: c.id,
-            kind,
-            title: title.trim(),
-            notes: `${notes.trim()}${contactSuffix}`.trim() || undefined,
-            dueAt: null,
-            doneNow: true,
-          })
+          type: 'case/recordFollowUp',
+          id: c.id,
+          kind,
+          title: title.trim(),
+          notes: notes.trim() || undefined,
+          dueAt: null,
+          doneNow: true,
+        })
         : dispatch({
-            type: 'case/recordOwnerContact',
-            id: c.id,
-            at: fromLocalInput(at),
-            method: contactAutofill.contactMethod,
-            withWhom: withWhom.trim(),
-            summary: `${summary.trim()}${contactSuffix}`.trim(),
-            outcome,
-            nextStepAt: nextStep && isValidLocalInput(nextStep) ? fromLocalInput(nextStep) : null,
-          }),
+          type: 'case/recordOwnerContact',
+          id: c.id,
+          at: fromLocalInput(at),
+          method: contactMethod,
+          withWhom: withWhom.trim(),
+          summary: summary.trim(),
+          outcome,
+          nextStepAt: nextStep && isValidLocalInput(nextStep) ? fromLocalInput(nextStep) : null,
+        }),
     );
     if (ok) {
       toast.success(
@@ -114,17 +115,12 @@ export function FollowUpDialog({ c, mode, onClose }: CaseDialogProps & { mode: '
       {mode === 'follow_up' ? (
         <div className="space-y-3.5">
           <div className="sa-grid2">
-            <Field label="Type"><Select value={kind} onChange={(e) => setKind(e.target.value as FollowUpKind)}>{FOLLOWUP_MANUAL_KINDS.map((k) => <option key={k} value={k}>{FOLLOWUP_KINDS[k]}</option>)}</Select></Field>
+            <Field label="Type"><Select value={kind} onChange={(e) => { const k = e.target.value as FollowUpKind; setKind(k); if (titleAuto) setTitle(followUpTitle(k, c)); }}>{FOLLOWUP_MANUAL_KINDS.map((k) => <option key={k} value={k}>{FOLLOWUP_KINDS[k]}</option>)}</Select></Field>
             <Field label="Date and Time" hint="Automatically recorded when saved.">
               <Input value={fmtDateTime(recordedAt)} readOnly disabled />
             </Field>
           </div>
-          <Field label="What Happened" required error={errors.title}><Input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Checked with guardhouse; dog was moved to a safe area" /></Field>
-          <SubdivisionContactFields
-            autofill={contactAutofill}
-            methodLabel="Contact Method"
-            compact
-          />
+          <Field label="What Happened" required error={errors.title} hint={titleAuto ? <><AutoTag /> A starting line from the case. Change it to what happened.</> : undefined}><Input autoFocus value={title} onChange={(e) => { setTitle(e.target.value); setTitleAuto(false); }} placeholder="e.g. Checked with guardhouse; dog was moved to a safe area" /></Field>
           <Field label="Details" optional><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Additional observations, coordination notes, or outcome details" /></Field>
         </div>
       ) : (
@@ -140,10 +136,16 @@ export function FollowUpDialog({ c, mode, onClose }: CaseDialogProps & { mode: '
             </div>
           ) : null}
 
-          <SubdivisionContactFields
-            autofill={contactAutofill}
-            methodLabel="How You Reached Them (Contact Method)"
-          />
+          <Field label="How You Reached Them (Contact Method)" required>
+            <Select
+              value={contactMethod}
+              onChange={(e) => setContactMethod(e.target.value as ContactMethod)}
+            >
+              {(Object.keys(CONTACT_METHODS) as ContactMethod[]).map((m) => (
+                <option key={m} value={m}>{CONTACT_METHODS[m]}</option>
+              ))}
+            </Select>
+          </Field>
 
           <div className="sa-grid2">
             <Field label="Who you spoke with (Recipient)" required error={errors.withWhom} hint="Use the name and relationship, e.g. “Maria Cruz (owner)”."><Input value={withWhom} onChange={(e) => setWithWhom(e.target.value)} /></Field>
@@ -202,7 +204,8 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
   const [warningLevel, setWarningLevel] = useState<string>('1st Warning');
   const [templates, setTemplates] = useState<ApiWarningTemplate[]>([]);
   const [templateId, setTemplateId] = useState<string>('');
-  const [details, setDetails] = useState('');
+  const [details, setDetails] = useState(() => incidentSummary(c));
+  const [detailsAuto, setDetailsAuto] = useState(true);
   const [requiredAction, setRequiredAction] = useState('Keep your pet secured and supervised in accordance with subdivision rules.');
   const [delivery, setDelivery] = useState<WarningDelivery>('written');
   const [established, setEstablished] = useState(false);
@@ -393,7 +396,7 @@ export function WarningDialog({ c, onClose }: CaseDialogProps) {
             </Select>
           </Field>
           {policy ? <p className="sa-small sa-text-2">{policy.summary}</p> : null}
-          <Field label="Violation description" required error={errors.details} hint="Factual description of what occurred (populates {{violation_description}})."><Textarea autoFocus value={details} onChange={(e) => setDetails(e.target.value)} rows={3} /></Field>
+          <Field label="Violation description" required error={errors.details} hint={detailsAuto ? <><AutoTag /> Drafted from the report. Check the facts and edit before issuing (populates {'{{violation_description}}'}).</> : 'Factual description of what occurred (populates {{violation_description}}).'}><Textarea autoFocus value={details} onChange={(e) => { setDetails(e.target.value); setDetailsAuto(false); }} rows={4} /></Field>
           <Field label="Required corrective action" required error={errors.requiredAction} hint="What the resident must do (populates {{required_action}})."><Textarea value={requiredAction} onChange={(e) => setRequiredAction(e.target.value)} rows={2} /></Field>
           {terms ? (
             <div className="sa-grid2">

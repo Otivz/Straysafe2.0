@@ -6,6 +6,7 @@ map need. The whole case (assessment text, referrals, follow-ups, warnings, clai
 STAFF ONLY, like every /cases route: it carries the reporter's name and internal assessment state. Residents never get this
 shape (what a resident may see of a report is decided by utils/report_visibility.redact_response).
 """
+from app.utils.report_channel import reporter_block
 from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
@@ -125,7 +126,7 @@ def _rows(db: Session, reports: List[Report]) -> List[Dict[str, Any]]:
                        "count": r.animal_count, "description": _clip(r.description), "condition": _clip(r.condition)},
             "location": {"landmark": r.landmark, "latitude": float(r.latitude) if r.latitude is not None else None,
                          "longitude": float(r.longitude) if r.longitude is not None else None},
-            "reporter": {"user_id": r.user_id, "name": names.get(r.user_id) if r.user_id is not None else None},
+            "reporter": reporter_block(r, names),
             "assigned_leader_id": r.assigned_leader_id, "assigned_leader_name": names.get(r.assigned_leader_id) if r.assigned_leader_id is not None else None,
             "assessment": {"incident": case_state.incident_of(r), "evidence_sufficiency": case_state.sufficiency_of(r),
                            "urgency": case_state.urgency_of(r), "urgency_note": _clip(r.urgency_note, 200), "saved_at": r.assessed_at},

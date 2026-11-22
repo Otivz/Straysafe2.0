@@ -191,7 +191,7 @@ function DetailsForm({ draft }: { draft: Draft }) {
               max={kind === 'incident' ? 5 : 3}
               invalid={Boolean(errors.media)}
             />
-            {kind === 'incident' ? (
+            {kind === 'incident' && draft.category !== 'safety' ? (
               <Callout tone="amber" icon={ShieldAlert} title="Keep a safe distance." className="mt-3">
                 Never approach, touch or corner an animal to get a better picture. Avoid showing people’s faces, children or house numbers.
               </Callout>

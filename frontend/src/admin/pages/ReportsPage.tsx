@@ -1,5 +1,8 @@
-import { useSearchParams } from 'react-router-dom';
+import { lazy, Suspense, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChartNoAxesColumn } from 'lucide-react';
+import { adminPath } from '../config';
+import { useAdminData } from '../data/context';
 import { ChartCard, BarList, DataTable, LineChart, SegmentedBar, type SegPart } from '../components/charts';
 import { Field, Input, Segmented } from '../components/form';
 import { Callout, EmptyState, ErrorState, PageHeader, PageSkeleton, Panel } from '../components/layout';
@@ -9,6 +12,8 @@ import { addDays, fmtDate, plural, startOfDay } from '../../preview/lib/format';
 import { usePageTitle } from '../lib/hooks';
 import { useAnalytics } from '../lib/useAnalytics';
 import { useNow } from '../../preview/lib/hooks';
+
+const CasesMap = lazy(() => import('../components/CasesMap'));
 
 type Preset = '30' | '90' | 'ytd' | 'custom';
 const PRESETS: { value: Preset; label: string }[] = [{ value: '30', label: 'Last 30 days' }, { value: '90', label: 'Last 90 days' }, { value: 'ytd', label: 'Year to date' }, { value: 'custom', label: 'Custom range' }];
@@ -31,6 +36,8 @@ function delta(now: number, before: number, hasEarlier: boolean, period: string)
 /** A20 — Reports & analytics. A few operational insights, not an analytics platform. */
 export default function ReportsPage() {
   usePageTitle('Analytics');
+  const navigate = useNavigate();
+  const { state } = useAdminData();
   const now = useNow();
   const [params, setParams] = useSearchParams();
 
@@ -69,6 +76,16 @@ export default function ReportsPage() {
   const weekly = data.weekly;
   const labels = weekly.map((w) => w.label);
   const parts: SegPart[] = data.outcomes.map((o) => ({ id: o.group, label: `${OUTCOME_GROUPS[o.group].label}`, value: o.count, ...OUTCOME_COLOR[o.group] }));
+  const startMs = range.from.getTime();
+  const endMs = range.to.getTime();
+  const periodCases = useMemo(
+    () =>
+      state.cases.filter((c) => {
+        const t = new Date(c.reportedAt).getTime();
+        return t >= startMs && t < endMs;
+      }),
+    [state.cases, startMs, endMs],
+  );
 
   return (
     <div>
@@ -156,6 +173,15 @@ export default function ReportsPage() {
                 )}
               </div>
             </div>
+          </ChartCard>
+
+          <ChartCard
+            title="Case locations in this period"
+            description="Where reported cases were pinned inside the subdivision. Click any pin to open its case."
+          >
+            <Suspense fallback={<div className="pv-map pv-map--loading" style={{ height: 360 }} role="status" aria-label="Loading map" />}>
+              <CasesMap cases={periodCases} onSelect={(id) => navigate(adminPath(`/cases/${id}`))} height={360} />
+            </Suspense>
           </ChartCard>
 
           <Callout>These figures come from the cases you manage. They describe workload and outcomes. They are not a measure of anyone’s performance, and a closed case is not always a resolved one.</Callout>
