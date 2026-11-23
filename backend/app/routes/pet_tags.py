@@ -15,9 +15,10 @@ Public (Phase 2, `public_router`; no sign-in needed, an optional sign-in is used
   POST /t/{token}/found                         anyone            "tell the owner": stored, owner notified      3/hour per visitor
                                                                                                                  + 10/hour per tag
 """
-from typing import Optional
+from typing import Literal, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Request, Response, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -147,6 +148,10 @@ def tag_scans(pet_id: int, db: Session = Depends(get_db), current_user: User = D
 class ResolveScanBody(BaseModel):
     recovered: bool = False
     note: Optional[str] = Field(default=None, max_length=300)
+    # The owner's answer to a message when the pet is not back (QR_TAG_SCAN_TO_CASE_PLAN phase 3): "not_yet" (it was checked, the
+    # pet is not home) or "not_real" (not about their pet). Either one resolves the message and leaves a neutral line on the open
+    # missing-pet case, so the Leader knows why it was cleared. Ignored when `recovered` is true. Optional: older apps send none.
+    answer: Optional[Literal["not_yet", "not_real"]] = None
 
 
 def _resolve_and_maybe_recover(
@@ -158,7 +163,11 @@ def _resolve_and_maybe_recover(
     body: Optional[ResolveScanBody],
 ) -> dict:
     """Resolve one or all QR tag scans; when `recovered=True`, also confirm Lost Pet recovery / restore Pet.status."""
-    count = T.resolve_scans(db, pet, scan_id)
+    # "This isn't real / not my pet": the finder's photo link goes too (it may be a prank picture)
+    drop_photo = bool(body and body.answer == "not_real" and not body.recovered)
+    # the message's closed state says what happened: the pet came home, it was not the pet, or simply done
+    new_status = "returned" if (body and body.recovered) else ("dismissed" if drop_photo else "resolved")
+    count = T.resolve_scans(db, pet, scan_id, drop_photo=drop_photo, status=new_status)
     recovered_done = False
     report_id: Optional[int] = None
     alert_id: Optional[int] = None
@@ -188,7 +197,7 @@ def _resolve_and_maybe_recover(
             report_id = alert.report_id
             alert_id = alert.alert_id
         else:
-            count += T.resolve_scans(db, pet)
+            count += T.resolve_scans(db, pet, status="returned")
             if pet.status in ("Lost", "Found", "Rescued", "Missing"):
                 pet.status = "Active"
                 recovered_done = True
@@ -202,6 +211,9 @@ def _resolve_and_maybe_recover(
                     request=request,
                     commit=False,
                 )
+
+    if body and body.answer and not body.recovered and count:
+        T.record_owner_answer(db, pet, body.answer, count)
 
     if count and scan_id is None and not recovered_done:
         log_activity(
@@ -271,6 +283,25 @@ def public_tag(token: str, request: Request, db: Session = Depends(get_db), view
     T.record_view(db, tag, pet, viewer)
     db.commit()
     return T.public_card(db, pet, viewer)
+
+
+@public_router.post("/{token}/photo")
+@limiter.limit("3/hour")
+async def public_found_photo(token: str, request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    One photo for a "found it" message, from anyone who scanned the tag, signed in or not (a stranger's photo is the best proof
+    they have the right pet). Images only, up to 10 MB, uploaded by the server to the tag's own folder; the link is then sent with
+    the message, and only the owner and the Leader ever see it. A link that is never sent with a message is shown to nobody.
+    """
+    from app.utils.cloudinary_config import upload_to_cloudinary
+    from app.utils.uploads import read_and_validate_upload
+    T.tag_by_token(db, token)                      # an unknown, replaced or turned-off tag gets nothing (404/410), before any upload
+    content, unique_filename, _media_type, resource_type = await read_and_validate_upload(file, allowed={"Image"})
+    url = await run_in_threadpool(upload_to_cloudinary, content, folder=T.FOUND_PHOTO_FOLDER, resource_type=resource_type,
+                                  filename=unique_filename)
+    if not url:
+        raise HTTPException(status_code=502, detail="The photo could not be saved. Please try again, or send the message without it.")
+    return {"url": url}
 
 
 @public_router.post("/{token}/found")

@@ -19,7 +19,7 @@ export type ResidentAction =
   | { type: 'claim/submit'; noticeId: string; petId: string | null; statement: string; evidence: string[]; /** the photos themselves (the app uploads them as the claim's evidence) */ media?: Media[] }
   | { type: 'claim/addInfo'; claimId: string; text: string }
   | { type: 'pet/save'; pet: Pet; /** the photo file the person just chose (the app uploads it) */ photo?: File; /** "this is a different pet": the subdivision held a record that looked like it */ confirmNew?: boolean }
-  | { type: 'petTag/resolve'; petId: string; scanId?: number; recovered: boolean; note?: string }
+  | { type: 'petTag/resolve'; petId: string; scanId?: number; recovered: boolean; note?: string; answer?: 'not_yet' | 'not_real' }
   | { type: 'ownership/answer'; id: string; accept: boolean; reason?: string }
   | { type: 'notification/read'; id: string }
   | { type: 'notification/readAll' }

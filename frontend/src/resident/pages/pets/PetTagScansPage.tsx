@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Check, CircleCheck, ExternalLink, House, MapPin, PawPrint, Phone } from 'lucide-react';
+import { Check, CircleCheck, CircleX, ExternalLink, House, MapPin, PawPrint, Phone } from 'lucide-react';
 import { fromServer } from '../../../live/dates';
 import { fmtDateTime } from '../../../preview/lib/format';
 import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
 import { Screen } from '../../components/Screen';
-import { ConfirmSheet, Sheet } from '../../components/Sheet';
+import { ConfirmSheet } from '../../components/Sheet';
 import { useToast } from '../../components/toast';
 import {
   Button, Callout, EmptyState, ErrorState, LinkButton, ListSkeleton, NotFoundState, Pill, Section,
@@ -14,18 +14,17 @@ import { residentPath } from '../../config';
 import { useResidentData } from '../../data/context';
 import { activeLostReport, petById } from '../../data/selectors';
 import { residentApi, type ApiPetTagFoundReport, type ApiPetTagScans } from '../../live/api';
-
-const STATUS_PILL = {
-  new: { tone: 'brand', label: 'New' },
-  seen_by_owner: { tone: 'amber', label: 'Open' },
-  resolved: { tone: 'sage', label: 'Done' },
-} as const;
+import { STATUS_PILL, isClosedScan } from '../../lib/petTag';
+import { FinderPhoto } from './PetTagScans';
 
 /**
  * Separate owner notification page for a pet's QR tag scans (`/pets/:petId/scans` and `/pets/:petId/scans/:scanId`).
- * Shows the finder's message, embedded map pin, optional photo and phone number, and lets the owner mark each scan done
- * or confirm that a lost pet is back home.
+ * Shows the finder's message, embedded map pin, optional photo and phone number. A message goes New -> Viewed (opening this page)
+ * -> "Pet returned" (the existing recovery, for a missing pet) or "Not the pet" (a prank or a mistake: the message is closed, its
+ * photo link removed, and a neutral line is left on the case). For a pet that is not missing, a message can also be marked done.
  */
+type Answer = 'not_yet' | 'not_real';
+const ANSWER_TOAST: Record<Answer, string> = { not_yet: 'Noted: still looking.', not_real: 'Marked as not your pet.' };
 export default function PetTagScansPage() {
   const { state, dispatch } = useResidentData();
   const { petId, scanId } = useParams();
@@ -39,9 +38,7 @@ export default function PetTagScansPage() {
   const [owner, setOwner] = useState(false);
   const [loading, setLoading] = useState(valid);
   const [error, setError] = useState(false);
-  const [busyId, setBusyId] = useState<number | null>(null);
-  const [resolveChoiceScanId, setResolveChoiceScanId] = useState<number | null>(null);
-  const [choiceBusy, setChoiceBusy] = useState<'done' | 'recover' | null>(null);
+  const [busy, setBusy] = useState<{ id: number; what: 'done' | Answer } | null>(null);
   const [confirmHome, setConfirmHome] = useState(false);
 
   const load = useCallback(async () => {
@@ -82,44 +79,29 @@ export default function PetTagScansPage() {
   const missing = activeLostReport(state, pet.id);
   const isLost = Boolean(missing) || pet.status === 'Lost';
 
-  const runResolve = async (opts: { scanId?: number; recovered: boolean }) => {
-    await dispatch({ type: 'petTag/resolve', petId: pet.id, scanId: opts.scanId, recovered: opts.recovered });
+  const runResolve = async (opts: { scanId?: number; recovered: boolean; answer?: Answer }) => {
+    await dispatch({ type: 'petTag/resolve', petId: pet.id, scanId: opts.scanId, recovered: opts.recovered, answer: opts.answer });
     await load();
-    toast.success(opts.recovered ? `Glad ${pet.name} is home!` : 'Marked as done');
+    toast.success(opts.recovered ? `Glad ${pet.name} is home!` : opts.answer ? ANSWER_TOAST[opts.answer] : 'Marked as done');
   };
 
-  const markDone = async (id: number) => {
-    if (isLost) {
-      setResolveChoiceScanId(id);
-      return;
-    }
-    setBusyId(id);
+  /** One message: marked done (a pet that is not missing), or answered "not yet" / "not real" (a missing pet). */
+  const settle = async (id: number, what: 'done' | Answer) => {
+    setBusy({ id, what });
     try {
-      await runResolve({ scanId: id, recovered: false });
+      await runResolve({ scanId: id, recovered: false, answer: what === 'done' ? undefined : what });
     } catch (err) {
       toast.error((err as Error)?.message || 'Could not update the message.');
     } finally {
-      setBusyId(null);
+      setBusy(null);
     }
   };
-
-  const chooseResolution = async (recovered: boolean) => {
-    if (resolveChoiceScanId === null) return;
-    setChoiceBusy(recovered ? 'recover' : 'done');
-    try {
-      await runResolve({ scanId: resolveChoiceScanId, recovered });
-      setResolveChoiceScanId(null);
-    } catch (err) {
-      toast.error((err as Error)?.message || 'Could not update the message.');
-    } finally {
-      setChoiceBusy(null);
-    }
-  };
+  const isBusy = (id: number, what: 'done' | Answer) => busy?.id === id && busy.what === what;
 
   const reports = data?.found_reports ?? [];
   const focused = focusedScanId !== null ? reports.find((r) => r.scan_id === focusedScanId) ?? null : null;
   const rest = focused ? reports.filter((r) => r.scan_id !== focused.scan_id) : reports;
-  const openCount = reports.filter((r) => r.status !== 'resolved').length;
+  const openCount = reports.filter((r) => !isClosedScan(r.status)).length;
 
   const renderCard = (r: ApiPetTagFoundReport) => {
     const pill = STATUS_PILL[r.status];
@@ -129,7 +111,7 @@ export default function PetTagScansPage() {
       <div key={r.scan_id} className="rs-card rs-stack" style={{ alignItems: 'stretch' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
           <span className="rs-row__title">
-            {r.from_signed_in_resident ? 'A neighbour' : 'Someone'} · {fmtDateTime(fromServer(r.created_at))}
+            {r.from_signed_in_resident ? 'A neighbour' : 'A guest (not signed in)'} · {fmtDateTime(fromServer(r.created_at))}
           </span>
           <Pill tone={pill.tone}>{pill.label}</Pill>
         </div>
@@ -167,13 +149,7 @@ export default function PetTagScansPage() {
 
         {r.note ? <p className="rs-sub" style={{ whiteSpace: 'pre-wrap' }}>{r.note}</p> : null}
 
-        {r.photo_url ? (
-          <img
-            src={r.photo_url}
-            alt={`Photo from the person who found ${pet.name}`}
-            style={{ maxWidth: '100%', borderRadius: 12 }}
-          />
-        ) : null}
+        {r.photo_url ? <FinderPhoto url={r.photo_url} fromGuest={!r.from_signed_in_resident} petName={pet.name} /> : null}
 
         {r.finder_phone ? (
           <p className="rs-sub" style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -181,28 +157,42 @@ export default function PetTagScansPage() {
             <a href={`tel:${r.finder_phone}`}>{r.finder_phone}</a>
             <span className="rs-meta">· meet in a public place or at the guardhouse</span>
           </p>
-        ) : r.status === 'resolved' ? (
+        ) : isClosedScan(r.status) ? (
           <p className="rs-meta">Any shared finder phone number was cleared for privacy.</p>
         ) : r.phone_shared ? (
           <p className="rs-meta">The finder shared a phone number with the owner.</p>
+        ) : !r.from_signed_in_resident ? (
+          <p className="rs-meta">This guest left no phone number and cannot be contacted through StraySafe. Go to the place they described, or ask the Subdivision Leader for help.</p>
         ) : null}
 
-        {r.status === 'resolved' ? (
-          <Callout tone="sage" icon={CircleCheck} title="Done">
-            {isLost
-              ? `This scan message is marked as done, and ${pet.name} is still marked Lost.`
-              : `This scan message is marked as done and reflects as Done on ${pet.name}’s profile.`}
-          </Callout>
+        {r.status === 'returned' ? (
+          <Callout tone="sage" icon={House} title="Pet returned">{pet.name} is home. This message is closed.</Callout>
+        ) : r.status === 'dismissed' ? (
+          <Callout tone="info" icon={CircleX} title="Not the pet">You marked this message as not about {pet.name}.</Callout>
+        ) : r.status === 'resolved' ? (
+          <Callout tone="sage" icon={CircleCheck} title="Done">This message is closed.</Callout>
+        ) : owner && isLost ? (
+          <div className="rs-stack-sm">
+            <Button variant="primary" block icon={House} disabled={busy !== null} onClick={() => setConfirmHome(true)}>
+              Pet returned
+            </Button>
+            <Button variant="secondary" block icon={CircleX} loading={isBusy(r.scan_id, 'not_real')} disabled={busy !== null}
+              onClick={() => { void settle(r.scan_id, 'not_real'); }}>
+              Not my pet / fake
+            </Button>
+            <p className="rs-meta">Still looking? Leave it as it is: it stays here as Viewed until {pet.name} is home.</p>
+          </div>
         ) : owner ? (
-          <Button
-            variant="primary"
-            block
-            icon={Check}
-            loading={busyId === r.scan_id}
-            onClick={() => { void markDone(r.scan_id); }}
-          >
-            Mark as done
-          </Button>
+          <div className="rs-stack-sm">
+            <Button variant="primary" block icon={Check} loading={isBusy(r.scan_id, 'done')} disabled={busy !== null}
+              onClick={() => { void settle(r.scan_id, 'done'); }}>
+              Mark as done
+            </Button>
+            <Button variant="secondary" block icon={CircleX} loading={isBusy(r.scan_id, 'not_real')} disabled={busy !== null}
+              onClick={() => { void settle(r.scan_id, 'not_real'); }}>
+              Not my pet / fake
+            </Button>
+          </div>
         ) : null}
       </div>
     );
@@ -238,11 +228,7 @@ export default function PetTagScansPage() {
             </Section>
           ) : null}
 
-          {owner && isLost ? (
-            <Button variant="primary" block icon={House} onClick={() => setConfirmHome(true)}>
-              {pet.name} is back home (Mark as recovered)
-            </Button>
-          ) : owner && openCount > 1 ? (
+          {owner && !isLost && openCount > 1 ? (
             <Button variant="secondary" block icon={House} onClick={() => setConfirmHome(true)}>
               Mark all messages as done
             </Button>
@@ -253,41 +239,6 @@ export default function PetTagScansPage() {
           </LinkButton>
         </div>
       )}
-
-      {resolveChoiceScanId !== null ? (
-        <Sheet
-          title={`Is ${pet.name} back home?`}
-          description={`${pet.name} is currently marked Lost. Choose whether this QR scan brought ${pet.name} safely home or if you are just clearing this sighting message.`}
-          dismissible={choiceBusy === null}
-          onClose={() => { if (choiceBusy === null) setResolveChoiceScanId(null); }}
-        >
-          <div className="rs-stack-sm">
-            <Button
-              variant="primary"
-              block
-              icon={House}
-              loading={choiceBusy === 'recover'}
-              disabled={choiceBusy !== null}
-              onClick={() => { void chooseResolution(true); }}
-            >
-              Yes, {pet.name} is back home (Mark as recovered)
-            </Button>
-            <Button
-              variant="secondary"
-              block
-              icon={Check}
-              loading={choiceBusy === 'done'}
-              disabled={choiceBusy !== null}
-              onClick={() => { void chooseResolution(false); }}
-            >
-              No, still missing (Just mark scan done)
-            </Button>
-            <p className="rs-meta">
-              Marking as recovered marks QR scan messages done, deletes shared finder phone numbers, closes any open Lost Pet notice and report, and sets {pet.name} back to Active.
-            </p>
-          </div>
-        </Sheet>
-      ) : null}
 
       {confirmHome ? (
         <ConfirmSheet

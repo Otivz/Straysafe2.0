@@ -137,7 +137,7 @@ export interface ApiPetTag {
 
 /** One "tell the owner" message from someone who scanned the tag. `finder_phone` only for the owner, only when the finder chose to share it. */
 export interface ApiPetTagFoundReport {
-  scan_id: number; status: 'new' | 'seen_by_owner' | 'resolved'; created_at: string; location_label: string | null;
+  scan_id: number; status: 'new' | 'seen_by_owner' | 'resolved' | 'returned' | 'dismissed'; created_at: string; location_label: string | null;
   latitude: number | null; longitude: number | null; note: string | null; photo_url: string | null;
   from_signed_in_resident: boolean; finder_phone: string | null; phone_shared: boolean;
 }
@@ -322,13 +322,13 @@ export const residentApi = {
   disablePetTag: (id: number) => httpPost<ApiPetTag>(`/pets/${id}/tag/disable`),
   petTagQr: (id: number) => httpGetBlob(`/pets/${id}/tag/qr.png`),
   petTagScans: (id: number) => httpGet<ApiPetTagScans>(`/pets/${id}/tag/scans`),
-  resolvePetTagScan: (id: number, scanId: number, body?: { recovered?: boolean; note?: string }) =>
+  resolvePetTagScan: (id: number, scanId: number, body?: { recovered?: boolean; note?: string; answer?: 'not_yet' | 'not_real' }) =>
     httpPost<{ resolved: number; recovered: boolean; pet_status: string; report_id?: number | null; alert_id?: number | null }>(
       `/pets/${id}/tag/scans/${scanId}/resolve`,
       body,
     ),
   /** "Pet is back home": every open message resolved (and any shared phone number deleted). */
-  resolveAllPetTagScans: (id: number, body?: { recovered?: boolean; note?: string }) =>
+  resolveAllPetTagScans: (id: number, body?: { recovered?: boolean; note?: string; answer?: 'not_yet' | 'not_real' }) =>
     httpPost<{ resolved: number; recovered: boolean; pet_status: string; report_id?: number | null; alert_id?: number | null }>(
       `/pets/${id}/tag/scans/resolve`,
       body,

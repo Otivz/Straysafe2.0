@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, House, MapPin, Phone } from 'lucide-react';
+import { Check, House, Image as ImageIcon, MapPin, Phone } from 'lucide-react';
 import { fmtDateTime } from '../../../preview/lib/format';
 import { fromServer } from '../../../live/dates';
 import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
@@ -9,8 +9,25 @@ import { Button, Callout, Pill } from '../../components/ui';
 import { useToast } from '../../components/toast';
 import { residentPath } from '../../config';
 import { residentApi, type ApiPetTagScans } from '../../live/api';
+import { STATUS_PILL, isClosedScan } from '../../lib/petTag';
 
-const STATUS_PILL = { new: { tone: 'brand', label: 'New' }, seen_by_owner: { tone: 'amber', label: 'Open' }, resolved: { tone: 'sage', label: 'Done' } } as const;
+
+
+/**
+ * A finder's photo. A signed-in neighbour's is shown; a guest's (anyone who scanned the tag without an account) stays hidden until the
+ * owner taps it, since nobody has checked it and it could be a prank picture.
+ */
+export function FinderPhoto({ url, fromGuest, petName }: { url: string; fromGuest: boolean; petName: string }) {
+  const [shown, setShown] = useState(!fromGuest);
+  if (!shown) {
+    return (
+      <Button variant="secondary" size="sm" icon={ImageIcon} onClick={() => setShown(true)}>
+        Tap to view · photo from a guest (not checked)
+      </Button>
+    );
+  }
+  return <img src={url} alt={`Photo from the person who found ${petName}`} style={{ maxWidth: '100%', borderRadius: 12 }} />;
+}
 
 /**
  * Messages from people who scanned the pet's QR tag (Phase 2 of the pet QR tags plan). The owner sees a phone number a
@@ -51,7 +68,7 @@ export function PetTagScans({
 
   if (failed) return <Callout tone="amber">Couldn’t load the messages from tag scans right now.</Callout>;
   if (!data || (data.found_reports.length === 0 && data.views.count === 0)) return null;
-  const openReports = data.found_reports.filter((r) => r.status !== 'resolved');
+  const openReports = data.found_reports.filter((r) => !isClosedScan(r.status));
   const open = openReports.length;
   if (open === 0) {
     if (data.views.count === 0) return null;
@@ -89,7 +106,7 @@ export function PetTagScans({
         return (
           <div key={r.scan_id} className="rs-card rs-stack-sm" style={{ alignItems: 'stretch' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-              <span className="rs-row__title">{r.from_signed_in_resident ? 'A neighbour' : 'Someone'} · {fmtDateTime(fromServer(r.created_at))}</span>
+              <span className="rs-row__title">{r.from_signed_in_resident ? 'A neighbour' : 'A guest (not signed in)'} · {fmtDateTime(fromServer(r.created_at))}</span>
               <Pill tone={pill.tone}>{pill.label}</Pill>
             </div>
             {r.location_label || map ? (
@@ -104,18 +121,18 @@ export function PetTagScans({
               </div>
             ) : null}
             {r.note ? <p className="rs-sub" style={{ whiteSpace: 'pre-wrap' }}>{r.note}</p> : null}
-            {r.photo_url ? <img src={r.photo_url} alt={`Photo from the person who found ${petName}`} style={{ maxWidth: '100%', borderRadius: 12 }} /> : null}
+            {r.photo_url ? <FinderPhoto url={r.photo_url} fromGuest={!r.from_signed_in_resident} petName={petName} /> : null}
             {r.finder_phone ? (
               <p className="rs-sub" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <Phone size={15} aria-hidden="true" /><a href={`tel:${r.finder_phone}`}>{r.finder_phone}</a>
                 <span className="rs-meta">· meet in a public place or at the guardhouse</span>
               </p>
-            ) : r.status === 'resolved' ? (
+            ) : isClosedScan(r.status) ? (
               <p className="rs-meta">Marked as done.</p>
             ) : r.phone_shared ? <p className="rs-meta">The finder shared a phone number with the owner.</p> : null}
             <div className="rs-row-actions">
               <Link className="rs-btn rs-btn--secondary rs-btn--sm" to={residentPath(`/pets/${petId}/scans/${r.scan_id}`)}>Open details</Link>
-              {owner && r.status !== 'resolved' ? (
+              {owner && !isClosedScan(r.status) ? (
                 <Button size="sm" icon={Check} loading={busyId === r.scan_id} onClick={() => { void resolve(r.scan_id); }}>Mark as done</Button>
               ) : null}
             </div>

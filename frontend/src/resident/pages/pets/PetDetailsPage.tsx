@@ -28,7 +28,7 @@ export default function PetDetailsPage() {
     setDoneScans(null);
   }, [pet?.id]);
   const handleScansLoaded = useCallback((scans: ApiPetTagScans) => {
-    setDoneScans(scans.found_reports.filter((r) => r.status === 'resolved'));
+    setDoneScans(scans.found_reports.filter((r) => r.status === 'resolved' || r.status === 'returned' || r.status === 'dismissed'));
   }, []);
   const handleScansUnavailable = useCallback(() => {
     setDoneScans([]);

@@ -137,6 +137,7 @@ from app.models.user import Subdivision  # noqa: E402
 
 NOT_ACTIVE = "This tag is no longer active."
 FOUND_PER_TOKEN_PER_HOUR = 10       # across every visitor; each visitor is also limited to 3 per hour (routes/pet_tags.py)
+FOUND_PHOTO_FOLDER = "straysafe/pet-tag-found"   # where a finder's photo is stored (POST /t/{token}/photo); a guest's photo must be from here
 SCAN_COOLDOWN_MINUTES = max(1, int(os.getenv("PET_TAG_SCAN_COOLDOWN_MINUTES", "60")))  # authoritative 1-hour cooldown per QR tag
 COOLDOWN_MESSAGE = "QR Code Already Scanned. Please try again after the 1-hour cooldown period."
 NOTE_MAX = 500
@@ -296,10 +297,11 @@ def record_found(db: Session, tag: PetTag, pet: Pet, viewer: Optional[User], *, 
     if share_contact and not phone:
         raise HTTPException(status_code=422, detail="Enter your phone number, or untick “Share my number with the owner”.")
     if photo_url:
-        if viewer is None:
-            raise HTTPException(status_code=422, detail="Sign in to attach a photo.")
         from app.utils.uploads import validate_cloudinary_url
         validate_cloudinary_url(photo_url, allowed={"Image"})
+        # A guest's photo must be one uploaded through the tag's own photo route (POST /t/{token}/photo), never any other link
+        if viewer is None and f"/{FOUND_PHOTO_FOLDER}/" not in photo_url:
+            raise HTTPException(status_code=422, detail="Attach the photo from this page.")
 
     # Phase 3: while the pet has an open lost-pet alert (requested or active), the message is filed under it, so the Leader
     # sees it on that case. It is NOT turned into a sighting: sightings are shown to neighbours, a stranger's message is not.
@@ -312,6 +314,7 @@ def record_found(db: Session, tag: PetTag, pet: Pet, viewer: Optional[User], *, 
     )
     db.add(scan)
     db.flush()
+    _case_reacts(db, alert, viewer)
     where = f" near {label}" if label else ""
     who = "A neighbour" if viewer is not None and viewer.role_id == 1 else "Someone"
     dispatch_notification(
@@ -321,6 +324,52 @@ def record_found(db: Session, tag: PetTag, pet: Pet, viewer: Optional[User], *, 
         notification_type="pet_tag_found", related_id=pet.pet_id,
     )
     return scan
+
+
+def _case_reacts(db: Session, alert, viewer: Optional[User]) -> None:
+    """
+    The missing-pet case reacts to a tag message (docs/06-future-proposals/QR_TAG_SCAN_TO_CASE_PLAN_2026-11-23.md, phase 1):
+    a neutral history line, and for a signed-in sender the case moves to at least In progress. A guest's message is a lead only.
+    Never recovers or closes anything; a closed case, or a pet with no open lost notice, is left alone.
+    """
+    from app.services import case_lifecycle as L
+    from app.services import lost_pet_lifecycle as LP
+    from app.utils import case_state
+    from app.utils import case_vocab as V
+    report = getattr(alert, "report", None) if alert is not None else None
+    if report is None or case_state.is_closed(report):
+        return
+    if viewer is None:
+        LP.history_line(db, report, None, "A guest (not signed in) scanned the pet's QR tag and left a message for the owner.")
+        return
+    who = "A neighbor" if viewer.role_id == 1 else "Someone"
+    LP.history_line(db, report, None, f"{who} scanned the pet's QR tag and left a message for the owner.")
+    L.advance_case(db, report, None, V.IN_PROGRESS, "a QR tag message about the missing pet")
+
+
+OWNER_ANSWER_LINES = {
+    "not_yet": "The owner checked a QR tag message: the pet is not home yet.",
+    "not_real": "The owner said a QR tag message was not about their pet.",
+}
+
+
+def record_owner_answer(db: Session, pet: Pet, answer: str, count: int = 1) -> bool:
+    """
+    The owner answered tag messages without the pet being back (QR_TAG_SCAN_TO_CASE_PLAN phase 3): a neutral line on the pet's open
+    missing-pet case, so the Leader sees why the messages were cleared. Nothing else changes (no status, no recovery). Returns
+    whether a line was written (False when the pet has no open notice or its case is closed). Does not commit.
+    """
+    from app.services import lost_pet_lifecycle as LP
+    from app.utils import case_state
+    line = OWNER_ANSWER_LINES.get(answer)
+    alert = open_alert(db, pet, ("requested", "active"))
+    report = getattr(alert, "report", None) if alert is not None else None
+    if line is None or report is None or case_state.is_closed(report):
+        return False
+    if count > 1:
+        line = line.replace("a QR tag message", f"{count} QR tag messages").replace("was not", "were not")
+    LP.history_line(db, report, None, line)
+    return True
 
 
 def scan_card(scan: PetTagScan, show_phone: bool) -> dict:
@@ -354,16 +403,22 @@ def scan_history(db: Session, pet: Pet, viewer_is_owner: bool) -> dict:
     return {"found_reports": cards, "views": {"count": views.count(), "last_at": last.created_at if last else None}}
 
 
-def resolve_scans(db: Session, pet: Pet, scan_id: Optional[int] = None) -> int:
-    """Mark one (or every open) found report resolved and clear the finder's phone number. Does not commit."""
+def resolve_scans(db: Session, pet: Pet, scan_id: Optional[int] = None, drop_photo: bool = False, status: str = "resolved") -> int:
+    """
+    Close one (or every open) found report as `status`: "returned" (the pet is home), "dismissed" (not the pet) or "resolved"
+    (done), and clear the finder's phone number; with `drop_photo` the photo link is cleared too. Does not commit.
+    """
+    from app.models.pet_tag import CLOSED_SCAN_STATUSES
     q = db.query(PetTagScan).filter(PetTagScan.pet_id == pet.pet_id, PetTagScan.kind == "found_report")
-    q = q.filter(PetTagScan.scan_id == scan_id) if scan_id is not None else q.filter(PetTagScan.status != "resolved")
+    q = q.filter(PetTagScan.scan_id == scan_id) if scan_id is not None else q.filter(PetTagScan.status.notin_(CLOSED_SCAN_STATUSES))
     rows = q.all()
     if scan_id is not None and not rows:
         raise HTTPException(status_code=404, detail="Message not found.")
     for s in rows:
-        s.status = "resolved"
+        s.status = status
         s.finder_phone = None
+        if drop_photo:
+            s.photo_url = None
     return len(rows)
 
 
@@ -398,7 +453,7 @@ def cleanup_scans(db: Session, now: Optional[datetime] = None) -> dict:
     cutoff = now - timedelta(days=VIEW_RETENTION_DAYS)
     views = (db.query(PetTagScan).filter(PetTagScan.kind == "view", PetTagScan.created_at < cutoff)
              .delete(synchronize_session=False))
-    phones = (db.query(PetTagScan).filter(PetTagScan.kind == "found_report", PetTagScan.status == "resolved",
+    phones = (db.query(PetTagScan).filter(PetTagScan.kind == "found_report", PetTagScan.status.in_(("resolved", "returned", "dismissed")),
                                           PetTagScan.finder_phone.isnot(None))
               .update({PetTagScan.finder_phone: None}, synchronize_session=False))
     db.commit()

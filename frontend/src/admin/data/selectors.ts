@@ -85,11 +85,27 @@ export function mediationOf(c: Case): MediationRequest[] {
 export const openMediation = (c: Case): LostPetConversation[] => (c.lostPet?.conversations ?? []).filter((x) => x.status === 'open' && x.mode === 'leader');
 
 // ----------------------------------------------------------------------------------------------------- dashboard
-export type ReasonKind = 'urgent' | 'mediation' | 'new' | 'overdue' | 'due_today' | 'observation' | 'barangay' | 'awaiting' | 'stale';
+export type ReasonKind = 'urgent' | 'mediation' | 'tag_unseen' | 'new' | 'overdue' | 'due_today' | 'observation' | 'barangay' | 'awaiting' | 'stale';
 export interface AttentionReason { kind: ReasonKind; label: string; tone: 'red' | 'amber' | 'neutral' }
 export interface AttentionItem { case: Case; reasons: AttentionReason[]; score: number }
 
-const REASON_SCORE: Record<ReasonKind, number> = { urgent: 100, mediation: 95, barangay: 85, overdue: 80, observation: 60, new: 55, due_today: 50, awaiting: 30, stale: 20 };
+const REASON_SCORE: Record<ReasonKind, number> = { urgent: 100, mediation: 95, tag_unseen: 90, barangay: 85, overdue: 80, observation: 60, new: 55, due_today: 50, awaiting: 30, stale: 20 };
+
+/**
+ * QR tag messages go to the owner, not to the Leader. The Leader is the backstop: a missing pet's case asks for attention only when the owner
+ * has not opened a message for this long (docs/06-future-proposals/QR_TAG_SCAN_TO_CASE_PLAN_2026-11-23.md, phase 2).
+ */
+export const TAG_NUDGE_MINUTES = 60;
+
+/** The case's unopened QR tag message has waited longer than TAG_NUDGE_MINUTES; null otherwise. */
+export function tagMessageNudge(c: Case, now: Date): AttentionReason | null {
+  const t = c.tagMessages;
+  if (!t || t.unseen === 0 || !t.oldestUnseenAt) return null;
+  const waited = now.getTime() - new Date(t.oldestUnseenAt).getTime();
+  if (Number.isNaN(waited) || waited < TAG_NUDGE_MINUTES * 60_000) return null;
+  const guest = t.fromGuest > 0 && t.fromGuest === t.open ? ' (from a guest)' : '';
+  return { kind: 'tag_unseen', label: `QR tag message${guest} not yet seen by the owner · sent ${relative(t.oldestUnseenAt, now)}`, tone: 'amber' };
+}
 
 /**
  * "What needs my attention today?" Cases are ranked by the most pressing reason, not by date. A missing-pet report is not a task by itself: its
@@ -122,6 +138,8 @@ export function attentionItems(cases: Case[], now: Date): AttentionItem[] {
       const first = asked[0];
       reasons.push({ kind: 'mediation', label: asked.length === 1 ? `${first.ownerName} and ${first.finderName} asked you to help them get in touch` : `${asked.length} requests to help an owner and a neighbour get in touch`, tone: 'amber' });
     }
+    const tagNudge = tagMessageNudge(c, now);
+    if (tagNudge) reasons.push(tagNudge);
     if (c.status === 'reported' && c.priority !== 'urgent' && !isLostOrFound(c)) reasons.push({ kind: 'new', label: `New report · ${relative(c.reportedAt, now)}`, tone: 'amber' });
     const pending = pendingFollowUpsOf(c).filter((f) => f.dueAt);
     const overdue = pending.filter((f) => dueInfo(f.dueAt, now).overdue).sort((a, b) => a.dueAt!.localeCompare(b.dueAt!))[0];
