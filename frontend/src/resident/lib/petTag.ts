@@ -24,3 +24,13 @@ export function tokenFromQr(raw: string): string | null {
   const token = decodeURIComponent(match[1]);
   return TOKEN.test(token) ? token : null;
 }
+
+/** The QR tag message states as the owner sees them (QR_TAG_SCAN_TO_CASE_PLAN_2026-11-23.md). */
+export const STATUS_PILL = {
+  new: { tone: 'brand', label: 'New' },
+  seen_by_owner: { tone: 'amber', label: 'Viewed' },
+  resolved: { tone: 'sage', label: 'Done' },
+  returned: { tone: 'sage', label: 'Pet returned' },
+  dismissed: { tone: 'neutral', label: 'Not the pet' },
+} as const;
+export const isClosedScan = (status: string) => status === 'resolved' || status === 'returned' || status === 'dismissed';

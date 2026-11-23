@@ -53,6 +53,8 @@ export interface ApiCaseSummary {
   photo_count: number;
   thumbnail_url: string | null;
   photo_urls?: string[];
+  /** A missing pet's unresolved QR tag messages (counts only); absent or null when there are none. `oldest_unseen_at` is UTC ("...Z"). */
+  tag_messages?: { open: number; unseen: number; from_guest: number; oldest_unseen_at: string | null } | null;
 }
 
 export interface ApiSummaryPage { total: number; limit: number; offset: number; has_more: boolean; items: ApiCaseSummary[] }
@@ -543,7 +545,7 @@ export interface ApiGeneratedWarningLetter {
 export interface ApiPetTagInfo { pet_id: number; has_tag: boolean; tag_id: number | null; created_at: string | null; can_disable: boolean }
 /** One "tell the owner" message from a tag scan. The Leader never gets the finder's phone number, only whether one was shared. */
 export interface ApiTagFoundReport {
-  scan_id: number; status: 'new' | 'seen_by_owner' | 'resolved'; created_at: string; location_label: string | null;
+  scan_id: number; status: 'new' | 'seen_by_owner' | 'resolved' | 'returned' | 'dismissed'; created_at: string; location_label: string | null;
   latitude: number | null; longitude: number | null; note: string | null; photo_url: string | null;
   from_signed_in_resident: boolean; phone_shared: boolean; alert_id: number | null;
 }

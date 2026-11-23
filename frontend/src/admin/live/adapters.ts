@@ -398,6 +398,9 @@ export function caseFromSummary(s: ApiCaseSummary, lookup: Lookup): Case {
     claims: [], followUps: [], ownerContacts: [], warnings: [], referrals: [], relatedCaseIds: [], notes: [], threads: [], alerts: [],
     timeline: s.last_event ? [eventFromHistory({ history_id: s.last_event.history_id, remarks: s.last_event.text, created_at: s.last_event.at, updater_name: s.last_event.by_name })] : [],
     closure: s.closure ? closureOf(s.closure, lookup) : null,
+    tagMessages: s.tag_messages
+      ? { open: s.tag_messages.open, unseen: s.tag_messages.unseen, fromGuest: s.tag_messages.from_guest, oldestUnseenAt: fromServerOrNull(s.tag_messages.oldest_unseen_at) }
+      : null,
   };
 }
 

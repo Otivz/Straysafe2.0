@@ -447,6 +447,8 @@ export interface Case {
   lostPet?: LostPetCase | null;
   /** The open requests to help an owner and a neighbour get in touch, read from the work queue (so the dashboard needs no case opened). */
   mediation?: MediationRequest[];
+  /** A missing pet's unresolved QR tag messages, from the case list: how many, how many the owner has not opened, how many from guests. */
+  tagMessages?: { open: number; unseen: number; fromGuest: number; oldestUnseenAt: string | null } | null;
   claims: OwnershipClaim[];
   followUps: FollowUp[];
   ownerContacts: OwnerContact[];

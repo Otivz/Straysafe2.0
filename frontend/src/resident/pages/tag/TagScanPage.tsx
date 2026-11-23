@@ -2,9 +2,9 @@ import '../../../preview/styles/tokens.css';
 import '../../styles/resident.css';
 import { lazy, Suspense, useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
-import { Camera, CircleCheck, Eye, HeartHandshake, LocateFixed, MapPin, Maximize2, PawPrint, Send } from 'lucide-react';
+import { CircleCheck, Eye, HeartHandshake, LocateFixed, MapPin, Maximize2, PawPrint, Send } from 'lucide-react';
 import { MediaLightbox } from '../../../admin/components/MediaLightbox';
-import { httpGet, httpPost } from '../../../live/http';
+import { httpGet, httpPost, httpUpload } from '../../../live/http';
 import { LocationMapPreview } from '../../../preview/map/LocationMapPreview';
 import { Checkbox, Field, Input, Textarea } from '../../components/form';
 import { Button, Callout, Skeleton } from '../../components/ui';
@@ -230,7 +230,15 @@ function FoundForm({ token, petName, signedIn, onSent }: { token: string; petNam
     setPending(true);
     try {
       let photoUrl: string | null = null;
-      if (photo && signedIn) photoUrl = (await residentApi.uploadChatMedia(photo)).url;
+      if (photo) {
+        // a signed-in resident uses the app's own upload; anyone else uploads through the tag (images only, limited)
+        if (signedIn) photoUrl = (await residentApi.uploadChatMedia(photo)).url;
+        else {
+          const form = new FormData();
+          form.append('file', photo);
+          photoUrl = (await httpUpload<{ url: string }>(`/t/${encodeURIComponent(token)}/photo`, form)).url;
+        }
+      }
       await httpPost(`/t/${encodeURIComponent(token)}/found`, {
         location_label: place.trim() || null,
         latitude: coords?.lat ?? null,
@@ -277,13 +285,9 @@ function FoundForm({ token, petName, signedIn, onSent }: { token: string; petNam
       <Field label="Message" optional hint="How the pet looks, whether you are keeping it safe, when you saw it.">
         <Textarea value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
       </Field>
-      {signedIn ? (
-        <Field label="Photo" optional>
-          <Input type="file" accept="image/*" capture="environment" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
-        </Field>
-      ) : (
-        <p className="rs-meta" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Camera size={14} aria-hidden="true" /><span>Residents who <a href={residentPath('/login')}>sign in</a> can also attach a photo.</span></p>
-      )}
+      <Field label="Photo" optional hint="A photo of the pet helps the owner know it is theirs. Only the owner and the Subdivision Leader see it.">
+        <Input type="file" accept="image/*" capture="environment" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
+      </Field>
       <Checkbox
         label="Share my number with the owner"
         hint="Only the owner sees it, so they can call you. It is deleted when the matter is closed."

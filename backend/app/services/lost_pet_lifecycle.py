@@ -791,7 +791,7 @@ def confirm_recovery(db: Session, alert: LostPetAlert, *, source: str, actor: Us
         pet = db.get(Pet, report.pet_id)
         if pet is not None:
             from app.services import pet_tags as T
-            T.resolve_scans(db, pet)
+            T.resolve_scans(db, pet, status="returned")            # its QR tag messages read "Pet returned"
 
     # 6: who is told
     card = pet_card(db, locked)

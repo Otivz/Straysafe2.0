@@ -13,6 +13,7 @@ import {
   Landmark,
   MapPin,
   PawPrint,
+  QrCode,
   Share2,
   type LucideIcon,
 } from 'lucide-react';
@@ -295,6 +296,9 @@ export default function DashboardPage() {
                               <span className="sa-id">{c.id}</span>
                               <Badge tone={isFound ? 'brand' : 'amber'}>{isFound ? 'Found' : 'Missing'}</Badge>
                               <CaseStatusBadge c={c} />
+                              {c.tagMessages && c.tagMessages.open > 0 ? (
+                                <Badge tone="neutral" icon={QrCode}>{plural(c.tagMessages.open, 'tag message')}</Badge>
+                              ) : null}
                             </span>
                             <span className="sa-mf__title" style={{ display: 'block' }}>{c.title}</span>
                             <span className="sa-mf__meta" style={{ display: 'block' }}>

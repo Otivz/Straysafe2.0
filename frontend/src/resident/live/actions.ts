@@ -275,7 +275,7 @@ export async function runAction(a: ResidentAction, ctx: ResidentActionContext): 
 
     case 'petTag/resolve': {
       const petNum = numeric(a.petId, 'pet');
-      const body = { recovered: a.recovered, ...(a.note?.trim() ? { note: a.note.trim() } : {}) };
+      const body = { recovered: a.recovered, ...(a.note?.trim() ? { note: a.note.trim() } : {}), ...(a.answer && !a.recovered ? { answer: a.answer } : {}) };
       const res = a.scanId != null
         ? await residentApi.resolvePetTagScan(petNum, a.scanId, body)
         : await residentApi.resolveAllPetTagScans(petNum, body);

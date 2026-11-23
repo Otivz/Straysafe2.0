@@ -166,6 +166,28 @@ test('a request to help an owner and a neighbour, and a Barangay nobody has cont
   assert.equal(selectors.dashboardCounts([asked, queued, unsentOnly], NOW).mediation, 2);
 });
 
+// QR tag messages (docs/06-future-proposals/QR_TAG_SCAN_TO_CASE_PLAN_2026-11-23.md, phase 2): the Leader is the backstop, not the inbox
+test('a QR tag message is a badge count, and asks for attention only when the owner has not opened it for an hour', () => {
+  const tag = (over) => ({ open: 1, unseen: 1, from_guest: 1, oldest_unseen_at: '2026-11-11T03:30:00Z', ...over });
+  const fresh = caseOf({ tag_messages: tag() });                                              // sent 30 minutes before NOW
+  assert.deepEqual(fresh.tagMessages, { open: 1, unseen: 1, fromGuest: 1, oldestUnseenAt: '2026-11-11T03:30:00.000Z' }, 'the UTC time is read exactly');
+  assert.deepEqual(selectors.attentionItems([fresh], NOW), [], 'a new message is not a task: the owner has it');
+  const waiting = caseOf({ report_id: 170, tag_messages: tag({ oldest_unseen_at: '2026-11-11T02:30:00Z' }) });   // 90 minutes
+  const items = selectors.attentionItems([waiting], NOW);
+  assert.deepEqual(items.map((i) => i.reasons.map((r) => r.kind)), [['tag_unseen']]);
+  assert.match(items[0].reasons[0].label, /QR tag message \(from a guest\) not yet seen by the owner/);
+  const signedIn = caseOf({ report_id: 171, tag_messages: tag({ from_guest: 0, oldest_unseen_at: '2026-11-11T02:30:00Z' }) });
+  assert.doesNotMatch(selectors.attentionItems([signedIn], NOW)[0].reasons[0].label, /from a guest/);
+  const read = caseOf({ report_id: 172, tag_messages: tag({ unseen: 0, oldest_unseen_at: null }) });
+  assert.deepEqual(selectors.attentionItems([read], NOW), [], 'once the owner has opened it, nothing is asked of the Leader');
+  assert.equal(read.tagMessages.open, 1, 'the badge still counts it until it is resolved');
+  const closed = caseOf({ report_id: 173, case_status: 'closed', tag_messages: tag({ oldest_unseen_at: '2026-11-11T01:00:00Z' }) });
+  assert.deepEqual(selectors.attentionItems([closed], NOW), [], 'a closed case asks nothing');
+  assert.equal(caseOf({ report_id: 174 }).tagMessages, null, 'no messages: no badge');
+  const asked = caseOf({ report_id: 175, tag_messages: tag({ oldest_unseen_at: '2026-11-11T02:30:00Z' }) }, { report_id: 175, referrals: [referral({ report_id: 175 })] });
+  assert.equal(asked.tagMessages.unseen, 1, 'opening the case keeps the counts from the list');
+});
+
 test('a finished request is no longer a task, and neither is a closed case', () => {
   const finished = caseOf({}, { lost_pet: alertBlock({ coordinations: [conversation({ status: 'resolved', resolved_at: '2026-11-11T03:00:00', resolution_note: 'Both reached.' })] }) });
   assert.deepEqual(selectors.attentionItems([finished], NOW), []);

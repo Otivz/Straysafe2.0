@@ -107,6 +107,7 @@ def _rows(db: Session, reports: List[Report]) -> List[Dict[str, Any]]:
                         entry["thumbnail"] = thumb_url            # first photo (or video poster frame) is the list thumbnail
 
     decided = identity_decision.decided_ids(db, reports)
+    tag_messages = _tag_messages(db, ids)
     rows = []
     for r in reports:
         status = case_state.case_status_of(r)
@@ -137,5 +138,39 @@ def _rows(db: Session, reports: List[Report]) -> List[Dict[str, Any]]:
             "merged_into_report_id": r.duplicate_of_report_id,
             "photo_count": media["count"], "thumbnail_url": media["thumbnail"],
             "photo_urls": media.get("photos", []),
+            "tag_messages": tag_messages.get(r.report_id),
         })
     return rows
+
+
+def _tag_messages(db: Session, ids: List[int]) -> Dict[int, Dict[str, Any]]:
+    """
+    For each missing-pet case, its QR tag "found it" messages that are not resolved yet (docs/06-future-proposals/
+    QR_TAG_SCAN_TO_CASE_PLAN_2026-11-23.md, phase 2): how many, how many the owner has not opened (`new`), how many came from a
+    guest, and when the oldest unopened one arrived. The Dashboard shows a badge, and asks the Leader to step in only when the owner
+    has not opened a message for a while. Counts only: no place, note or phone. Cases without such a message are left out.
+    """
+    if not ids:
+        return {}
+    from app.models.lost_pet_alert import LostPetAlert
+    from app.models.pet_tag import PetTagScan
+    rows = (db.query(LostPetAlert.report_id, PetTagScan.status, PetTagScan.created_at, PetTagScan.scanner_user_id)
+            .join(PetTagScan, PetTagScan.alert_id == LostPetAlert.alert_id)
+            .filter(LostPetAlert.report_id.in_(ids), PetTagScan.kind == "found_report",
+                    PetTagScan.status.notin_(("resolved", "returned", "dismissed")))
+            .all())
+    out: Dict[int, Dict[str, Any]] = {}
+    for report_id, status, created_at, scanner_id in rows:
+        entry = out.setdefault(report_id, {"open": 0, "unseen": 0, "from_guest": 0, "oldest_unseen_at": None})
+        entry["open"] += 1
+        if scanner_id is None:
+            entry["from_guest"] += 1
+        if status == "new":
+            entry["unseen"] += 1
+            if created_at is not None and (entry["oldest_unseen_at"] is None or created_at < entry["oldest_unseen_at"]):
+                entry["oldest_unseen_at"] = created_at
+    for entry in out.values():
+        # pet_tag_scans.created_at is written in UTC (services/pet_tags.record_found), unlike the local times elsewhere: say so
+        if entry["oldest_unseen_at"] is not None:
+            entry["oldest_unseen_at"] = entry["oldest_unseen_at"].isoformat() + "Z"
+    return out

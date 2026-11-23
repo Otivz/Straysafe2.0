@@ -19,7 +19,11 @@ from app.database import Base
 
 TAG_STATUSES = ("active", "replaced", "disabled")
 SCAN_KINDS = ("view", "found_report")
-SCAN_STATUSES = ("new", "seen_by_owner", "resolved")
+# new -> seen_by_owner ("Viewed", set when the owner opens it) -> returned ("Pet returned") or dismissed ("Not the pet").
+# "resolved" ("Done") is a message closed without either answer (a pet that was not missing, and every message closed before
+# 2026-11-23). The three closed ones are CLOSED_SCAN_STATUSES.
+SCAN_STATUSES = ("new", "seen_by_owner", "resolved", "returned", "dismissed")
+CLOSED_SCAN_STATUSES = ("resolved", "returned", "dismissed")
 
 
 class PetTag(Base):

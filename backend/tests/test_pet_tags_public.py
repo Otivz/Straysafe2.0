@@ -134,7 +134,7 @@ check("an email in the place is refused", found(token, location_label="me@exampl
 check("a too-long note is refused", found(token, note="x" * 501).status_code == 422)
 check("sharing without a number is refused", found(token, share_contact=True).status_code == 422)
 check("a bad phone number is refused", found(token, share_contact=True, finder_phone="12345").status_code == 422)
-check("a guest cannot attach a photo", found(token, photo_url="https://res.cloudinary.com/demo/image/upload/x.jpg").status_code == 422)
+check("a guest cannot attach a photo that was not uploaded through the tag", found(token, photo_url="https://res.cloudinary.com/demo/image/upload/x.jpg").status_code == 422)
 check("the owner cannot report their own pet", found(token, headers=H(owner)).status_code == 409)
 db.expire_all()
 check("refused messages store nothing", db.query(PetTagScan).filter(PetTagScan.kind == "found_report").count() == 0)
