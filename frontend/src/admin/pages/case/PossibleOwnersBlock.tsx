@@ -69,6 +69,24 @@ const STATUS_TONE: Record<ApiOwnerStatus, Tone> = {
   not_confirmed: 'red',
   unable_to_contact: 'ink',
 };
+/**
+ * The overall number is a ranking aid, not a probability (it blends look-alike attributes and adds bonuses for a Lost status or a QR
+ * tag message), so the cards show words; the exact number appears only in View details, labelled "for ranking only".
+ */
+type MatchLike = { score: number | null; classification?: string | null; classification_label?: string | null };
+function matchClass(m: MatchLike): { cls: string; label: string } | null {
+  if (m.classification && m.classification_label) return { cls: m.classification, label: m.classification_label };
+  if (m.score === null || m.score === undefined) return null;
+  if (m.score >= 75) return { cls: 'strong', label: 'Strong Possible Match' };
+  if (m.score >= 52) return { cls: 'potential', label: 'Potential Match' };
+  return { cls: 'low', label: 'Low Confidence Match' };
+}
+const VERDICT_LABEL: Record<string, string> = { match: 'Match', similar: 'Similar', differs: 'Differs', unknown: 'Not given' };
+function attrVerdict(a: { score: number | null; verdict?: string | null }): string | null {
+  if (a.score === null) return null;
+  return a.verdict || (a.score >= 80 ? 'match' : a.score >= 40 ? 'similar' : 'differs');
+}
+
 const CLASS_TONE: Record<string, Tone> = {
   strong: 'sage',
   potential: 'brand',
@@ -215,10 +233,10 @@ export default function PossibleOwnersBlock({
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e7e2da] bg-[#faf7f2] px-3 py-2 text-xs">
                 <span className="text-[var(--sa-text-2)]">
                   {showAllLower
-                    ? `Showing all ${plural(allCandidates.length, 'candidate')} (including ${lowerScoringCount} under ${HIGH_CONFIDENCE_THRESHOLD}%)`
+                    ? `Showing all ${plural(allCandidates.length, 'candidate')} (including ${plural(lowerScoringCount, 'weaker match', 'weaker matches')})`
                     : highConfidenceCandidates.length > 0
-                      ? `Showing ${plural(highConfidenceCandidates.length, 'high-confidence match')} (≥ ${HIGH_CONFIDENCE_THRESHOLD}%)`
-                      : `No high-confidence matches (≥ ${HIGH_CONFIDENCE_THRESHOLD}%) — ${plural(lowerScoringCount, 'lower-scoring candidate')} hidden`}
+                      ? `Showing ${plural(highConfidenceCandidates.length, 'closest match', 'closest matches')}`
+                      : `No close matches — ${plural(lowerScoringCount, 'weaker match', 'weaker matches')} hidden`}
                 </span>
                 <button
                   type="button"
@@ -482,17 +500,9 @@ function OwnerCard({
             ) : null}
           </div>
         </div>
-        {m && m.score !== null ? (
+        {m && matchClass(m) ? (
           <div className="sa-po__score">
-            <span className="sa-po__pct">{m.score}%</span>
-            {m.classification_label ? (
-              <Badge tone={CLASS_TONE[m.classification ?? ''] ?? 'neutral'}>
-                {m.classification_label}
-              </Badge>
-            ) : null}
-            {m.coverage !== null ? (
-              <span className="sa-meta">{m.coverage}% of the information</span>
-            ) : null}
+            <Badge tone={CLASS_TONE[matchClass(m)!.cls] ?? 'neutral'}>{matchClass(m)!.label}</Badge>
           </div>
         ) : m?.method === 'manual' ? (
           <span className="sa-meta">Staff-identified match</span>
@@ -510,9 +520,9 @@ function OwnerCard({
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold text-[var(--sa-text-1)]">{a.label}</span>
-                  {a.score !== null ? (
+                  {attrVerdict(a) ? (
                     <span className="rounded-full bg-[#f5f0e8] px-1.5 py-0.5 text-[11px] font-semibold text-[#57534e]">
-                      {a.score}%
+                      {VERDICT_LABEL[attrVerdict(a)!] ?? attrVerdict(a)}
                     </span>
                   ) : null}
                 </div>
@@ -770,10 +780,8 @@ function OwnerDetailsDialog({
             {o.status_label}
           </Badge>
           <span className="sa-ref text-xs">Case {c.id}</span>
-          {m?.score !== null && m?.score !== undefined ? (
-            <Badge tone={CLASS_TONE[m.classification ?? ''] ?? 'neutral'}>
-              {m.score}% · {m.classification_label ?? 'Match'}
-            </Badge>
+          {m && matchClass(m) ? (
+            <Badge tone={CLASS_TONE[matchClass(m)!.cls] ?? 'neutral'}>{matchClass(m)!.label}</Badge>
           ) : null}
         </span>
       }
@@ -949,8 +957,8 @@ function OwnerDetailsDialog({
         {m ? (
           <div className="sa-mscore">
             <div className="sa-mscore__head">
-              <span className="sa-mscore__total">{m.score}%</span>
-              <span className="sa-text-2">Matching Accuracy</span>
+              {m.score !== null ? <span className="sa-mscore__total">{m.score}</span> : null}
+              <span className="sa-text-2">Matching score (for ranking only, not a probability)</span>
               {m.classification_label ? (
                 <Badge tone={CLASS_TONE[m.classification ?? ''] ?? 'neutral'}>
                   {m.classification_label}

@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCheck, ChevronDown, ClipboardCheck, Eye, Flag, Imag
 import { Badge, IdentityBadge, OwnershipBadge, PriorityMark } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { Checkbox, Field, FieldGroup, OptionGroup, Select, Textarea } from '../../components/form';
+import { ResidentCombobox } from '../../components/ResidentCombobox';
 import { Block, Callout, FormError, Panel } from '../../components/layout';
 import { SaveBar } from '../../components/SaveBar';
 import { useToast } from '../../components/toast';
@@ -888,10 +889,8 @@ function OwnershipSection({
                 {f.status === 'confirmed' ? (
                   <div className="mt-5 flex flex-col gap-4">
                     <Field label="Confirmed owner" required error={errors.owner}>
-                      <Select value={f.ownerResidentId ?? ''} onChange={(e) => setF({ ...f, ownerResidentId: e.target.value || null })}>
-                        <option value="">Choose a resident…</option>
-                        {residents.map((r) => <option key={r.id} value={r.id}>{r.name} · {r.unit}</option>)}
-                      </Select>
+                      <ResidentCombobox residents={residents} value={f.ownerResidentId ?? ''} label="Confirmed owner" placeholder="Type the owner's name, or choose…"
+                        invalid={!!errors.owner} onChange={(id) => setF({ ...f, ownerResidentId: id || null })} />
                     </Field>
                     <FieldGroup label="Evidence relied on" required error={errors.evidence} hint="No single kind of evidence establishes ownership on its own.">
                       <div className="flex flex-col gap-2">

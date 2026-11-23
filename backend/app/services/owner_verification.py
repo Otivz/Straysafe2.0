@@ -420,6 +420,121 @@ def _extract_breeds(raw_breed: Optional[str]) -> tuple:
     return breeds, display
 
 
+_STREET_SUFFIX = r"(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|extension|ext)"
+_GENERIC_PLACE_WORDS = {"block", "blk", "lot", "phase", "purok", "sitio", "the", "corner", "near", "main"}
+
+
+def _street_name(address: str) -> Optional[str]:
+    """
+    The street name in an address, without its suffix: "Block 13 Lot 7, Molave Street" -> "molave"; "Blk 2, San Jose St." -> "san jose".
+    Up to three words before the suffix; numbers and words such as "block" or "lot" end the name.
+    """
+    import re
+    low = re.sub(r"[^a-z0-9\s.-]+", " ", (address or "").lower())
+    m = re.search(rf"((?:[a-z][a-z-]*\s+){{0,2}}[a-z][a-z-]*)\s+{_STREET_SUFFIX}\b\.?", low)
+    if not m:
+        return None
+    words = m.group(1).split()
+    while words and words[0] in _GENERIC_PLACE_WORDS:
+        words = words[1:]
+    name = " ".join(words)
+    return name if len(name) >= 3 else None
+
+
+def _mentions_street(text: str, street: str) -> bool:
+    """Whole-word mention of the street in the report's location text ("molave" matches "Molave St", not "Molavenue")."""
+    import re
+    return bool(re.search(rf"\b{re.escape(street)}\b", text))
+
+
+# ------------------------------------------------------------------------------------------- strong signals (bonuses)
+# Evidence that is not "looks alike" but "this pet is actually missing": added on top of any score (live or stored), never a weight.
+LOST_BONUS = 15                 # the pet is marked Lost in the registry
+LOST_RECENT_BONUS = 20          # ... and its lost-pet report is within LOST_RECENT_DAYS of this report (either side)
+LOST_RECENT_DAYS = 14
+TAG_FOUND_FLOOR = 90            # someone scanned the pet's QR tag and sent a "found" message near the time of this report
+TAG_FOUND_BONUS = 25
+TAG_WINDOW_BEFORE_DAYS = 3      # a tag message up to 3 days before the report counts (the finder may have scanned first)
+
+
+def _owner_signals(db: Session, report: Report, pet_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+    """
+    For each candidate pet: is it marked Lost (and since when, from its latest lost-pet report), and was its QR tag scanned with a
+    "found" message around the time of this report. Two queries for the whole list.
+    """
+    from datetime import timedelta
+    from app.models.pet_tag import PetTagScan
+    out: Dict[int, Dict[str, Any]] = {pid: {"lost_since": None, "tag_found_at": None} for pid in pet_ids}
+    if not pet_ids:
+        return out
+    for r in (db.query(Report).filter(Report.pet_id.in_(pet_ids), Report.report_id != report.report_id)
+              .order_by(Report.created_at.desc()).all()):
+        if r.created_at and out[r.pet_id]["lost_since"] is None and _is_lost(r):
+            out[r.pet_id]["lost_since"] = r.created_at
+    since = (report.created_at or _now()) - timedelta(days=TAG_WINDOW_BEFORE_DAYS)
+    for s in (db.query(PetTagScan).filter(PetTagScan.pet_id.in_(pet_ids), PetTagScan.kind == "found_report",
+                                          PetTagScan.created_at >= since).order_by(PetTagScan.created_at.desc()).all()):
+        if out[s.pet_id]["tag_found_at"] is None:
+            out[s.pet_id]["tag_found_at"] = s.created_at
+    return out
+
+
+def _classify(score: int) -> tuple:
+    if score >= 75:
+        return "strong", "Strong Possible Match"
+    if score >= 52:
+        return "potential", "Potential Match"
+    return "low", "Low Confidence Match"
+
+
+_CLASS_RANK = {"low": 0, "potential": 1, "strong": 2}
+
+
+def _apply_signals(matching: Optional[Dict[str, Any]], pet: Pet, report: Report, sig: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Add the Lost / QR-tag bonuses to a candidate's matching result and say so in its reasons and in a "Lost report & QR tag" row.
+    The classification can only go up. A staff-identified match (no score) gets the reasons only. Ownership is still never assumed.
+    """
+    if matching is None or report.pet_id == pet.pet_id:
+        return matching
+    lost = (pet.status or "").lower() == "lost"
+    lost_since = sig.get("lost_since")
+    tag_at = sig.get("tag_found_at")
+    if not lost and tag_at is None:
+        matching["signals"] = {"lost": False, "lost_since": None, "tag_found_at": None, "bonus": 0}
+        return matching
+
+    bonus = 0
+    notes: List[str] = []
+    if lost:
+        recent = bool(lost_since and report.created_at and abs((report.created_at - lost_since).days) <= LOST_RECENT_DAYS)
+        bonus += LOST_RECENT_BONUS if recent else LOST_BONUS
+        when = f" (lost-pet report on {lost_since.strftime('%d %b %Y')})" if lost_since else ""
+        notes.append(f"The owner marked this pet Lost{when}.")
+    if tag_at is not None:
+        notes.append(f"Someone scanned this pet's QR tag and sent a found message on {tag_at.strftime('%d %b %Y, %I:%M %p')}.")
+
+    score = matching.get("score")
+    if isinstance(score, (int, float)):
+        new = score + bonus
+        if tag_at is not None:
+            new = max(new + TAG_FOUND_BONUS, TAG_FOUND_FLOOR)
+        new = int(round(min(100, new)))
+        matching["score"] = new
+        cls, label = _classify(new)
+        if _CLASS_RANK.get(cls, 0) > _CLASS_RANK.get(matching.get("classification") or "low", 0) or not matching.get("classification"):
+            matching["classification"], matching["classification_label"] = cls, label
+        bonus = new - int(round(score))
+    matching["reasons"] = notes + list(matching.get("reasons") or [])
+    matching["explanation"] = " ".join(matching["reasons"])
+    matching.setdefault("attributes", []).append({
+        "key": "signals", "label": "Lost report & QR tag", "score": None, "available": True, "verdict": "match", "weight": 0,
+        "explanation": " ".join(notes) + (f" Score raised by {bonus} points." if bonus else "")})
+    matching["signals"] = {"lost": lost, "lost_since": lost_since.isoformat() if lost_since else None,
+                           "tag_found_at": tag_at.isoformat() if tag_at else None, "bonus": bonus}
+    return matching
+
+
 def _score_pet_candidate(report: Report, pet: Pet, owner: Optional[User]) -> Dict[str, Any]:
     """
     Accuracy-based multi-criteria scoring and ranking between a reported animal and a registered pet:
@@ -427,8 +542,9 @@ def _score_pet_candidate(report: Report, pet: Pet, owner: Optional[User]) -> Dic
       - Breed: 30% weight
       - Color / Coat: 30% weight
       - Physical Description (markings, temperament/behavior, size): 20% weight
-      - Location Proximity (coordinates + street/block/corner-lot context): 15% weight
-      - Other Relevant Details (Lost registry status, profile completeness): 5% weight
+      - Location Proximity (coordinates + street/block named in the report): 15% weight
+    The weights are relative (they are normalized over what could be compared). A Lost registry status and a QR tag "found" message
+    are bonuses added afterwards (_apply_signals), not weights.
     """
     import re
     from app.utils import match_scoring as MS
@@ -636,6 +752,8 @@ def _score_pet_candidate(report: Report, pet: Pet, owner: Optional[User]) -> Dic
     rep_pt = MS.valid_point(rep_lat, rep_lng)
     pet_pt = MS.valid_point(pet_lat, pet_lng)
     dist_m = MS.haversine_m(rep_pt[0], rep_pt[1], pet_pt[0], pet_pt[1]) if rep_pt and pet_pt else None
+    sub_name = (getattr(getattr(owner, "subdivision", None), "subdivision_name", None)
+                or getattr(getattr(report, "subdivision", None), "subdivision_name", None) or "the subdivision")
     if dist_m is not None:
         if dist_m <= 120:
             location_score = 96
@@ -649,54 +767,41 @@ def _score_pet_candidate(report: Report, pet: Pet, owner: Optional[User]) -> Dic
             location_score = 56
         else:
             location_score = 38
-        loc_expl = f"~{int(round(dist_m))} m from owner's registered address ({owner_addr or 'Selera Homes'})."
+        loc_expl = f"~{int(round(dist_m))} m from owner's registered address ({owner_addr or sub_name})."
     else:
         location_score = 62
-        loc_expl = f"Registered in the same subdivision ({owner_addr or 'Selera Homes'})."
+        loc_expl = f"Registered in the same subdivision ({owner_addr or sub_name})."
 
-    # Street / Block / Corner-lot contextual matching
+    # Street / block named in the report (works for any subdivision: no lot numbers or place names are built in)
+    loc_text_match = False
     if owner_addr and rep_loc_text:
-        addr_low = owner_addr.lower()
-        street_match = re.search(r"([a-z-]+)\s+street", addr_low)
-        block_match = re.search(r"(block\s+\d+)", addr_low)
-        lot_match = re.search(r"lot\s+(\d+)", addr_low)
-        if street_match and street_match.group(1) in rep_loc_text:
+        street = _street_name(owner_addr)
+        block = re.search(r"\b(?:block|blk)\.?\s*(\d+)\b", owner_addr.lower())
+        if street and _mentions_street(rep_loc_text, street):
             location_score = max(location_score, 94)
             loc_expl = f"Owner lives on the reported street ({owner_addr})."
-        elif block_match and block_match.group(1) in rep_loc_text:
+            loc_text_match = True
+        elif block and re.search(rf"\b(?:block|blk)\.?\s*{block.group(1)}\b", rep_loc_text):
             location_score = max(location_score, 90)
             loc_expl = f"Owner lives on the reported block ({owner_addr})."
-        elif "corner lot" in rep_loc_text and lot_match:
-            lot_num = int(lot_match.group(1))
-            if lot_num in (1, 2, 14, 15, 16):
-                location_score = min(100, location_score + 10)
-                loc_expl = f"Corner/end lot proximity ({owner_addr})."
+            loc_text_match = True
 
     loc_verdict = "match" if location_score >= 75 else ("similar" if location_score >= 55 else "differs")
 
-    # 5. OTHER RELEVANT DETAILS (5% weight)
-    if (pet.status or "").lower() == "lost":
-        other_score = 100
-        other_verdict = "match"
-        other_expl = "Registered pet is currently marked as Lost."
-    else:
-        other_score = 65
-        other_verdict = "similar"
-        other_expl = f"Active registered {pet_species.lower()} in subdivision registry."
-
     # WEIGHTED SCORE COMBINATION
-    # Weights: Breed 30%, Color/Coat 30%, Physical Description 20%, Location 15%, Other 5%
+    # Weights: Breed 30, Color/Coat 30, Physical Description 20, Location 15 (relative). A Lost registry status and a QR tag "found"
+    # message are not weights: they are added afterwards as bonuses by _apply_signals, for every scoring method alike.
     criteria = [
         ("breed", "Breed", 0.30, breed_score, breed_avail, breed_verdict, breed_expl),
         ("coat", "Color & Coat", 0.30, coat_score, coat_avail, coat_verdict, coat_expl),
         ("description", "Physical Description", 0.20, description_score, desc_avail, desc_verdict, desc_expl),
         ("location", "Location Proximity", 0.15, location_score, True, loc_verdict, loc_expl),
-        ("other", "Other Details", 0.05, other_score, True, other_verdict, other_expl),
     ]
 
-    avail_weight = sum(w for _, _, w, s, av, _, _ in criteria if av and s is not None)
+    total_weight = sum(w for _, _, w, _, _, _, _ in criteria)
+    avail_weight = sum(w for _, _, w, s, av, _, _ in criteria if av and s is not None) / total_weight
     weighted_sum = sum(w * float(s) for _, _, w, s, av, _, _ in criteria if av and s is not None)
-    raw_score = (weighted_sum / avail_weight) if avail_weight > 0 else 0.0
+    raw_score = (weighted_sum / (avail_weight * total_weight)) if avail_weight > 0 else 0.0
 
     # Coverage damping if core physical attributes (breed/coat) were not supplied on the report
     if avail_weight < 0.70:
@@ -750,12 +855,10 @@ def _score_pet_candidate(report: Report, pet: Pet, owner: Optional[User]) -> Dic
     if desc_matches:
         reasons.append(f"Physical/behavior match: {', '.join(desc_matches)}.")
     if owner_addr:
-        if dist_m is not None:
-            reasons.append(f"Location: ~{int(round(dist_m))} m from owner's address ({owner_addr}).")
-        elif "corner lot" in rep_loc_text and "Corner/end lot" in loc_expl:
+        if loc_text_match:
             reasons.append(f"Location: {loc_expl}")
-    if (pet.status or "").lower() == "lost":
-        reasons.append("Currently reported as Lost in the subdivision pet registry.")
+        elif dist_m is not None:
+            reasons.append(f"Location: ~{int(round(dist_m))} m from owner's address ({owner_addr}).")
 
     attr_rows = [
         {
@@ -917,11 +1020,9 @@ def possible_owners(db: Session, report_id: int, viewer: User) -> Dict[str, Any]
     if report.pet_id and report.pet_id not in pet_ids:
         pet_ids.insert(0, report.pet_id)
 
-    # Include all active registered pets in the report's subdivision that match the reported species,
-    # unless isolated synthetic fixture matches are being tested.
-    is_synthetic_fixture = any(m.ai_explanation == "Same breed and nearby." for m in by_pet_match.values())
+    # Include all active registered pets in the report's subdivision that match the reported species.
     rep_species = (report.animal_type or "").strip()
-    if not is_synthetic_fixture and report.subdivision_id:
+    if report.subdivision_id:
         q_sub = (
             db.query(Pet.pet_id)
             .join(User, Pet.owner_id == User.user_id)
@@ -939,6 +1040,7 @@ def possible_owners(db: Session, report_id: int, viewer: User) -> Dict[str, Any]
                 pet_ids.append(sub_pid)
 
     pets = {p.pet_id: p for p in db.query(Pet).options(joinedload(Pet.owner)).filter(Pet.pet_id.in_(pet_ids)).all()} if pet_ids else {}
+    signals = _owner_signals(db, report, list(pets.keys()))
 
     out: List[Dict[str, Any]] = []
     for pid in pet_ids:
@@ -947,8 +1049,7 @@ def possible_owners(db: Session, report_id: int, viewer: User) -> Dict[str, Any]
             continue
         # Mandatory species filter: a cat report only matches registered cats; a dog report only matches registered dogs
         if (
-            not is_synthetic_fixture
-            and rep_species.lower() in ("dog", "cat")
+            rep_species.lower() in ("dog", "cat")
             and (pet.pet_type or "").strip().lower() != rep_species.lower()
             and report.pet_id != pet.pet_id
             and pid not in by_pet_requests
@@ -980,7 +1081,7 @@ def possible_owners(db: Session, report_id: int, viewer: User) -> Dict[str, Any]
                     "colour": _pet_colour(pet), "size": pet.size_category, "markings": pet.distinctive_markings, "photo_url": _pet_photo(pet),
                     "status": pet.status},
             "registered_address": pet.registered_address,
-            "matching": _matching(match, report=report, pet=pet, owner=owner),
+            "matching": _apply_signals(_matching(match, report=report, pet=pet, owner=owner), pet, report, signals.get(pid, {})),
             "status": status, "status_label": STATUS_LABELS[status],
             "request": _request_view(db, latest, viewer) if latest is not None else None,
             "earlier_requests": [_request_view(db, r, viewer) for r in reqs[1:]],
@@ -997,6 +1098,7 @@ def possible_owners(db: Session, report_id: int, viewer: User) -> Dict[str, Any]
     out.sort(
         key=lambda c: (
             order.get(c["status"], 9),
+            0 if ((c["matching"] or {}).get("signals") or {}).get("tag_found_at") else 1,     # a QR tag "found" message first
             -(((c["matching"] or {}).get("score")) if (c["matching"] or {}).get("score") is not None else -1),
             -(((c["matching"] or {}).get("breed_score")) if (c["matching"] or {}).get("breed_score") is not None else -1),
             -(((c["matching"] or {}).get("coat_score")) if (c["matching"] or {}).get("coat_score") is not None else -1),

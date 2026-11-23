@@ -167,9 +167,10 @@ c = cand(body, bantay)
 check("a possible owner shows the resident, the pet, species, breed, colour and registered address",
       c is not None and c["resident"]["name"] == "Olive Owner" and c["pet"]["name"] == "Bantay" and c["pet"]["species"] == "Dog"
       and c["pet"]["breed"] == "Aspin" and "Brown" in c["pet"]["colour"] and c["registered_address"].startswith("Blk 4"), str(c)[:400])
-check("the matching attributes and classification come from the existing matcher",
-      c["matching"]["score"] == 82 and c["matching"]["classification_label"] == "Strong Possible Match"
-      and [a["label"] for a in c["matching"]["attributes"]] == ["Visual similarity", "Location", "Breed"])
+check("the matching attributes and classification come from the existing matcher, plus the Lost bonus (the pet is marked Lost)",
+      c["matching"]["score"] == 82 + 15 and c["matching"]["classification_label"] == "Strong Possible Match"
+      and [a["label"] for a in c["matching"]["attributes"]] == ["Visual similarity", "Location", "Breed", "Lost report & QR tag"]
+      and c["matching"]["signals"]["lost"] is True, str(c["matching"])[:400])
 check("its status is Possible Owner Identified and it can be contacted",
       c["status"] == "identified" and c["status_label"] == "Possible Owner Identified" and c["actions"]["contact"] and not c["actions"]["finalize"])
 check("a pet outside the Leader's data scope (another subdivision's registry) is not shown", cand(body, far_pet) is None)
