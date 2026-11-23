@@ -48,6 +48,13 @@ No second messaging, matching or verification system was added:
      - the registered address (or the subdivision);
      - the status, the request's details and the full verification history.
    - **Matching attributes:** each with its explanation. A score, classification and coverage appear only when the existing matcher produced them; a staff-identified (manual) match shows none.
+   - **Who is listed and how they are ranked** (`services/owner_verification.py`, since 2026-11-22):
+     - Every registered pet of the reported species in the report's subdivision is a candidate. A pet with a stored matcher result keeps that score; any other pet is scored live on breed (30), colour and coat (30), physical description (20) and location (15), normalized over what could be compared.
+     - Location uses the distance to the owner's registered address, or a street or block named in the report (`Block`/`Blk`, street names of several words). No subdivision names or lot numbers are built in.
+     - **Strong signals are bonuses, not weights,** added to either kind of score, and shown as a "Lost report & QR tag" row and at the top of the reasons:
+       - the pet is marked **Lost**: +15, or +20 when its lost-pet report is within 14 days of this report;
+       - someone scanned the pet's **QR tag and sent a found message** from 3 days before the report onward: +25, at least 90, and the pet is listed first.
+     - The classification can only go up with a bonus (75+ Strong, 52+ Potential). A bonus never confirms ownership: the owner must still answer and the Leader must still verify.
 2. **Contact Possible Owner.**
    - **The message:** the Leader edits the prefilled message, then sends it. The template is the agreed text; the subdivision name comes from the report.
    - **The conversation:** the server creates the request and opens the conversation (subject "Ownership verification: Report SS-…"). It starts with a system line describing the reported animal (type, breed, colour, size, subdivision, date), followed by the Leader's message.

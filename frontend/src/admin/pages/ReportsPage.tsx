@@ -6,7 +6,7 @@ import { useAdminData } from '../data/context';
 import { ChartCard, BarList, DataTable, LineChart, SegmentedBar, type SegPart } from '../components/charts';
 import { Field, Input, Segmented } from '../components/form';
 import { Callout, EmptyState, ErrorState, PageHeader, PageSkeleton, Panel } from '../components/layout';
-import { OUTCOME_GROUPS, REFERRAL_STATUS } from '../data/constants';
+import { CATEGORIES, OUTCOME_GROUPS, REFERRAL_STATUS } from '../data/constants';
 import type { DateRange } from '../data/selectors';
 import { addDays, fmtDate, plural, startOfDay } from '../../preview/lib/format';
 import { usePageTitle } from '../lib/hooks';
@@ -178,6 +178,13 @@ export default function ReportsPage() {
           <ChartCard
             title="Case locations in this period"
             description="Where reported cases were pinned inside the subdivision. Click any pin to open its case."
+            table={
+              <DataTable
+                caption="Cases reported in this period, with their location"
+                head={['Case', 'Category', 'Location']}
+                rows={periodCases.map((c) => [c.id, CATEGORIES[c.category].label, [c.location.area, c.location.detail].filter(Boolean).join(', ') || 'Not recorded'])}
+              />
+            }
           >
             <Suspense fallback={<div className="pv-map pv-map--loading" style={{ height: 360 }} role="status" aria-label="Loading map" />}>
               <CasesMap cases={periodCases} onSelect={(id) => navigate(adminPath(`/cases/${id}`))} height={360} />

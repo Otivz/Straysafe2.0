@@ -253,11 +253,14 @@ def test_ss_2026_0010_ranking():
     )
     db.commit()
     res_fix = OV.possible_owners(db, 99, leader)
-    assert len(res_fix["candidates"]) == 1
-    cf = res_fix["candidates"][0]
-    assert cf["matching"]["score"] == 82
-    assert cf["matching"]["classification_label"] == "Strong Possible Match"
-    assert [a["label"] for a in cf["matching"]["attributes"]] == ["Visual similarity", "Location", "Breed"]
+    # The stored match is listed with its own score, next to the subdivision's other registered dogs (no test-only shortcut any more)
+    assert all(c["pet"]["species"] == "Dog" for c in res_fix["candidates"])
+    cf = next(c for c in res_fix["candidates"] if c["pet_id"] == bantay_pet.pet_id)
+    expected = 82 if (bantay_pet.status or "").lower() != "lost" else None
+    if expected is not None:
+        assert cf["matching"]["score"] == 82, cf["matching"]["score"]
+        assert cf["matching"]["classification_label"] == "Strong Possible Match"
+    assert [a["label"] for a in cf["matching"]["attributes"]][:3] == ["Visual similarity", "Location", "Breed"]
 
     print("SS-2026-0010 RANKED CANDIDATES (All 20 Registered Cats in Selera Homes):")
     for c in cands:
@@ -270,5 +273,73 @@ def test_ss_2026_0010_ranking():
     print("\nALL POSSIBLE OWNER RANKING CHECKS PASSED!")
 
 
+def test_signals_and_location_text():
+    """Lost status and QR tag "found" messages are bonuses; street / block names work for any subdivision."""
+    from datetime import datetime, timedelta
+    from app.models.pet_tag import PetTag, PetTagScan
+
+    # Street names: suffix dropped, several words kept, block/lot words ignored
+    assert OV._street_name("Block 13 Lot 7, Molave Street") == "molave"
+    assert OV._street_name("Blk 2, San Jose St.") == "san jose"
+    assert OV._street_name("Lot 4 Phase 2 Ilang-Ilang Ave") == "ilang-ilang"
+    assert OV._street_name("Block 5 Lot 3") is None
+    assert OV._mentions_street("seen near molave st corner", "molave")
+    assert not OV._mentions_street("seen near molavenue", "molave")
+    # No place names or lot numbers are built in any more
+    src = open(OV.__file__, encoding="utf-8").read()
+    assert "Selera Homes'" not in src and "(1, 2, 14, 15, 16)" not in src and "Same breed and nearby" not in src
+
+    db, leader, reporter = build_test_session()
+    now = datetime.now()
+    rep = Report(report_id=20, user_id=reporter.user_id, category_id=2, current_status_id=2, case_status="under_assessment",
+                 subdivision_id=1, animal_type="Cat", animal_breed="Tabby, Puspin (Pusang Pinoy)", description="friendly cat",
+                 landmark="near the gate", latitude=Decimal("14.80120000"), longitude=Decimal("121.00340000"), created_at=now)
+    db.add(rep)
+    db.commit()
+    before = {c["pet_id"]: c for c in OV.possible_owners(db, 20, leader)["candidates"]}
+
+    # Pick the lowest-ranked cat and mark it Lost: it gains the Lost bonus and says so
+    low = max(before.values(), key=lambda c: c["rank"])
+    lost_pet = db.get(Pet, low["pet_id"])
+    lost_pet.status = "Lost"
+    # A second low cat gets a QR tag "found" message an hour ago
+    second = sorted(before.values(), key=lambda c: c["rank"])[-2]
+    tag = PetTag(pet_id=second["pet_id"], token="tok-signal-test-0001", status="active")
+    db.add(tag)
+    db.flush()
+    db.add(PetTagScan(tag_id=tag.tag_id, pet_id=second["pet_id"], kind="found_report", created_at=now - timedelta(hours=1)))
+    # An old tag message (a month before the report) does not count
+    third = sorted(before.values(), key=lambda c: c["rank"])[-3]
+    tag3 = PetTag(pet_id=third["pet_id"], token="tok-signal-test-0002", status="active")
+    db.add(tag3)
+    db.flush()
+    db.add(PetTagScan(tag_id=tag3.tag_id, pet_id=third["pet_id"], kind="found_report", created_at=now - timedelta(days=30)))
+    db.commit()
+
+    after = {c["pet_id"]: c for c in OV.possible_owners(db, 20, leader)["candidates"]}
+    lm = after[lost_pet.pet_id]["matching"]
+    assert lm["score"] == min(100, before[lost_pet.pet_id]["matching"]["score"] + OV.LOST_BONUS), (lm["score"], before[lost_pet.pet_id]["matching"]["score"])
+    assert any("marked this pet Lost" in r for r in lm["reasons"])
+    assert lm["signals"]["lost"] is True and lm["signals"]["bonus"] > 0
+    assert any(a["key"] == "signals" and a["available"] for a in lm["attributes"])
+
+    tm = after[second["pet_id"]]
+    assert tm["matching"]["score"] >= OV.TAG_FOUND_FLOOR
+    assert tm["rank"] == 1, f"a QR tag found message should rank first, got {tm['rank']}"
+    assert tm["matching"]["classification"] == "strong"
+    assert any("QR tag" in r for r in tm["matching"]["reasons"])
+
+    old = after[third["pet_id"]]["matching"]
+    assert old["score"] == before[third["pet_id"]]["matching"]["score"]
+    assert old["signals"]["tag_found_at"] is None
+
+    # A pet with no signal is unchanged and gets no extra row
+    plain = next(c for pid, c in after.items() if pid not in (lost_pet.pet_id, second["pet_id"], third["pet_id"]))
+    assert plain["matching"]["score"] == before[plain["pet_id"]]["matching"]["score"]
+    assert not any(a["key"] == "signals" for a in plain["matching"]["attributes"]) and plain["matching"]["signals"]["bonus"] == 0
+    print("SIGNAL AND LOCATION CHECKS PASSED!")
+
+
 if __name__ == "__main__":
     test_ss_2026_0010_ranking()
+    test_signals_and_location_text()

@@ -25,7 +25,6 @@ import LoginPage from './pages/auth/LoginPage';
 import ActivatePage from './pages/auth/ActivatePage';
 import RegisterPage from './pages/auth/RegisterPage';
 import RegistrationStatusPage from './pages/auth/RegistrationStatusPage';
-import { residentPath } from './config';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import VerifyPage from './pages/auth/VerifyPage';
 import WelcomePage from './pages/auth/WelcomePage';

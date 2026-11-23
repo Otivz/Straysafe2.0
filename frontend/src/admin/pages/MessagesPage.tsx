@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ExternalLink, Inbox, Info, Lock, MessageSquare, Send } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Inbox, Info, Lock, MessageSquare, PawPrint, Send } from 'lucide-react';
 import { fromServer } from '../../live/dates';
 import { errorMessage } from '../../preview/lib/errors';
 import { fmtDate, fmtDateTime } from '../../preview/lib/format';
@@ -8,6 +8,9 @@ import { adminPath } from '../config';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { MessageThread } from '../components/MessageThread';
+import { ANIMAL_ICON } from '../components/icons';
+import { useAdminData } from '../data/context';
+import type { Case } from '../data/types';
 import { Field, Input, SearchInput, Segmented } from '../components/form';
 import { Callout, EmptyState, ErrorState, FormError, PageHeader, Panel, Skeleton } from '../components/layout';
 import { adminApi, type ApiInbox, type ApiInboxThread, type ApiInboxThreadView, type InboxFilter } from '../live/api';
@@ -55,6 +58,8 @@ export default function MessagesPage() {
     return () => { clearTimeout(first); clearInterval(timer); document.removeEventListener('visibilitychange', refresh); };
   }, [load, q]);
 
+  const { state } = useAdminData();
+  const caseByRef = useMemo(() => new Map(state.cases.map((c) => [c.id, c])), [state.cases]);
   const selected = threadId ? Number(threadId) : null;
   const linkTo = (id: number) => adminPath(`/messages/${id}${params.toString() ? `?${params.toString()}` : ''}`);
 
@@ -77,7 +82,7 @@ export default function MessagesPage() {
               </EmptyState>
             ) : (
               <ul className="m-0 list-none p-0" aria-label="Conversations">
-                {inbox.items.map((t) => <InboxRow key={t.thread_id} t={t} active={t.thread_id === selected} to={linkTo(t.thread_id)} />)}
+                {inbox.items.map((t) => <InboxRow key={t.thread_id} t={t} c={t.report_ref ? caseByRef.get(t.report_ref) : undefined} active={t.thread_id === selected} to={linkTo(t.thread_id)} />)}
               </ul>
             )}
             {error && inbox ? <p className="sa-small sa-text-3 p-3" role="status">Could not refresh: {error}</p> : null}
@@ -93,12 +98,28 @@ export default function MessagesPage() {
   );
 }
 
-function InboxRow({ t, active, to }: { t: ApiInboxThread; active: boolean; to: string }) {
+/**
+ * The row's picture: the case's first photo (or the registered pet's), else the animal's kind; a general conversation shows a message
+ * icon. Taken from the cases already loaded for the Leader, so the inbox call is unchanged; decorative, the text says what it is.
+ */
+function ThreadThumb({ t, c }: { t: ApiInboxThread; c: Case | undefined }) {
+  const photo = c ? c.evidence.find((e) => e.kind === 'photo' && e.url)?.url || c.registeredPet?.current?.photos?.[0] || null : null;
+  const Icon = !t.report_ref ? MessageSquare : c ? ANIMAL_ICON[c.animal.type] ?? PawPrint : PawPrint;
+  return (
+    <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[var(--sa-line)] bg-[var(--sa-sand)] text-[var(--sa-ink-3)]">
+      {photo ? <img src={photo} alt="" loading="lazy" className="h-full w-full object-cover" /> : <Icon size={20} />}
+    </span>
+  );
+}
+
+function InboxRow({ t, c, active, to }: { t: ApiInboxThread; c: Case | undefined; active: boolean; to: string }) {
   const closed = t.status === 'closed';
   return (
     <li className="border-b border-[var(--sa-line)] last:border-b-0">
       <Link to={to} aria-current={active ? 'true' : undefined}
-        className={`flex flex-col gap-1 px-4 py-3 no-underline ${active ? 'bg-[var(--sa-brand-soft)]' : 'hover:bg-[var(--sa-sand)]'}`}>
+        className={`flex items-start gap-3 px-4 py-3 no-underline ${active ? 'bg-[var(--sa-brand-soft)]' : 'hover:bg-[var(--sa-sand)]'}`}>
+        <ThreadThumb t={t} c={c} />
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex items-start justify-between gap-2">
           <span className={`min-w-0 truncate ${t.unread > 0 ? 'font-bold' : 'font-semibold'}`}>{t.title}</span>
           <span className="sa-small sa-text-3 shrink-0">{t.last_at ? fmtDateTime(at(t.last_at)) : ''}</span>
@@ -110,6 +131,7 @@ function InboxRow({ t, active, to }: { t: ApiInboxThread; active: boolean; to: s
           {closed && t.close_trigger === 'case_closed' ? <Badge tone="neutral" icon={Lock}>Auto-closed: case {t.case_status === 'Resolved' ? 'resolved' : 'closed'}</Badge> : null}
           {t.report_ref ? <Badge tone="ink">{t.report_ref}</Badge> : <Badge tone="neutral">General</Badge>}
           {t.unread > 0 ? <Badge tone="brand">{t.unread} unread</Badge> : null}
+        </span>
         </span>
       </Link>
     </li>

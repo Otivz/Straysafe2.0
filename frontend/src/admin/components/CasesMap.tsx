@@ -12,6 +12,7 @@ const PRIORITY_STYLE: Record<Case['priority'], { color: string; fillColor: strin
   urgent: { color: '#991b1b', fillColor: '#dc2626', label: 'Urgent' },
   high: { color: '#92400e', fillColor: '#d97706', label: 'High priority' },
   normal: { color: '#9a3412', fillColor: '#c25216', label: 'Normal' },
+  low: { color: '#57534e', fillColor: '#a8a29e', label: 'Low' },
 };
 
 function RecenterControl() {
@@ -62,7 +63,7 @@ export default function CasesMap({
           <strong className="sa-num text-[var(--sa-ink)]">{cases.length}</strong> cases with map pins
         </span>
         <div className="flex flex-wrap items-center gap-3">
-          {(['urgent', 'high', 'normal'] as const).map((p) => (
+          {(['urgent', 'high', 'normal', 'low'] as const).map((p) => (
             <span key={p} className="inline-flex items-center gap-1.5 text-[12px]">
               <span
                 className="inline-block h-2.5 w-2.5 rounded-full border"

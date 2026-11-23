@@ -296,7 +296,7 @@ export function LiveAdminDataProvider({ children }: { children: ReactNode }) {
   const refreshResidents = useCallback(async () => {
     if (subdivisionId === null) return;
     try {
-      const users = await adminApi.users(subdivisionId);
+      const users = await adminApi.users();
       const resList = users
         .filter((u) => u.role_id === 1)
         .map((u) => ad.residentFromUser(u, directory.current.residents.get(u.user_id)?.petIds ?? []));
