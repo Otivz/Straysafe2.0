@@ -34,7 +34,7 @@ return {
     port: 5173,
     host: '0.0.0.0',
     // Google Sign-In rejects raw IP origins; https://10-1-207-251.sslip.io:5173 resolves to the same LAN IP.
-    allowedHosts: ['.sslip.io', '.trycloudflare.com', '.ngrok-free.app'],
+    allowedHosts: ['.sslip.io', '.trycloudflare.com', '.ngrok-free.app', '.ngrok-free.dev'],
     proxy: {
       '/api': {
         target: apiTarget,

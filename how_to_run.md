@@ -1,8 +1,7 @@
-
 # How to Run StraySafe 2.0 (Localhost & Tunnel Setup)
 
 > **Status:** Current
-> **Applies to:** StraySafe 2.0 Web Application (Subdivision Leader Admin & Resident Web App), Mobile Android APK, and Cloudflare Quick Tunnels.
+> **Applies to:** StraySafe 2.0 Web Application (Subdivision Leader Admin & Resident Web App), Mobile Android APK, Cloudflare Quick Tunnels, and ngrok Tunnels.
 
 ---
 
@@ -138,7 +137,70 @@ The compiled Android APK already bundles all frontend assets inside the app; it 
 
 ---
 
-## 4. Accounts & First Sign-In
+## 4. Running with ngrok (Alternative Tunnel & Static Domain)
+
+`ngrok` is pre-allowed in both `frontend/vite.config.ts` (`.ngrok-free.app`, `.ngrok-free.dev`) and `backend/app/main.py` CORS rules. You can use either a temporary random URL or your free static ngrok domain.
+
+### One-Time Setup (First Time Only)
+
+1. Install ngrok (`winget install Ngrok.Ngrok` or download from [ngrok.com](https://ngrok.com)).
+2. Connect your account authtoken once:
+   ```powershell
+   ngrok config add-authtoken <YOUR_NGROK_AUTHTOKEN>
+   ```
+
+---
+
+### Method A: Web Browser & Printed Pet QR Tag Testing with ngrok (Port 5173)
+
+Use this to open the **Subdivision Leader Admin**, **Resident Web App**, and **printed Pet QR Collar Tags** in Chrome/Safari on a phone or another computer (matches `PUBLIC_TAG_BASE_URL` and `FRONTEND_URL` in `.env`):
+
+1. **Start the Frontend ngrok Tunnel (Fixed Domain):**
+   ```powershell
+   ngrok http --url=datolitic-tatyana-subgerminally.ngrok-free.dev 5173
+   ```
+   *(Or without a fixed domain: `ngrok http 5173`)*
+2. **Open the URLs in the browser** (click **Visit Site** once on ngrok's free interstitial page):
+   - **Subdivision Leader Admin:**
+     ```text
+     https://datolitic-tatyana-subgerminally.ngrok-free.dev/
+     ```
+   - **Resident Web App:**
+     ```text
+     https://datolitic-tatyana-subgerminally.ngrok-free.dev/resident-app
+     ```
+   - **Printed Pet QR Tag Scans:**
+     ```text
+     https://datolitic-tatyana-subgerminally.ngrok-free.dev/t/<token>
+     ```
+3. **Why this works with one tunnel:** Vite forwards all `/api/*` requests to `http://127.0.0.1:8000` locally, and because `.ngrok-free.dev` is a fixed domain, printed pet QR codes continue working across tunnel restarts.
+
+---
+
+### Method B: Mobile Android APK Testing with ngrok (Port 8000)
+
+Use this when testing the installed **StraySafe Debug APK** on a phone over mobile data or external Wi-Fi:
+
+1. **Start the Backend ngrok Tunnel:**
+   ```powershell
+   ngrok http 8000
+   ```
+   *(Or with your static domain: `ngrok http --url=<your-static-domain>.ngrok-free.app 8000`)*
+2. **Copy the `Forwarding` HTTPS URL:**
+   ```text
+   https://<your-ngrok-domain>.ngrok-free.app
+   ```
+3. **Connect the Resident Android APK:**
+   - Open the **StraySafe** debug APK $\rightarrow$ tap **Connection** (or **Settings $\rightarrow$ Developer $\rightarrow$ Developer connection**).
+   - In **Backend API address**, paste the base ngrok URL (**do not add `/resident-app`**):
+     ```text
+     https://<your-ngrok-domain>.ngrok-free.app
+     ```
+   - Tap **Test connection** $\rightarrow$ **Save & connect**.
+
+---
+
+## 5. Accounts & First Sign-In
 
 The database starts with no accounts seeded. Use the following steps to access:
 
@@ -163,12 +225,12 @@ Residents sign up directly in the application:
 
 ---
 
-## 5. Troubleshooting & FAQs
+## 6. Troubleshooting & FAQs
 
 ### Why do I get `{"message":"Welcome to StraySafe API"}` when opening my tunnel in a browser?
 
-You tunneled **port 8000** (`cloudflared tunnel --url http://localhost:8000`), which is the FastAPI backend API.
-**Fix:** Run `cloudflared tunnel --url http://localhost:5173` to tunnel the web frontend.
+You tunneled **port 8000** (`cloudflared tunnel --url http://localhost:8000` or `ngrok http 8000`), which is the FastAPI backend API.
+**Fix:** Tunnel **port 5173** (`cloudflared tunnel --url http://localhost:5173` or `ngrok http 5173`) to serve the web frontend.
 
 ### Why do I get a `404 Not Found` on `/login` or `/cases` via tunnel?
 
@@ -176,10 +238,8 @@ Your tunnel is pointing to port 8000 (FastAPI), which does not serve web pages. 
 
 ### Does the tunnel URL change every time?
 
-Yes. Cloudflare Quick Tunnels create a brand-new random URL each time you run `cloudflared`.
-
-- For the web: copy the new URL into your browser.
-- For the Android app: paste the new URL into the app's Developer Connection Settings.
+- **Cloudflare Quick Tunnels (`cloudflared`):** Yes, it creates a new random URL each time you restart it.
+- **ngrok (`ngrok http`):** Changes on restart unless you pass your free static domain (`ngrok http --url=<your-domain>.ngrok-free.app 5173`).
 
 ### How to stop a service or tunnel?
 
