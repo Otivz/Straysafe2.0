@@ -16,6 +16,7 @@ import { useNow } from '../../../preview/lib/hooks';
 import { useUnsavedGuard } from '../../lib/navGuard';
 import { useSubmit } from '../../lib/useSubmit';
 import { useMediaViewer, type LightboxMediaItem } from '../../components/MediaLightbox';
+import AiInsightsCard from './AiInsightsCard';
 import type { OpenCaseDialog } from './dialogState';
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -1176,5 +1177,10 @@ function UnifiedAssessmentForm({ c, openDialog, ownershipOnly }: { c: Case; open
  */
 export default function AssessmentTab({ c, openDialog, ownershipOnly = false }: { c: Case; openDialog: OpenCaseDialog; ownershipOnly?: boolean }) {
   const formKey = `${JSON.stringify(c.assessment)}:${JSON.stringify(c.identity)}:${JSON.stringify(c.ownership)}:${c.priority}:${c.timeline.length}:${c.claims.map((x) => x.status).join()}`;
-  return <UnifiedAssessmentForm key={formKey} c={c} openDialog={openDialog} ownershipOnly={ownershipOnly} />;
+  return (
+    <>
+      {ownershipOnly ? null : <AiInsightsCard c={c} />}
+      <UnifiedAssessmentForm key={formKey} c={c} openDialog={openDialog} ownershipOnly={ownershipOnly} />
+    </>
+  );
 }

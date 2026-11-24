@@ -184,6 +184,7 @@ async function submitReport(ctx: ResidentActionContext): Promise<ResidentActionR
     ...(pet ? { pet_id: numeric(pet.id, 'pet'), last_seen_at: toServer(draft.observedAt) } : {
       pet_id: null,
       ...(breed ? { animal_breed: breed } : {}),
+      ...(draft.size ? { estimated_size: draft.size } : {}),
       ...(colorTags.length > 0 ? { animal_colors: colorTags, animal_color: colorTags.join(', ') } : {}),
     }),
     // Complaint management: when it was seen; on an animal complaint, what it looked like and what the resident knows about the owner

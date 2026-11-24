@@ -10,7 +10,9 @@ import { CATEGORIES, OUTCOME_GROUPS, REFERRAL_STATUS } from '../data/constants';
 import type { DateRange } from '../data/selectors';
 import { addDays, fmtDate, plural, startOfDay } from '../../preview/lib/format';
 import { usePageTitle } from '../lib/hooks';
+import { useAiSummary } from '../lib/useAiSummary';
 import { useAnalytics } from '../lib/useAnalytics';
+import { AiHotspotNote, AiTrendSummaryCard } from '../components/AiTrendSummary';
 import { useNow } from '../../preview/lib/hooks';
 
 const CasesMap = lazy(() => import('../components/CasesMap'));
@@ -37,7 +39,7 @@ function delta(now: number, before: number, hasEarlier: boolean, period: string)
 export default function ReportsPage() {
   usePageTitle('Analytics');
   const navigate = useNavigate();
-  const { state } = useAdminData();
+  const { state, fetchAnalytics } = useAdminData();
   const now = useNow();
   const [params, setParams] = useSearchParams();
 
@@ -61,6 +63,8 @@ export default function ReportsPage() {
   const days = Math.round(lengthMs / 86_400_000);
 
   const result = useAnalytics(range, previous);
+  // The AI summary asks the server, so it exists only on the connected app, for a valid range of at most a year (the server's limit)
+  const ai = useAiSummary(ymd(range.from), ymd(addDays(range.to, -1)), Boolean(fetchAnalytics) && !rangeError && days <= 366);
   const { data, before } = result;
   const period = `previous ${days} days`;
   const hasEarlier = before.received > 0 || before.closed > 0;
@@ -114,6 +118,8 @@ export default function ReportsPage() {
             <div role="listitem" className="sa-stat"><span className="sa-stat__value sa-num">{data.resolvedShare === null ? '—' : `${Math.round(data.resolvedShare * 100)}%`}</span><span className="sa-stat__label">Closed as resolved</span><span className="sa-meta">Closed does not always mean resolved</span></div>
             <div role="listitem" className="sa-stat"><span className="sa-stat__value sa-num">{data.medianDays === null ? '—' : data.medianDays < 10 ? data.medianDays.toFixed(1) : Math.round(data.medianDays)}</span><span className="sa-stat__label">Median days to close</span><span className="sa-meta">From report to closure</span></div>
           </div>
+
+          <AiTrendSummaryCard ai={ai} />
 
           <ChartCard
             title="Reports received and cases closed"
@@ -174,6 +180,8 @@ export default function ReportsPage() {
               </div>
             </div>
           </ChartCard>
+
+          <AiHotspotNote ai={ai} />
 
           <ChartCard
             title="Case locations in this period"

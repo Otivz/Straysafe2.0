@@ -57,6 +57,49 @@ export interface ApiCaseSummary {
   tag_messages?: { open: number; unseen: number; from_guest: number; oldest_unseen_at: string | null } | null;
 }
 
+export type AiEvidenceFlag = 'blurry' | 'no_animal' | 'contradicts_description';
+export interface ApiAiEvidenceCheck {
+  /** no_media: no photo to look at. unavailable: it could not be made (the rest of the insight is still good). */
+  status: 'ok' | 'flag' | 'no_media' | 'unavailable';
+  flags: AiEvidenceFlag[];
+  summary: string;
+  confidence: number;
+}
+/** One AI suggestion for a case (backend/app/services/case_ai_insights.py). Suggestions only: nothing here is applied by itself. */
+export interface ApiAiInsight {
+  summary: string;
+  suggested_priority: 'Urgent' | 'High' | 'Normal';
+  priority_confidence: 'high' | 'medium' | 'low' | null;
+  priority_reason: string | null;
+  category_check: { mismatch: boolean; suggested_category: CategoryId | null; suggested_category_label: string | null; reason: string | null };
+  /** Advisory only: it never rejects a photo or changes the evidence sufficiency the Leader decides. */
+  evidence_check: ApiAiEvidenceCheck;
+  model: string | null;
+  generated_at: string | null;
+}
+export interface ApiAiInsights {
+  /** disabled: Gemini is OFF or not set up. unavailable: the last attempt failed (a cached insight may still come with it). */
+  status: 'ready' | 'not_generated' | 'disabled' | 'unavailable' | 'not_applicable';
+  message: string | null;
+  insight: ApiAiInsight | null;
+}
+
+/** The Analytics page's AI trend and hotspot summary (backend/app/services/analytics_ai_summary.py). Advisory text only. */
+export interface ApiAiSummary {
+  /** disabled: AI is off or not set up. unavailable: the AI failed (a plain rule-based summary, or the last AI one, comes with it). */
+  status: 'ready' | 'not_generated' | 'disabled' | 'unavailable' | 'insufficient_data';
+  /** ai: written by Gemini. rules: a plain summary built from the same numbers, no AI. */
+  source: 'ai' | 'rules' | null;
+  message: string | null;
+  range: { from: string; to: string };
+  trend_summary: string;
+  hotspot_explanation: string;
+  repeat_patterns: string[];
+  monthly_digest: string;
+  model: string | null;
+  generated_at: string | null;
+}
+
 export interface ApiSummaryPage { total: number; limit: number; offset: number; has_more: boolean; items: ApiCaseSummary[] }
 
 export interface ApiReferralDocument { name: string; url: string; type?: string; uploaded_at?: string }
@@ -606,6 +649,12 @@ export const adminApi = {
   addNote: (id: number, text: string) => httpPost<ApiNote>(`/cases/${id}/notes`, { text }),
   move: (id: number, to: CaseStatus, note?: string) => httpPost(`/cases/${id}/status`, { to, note: note || null }),
   priority: (id: number, priority: Priority, reason: string) => httpPut(`/cases/${id}/priority`, { priority, reason }),
+  /** The Leader moves the case to another kind of concern (the AI category check only suggests it). */
+  changeCategory: (id: number, category: CategoryId) => httpPut(`/cases/${id}/category`, { category }),
+  /** The cached AI insight for the report as it is now. Never calls Gemini. */
+  aiInsights: (id: number) => httpGet<ApiAiInsights>(`/cases/${id}/ai-insights`),
+  /** Make or refresh the AI insight now. A failure is a normal answer (status 'unavailable'), not an error. */
+  generateAiInsights: (id: number) => httpPost<ApiAiInsights>(`/cases/${id}/ai-insights`, undefined, { timeoutMs: 60_000 }),
   assessment: (id: number, body: Record<string, unknown>) => httpPut(`/cases/${id}/assessment`, body),
   updateConcern: (id: number, concernId: number, body: Record<string, unknown>) => httpPut(`/cases/${id}/concerns/${concernId}`, body),
   close: (id: number, body: Record<string, unknown>) => httpPost(`/cases/${id}/close`, body),
@@ -825,4 +874,9 @@ export const adminApi = {
   deleteLandmark: (id: number) => httpDelete<{ message: string; deleted_landmark_id: number }>(`/landmarks/${id}`),
 
   analytics: (startDate: string, endDate: string) => httpGet<ApiAnalytics>('/analytics/subdivision', { start_date: startDate, end_date: endDate, group_by: 'week' }),
+  /** The cached AI trend and hotspot summary for a range (YYYY-MM-DD, both days included). Never calls Gemini. */
+  aiSummary: (from: string, to: string) => httpGet<ApiAiSummary>('/analytics/ai-summary', { from, to }),
+  /** The cached summary, or make it from aggregated, anonymised statistics; refresh makes it again. A failure is a normal answer. */
+  generateAiSummary: (from: string, to: string, refresh: boolean) =>
+    httpPost<ApiAiSummary>(`/analytics/ai-summary?from=${from}&to=${to}${refresh ? '&refresh=true' : ''}`, undefined, { timeoutMs: 60_000 }),
 };

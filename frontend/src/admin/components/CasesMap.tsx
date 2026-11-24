@@ -1,11 +1,12 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Circle, CircleMarker, MapContainer, Polygon, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet';
-import { ArrowRight, Crosshair } from 'lucide-react';
+import { ArrowRight, Crosshair, Flame } from 'lucide-react';
 import MapAutoResize from '../../components/MapControls/MapAutoResize';
 import { OSM_TILES, areaCenter, areaOutline, reportingCoverage } from '../../preview/geo';
 import { OUTLINE_STYLE, RADIUS_STYLE } from '../../preview/map/styles';
 import { ANIMAL_TYPES, CATEGORIES } from '../data/constants';
 import type { Case } from '../data/types';
+import { HOTSPOT_JOIN_M, computeHotspots, type PinnedCase } from '../lib/hotspots';
 import '../../preview/map/map.css';
 
 const PRIORITY_STYLE: Record<Case['priority'], { color: string; fillColor: string; label: string }> = {
@@ -14,6 +15,12 @@ const PRIORITY_STYLE: Record<Case['priority'], { color: string; fillColor: strin
   normal: { color: '#9a3412', fillColor: '#c25216', label: 'Normal' },
   low: { color: '#57534e', fillColor: '#a8a29e', label: 'Low' },
 };
+
+/** Hotspot zone colours: amber for 2-3 cases, red for 4 or more or any open urgent case inside. */
+const HOTSPOT_STYLE = {
+  amber: { color: '#b45309', fillColor: '#f59e0b', label: 'Amber' },
+  red: { color: '#b91c1c', fillColor: '#ef4444', label: 'Red' },
+} as const;
 
 function RecenterControl() {
   const map = useMap();
@@ -31,7 +38,10 @@ function RecenterControl() {
   );
 }
 
-/** Interactive Leaflet map showing filtered or period cases inside the subdivision reporting area. */
+/**
+ * Interactive Leaflet map showing filtered or period cases inside the subdivision reporting area. Zones where two or more of those cases
+ * are pinned within about 70 m of each other are drawn as translucent hotspot circles behind the pins (computed from `cases`, never fixed).
+ */
 export default function CasesMap({
   cases,
   onSelect,
@@ -46,7 +56,7 @@ export default function CasesMap({
   const pinned = useMemo(
     () =>
       cases.filter(
-        (c): c is Case & { location: { lat: number; lng: number } } =>
+        (c): c is PinnedCase =>
           typeof c.location.lat === 'number' &&
           Number.isFinite(c.location.lat) &&
           typeof c.location.lng === 'number' &&
@@ -54,6 +64,10 @@ export default function CasesMap({
       ),
     [cases],
   );
+  const hotspots = useMemo(() => computeHotspots(pinned), [pinned]);
+  // On by default while there are hotspots; the Leader's own choice wins from the first click on
+  const [hotspotChoice, setHotspotChoice] = useState<boolean | null>(null);
+  const showHotspots = hotspots.length > 0 && (hotspotChoice ?? true);
 
   return (
     <div className="overflow-hidden rounded-[var(--sa-radius-lg)] border border-[#e7e2da] bg-white shadow-xs">
@@ -63,6 +77,19 @@ export default function CasesMap({
           <strong className="sa-num text-[var(--sa-ink)]">{cases.length}</strong> cases with map pins
         </span>
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            aria-pressed={showHotspots}
+            disabled={hotspots.length === 0}
+            onClick={() => setHotspotChoice(!showHotspots)}
+            title={hotspots.length === 0 ? `No place has 2 or more cases pinned within ${HOTSPOT_JOIN_M} m of each other` : 'Show or hide the hotspot zones'}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+              showHotspots ? 'border-[#d97706] bg-[#fef3c7] text-[#92400e]' : 'border-[#e7e2da] bg-white text-[var(--sa-ink-2)] hover:bg-[#fbf6ee]'
+            }`}
+          >
+            <Flame size={13} aria-hidden="true" />
+            Hotspots ({hotspots.length})
+          </button>
           {(['urgent', 'high', 'normal', 'low'] as const).map((p) => (
             <span key={p} className="inline-flex items-center gap-1.5 text-[12px]">
               <span
@@ -79,6 +106,19 @@ export default function CasesMap({
             />
             Closed
           </span>
+          {showHotspots ? (
+            <span className="inline-flex items-center gap-1.5 text-[12px]" title="Amber: 2-3 cases close together. Red: 4 or more, or an open urgent case.">
+              <span
+                className="inline-block h-3 w-3 rounded-full border"
+                style={{ backgroundColor: 'rgba(245, 158, 11, 0.25)', borderColor: HOTSPOT_STYLE.amber.color }}
+              />
+              <span
+                className="-ml-1 inline-block h-3 w-3 rounded-full border"
+                style={{ backgroundColor: 'rgba(239, 68, 68, 0.25)', borderColor: HOTSPOT_STYLE.red.color }}
+              />
+              Hotspot
+            </span>
+          ) : null}
         </div>
       </div>
 
@@ -89,6 +129,29 @@ export default function CasesMap({
           <Circle center={center} radius={radius} pathOptions={RADIUS_STYLE} />
           <Polygon positions={areaOutline()} pathOptions={OUTLINE_STYLE} />
           <RecenterControl />
+          {showHotspots ? hotspots.map((h) => {
+            const st = HOTSPOT_STYLE[h.tier];
+            return (
+              <Circle
+                key={`hotspot-${h.key}`}
+                center={[h.lat, h.lng]}
+                radius={h.radiusM}
+                pathOptions={{ color: st.color, fillColor: st.fillColor, fillOpacity: 0.2, weight: 1.5, dashArray: '4 4' }}
+              >
+                <Tooltip sticky direction="top">
+                  <span className="font-semibold">{h.area ?? 'Hotspot'}</span> · {h.total} cases
+                </Tooltip>
+                <Popup>
+                  <div className="min-w-[190px] space-y-1 text-[12.5px]">
+                    <p className="m-0 text-[11px] font-semibold uppercase tracking-wide" style={{ color: st.color }}>{st.label} hotspot</p>
+                    <p className="m-0 font-semibold text-[#1c1917]">{h.area ?? 'Area not named'}</p>
+                    <p className="m-0 text-[#57534e]"><strong>{h.total}</strong> cases in this hotspot</p>
+                    <p className="m-0 text-[#78716c]">{h.urgent} urgent · {h.open} open · {h.closed} closed</p>
+                  </div>
+                </Popup>
+              </Circle>
+            );
+          }) : null}
           {pinned.map((c) => {
             const st = PRIORITY_STYLE[c.priority];
             const closed = c.status === 'closed';

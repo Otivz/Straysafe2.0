@@ -21,6 +21,8 @@ from app.models.barangay_referral import BarangayReferral, BarangayReferralUpdat
 from app.models.case_records import CaseFollowUp, CaseContactLog, CaseLink, OwnershipClaim  # noqa: F401  (case details)
 from app.models.case_concern import CaseConcern  # noqa: F401  (per-concern status on merged cases)
 from app.models.lost_found_match import LostFoundMatch  # noqa: F401  (possible lost/found matches)
+from app.models.analytics_ai_summary import AnalyticsAiSummary  # noqa: F401  (cached analytics AI summary; created by a SQL migration, not at start-up)
+from app.models.case_ai_insight import CaseAiInsight  # noqa: F401  (cached AI insights; created by a SQL migration, not at start-up)
 from app.models.case_alert import CaseAlert, CaseAlertSend  # noqa: F401  (lost & found notification alerts; created by a SQL migration, not at start-up)
 from app.models.case_messaging import CaseMessage, CaseMessageMember, CaseMessageThread  # noqa: F401  (Leader-to-resident messages and the lost/found bridge)
 from app.models.complaint import ComplaintFinding, ComplaintOffense, ComplaintRespondent, EnforcementStep, EnforcementStepEvent  # noqa: F401  (complaint management; created by a SQL migration, not at start-up)

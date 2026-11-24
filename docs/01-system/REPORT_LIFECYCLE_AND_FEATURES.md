@@ -62,7 +62,7 @@ From **Report** in the Resident app:
 |---|---|---|
 | **Lost pet** (needs a registered pet; "Register your pet first to report it missing") | `lost_pet` | The pet, when and where it was last seen, a pin |
 | **Animal complaint** | `nuisance` | What the animal did, when, a pin, optionally whose animal and what it looked like |
-| **Report an animal**, then *"What's happening with the animal?"* | `found_animal` ("It looks lost or has no owner nearby"), `injured` ("It is hurt or needs help"), or `safety` ("It may be dangerous") | Kind of animal, what happened, when, photos or video (optional), a pin. The injured form asks the animal's condition and whether it can move. The dangerous form shows *"Stay safe. Keep your distance..."* and asks what it did and whether it is still dangerous |
+| **Report an animal**, then *"What's happening with the animal?"* | `found_animal` ("It looks lost or has no owner nearby"), `injured` ("It is hurt or needs help"), or `safety` ("It may be dangerous") | Kind of animal, what happened, when, photos or video (required for incident reports), a pin. The injured form asks the animal's condition and whether it can move. The dangerous form shows *"Stay safe. Keep your distance..."* and asks what it did and whether it is still dangerous |
 
 The sixth concern, **Other animal concern** (`other`), is filed by the Leader, not offered to residents.
 
@@ -85,6 +85,7 @@ All in `create_report` ([reports.py](../../backend/app/routes/reports.py)):
 7. **After saving:**
    - lost and found reports are compared with each other in both directions and a possible match is queued for the Leader ([LOST_FOUND_MATCHING.md](LOST_FOUND_MATCHING.md));
    - an AI job is queued (animal present, photo checks, colour and breed, look-alike pets, duplicate sightings). It never blocks the submit and only suggests ([AI_COMPONENTS.md](AI_COMPONENTS.md));
+   - when a photo or video is selected while filing in the Resident or Leader app, `POST /reports/analyze-media` runs in the background to suggest untouched animal fields (`AutoTag`) and flag non-animal or AI-generated images without blocking submission;
    - the resident gets "your report was received"; the Leaders get a new-report notice, or an **urgent injured** or **dangerous animal** notice for those two kinds.
 
 ### 3.5 Waiting for a Leader to take it
@@ -117,6 +118,7 @@ For a normal case (`injured`, `safety`, `other`) the tabs are **Overview**, **As
 - Records four things, only what is sent changes: incident verification (not reviewed, verified, partial, unverified, invalid), evidence sufficiency, urgency, animal identity, and ownership.
 - **Ownership can be `confirmed` only with a named resident and at least one piece of evidence besides the pet registration** (photos with the person, matching markings, CCTV, a firsthand observation, earlier documented contact, an owner statement, a vet record). The owner is chosen by typing their name.
 - Injured and dangerous cases also record their own **welfare outcome** or **dangerous-incident outcome** before closing.
+- **AI Insights (Suggested):** an optional, cached **AI Insights** panel in Assessment provides a PII-redacted 2–3 line summary, suggested priority with reasoning, category-mismatch check, and **evidence check** (flagging blurry photos, photos with no animal, or photos that contradict the description; advisory only, it never rejects a photo or decides evidence sufficiency); the Leader reviews and applies suggestions explicitly.
 
 ### 5.2 Referrals to outside organisations (Referrals tab)
 - The Leader *records* a referral to the Barangay, animal control, a vet, an animal-welfare group, wildlife rescue or another body. StraySafe does not send anything to them and does not run rescue or custody.
@@ -182,8 +184,8 @@ For a normal case (`injured`, `safety`, `other`) the tabs are **Overview**, **As
 - **Privacy:** other residents get an allow-list of fields, never a redacted copy. Phone numbers, e-mails and house numbers are refused in public text and masked when older text is shown.
 
 ### 5.15 Dashboard and Analytics
-- **Dashboard:** "what needs me today", a count line, the attention list, missing and found animals listed apart, and recent cases.
-- **Analytics (Leader):** reports received and closed per week, outcomes, categories, referral activity and case locations, with a Chart or Table view. A closed case is not assumed resolved. Known gaps are listed in section 9.
+- **Dashboard:** "what needs me today", a count line, the attention list, missing and found animals listed apart, an **Active cases map** showing pinned open cases in the subdivision, and recent cases.
+- **Cases & Analytics (Leader):** Cases supports both a **List** and interactive **Map** view (`CasesMap`). Analytics shows reports received and closed per week, outcomes, categories, referral activity, case locations, and an **AI Trend & Hotspot Summary** card (plain-words trend summary, hotspot explanation beside `CasesMap`, repeat complaint patterns, and monthly digest from aggregated counts with zero PII; advisory, cached, with a rule-based fallback when the AI is unavailable), with a Chart or Table view. A closed case is not assumed resolved. Known gaps are listed in section 9.
 
 ### 5.16 Settings that shape the process
 Per subdivision, in one JSON row in `system_settings`: which categories are on, the confirmed **policies** (rules, references, observation days, fine, counting window), follow-up bounds, notice publication mode, the **external coordination** organisations, and the office contact ([CASE_WORKFLOW_BACKEND.md](CASE_WORKFLOW_BACKEND.md)).

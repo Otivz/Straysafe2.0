@@ -4,13 +4,14 @@
  * the result: nothing is applied to the screen's data until the request has succeeded and the touched records have been read back.
  */
 import type {
-  AdminProfile, AlertInput, Assessment, CaseStatus, ClaimStatus, ComplianceResult, ConcernStatus, ContactMethod, DangerousAssessment, DispositionId, FollowUpKind, IdentityReview, InjuredAssessment, Notice,
+  AdminProfile, AlertInput, Assessment, CaseStatus, CategoryId, ClaimStatus, ComplianceResult, ConcernStatus, ContactMethod, DangerousAssessment, DispositionId, FollowUpKind, IdentityReview, InjuredAssessment, Notice,
   OwnerContact, OwnershipReview, Priority, ReferralAttachment, ReferralPriority, ReferralStatus, Resident, Settings, WarningDelivery,
 } from './types';
 
 export type AdminAction =
   | { type: 'case/changeStatus'; id: string; to: CaseStatus; note?: string }
   | { type: 'case/changePriority'; id: string; to: Priority; reason: string }
+  | { type: 'case/changeCategory'; id: string; to: CategoryId }
   | { type: 'case/addNote'; id: string; text: string }
   | { type: 'case/saveAssessment'; id: string; assessment: Omit<Assessment, 'savedAt' | 'savedBy'>; identity: IdentityReview; ownership: OwnershipReview; alsoSetUrgent: boolean; injuredAssessment?: InjuredAssessment; dangerousAssessment?: DangerousAssessment; priorityOverride?: Priority; priorityChangeReason?: string }
   | { type: 'case/recordFollowUp'; id: string; kind: FollowUpKind; title: string; notes?: string; dueAt: string | null; doneNow: boolean }

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { isValidLocalInput, toLocalInput } from '../../../preview/lib/format';
 import { ANIMAL_ICON } from '../../components/icons';
@@ -7,7 +7,14 @@ import { BreedInput } from '../../components/BreedInput';
 import { ChoiceChips, Field, FieldGroup, Input, Select, Textarea } from '../../components/form';
 import { MediaPicker } from '../../components/MediaPicker';
 import { ConfirmSheet } from '../../components/Sheet';
-import { ShieldAlert } from 'lucide-react';
+import { Loader2, ShieldAlert } from 'lucide-react';
+import { AiBadge } from '../../components/AiBadge';
+import {
+  analyzeReportMedia, animalIdOf, appearanceNoteOf, colorsOf, isUsableAnalysis, known, looksAiGenerated, matchBreed, sizeOf,
+  type MediaAnalysis,
+} from '../../../live/mediaAnalysis';
+import { AdminApiError } from '../../../preview/lib/errors';
+import { getBreedsForAnimalType } from '../../data/breeds';
 import { Button, Callout } from '../../components/ui';
 import { residentPath } from '../../config';
 import {
@@ -59,6 +66,11 @@ type Errors = Partial<Record<
   string
 >>;
 
+type AiField = 'animalType' | 'colors' | 'breed' | 'size' | 'looks';
+type Analysis = { status: 'idle' } | { status: 'busy' } | { status: 'done'; result: MediaAnalysis } | { status: 'failed'; message: string };
+const SIZES = ['Small', 'Medium', 'Large'] as const;
+
+
 function DetailsForm({ draft }: { draft: Draft }) {
   const { state, local } = useResidentData();
   const navigate = useNavigate();
@@ -98,6 +110,72 @@ function DetailsForm({ draft }: { draft: Draft }) {
     personBitten: '', animalBitten: '', affectedCount: '', incidentTime: '', incidentLocation: '', whatHappened: '', stillNearby: '',
   };
   const patchBite = (bPatch: Partial<NonNullable<Draft['biteDetails']>>) => patch({ biteDetails: { ...bite, ...bPatch } });
+
+  // The photo check (POST /reports/analyze-media): runs in the background on the first photo (else video) chosen, fills only fields
+  // the resident has not filled or edited, and never blocks Continue. A failed, slow or rate-limited check leaves manual entry as is.
+  const [analysis, setAnalysis] = useState<Analysis>({ status: 'idle' });
+  const [ai, setAi] = useState<Partial<Record<AiField, boolean>>>({});
+  const [edited, setEdited] = useState<Partial<Record<AiField, boolean>>>({});
+  const analysisRun = useRef(0);
+  const analyzedId = useRef<string | null>(null);
+  // What the resident has entered by the time a check finishes (the answer arrives after later renders)
+  const latest = useRef({ draft, ai, edited });
+  useLayoutEffect(() => { latest.current = { draft, ai, edited }; });
+  const showsLooks = draft.category === 'nuisance' || isSafety;
+  const userEdit = (key: AiField) => { setEdited((e) => ({ ...e, [key]: true })); setAi((a) => ({ ...a, [key]: false })); };
+
+  const applyAnalysis = (result: MediaAnalysis) => {
+    if (!isUsableAnalysis(result)) return;
+    const { draft: d, ai: wasAi, edited: byHand } = latest.current;
+    const isEmpty = (key: AiField) => {
+      const v = d[key];
+      return Array.isArray(v) ? v.length === 0 : !String(v ?? '').trim();
+    };
+    const free = (key: AiField) => !byHand[key] && (isEmpty(key) || Boolean(wasAi[key]));
+    const p: Partial<Draft> = {};
+    const filled: Partial<Record<AiField, boolean>> = {};
+    const aiAnimal = animalIdOf(result);
+    if (aiAnimal && free('animalType')) { p.animalType = aiAnimal; p.customAnimalType = ''; filled.animalType = true; }
+    const animalFor = p.animalType ?? d.animalType ?? aiAnimal;
+    const pattern = known(result.coat_pattern);
+    const colors = [...colorsOf(result), ...(pattern && pattern.toLowerCase() !== 'solid' ? [pattern] : [])];
+    if (colors.length && free('colors')) { p.colors = colors; filled.colors = true; }
+    const breed = matchBreed(result.possible_breed, getBreedsForAnimalType(animalFor || null)) ?? known(result.possible_breed);
+    if (breed && free('breed')) { p.breed = breed.slice(0, 60); filled.breed = true; }
+    const size = sizeOf(result);
+    if (size && free('size')) { p.size = size; filled.size = true; }
+    const note = appearanceNoteOf(result);
+    if (note && showsLooks && free('looks')) { p.looks = note.slice(0, 200); filled.looks = true; }
+    if (Object.keys(filled).length) {
+      patch(p);
+      setAi((a) => ({ ...a, ...filled }));
+      if (filled.animalType) clear('animalType');
+    }
+  };
+
+  const analyzeFirst = (media: Draft['media']) => {
+    const first = media.find((m) => m.kind === 'photo' && m.file) ?? media.find((m) => m.kind === 'video' && m.file);
+    if (!first?.file) {
+      if (!media.some((m) => m.file)) { analysisRun.current += 1; analyzedId.current = null; setAnalysis({ status: 'idle' }); }
+      return;
+    }
+    if (first.id === analyzedId.current) return;          // already checked (or being checked)
+    analyzedId.current = first.id;
+    const run = ++analysisRun.current;
+    setAnalysis({ status: 'busy' });
+    analyzeReportMedia(first.file).then(
+      (result) => {
+        if (run !== analysisRun.current) return;
+        setAnalysis({ status: 'done', result });
+        applyAnalysis(result);
+      },
+      (err: unknown) => {
+        if (run !== analysisRun.current) return;
+        const busy = err instanceof AdminApiError && err.status === 429;
+        setAnalysis({ status: 'failed', message: busy ? 'The photo check is busy right now.' : 'We couldn’t check the photo.' });
+      },
+    );
+  };
 
   const toggleCondition = (cond: string) => {
     const exists = selectedConditions.includes(cond);
@@ -186,11 +264,43 @@ function DetailsForm({ draft }: { draft: Draft }) {
           >
             <MediaPicker
               value={draft.media}
-              onChange={(media) => { patch({ media }); clear('media'); }}
+              onChange={(media) => { patch({ media }); clear('media'); analyzeFirst(media); }}
               accept="both"
               max={kind === 'incident' ? 5 : 3}
               invalid={Boolean(errors.media)}
             />
+            {analysis.status !== 'idle' ? (
+              <div className="mt-2 flex flex-col gap-2" aria-live="polite">
+                {analysis.status === 'busy' ? (
+                  <p className="rs-meta m-0 inline-flex items-center gap-1.5">
+                    <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                    Analyzing photo… You can keep filling in the form.
+                  </p>
+                ) : null}
+                {analysis.status === 'failed' ? (
+                  <p className="rs-meta m-0">{analysis.message} Please fill in the animal details yourself. You can still continue.</p>
+                ) : null}
+                {analysis.status === 'done' && looksAiGenerated(analysis.result) ? (
+                  <Callout tone="amber" title="This photo may be AI-generated.">
+                    {analysis.result.verification_message || 'Please upload an actual photo of the animal.'}
+                  </Callout>
+                ) : null}
+                {analysis.status === 'done' && analysis.result.animal_detected === false ? (
+                  <Callout tone="info" title="We couldn’t find a dog or cat in this photo.">
+                    Please upload a clear photo of the animal. You can still continue and describe it yourself.
+                  </Callout>
+                ) : null}
+                {analysis.status === 'done' && isUsableAnalysis(analysis.result) && analysis.result.multiple_animals_message ? (
+                  <Callout tone="info">{analysis.result.multiple_animals_message}</Callout>
+                ) : null}
+                {analysis.status === 'done' && isUsableAnalysis(analysis.result) && Object.values(ai).some(Boolean) ? (
+                  <p className="rs-meta m-0"><AiBadge />Some details were suggested from your photo. Please check them.</p>
+                ) : null}
+                {analysis.status === 'done' && isUsableAnalysis(analysis.result) && !showsLooks && appearanceNoteOf(analysis.result) ? (
+                  <p className="rs-meta m-0">The photo shows: {appearanceNoteOf(analysis.result)}</p>
+                ) : null}
+              </div>
+            ) : null}
             {kind === 'incident' && draft.category !== 'safety' ? (
               <Callout tone="amber" icon={ShieldAlert} title="Keep a safe distance." className="mt-3">
                 Never approach, touch or corner an animal to get a better picture. Avoid showing people’s faces, children or house numbers.
@@ -198,12 +308,13 @@ function DetailsForm({ draft }: { draft: Draft }) {
             ) : null}
           </FieldGroup>
 
-          <FieldGroup label={kind === 'incident' ? 'What kind of animal?' : 'What kind of animal is it?'} required error={errors.animalType}>
+          <FieldGroup label={kind === 'incident' ? 'What kind of animal?' : 'What kind of animal is it?'} required error={errors.animalType} hint={ai.animalType ? <AiBadge /> : undefined}>
             <ChoiceChips
               label="Kind of animal"
               value={draft.animalType}
               onChange={(v) => {
                 patch({ animalType: v, ...(v !== 'other' ? { customAnimalType: '' } : {}) });
+                userEdit('animalType');
                 clear('animalType');
                 clear('customAnimalType');
               }}
@@ -227,19 +338,28 @@ function DetailsForm({ draft }: { draft: Draft }) {
             </Field>
           ) : null}
 
-          <FieldGroup label="Colour or coat" hint="Optional. Type a colour and press Enter (e.g. White, Tan, Black) or choose a suggestion.">
-            <ColorTagInput value={draft.colors ?? []} onChange={(colors) => patch({ colors })} />
+          <FieldGroup label="Colour or coat" hint={<>{ai.colors ? <AiBadge /> : null}Optional. Type a colour and press Enter (e.g. White, Tan, Black) or choose a suggestion.</>}>
+            <ColorTagInput value={draft.colors ?? []} onChange={(colors) => { patch({ colors }); userEdit('colors'); }} />
           </FieldGroup>
 
-          <Field label="Breed" optional>
+          <Field label="Breed" optional hint={ai.breed ? <AiBadge /> : undefined}>
             <BreedInput
               value={draft.breed ?? ''}
-              onChange={(breed) => patch({ breed })}
+              onChange={(breed) => { patch({ breed }); userEdit('breed'); }}
               animalType={draft.animalType}
               placeholder="e.g. Aspin, Shih Tzu, Puspin"
               maxLength={60}
             />
           </Field>
+
+          <FieldGroup label="Estimated size" hint={<>{ai.size ? <AiBadge /> : null}Optional.</>}>
+            <ChoiceChips
+              label="Estimated size"
+              value={draft.size ?? ''}
+              onChange={(v) => { patch({ size: v }); userEdit('size'); }}
+              options={SIZES.map((s) => ({ value: s, label: s }))}
+            />
+          </FieldGroup>
 
           {isInjured ? (
             <>
@@ -412,8 +532,8 @@ function DetailsForm({ draft }: { draft: Draft }) {
                 </Field>
               ) : null}
 
-              <Field label="Identifying characteristics" optional hint="Size, collar, ear notch, or distinguishing markings.">
-                <Input value={draft.looks ?? ''} maxLength={200} onChange={(e) => patch({ looks: e.target.value })} placeholder="e.g. Large, black collar, scar on muzzle" />
+              <Field label="Identifying characteristics" optional hint={<>{ai.looks ? <AiBadge /> : null}Size, collar, ear notch, or distinguishing markings.</>}>
+                <Input value={draft.looks ?? ''} maxLength={200} onChange={(e) => { patch({ looks: e.target.value }); userEdit('looks'); }} placeholder="e.g. Large, black collar, scar on muzzle" />
               </Field>
             </>
           ) : null}
@@ -438,8 +558,8 @@ function DetailsForm({ draft }: { draft: Draft }) {
           {draft.category === 'nuisance' || isSafety ? (
             <>
               {draft.category === 'nuisance' ? (
-                <Field label="Size, collar or markings" optional hint="Size, collar, tags or distinguishing marks that help recognise it—even if you don’t know the owner.">
-                  <Input value={draft.looks ?? ''} maxLength={200} onChange={(e) => patch({ looks: e.target.value })} placeholder="e.g. Small, red collar, notched ear" />
+                <Field label="Size, collar or markings" optional hint={<>{ai.looks ? <AiBadge /> : null}Size, collar, tags or distinguishing marks that help recognise it—even if you don’t know the owner.</>}>
+                  <Input value={draft.looks ?? ''} maxLength={200} onChange={(e) => { patch({ looks: e.target.value }); userEdit('looks'); }} placeholder="e.g. Small, red collar, notched ear" />
                 </Field>
               ) : null}
               <details className="rs-details" open={draft.suspectName || draft.suspectAddress || draft.suspectDetails ? true : undefined}>

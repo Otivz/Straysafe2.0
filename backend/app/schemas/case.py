@@ -70,6 +70,11 @@ class PriorityChange(BaseModel):
     reason: Optional[str] = Field(None, max_length=1000)
 
 
+class CategoryChange(BaseModel):
+    """The Leader moves a case to another kind of concern (never to or from Lost Pet)."""
+    category: CategoryFamilyId
+
+
 class IdentityIn(BaseModel):
     status: IdentityId
     note: Optional[str] = Field(None, max_length=2000)

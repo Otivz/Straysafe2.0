@@ -251,6 +251,8 @@ export interface Draft {
   customAnimalType?: string;
   breed?: string;
   colors?: string[];
+  /** Estimated size (optional); the report table accepts only these three. */
+  size?: 'Small' | 'Medium' | 'Large' | '';
   petId: string | null;
   petName: string;
   description: string;

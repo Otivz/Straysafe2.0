@@ -239,18 +239,11 @@ export function closureOf(c: ApiClosure, lookup: Pick<Lookup, 'nameOf'>, followU
 
 const NO_REPORTER_DETAIL = '—';
 
-function reporterOf(rep: ApiCaseSummary['reporter'], lookup: Lookup): Case['reporter'] {
-  const channel = rep.channel ?? null;
-  // A report the Leader filed as their own has no resident behind it; one filed for someone else names that person (and their
-  // account only when they have one). Older and in-app reports are the resident's own.
-  const userId = channel === 'self' ? null : rep.user_id;
+function reporterOf(userId: number | null, name: string | null, lookup: Lookup): Case['reporter'] {
   const r = lookup.resident(userId);
-  const name = channel === 'self' ? 'Subdivision Leader' : (r && !channel ? r.name : null) ?? rep.name ?? r?.name ?? 'Unknown reporter';
   return {
-    residentId: r ? idOf(userId) : channel ? null : idOf(userId), name,
-    unit: r ? [r.unit, r.street].filter(Boolean).join(', ') || NO_REPORTER_DETAIL : NO_REPORTER_DETAIL,
-    phone: rep.contact?.trim() || r?.phone || NO_REPORTER_DETAIL, email: r?.email || NO_REPORTER_DETAIL, preferredContact: 'phone',
-    channel, channelLabel: rep.channel_label ?? (channel ? undefined : 'via app'), filedBy: rep.filed_by_name ?? null,
+    residentId: idOf(userId), name: r?.name ?? name ?? 'Unknown reporter', unit: r ? [r.unit, r.street].filter(Boolean).join(', ') || NO_REPORTER_DETAIL : NO_REPORTER_DETAIL,
+    phone: r?.phone || NO_REPORTER_DETAIL, email: r?.email || NO_REPORTER_DETAIL, preferredContact: 'phone',
   };
 }
 
@@ -372,7 +365,7 @@ export function caseFromSummary(s: ApiCaseSummary, lookup: Lookup): Case {
     reportedAt,
     updatedAt: fromServer(s.updated_at) || reportedAt,
     sensitive: s.is_sensitive,
-    reporter: reporterOf(s.reporter, lookup),
+    reporter: reporterOf(s.reporter.user_id, s.reporter.name, lookup),
     assignedTo: s.assigned_leader_name?.trim() || 'Unassigned',
     evidence: (() => {
       const urls = s.photo_urls && s.photo_urls.length > 0 ? s.photo_urls : (s.thumbnail_url ? [s.thumbnail_url] : []);
@@ -398,9 +391,6 @@ export function caseFromSummary(s: ApiCaseSummary, lookup: Lookup): Case {
     claims: [], followUps: [], ownerContacts: [], warnings: [], referrals: [], relatedCaseIds: [], notes: [], threads: [], alerts: [],
     timeline: s.last_event ? [eventFromHistory({ history_id: s.last_event.history_id, remarks: s.last_event.text, created_at: s.last_event.at, updater_name: s.last_event.by_name })] : [],
     closure: s.closure ? closureOf(s.closure, lookup) : null,
-    tagMessages: s.tag_messages
-      ? { open: s.tag_messages.open, unseen: s.tag_messages.unseen, fromGuest: s.tag_messages.from_guest, oldestUnseenAt: fromServerOrNull(s.tag_messages.oldest_unseen_at) }
-      : null,
   };
 }
 
@@ -691,7 +681,7 @@ export function applyDetail(base: Case, d: ApiCaseDetail, report: ApiReport | nu
     location: { area: d.location.landmark?.trim() || 'Location not named', detail: '', ...(hasPin ? { lat: d.location.latitude as number, lng: d.location.longitude as number } : {}) },
     observedAt: reportedAt, reportedAt,
     updatedAt: timeline[0]?.at ?? base.updatedAt,
-    reporter: reporterOf(d.reporter, lookup),
+    reporter: reporterOf(d.reporter.user_id, d.reporter.name, lookup),
     assignedTo: d.assigned_leader_name?.trim() || 'Unassigned',
     evidence: evidenceFromMedia(report?.media ?? []),
     assessment: {
@@ -1037,13 +1027,6 @@ export function notificationFromApi(n: ApiNotification): AdminNotification {
       to: n.related_id !== null ? `/messages/${n.related_id}` : '/messages'
     };
   }
-  // A self-registered resident is waiting for a residency decision: its related id is the APPLICATION's; opened in Residents > Applications.
-  if ((n.type ?? '').toLowerCase() === 'resident_application') {
-    return {
-      id: String(n.notification_id), kind: 'case_activity', title: n.title, body: n.message ?? '', at: fromServer(n.created_at), read: n.is_read,
-      to: '/residents/applications',
-    };
-  }
   if ((n.type ?? '').toLowerCase() === 'qr_collar_request') {
     return {
       id: String(n.notification_id), kind: 'case_activity', title: n.title, body: n.message ?? '', at: fromServer(n.created_at), read: n.is_read,
@@ -1102,24 +1085,24 @@ export function settingsFrom(cs: ApiCaseSettings, cats: ApiCategories, prefs: Ap
   const legacyName = extRaw?.barangay_name?.trim() || '';
   const agencies = rawAgencies.length > 0
     ? rawAgencies.map((a) => ({
-        id: a.id,
-        name: a.name?.trim() || '',
-        type: (a.agency_type || 'other') as Settings['externalCoordination']['agencies'][number]['type'],
-        contactPerson: a.contact_person?.trim() || '',
-        phone: a.phone?.trim() || '',
-        email: a.email?.trim() || '',
-        address: a.address?.trim() || '',
-      }))
+      id: a.id,
+      name: a.name?.trim() || '',
+      type: (a.agency_type || 'other') as Settings['externalCoordination']['agencies'][number]['type'],
+      contactPerson: a.contact_person?.trim() || '',
+      phone: a.phone?.trim() || '',
+      email: a.email?.trim() || '',
+      address: a.address?.trim() || '',
+    }))
     : legacyName
       ? [{
-          id: 'barangay-default',
-          name: legacyName,
-          type: 'barangay' as const,
-          contactPerson: extRaw?.contact_person?.trim() || '',
-          phone: extRaw?.phone?.trim() || '',
-          email: extRaw?.email?.trim() || '',
-          address: extRaw?.address?.trim() || '',
-        }]
+        id: 'barangay-default',
+        name: legacyName,
+        type: 'barangay' as const,
+        contactPerson: extRaw?.contact_person?.trim() || '',
+        phone: extRaw?.phone?.trim() || '',
+        email: extRaw?.email?.trim() || '',
+        address: extRaw?.address?.trim() || '',
+      }]
       : [];
 
   return {

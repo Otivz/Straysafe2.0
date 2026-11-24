@@ -112,6 +112,7 @@ export async function runAction(a: AdminAction, ctx: ActionContext): Promise<Act
     // ----------------------------------------------------------------------------------------------- the case
     case 'case/changeStatus': await adminApi.move(reportId(a.id), a.to, a.note); return done({ cases: [a.id] });
     case 'case/changePriority': await adminApi.priority(reportId(a.id), a.to, a.reason); return done({ cases: [a.id] });
+    case 'case/changeCategory': await adminApi.changeCategory(reportId(a.id), a.to); return done({ cases: [a.id] });
     case 'case/addNote': await adminApi.addNote(reportId(a.id), a.text); return done({ cases: [a.id] });
 
     case 'case/saveAssessment': {

@@ -1593,6 +1593,12 @@ require_resident_registry_schema(engine)
 # Who reported a case and how (2026-11-23): applied by backend/migrations/2026-11-23_report_channel.sql, never here. Same read-only check.
 from app.db_migrations.report_channel import require as require_report_channel_schema  # noqa: E402
 require_report_channel_schema(engine)
+# Cached AI insights for a case (2026-11-24): applied by backend/migrations/2026-11-24_case_ai_insights.sql, never here. Same read-only check.
+from app.db_migrations.case_ai_insights import require as require_case_ai_insights_schema  # noqa: E402
+require_case_ai_insights_schema(engine)
+# Cached AI trend and hotspot summary of the Analytics page (2026-11-24): applied by backend/migrations/2026-11-24_analytics_ai_summary.sql, never here. Same read-only check.
+from app.db_migrations.analytics_ai_summary import require as require_analytics_ai_summary_schema  # noqa: E402
+require_analytics_ai_summary_schema(engine)
 
 async def backfill_ai_suggestions_background():
     """Run in background after startup to backfill missing AI suggestions without blocking HTTP requests."""
