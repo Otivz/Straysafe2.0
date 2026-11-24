@@ -1,6 +1,8 @@
-import { useState, type FormEvent } from 'react';
+import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { Loader2 } from 'lucide-react';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ANIMAL_ICON } from '../../components/icons';
+import { AiBadge } from '../../components/AiBadge';
 import { ColorTagInput } from '../../components/ColorTagInput';
 import { BreedInput } from '../../components/BreedInput';
 import { ChoiceChips, Field, FieldGroup, Input, Textarea } from '../../components/form';
@@ -18,9 +20,14 @@ import type { AnimalType, Media, Pet, PetSex } from '../../data/types';
 import { stepPath, useStartReport } from '../../lib/flow';
 import { useFormFocus, useLeaveGuard, useSubmit } from '../../lib/hooks';
 import { ApiDetailError, errorCodeOf } from '../../../live/http';
+import { AdminApiError } from '../../../preview/lib/errors';
+import { analyzeReportMedia, animalIdOf, colorsOf, isUsableAnalysis, type MediaAnalysis } from '../../../live/mediaAnalysis';
 
 interface Values { name: string; type: AnimalType | ''; sex: PetSex; breed: string; colors: string[]; ageText: string; markings: string; description: string }
 type Errors = Partial<Record<'name' | 'type' | 'color' | 'photo', string>>;
+/** The photo check on the registration photo: the fields it may suggest, and where the check stands. */
+type AiField = 'type' | 'colors';
+type Analysis = { status: 'idle' } | { status: 'busy' } | { status: 'done'; result: MediaAnalysis } | { status: 'failed'; message: string };
 /** A record the subdivision office already holds that looks like the pet being registered (the server stops and asks). */
 type HeldRecord = { id: string; name: string; kind: string };
 
@@ -53,6 +60,57 @@ function PetForm({ pet }: { pet?: Pet }) {
   const dirty = JSON.stringify(v) !== JSON.stringify(initial) || media.map((m) => m.id).join() !== initialPhoto.map((m) => m.id).join();
   const guard = useLeaveGuard(dirty, residentPath(pet ? `/pets/${pet.id}` : '/pets'));
   const set = <K extends keyof Values>(key: K, value: Values[K]) => { setV((p) => ({ ...p, [key]: value })); setErrors((p) => ({ ...p, [key as string]: undefined })); };
+
+  // The photo check (POST /reports/analyze-media, purpose "pet": the local detector only): runs in the background on a newly chosen photo,
+  // fills only the kind of animal and the colours the owner has not filled or edited, and never blocks saving.
+  const [analysis, setAnalysis] = useState<Analysis>({ status: 'idle' });
+  const [ai, setAi] = useState<Partial<Record<AiField, boolean>>>({});
+  const [edited, setEdited] = useState<Partial<Record<AiField, boolean>>>({});
+  const analysisRun = useRef(0);
+  const analyzedId = useRef<string | null>(null);
+  // What the owner has entered by the time a check finishes (the answer arrives after later renders)
+  const latest = useRef({ v, ai, edited });
+  useLayoutEffect(() => { latest.current = { v, ai, edited }; });
+  const userEdit = (key: AiField) => { setEdited((e) => ({ ...e, [key]: true })); setAi((a) => ({ ...a, [key]: false })); };
+
+  const applyAnalysis = (result: MediaAnalysis) => {
+    if (!isUsableAnalysis(result)) return;
+    const { v: cur, ai: wasAi, edited: byHand } = latest.current;
+    const filled: Partial<Record<AiField, boolean>> = {};
+    const patch: Partial<Values> = {};
+    const kind = animalIdOf(result);
+    if (kind && !byHand.type && (!cur.type || wasAi.type)) { patch.type = kind; filled.type = true; }
+    const colors = colorsOf(result);
+    if (colors.length && !byHand.colors && (cur.colors.length === 0 || wasAi.colors)) { patch.colors = colors; filled.colors = true; }
+    if (Object.keys(filled).length === 0) return;
+    setV((p) => ({ ...p, ...patch }));
+    setAi((a) => ({ ...a, ...filled }));
+    setErrors((p) => ({ ...p, ...(filled.type ? { type: undefined } : {}), ...(filled.colors ? { color: undefined } : {}) }));
+  };
+
+  const analyzePhoto = (next: Media[]) => {
+    const first = next.find((m) => m.kind === 'photo' && m.file);
+    if (!first?.file) {
+      if (!next.some((m) => m.file)) { analysisRun.current += 1; analyzedId.current = null; setAnalysis({ status: 'idle' }); }
+      return;
+    }
+    if (first.id === analyzedId.current) return;          // already checked (or being checked)
+    analyzedId.current = first.id;
+    const run = ++analysisRun.current;
+    setAnalysis({ status: 'busy' });
+    analyzeReportMedia(first.file, 'pet').then(
+      (result) => {
+        if (run !== analysisRun.current) return;
+        setAnalysis({ status: 'done', result });
+        applyAnalysis(result);
+      },
+      (err: unknown) => {
+        if (run !== analysisRun.current) return;
+        const busy = err instanceof AdminApiError && err.status === 429;
+        setAnalysis({ status: 'failed', message: busy ? 'The photo check is busy right now.' : 'We couldn’t check the photo.' });
+      },
+    );
+  };
 
   const save = async (confirmNew: boolean) => {
     const saved: Pet = {
@@ -120,11 +178,51 @@ function PetForm({ pet }: { pet?: Pet }) {
       ) : null}
       <form id="pet-form" className="rs-stack" onSubmit={(e) => void submit(e)} noValidate>
         <div ref={ref} className="rs-stack">
+          <FieldGroup
+            label="Photo"
+            required
+            error={errors.photo}
+            hint="For accurate animal identification and verification, please upload a clear photo of the animal."
+          >
+            <MediaPicker
+              value={media}
+              onChange={(next) => { setMedia(next); setErrors((p) => ({ ...p, photo: undefined })); analyzePhoto(next); }}
+              accept="photo"
+              max={1}
+              invalid={Boolean(errors.photo)}
+            />
+            {analysis.status !== 'idle' ? (
+              <div className="mt-2 flex flex-col gap-2" aria-live="polite">
+                {analysis.status === 'busy' ? (
+                  <p className="rs-meta m-0 inline-flex items-center gap-1.5">
+                    <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                    Analyzing photo… You can keep filling in the form.
+                  </p>
+                ) : null}
+                {analysis.status === 'failed' ? (
+                  <p className="rs-meta m-0">{analysis.message} Please fill in your pet’s details yourself. You can still register.</p>
+                ) : null}
+                {analysis.status === 'done' && analysis.result.animal_detected === false ? (
+                  <Callout tone="info" title="We couldn’t find a dog or cat in this photo.">
+                    Please upload a clear photo of your pet. You can still register and fill in the details yourself.
+                  </Callout>
+                ) : null}
+                {analysis.status === 'done' && isUsableAnalysis(analysis.result) && analysis.result.multiple_animals_detected ? (
+                  <Callout tone="amber" title="This photo seems to show more than one animal.">
+                    Use a photo of only {v.name.trim() || 'this pet'}, so the neighbours and the office can recognise them.
+                  </Callout>
+                ) : null}
+                {analysis.status === 'done' && isUsableAnalysis(analysis.result) && Object.values(ai).some(Boolean) ? (
+                  <p className="rs-meta m-0"><AiBadge />Some details were suggested from your photo. Please check them.</p>
+                ) : null}
+              </div>
+            ) : null}
+          </FieldGroup>
           <Field label="Name" required error={errors.name}>
             <Input value={v.name} onChange={(e) => set('name', e.target.value)} maxLength={40} autoComplete="off" placeholder="Mochi" />
           </Field>
-          <FieldGroup label="Dog or cat" required error={errors.type} hint="Dogs and cats can be registered for now.">
-            <ChoiceChips label="Dog or cat" value={v.type} onChange={(t) => set('type', t)} options={PET_TYPE_IDS.map((id) => ({ value: id, label: ANIMAL_TYPES[id], icon: ANIMAL_ICON[id] }))} />
+          <FieldGroup label="Dog or cat" required error={errors.type} hint={<>{ai.type ? <AiBadge /> : null}Dogs and cats can be registered for now.</>}>
+            <ChoiceChips label="Dog or cat" value={v.type} onChange={(t) => { set('type', t); userEdit('type'); }} options={PET_TYPE_IDS.map((id) => ({ value: id, label: ANIMAL_TYPES[id], icon: ANIMAL_ICON[id] }))} />
           </FieldGroup>
           <FieldGroup label="Sex (optional)">
             <ChoiceChips label="Sex" value={v.sex} onChange={(s) => set('sex', s)} options={(['male', 'female'] as const).map((id) => ({ value: id, label: SEX_LABEL[id] }))} />
@@ -138,8 +236,8 @@ function PetForm({ pet }: { pet?: Pet }) {
               placeholder="e.g. Shih Tzu, Aspin"
             />
           </Field>
-          <FieldGroup label="Colour or coat" required error={errors.color} hint="Type a colour and press Enter or pick a suggestion to add separate tags.">
-            <ColorTagInput value={v.colors} onChange={(colors) => { set('colors', colors); setErrors((p) => ({ ...p, color: undefined })); }} invalid={Boolean(errors.color)} />
+          <FieldGroup label="Colour or coat" required error={errors.color} hint={<>{ai.colors ? <AiBadge /> : null}Type a colour and press Enter or pick a suggestion to add separate tags.</>}>
+            <ColorTagInput value={v.colors} onChange={(colors) => { set('colors', colors); userEdit('colors'); setErrors((p) => ({ ...p, color: undefined })); }} invalid={Boolean(errors.color)} />
           </FieldGroup>
           <Field label="Age" optional>
             <Input value={v.ageText} onChange={(e) => set('ageText', e.target.value)} maxLength={30} placeholder="3 years" />
@@ -150,20 +248,6 @@ function PetForm({ pet }: { pet?: Pet }) {
           <Field label="About your pet" optional hint="How they act around strangers, whether they answer to their name.">
             <Textarea value={v.description} onChange={(e) => set('description', e.target.value)} rows={3} maxLength={300} />
           </Field>
-          <FieldGroup
-            label="Photo"
-            required
-            error={errors.photo}
-            hint="For accurate animal identification and verification, please upload a clear photo of the animal."
-          >
-            <MediaPicker
-              value={media}
-              onChange={(next) => { setMedia(next); setErrors((p) => ({ ...p, photo: undefined })); }}
-              accept="photo"
-              max={1}
-              invalid={Boolean(errors.photo)}
-            />
-          </FieldGroup>
         </div>
       </form>
       {guard.asking ? <DiscardSheet onDiscard={guard.discard} onKeep={guard.keep} /> : null}

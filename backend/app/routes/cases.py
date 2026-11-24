@@ -11,6 +11,8 @@ Administrator). Residents and Barangay staff get nothing from here.
     POST /cases/{id}/status                     move by hand (reported / under review / in progress)
     PUT  /cases/{id}/assessment                 incident, evidence, urgency, animal identity, ownership
     PUT  /cases/{id}/priority
+    PUT  /cases/{id}/category                   the Leader moves the case to another kind of concern (audited)
+    GET/POST /cases/{id}/ai-insights            cached, suggest-only AI summary / priority / category check (services/case_ai_insights.py)
     POST /cases/{id}/close                      a documented disposition; the outcome is never assumed to be a resolution
     POST /cases/{id}/reopen
     POST /cases/{id}/warnings/{warning_id}/observations   a compliance observation (concluding it never closes the case)
@@ -25,16 +27,17 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.limiter import limiter
 from app.models.audit_log import AuditLog
 from app.models.case_records import CaseContactLog, CaseFollowUp, OwnershipClaim
 from app.models.barangay_referral import BarangayReferral
 from app.models.report import ReportCategory
 from app.models.user import Barangay, Subdivision, User
-from app.schemas.case import (AssessmentIn, CaseSettings, CloseIn, ComplianceIn, ConcernUpdateIn, ContactIn, ClaimReviewIn, DuplicateDecisionIn, FollowUpCancel, FollowUpDone,
+from app.schemas.case import (AssessmentIn, CaseSettings, CategoryChange, CloseIn, ComplianceIn, ConcernUpdateIn, ContactIn, ClaimReviewIn, DuplicateDecisionIn, FollowUpCancel, FollowUpDone,
                               FollowUpIn, LinkIn, NoteIn, PriorityChange, ReferralIn, ReferralUpdateIn, ReopenIn, StatusMove,
                               UnlinkIn)
-from app.services import case_claims, case_compliance, case_concerns, case_lifecycle as L, case_notes, case_summaries, case_view, case_work
-from app.utils import case_policy, case_vocab as V
+from app.services import case_ai_insights, case_claims, case_compliance, case_concerns, case_lifecycle as L, case_notes, case_summaries, case_view, case_work
+from app.utils import case_policy, case_state, case_vocab as V
 from app.utils.auth import get_current_user, verify_subdivision_scope
 
 router = APIRouter(prefix="/cases", tags=["cases"])
@@ -162,7 +165,11 @@ def change_status(report_id: int, body: StatusMove, db: Session = Depends(get_db
 @router.put("/{report_id}/assessment")
 def put_assessment(report_id: int, body: AssessmentIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     report = L.case_for_staff(db, report_id, user, write=True)
+    insight = case_ai_insights.current_row(db, report) if body.priority_override else None
+    before = case_state.priority_of(report)
     L.save_assessment(db, report, user, body)
+    if body.priority_override:
+        case_ai_insights.record_decision(db, report, user, "priority", body.priority_override, before, insight)
     db.commit()
     return _detail(db, report_id, user)
 
@@ -170,9 +177,39 @@ def put_assessment(report_id: int, body: AssessmentIn, db: Session = Depends(get
 @router.put("/{report_id}/priority")
 def put_priority(report_id: int, body: PriorityChange, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     report = L.case_for_staff(db, report_id, user, write=True)
+    insight = case_ai_insights.current_row(db, report)      # read BEFORE the change: it is what the Leader was looking at
+    before = case_state.priority_of(report)
     L.set_priority(db, report, user, body.priority, body.reason)
+    case_ai_insights.record_decision(db, report, user, "priority", body.priority, before, insight)
     db.commit()
     return _detail(db, report_id, user)
+
+
+@router.put("/{report_id}/category")
+def put_category(report_id: int, body: CategoryChange, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Move the case to another kind of concern. Only the Leader does this (the AI category check just suggests it)."""
+    report = L.case_for_staff(db, report_id, user, write=True)
+    insight = case_ai_insights.current_row(db, report)
+    case_ai_insights.switch_category(db, report, user, body.category, insight)
+    db.commit()
+    return _detail(db, report_id, user)
+
+
+@router.get("/{report_id}/ai-insights")
+def get_ai_insights(report_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """The cached AI insight for the report as it is now, or not_generated / disabled. Never calls Gemini."""
+    report = L.case_for_staff(db, report_id, user)
+    return case_ai_insights.read(db, report)
+
+
+@router.post("/{report_id}/ai-insights")
+@limiter.limit("10/minute")
+def post_ai_insights(request: Request, report_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Make (or refresh) the insight now: redacted text to Gemini, strict JSON back, cached and logged. Suggestions only; a failure is a normal answer."""
+    report = L.case_for_staff(db, report_id, user)
+    result = case_ai_insights.generate(db, report, user)
+    db.commit()
+    return result
 
 
 @router.put("/{report_id}/concerns/{concern_id}")
