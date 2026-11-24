@@ -158,7 +158,10 @@ Use this to open the **Subdivision Leader Admin**, **Resident Web App**, and **p
 1. **Start the Frontend ngrok Tunnel (Fixed Domain):**
    ```powershell
    ngrok http --url=datolitic-tatyana-subgerminally.ngrok-free.dev 5173
+
+   "%LOCALAPPDATA%\Microsoft\WinGet\Links\ngrok.exe" http --url=https://datolitic-tatyana-subgerminally.ngrok-free.dev 5173
    ```
+
    *(Or without a fixed domain: `ngrok http 5173`)*
 2. **Open the URLs in the browser** (click **Visit Site** once on ngrok's free interstitial page):
    - **Subdivision Leader Admin:**
@@ -185,6 +188,7 @@ Use this when testing the installed **StraySafe Debug APK** on a phone over mobi
    ```powershell
    ngrok http 8000
    ```
+
    *(Or with your static domain: `ngrok http --url=<your-static-domain>.ngrok-free.app 8000`)*
 2. **Copy the `Forwarding` HTTPS URL:**
    ```text
