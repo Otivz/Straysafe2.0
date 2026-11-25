@@ -36,6 +36,9 @@ export interface MediaAnalysis {
   verification_message?: string;
   authenticity_details?: string;
   message?: string;
+  /** "ai": the AI looked at the photo. "basic": the AI was unavailable, so only the local detector and a basic colour
+   *  reading answered (no breed, size or pattern). Absent on older servers and on the pet check. */
+  analysis_source?: 'ai' | 'basic';
 }
 
 /** The check runs YOLO and, when enabled, Gemini; a minute is plenty. The form never waits for it. */
@@ -67,6 +70,11 @@ export const known = (v: string | null | undefined): string | null => {
 /** True when the answer describes a dog or cat the forms may fill from. */
 export function isUsableAnalysis(a: MediaAnalysis): boolean {
   return a.animal_detected === true && (a.animal_type === 'Dog' || a.animal_type === 'Cat');
+}
+
+/** True when the AI was unavailable and only the animal type and a basic colour reading came back. */
+export function isBasicAnalysis(a: MediaAnalysis): boolean {
+  return a.analysis_source === 'basic';
 }
 
 /** True when the photo looks AI-generated. */

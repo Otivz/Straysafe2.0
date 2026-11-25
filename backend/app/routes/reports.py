@@ -1616,12 +1616,12 @@ def analyze_report_media(
                 
                 - animal_type: "Dog" | "Cat" | "Unknown" (MUST be "Unknown" if not a dog or cat).
                 - detected_subject_description: Brief description of what is actually shown (e.g. "Two dogs: Jack Russell Terrier and terrier mix", "White and gray patched Aspin dog", "Puspin cat").
-                - primary_color: Dominant fur color ("White", "Brown", "Black", "Gray", "Orange", "Tan", "Cream", "Golden", or "Unknown").
+                - primary_color: Dominant fur color ("White", "Brown", "Black", "Gray", "Orange", "Tan", "Cream", "Golden", or "Unknown"). Name only the animal's own fur: ignore shadows, the ground, vehicles and other objects. Use "Gray" only for gray fur, never for shade.
                 - secondary_color: Secondary fur color (e.g. "Gray", "Brown", "Black", "White", or "None").
                 - tertiary_color: Third fur color or "None".
                 - coat_pattern: "Bicolor", "Patched", "Solid", "Tricolor", "Spotted", "Striped", "Brindle", "Merle", "Tabby", "Calico", "Tortoiseshell", or "Unknown".
-                - estimated_size: "Small" (cats, small breeds, puppies), "Medium" (standard Aspin dogs, spaniels), "Large" (retrievers, huskies, shepherds).
-                - possible_breed: Likely breed name (e.g. "Aspin" for Philippine local dogs, "Puspin" for Philippine domestic cats, "Shih Tzu", "Golden Retriever", "Siamese", etc.).
+                - estimated_size: Judge the animal's own build, not the camera distance. "Small" (cats, puppies, toy and small breeds such as Shih Tzu, Chihuahua, Pomeranian, Maltese, Poodle, Dachshund), "Medium" (most adult local mixed-breed dogs, beagles, spaniels), "Large" (retrievers, huskies, shepherds, Rottweilers), or "Unknown" if you cannot judge.
+                - possible_breed: The breed the animal visibly resembles, from its coat length and texture, face shape, muzzle, ears and build. Do NOT default to a local breed: use "Aspin" (Philippine local dog) or "Puspin" (Philippine local cat) only when the animal looks like a local mixed breed (short smooth coat, no distinct breed features). A long-haired or flat-faced small dog is not an Aspin. If you are not reasonably sure, answer "Unknown". Examples: "Shih Tzu", "Aspin", "Puspin", "Golden Retriever", "Siamese".
                 - collar_detected: true ONLY if collar/harness is visible on the primary subject, otherwise false.
                 - qr_tag_detected: true ONLY if QR/ID tag is attached, otherwise false.
 
@@ -1765,12 +1765,13 @@ def analyze_report_media(
                         "message": reject_msg
                     }
 
-                p_col = str(data.get("primary_color", "White")).strip()
+                # A field the AI left out stays "Unknown": nothing is invented (no default breed, size or colour)
+                p_col = str(data.get("primary_color", "Unknown")).strip()
                 s_col = str(data.get("secondary_color", "None")).strip()
                 t_col = str(data.get("tertiary_color", "None")).strip()
                 pattern = str(data.get("coat_pattern", "Patched" if s_col not in ["None", ""] else "Solid")).strip()
-                size_est = str(data.get("estimated_size", "Medium" if animal_type == "Dog" else "Small")).strip()
-                breed_est = str(data.get("possible_breed", "Aspin" if animal_type == "Dog" else "Puspin")).strip()
+                size_est = str(data.get("estimated_size", "Unknown")).strip()
+                breed_est = str(data.get("possible_breed", "Unknown")).strip()
                 
                 gemini_count = 1
                 try:
@@ -1808,7 +1809,8 @@ def analyze_report_media(
                     "verification_status": v_status,
                     "verification_message": v_msg,
                     "authenticity_details": auth_details,
-                    "message": v_msg if v_status == "ai_generated" else "Animal detected and analyzed successfully."
+                    "message": v_msg if v_status == "ai_generated" else "Animal detected and analyzed successfully.",
+                    "analysis_source": "ai",
                 }
             except Exception as gem_err:
                 print("Gemini Vision analysis error:", gem_err)
@@ -1846,22 +1848,23 @@ def analyze_report_media(
                 "possible_breed": "Unknown",
             }
 
-        p_color = "White"
+        # The AI did not answer: only the local detector and a basic colour reading are used. Nothing is guessed: breed, size
+        # and coat pattern stay "Unknown" (they used to be "Aspin"/"Puspin", "Medium" and a pattern counted from the colours),
+        # and at most two colours are named, ignoring small patches and the gray of shade between black and white fur.
+        p_color = "Unknown"
         s_color = "None"
         t_color = "None"
-        coat_pattern_val = "Solid"
+        coat_pattern_val = "Unknown"
 
         if is_detected:
             try:
                 cropped_bytes_io = io.BytesIO()
-                cropped_img.save(cropped_bytes_io, format='JPEG')
-                extracted_color_str = extract_dominant_colors(cropped_bytes_io.getvalue())
+                cropped_img.convert("RGB").save(cropped_bytes_io, format='JPEG')
+                extracted_color_str = extract_dominant_colors(cropped_bytes_io.getvalue(), max_colors=2, min_share=0.15,
+                                                              drop_shading_gray=True)
                 extracted_colors = [c.strip() for c in extracted_color_str.split(',') if c.strip() and c.strip() != "Unknown"]
-                p_color = extracted_colors[0] if extracted_colors else "White"
+                p_color = extracted_colors[0] if extracted_colors else "Unknown"
                 s_color = extracted_colors[1] if len(extracted_colors) > 1 else "None"
-                t_color = extracted_colors[2] if len(extracted_colors) > 2 else "None"
-                if s_color not in ["None", ""]:
-                    coat_pattern_val = "Bicolor" if t_color in ["None", ""] else "Tricolor"
             except Exception as col_err:
                 print("Color extraction fallback error:", col_err)
 
@@ -1875,8 +1878,8 @@ def analyze_report_media(
             "secondary_color": s_color,
             "tertiary_color": t_color,
             "coat_pattern": coat_pattern_val,
-            "estimated_size": "Small" if detected_type == "Cat" else "Medium",
-            "possible_breed": "Puspin" if detected_type == "Cat" else "Aspin",
+            "estimated_size": "Unknown",
+            "possible_breed": "Unknown",
             "collar_detected": False,
             "qr_tag_detected": False,
             "is_ai_generated": False,
@@ -1887,7 +1890,8 @@ def analyze_report_media(
             "verification_status": STATUS_NOT_CHECKED,
             "verification_message": "Animal detected with the local vision model. Authenticity was not checked (AI offline).",
             "authenticity_details": "Only the local model ran (animal box + coat colors); no AI-generated check was possible.",
-            "message": "Animal detected and analyzed successfully with local vision engine." if is_detected else f"No animal detected in the uploaded {media_label}."
+            "message": "Animal detected and analyzed successfully with local vision engine." if is_detected else f"No animal detected in the uploaded {media_label}.",
+            "analysis_source": "basic",
         }
     except HTTPException:
         raise
