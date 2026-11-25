@@ -131,10 +131,16 @@ flowchart LR
 
 ## 4. Key Gaps Solved by Proposed STRAY-SAFE 2.0
 
-| Existing Manual Bottleneck                                                       | Proposed STRAY-SAFE 2.0 Improvement                                                                           |
-| :------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------ |
-| Walk-in, SMS, and Messenger reports scatter across devices with no tracking code | Unified 6-category reporting with automatic `Reference ID`, GPS pin, and status timeline                    |
-| Street descriptions only; no geofence boundary or map pin correction             | Interactive Leaflet map with subdivision geofence validation and Leader pin fix                               |
-| Memory/logbook lookups miss repeat incidents and look-alikes                     | Structured Match Leads (`breed`, `color`, `location`), case linking, and QR collar tags (`/t/:token`) |
-| Loose paper warning slips with no acknowledgement or observation tracking        | Standardized warning letters, PDF delivery, acknowledgement tracking, and Owner Observation                   |
-| Paper folders prevent quick trend counts or verifiable history                   | Digital case closures, case analytics, and immutable chronological audit logs                                 |
+*(Updated 2026-11-24 to match the system as it works today. The diagrams above describe the manual process before the system and are unchanged.)*
+
+| Existing Manual Bottleneck | Proposed STRAY-SAFE 2.0 Improvement |
+| :--- | :--- |
+| Resident and pet lists live in a homeowner spreadsheet or paper registry; no way to know who is really a resident | The Subdivision Leader imports the official resident list (e-mail activation links) or approves residents who register themselves; pets are registered with photos and a permanent QR collar tag |
+| Walk-in, SMS, and Messenger reports scatter across devices with no tracking code | Unified 6-category reporting with an automatic `Reference ID`, a GPS pin, a status timeline, and an automatic starting priority for injured and dangerous animals |
+| Street descriptions only; no coverage boundary or map pin correction | Interactive Leaflet map with a reporting coverage area (centre point and radius) and Leader pin fix |
+| Memory/logbook lookups miss repeat incidents and look-alikes | Match leads (`breed`, `colour`, `location`), possible pet owners with the owner's own confirmation, and case linking and merging |
+| A person who finds a pet can only shout at the gate or comment on a Facebook post, and the owner may never see it | A QR collar tag (`/t/:token`) lets anyone, with or without an account, tell the owner where the pet is, with a place, a note and a photo; the owner answers (Viewed, Pet Returned, Not the Pet) and the Leader sees it on the case |
+| Lost and found notices are unmoderated posts that nobody closes | Community notices published at once for a lost pet, reviewed by the Leader for a found animal, with sightings and closure when the pet is home |
+| Loose paper warning slips with no acknowledgement or observation tracking | Standardized warning letters with delivery tracking, acknowledgement, observation periods, and for complaints an offense count and steps (letters, summons, fine record, meeting) |
+| Phone referrals to outside agencies are not written down, and nobody follows up | A referral log per case (agency, contact, status, outcome) with follow-up dates; a referral never closes the case |
+| Paper folders prevent quick trend counts or verifiable history | A Dashboard of what needs attention, case closures with a documented reason, analytics, and an append-only audit log |

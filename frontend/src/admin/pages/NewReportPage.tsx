@@ -19,7 +19,7 @@ import { usePageTitle } from '../lib/hooks';
 import { useSubmit } from '../lib/useSubmit';
 import { caseRef } from '../../live/refs';
 import {
-  analyzeReportMedia, animalIdOf, appearanceNoteOf, colorTextOf, isUsableAnalysis, looksAiGenerated, matchBreed, pickAnalyzableFile, sizeOf,
+  analyzeReportMedia, animalIdOf, appearanceNoteOf, colorTextOf, isBasicAnalysis, isUsableAnalysis, looksAiGenerated, matchBreed, pickAnalyzableFile, sizeOf,
   type MediaAnalysis,
 } from '../../live/mediaAnalysis';
 import { AdminApiError } from '../../preview/lib/errors';
@@ -562,7 +562,9 @@ export default function NewReportPage() {
                     <Callout tone="info">{analysis.result.multiple_animals_message}</Callout>
                   ) : null}
                   {analysis.status === 'done' && isUsableAnalysis(analysis.result) && Object.values(ai).some(Boolean) ? (
-                    <p className="sa-meta m-0"><AiSuggestedTag /> Some animal details were suggested from the photo. Review them before filing.</p>
+                    <p className="sa-meta m-0"><AiSuggestedTag /> {isBasicAnalysis(analysis.result)
+                      ? 'The AI photo check is unavailable right now, so only the animal and its main colours were read from the photo (shadows can make colours wrong). Breed and size were not guessed. Review before filing.'
+                      : 'Some animal details were suggested from the photo. Review them before filing.'}</p>
                   ) : null}
                 </div>
               ) : null}

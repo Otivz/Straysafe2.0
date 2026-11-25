@@ -144,9 +144,25 @@ The compiled Android APK already bundles all frontend assets inside the app; it 
 ### One-Time Setup (First Time Only)
 
 1. Install ngrok (`winget install Ngrok.Ngrok` or download from [ngrok.com](https://ngrok.com)).
-2. Connect your account authtoken once:
+2. Connect your account authtoken once (copy it from the ngrok dashboard, **Your Authtoken**; keep it private, never paste it in chats or files):
+
    ```powershell
    ngrok config add-authtoken <YOUR_NGROK_AUTHTOKEN>
+   ```
+3. **Check the version.** Free accounts need **ngrok 3.30.0 or newer** (an older agent fails with `ERR_NGROK_121 ... agent version is too old`):
+
+   ```powershell
+   ngrok version
+   ngrok update
+   ```
+
+   (`winget upgrade ngrok.ngrok` also works. Close any running ngrok window first.)
+4. **Your free fixed address** is the "dev domain" listed under **Domains** in the dashboard (here `datolitic-tatyana-subgerminally.ngrok-free.dev`). The free plan gives one; you do not create a new one.
+5. **Put it in the root `.env`** (then restart the backend), so printed pet QR codes and e-mail links use it:
+
+   ```text
+   PUBLIC_TAG_BASE_URL=https://datolitic-tatyana-subgerminally.ngrok-free.dev
+   FRONTEND_URL=https://datolitic-tatyana-subgerminally.ngrok-free.dev
    ```
 
 ---
@@ -156,14 +172,18 @@ The compiled Android APK already bundles all frontend assets inside the app; it 
 Use this to open the **Subdivision Leader Admin**, **Resident Web App**, and **printed Pet QR Collar Tags** in Chrome/Safari on a phone or another computer (matches `PUBLIC_TAG_BASE_URL` and `FRONTEND_URL` in `.env`):
 
 1. **Start the Frontend ngrok Tunnel (Fixed Domain):**
+
    ```powershell
    ngrok http --url=datolitic-tatyana-subgerminally.ngrok-free.dev 5173
+
+   & "$env:LOCALAPPDATA\Microsoft\WinGet\Links\ngrok.exe" http --url=https://datolitic-tatyana-subgerminally.ngrok-free.dev 5173
 
    "%LOCALAPPDATA%\Microsoft\WinGet\Links\ngrok.exe" http --url=https://datolitic-tatyana-subgerminally.ngrok-free.dev 5173
    ```
 
    *(Or without a fixed domain: `ngrok http 5173`)*
 2. **Open the URLs in the browser** (click **Visit Site** once on ngrok's free interstitial page):
+
    - **Subdivision Leader Admin:**
      ```text
      https://datolitic-tatyana-subgerminally.ngrok-free.dev/
@@ -177,6 +197,20 @@ Use this to open the **Subdivision Leader Admin**, **Resident Web App**, and **p
      https://datolitic-tatyana-subgerminally.ngrok-free.dev/t/<token>
      ```
 3. **Why this works with one tunnel:** Vite forwards all `/api/*` requests to `http://127.0.0.1:8000` locally, and because `.ngrok-free.dev` is a fixed domain, printed pet QR codes continue working across tunnel restarts.
+4. **Keep the ngrok window open.** Closing it, Ctrl+C or the computer sleeping takes the address offline (`ERR_NGROK_3200`).
+5. **Start order:** backend (Terminal 1), then the website (Terminal 3), then ngrok. ngrok forwards to port 5173, which must already be running.
+
+#### ngrok troubleshooting
+
+| What you see                                                | Why                                                                                               | Fix                                                                                                                              |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `'ngrok' is not recognized`                               | ngrok was installed after this terminal (or VS Code) was opened, so its folder is not on PATH yet | Use the full path `"%LOCALAPPDATA%\Microsoft\WinGet\Links\ngrok.exe"`, or close the terminal (or all of VS Code) and reopen it |
+| `ERROR: unknown flag: --url`                              | An old ngrok (before 3.16)                                                                        | Update (`ngrok update`), or use `--domain=datolitic-tatyana-subgerminally.ngrok-free.dev` (no `https://`)                  |
+| `ERR_NGROK_121 ... agent version is too old`              | Free accounts need 3.30.0 or newer                                                                | `ngrok update` (or `winget upgrade ngrok.ngrok`), then `ngrok version`                                                     |
+| `ERR_NGROK_3200 ... endpoint is offline` (in the browser) | The ngrok window is not running                                                                   | Start the tunnel again and keep the window open                                                                                  |
+| `ERR_NGROK_334 ... already online`                        | ngrok is already running in another window                                                        | Close the other window first                                                                                                     |
+| "Blocked request. This host is not allowed"                 | The website was started before `.ngrok-free.dev` was allowed                                    | Restart `npm run dev`                                                                                                          |
+| "You are about to visit..." page                            | ngrok's free-plan notice, shown once per browser                                                  | Tap **Visit Site**                                                                                                         |
 
 ---
 
@@ -185,16 +219,19 @@ Use this to open the **Subdivision Leader Admin**, **Resident Web App**, and **p
 Use this when testing the installed **StraySafe Debug APK** on a phone over mobile data or external Wi-Fi:
 
 1. **Start the Backend ngrok Tunnel:**
+
    ```powershell
    ngrok http 8000
    ```
 
-   *(Or with your static domain: `ngrok http --url=<your-static-domain>.ngrok-free.app 8000`)*
+   *(The free plan runs **one** fixed-domain tunnel at a time. If Method A is already using your fixed domain, use the random address that `ngrok http 8000` gives for the APK.)*
 2. **Copy the `Forwarding` HTTPS URL:**
+
    ```text
    https://<your-ngrok-domain>.ngrok-free.app
    ```
 3. **Connect the Resident Android APK:**
+
    - Open the **StraySafe** debug APK $\rightarrow$ tap **Connection** (or **Settings $\rightarrow$ Developer $\rightarrow$ Developer connection**).
    - In **Backend API address**, paste the base ngrok URL (**do not add `/resident-app`**):
      ```text

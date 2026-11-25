@@ -75,13 +75,19 @@ def rgb_to_color_name(rgb: Tuple[int, int, int]) -> str:
     return "Mixed Color"
 
 
-def extract_dominant_colors(image_data: bytes, bbox: Optional[List[float]] = None) -> str:
+def extract_dominant_colors(image_data: bytes, bbox: Optional[List[float]] = None, max_colors: int = 3,
+                            min_share: float = 0.0, drop_shading_gray: bool = False) -> str:
     """
     Extract dominant animal coat colors from an image, focusing on the animal's coat.
-    
+
     Args:
         image_data: Raw image bytes
         bbox: Bounding box [x1, y1, x2, y2] from YOLOv8 detection
+        max_colors: at most this many colours are returned (3 by default, as before)
+        min_share: a colour must cover at least this share of the coat pixels to be named (0 = any, as before)
+        drop_shading_gray: drop "Gray" when Black and White are also present and gray is not a large part of the coat:
+            on a black-and-white animal, mid-gray pixels are usually shadow or the edge between the two colours, not gray fur
+        The defaults keep the earlier behaviour. The report form's photo check uses the stricter options when the AI is unavailable.
     
     Returns:
         Human-readable comma-separated coat colors (e.g. "White, Gray", "Brown, White")
@@ -134,7 +140,15 @@ def extract_dominant_colors(image_data: bytes, bbox: Optional[List[float]] = Non
                     color_counts[name] = color_counts.get(name, 0) + count
 
         sorted_colors = sorted(color_counts.items(), key=lambda x: x[1], reverse=True)
-        unique_colors = [color_name for color_name, _ in sorted_colors[:3]]
+        total = sum(color_counts.values()) or 1
+        if min_share > 0:
+            sorted_colors = [(n, c) for n, c in sorted_colors if c / total >= min_share] or sorted_colors[:1]
+        if drop_shading_gray:
+            names = {n for n, _ in sorted_colors}
+            gray_share = color_counts.get("Gray", 0) / total
+            if {"Black", "White"} <= names and "Gray" in names and gray_share < 0.40:
+                sorted_colors = [(n, c) for n, c in sorted_colors if n != "Gray"]
+        unique_colors = [color_name for color_name, _ in sorted_colors[:max(1, max_colors)]]
         
         if len(unique_colors) == 0:
             return "Unknown"

@@ -10,7 +10,7 @@ import { ConfirmSheet } from '../../components/Sheet';
 import { Loader2, ShieldAlert } from 'lucide-react';
 import { AiBadge } from '../../components/AiBadge';
 import {
-  analyzeReportMedia, animalIdOf, appearanceNoteOf, colorsOf, isUsableAnalysis, known, looksAiGenerated, matchBreed, sizeOf,
+  analyzeReportMedia, animalIdOf, appearanceNoteOf, colorsOf, isBasicAnalysis, isUsableAnalysis, known, looksAiGenerated, matchBreed, sizeOf,
   type MediaAnalysis,
 } from '../../../live/mediaAnalysis';
 import { AdminApiError } from '../../../preview/lib/errors';
@@ -294,7 +294,9 @@ function DetailsForm({ draft }: { draft: Draft }) {
                   <Callout tone="info">{analysis.result.multiple_animals_message}</Callout>
                 ) : null}
                 {analysis.status === 'done' && isUsableAnalysis(analysis.result) && Object.values(ai).some(Boolean) ? (
-                  <p className="rs-meta m-0"><AiBadge />Some details were suggested from your photo. Please check them.</p>
+                  <p className="rs-meta m-0"><AiBadge />{isBasicAnalysis(analysis.result)
+                    ? 'The AI photo check is busy right now, so only the kind of animal and its main colours were read from your photo. Shadows can make colours look wrong, so please check them. Breed and size were not guessed.'
+                    : 'Some details were suggested from your photo. Please check them.'}</p>
                 ) : null}
                 {analysis.status === 'done' && isUsableAnalysis(analysis.result) && !showsLooks && appearanceNoteOf(analysis.result) ? (
                   <p className="rs-meta m-0">The photo shows: {appearanceNoteOf(analysis.result)}</p>
