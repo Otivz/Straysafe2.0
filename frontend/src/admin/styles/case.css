@@ -1,0 +1,312 @@
+/*
+ * StraySafe Admin — the case workspace (the standard case page: header, alert bars, tabs, panels and the AI Insights card).
+ *
+ * Everything is scoped under `.sa-casepage`, so no other admin page changes. Colours, radii and fonts come from the brand tokens
+ * (preview/styles/tokens.css); no colour is hard-coded here. Motion is CSS only and short (under 350 ms); preview/styles/tokens.css
+ * already collapses every animation inside `.sa-root` for people who ask for reduced motion.
+ */
+@layer components {
+  /* ------------------------------------------------------------------------------------------------- motion */
+  @keyframes sa-fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes sa-fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes sa-pulse-ring {
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--sa-red) 38%, transparent); }
+    70%, 100% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--sa-red) 0%, transparent); }
+  }
+  @keyframes sa-twinkle { 0%, 100% { transform: rotate(0) scale(1); } 50% { transform: rotate(14deg) scale(1.14); } }
+  @keyframes sa-accent-sweep { from { background-position: 0 0; } to { background-position: 200% 0; } }
+
+  /* One entrance for every card, shared by all tabs. The delay is a custom property, so a list can stagger itself. */
+  .sa-fade-up { animation: sa-fade-up 0.34s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: var(--sa-delay, 0ms); }
+  .sa-casepage [role='tabpanel'] { animation: sa-fade-in 0.22s ease-out both; }
+  .sa-casepage [role='tabpanel'] .sa-fade-up:nth-child(2) { --sa-delay: 50ms; }
+  .sa-casepage [role='tabpanel'] .sa-fade-up:nth-child(3) { --sa-delay: 100ms; }
+  .sa-casepage [role='tabpanel'] .sa-fade-up:nth-child(4) { --sa-delay: 150ms; }
+  .sa-casepage [role='tabpanel'] .sa-fade-up:nth-child(n + 5) { --sa-delay: 190ms; }
+
+  /* -------------------------------------------------------------------------------------------------- header */
+  .sa-casepage .sa-back { margin-bottom: 12px; padding: 4px 8px 4px 0; transition: color 0.15s; }
+  .sa-casepage .sa-back:hover { color: var(--sa-brand-ink); }
+  .sa-casepage .sa-back span { display: inline-block; transition: transform 0.18s ease-out; }
+  .sa-casepage .sa-back:hover span { transform: translateX(-3px); }
+
+  .sa-casepage .sa-casehead {
+    position: relative; overflow: hidden; margin-bottom: 14px; padding: 22px 24px 18px;
+    background: var(--sa-surface); border: 1px solid var(--sa-line); border-radius: var(--sa-radius-lg);
+    box-shadow: 0 1px 2px rgb(41 37 36 / 0.04), 0 8px 24px -16px rgb(41 37 36 / 0.16);
+    animation: sa-fade-up 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  /* The brand stripe along the top: burnt orange to warm orange to soft amber, slowly drifting once */
+  .sa-casepage .sa-casehead::before {
+    content: ''; position: absolute; inset: 0 0 auto 0; height: 3px;
+    background: linear-gradient(90deg, var(--sa-brand), var(--sa-accent), var(--sa-amber), var(--sa-accent), var(--sa-brand)); background-size: 200% 100%;
+    animation: sa-accent-sweep 1.4s ease-out both;
+  }
+  .sa-casehead__eyebrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0; }
+  .sa-casehead__ref {
+    padding: 2px 9px; border-radius: 6px; background: var(--sa-brand-soft); color: var(--sa-brand-ink);
+    font-size: 12.5px; font-weight: 700; letter-spacing: 0.03em; font-variant-numeric: tabular-nums;
+  }
+  .sa-casepage .sa-casehead__title { margin-top: 10px; font-size: 25px; line-height: 33px; text-wrap: balance; }
+  .sa-casepage .sa-casehead__meta {
+    align-items: center; gap: 10px 12px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--sa-line-soft);
+  }
+  .sa-casehead__fact { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--sa-ink-2); }
+  .sa-casehead__fact + .sa-casehead__fact::before, .sa-casehead__fact--lead::before {
+    content: ''; width: 3px; height: 3px; margin-right: 6px; border-radius: 50%; background: var(--sa-line-control);
+  }
+  .sa-casehead__fact strong { font-weight: 600; color: var(--sa-ink); }
+
+  /* ------------------------------------------------------------------------------------------------ alert bars */
+  .sa-alertbar {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; margin-bottom: 12px; padding: 14px 18px 14px 20px;
+    border: 1px solid; border-radius: var(--sa-radius-lg); animation: sa-fade-up 0.34s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: var(--sa-delay, 0ms);
+  }
+  .sa-alertbar[data-tone='red'] {
+    background: linear-gradient(90deg, var(--sa-red-soft), color-mix(in srgb, var(--sa-red-soft) 35%, var(--sa-surface)));
+    border-color: color-mix(in srgb, var(--sa-red) 30%, var(--sa-surface)); color: var(--sa-red-ink); box-shadow: inset 4px 0 0 var(--sa-red);
+  }
+  .sa-alertbar[data-tone='amber'] {
+    background: linear-gradient(90deg, var(--sa-amber-soft), color-mix(in srgb, var(--sa-amber-soft) 35%, var(--sa-surface)));
+    border-color: color-mix(in srgb, var(--sa-amber) 55%, var(--sa-surface)); color: var(--sa-amber-ink); box-shadow: inset 4px 0 0 var(--sa-amber);
+  }
+  .sa-alertbar__main { display: flex; align-items: flex-start; gap: 12px; min-width: 0; flex: 1 1 320px; }
+  .sa-alertbar__icon { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%; }
+  .sa-alertbar[data-tone='red'] .sa-alertbar__icon { background: color-mix(in srgb, var(--sa-red) 16%, var(--sa-surface)); }
+  .sa-alertbar[data-tone='amber'] .sa-alertbar__icon { background: color-mix(in srgb, var(--sa-amber) 40%, var(--sa-surface)); border-radius: 10px; }
+  .sa-alertbar[data-pulse] .sa-alertbar__icon { animation: sa-pulse-ring 2.2s ease-out infinite; }
+  .sa-alertbar__title { margin: 0; font-size: 14px; font-weight: 700; line-height: 1.35; }
+  .sa-alertbar__text { margin: 3px 0 0; font-size: 13px; line-height: 1.55; opacity: 0.92; }
+  .sa-alertbar__tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+  .sa-alertbar__tag {
+    padding: 2px 9px; border: 1px solid color-mix(in srgb, currentColor 22%, transparent); border-radius: 999px;
+    background: color-mix(in srgb, var(--sa-surface) 82%, transparent); font-size: 11.5px; font-weight: 600;
+  }
+  .sa-alertbar__pill {
+    display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px;
+    background: var(--sa-sage-soft); color: var(--sa-sage-ink); font-size: 11.5px; font-weight: 700;
+  }
+  .sa-alertbar__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex-shrink: 0; }
+
+  /* ---------------------------------------------------------------------------------------------------- tabs */
+  .sa-casepage .sa-tabs { gap: 6px; padding: 0 2px; }
+  .sa-casepage .sa-tabs .sa-tab { padding: 11px 12px 13px; border-radius: 8px 8px 0 0; transition: color 0.15s, background-color 0.15s; }
+  .sa-casepage .sa-tabs .sa-tab:hover { background: var(--sa-hover); }
+  .sa-casepage .sa-tabs .sa-tab::after {
+    content: ''; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--sa-brand);
+    transform: scaleX(0); transform-origin: left; transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .sa-casepage .sa-tabs .sa-tab[aria-selected='true'] { color: var(--sa-brand-ink); }
+  .sa-casepage .sa-tabs .sa-tab[aria-selected='true']::after { left: 12px; right: 12px; transform: scaleX(1); }
+  .sa-casepage .sa-tab__count { transition: background-color 0.15s, color 0.15s; }
+  .sa-casepage .sa-tab[aria-selected='true'] .sa-tab__count:not(.sa-tab__count--alert) { background: var(--sa-brand-tint); color: var(--sa-brand-ink); }
+
+  /* ------------------------------------------------------------------------------------------- panels and blocks */
+  .sa-casepage .sa-panel {
+    border-radius: var(--sa-radius-lg); box-shadow: 0 1px 2px rgb(41 37 36 / 0.04); transition: box-shadow 0.2s ease-out, border-color 0.2s ease-out;
+  }
+  .sa-casepage .sa-panel:hover { box-shadow: 0 1px 2px rgb(41 37 36 / 0.05), 0 10px 26px -18px rgb(41 37 36 / 0.22); }
+  .sa-casepage .sa-block__head .sa-h2 { font-family: var(--sa-font-display); font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; }
+  .sa-casepage .sa-callout { border-radius: var(--sa-radius-lg); }
+
+  /* ------------------------------------------------------------------------------------- AI Insights (Suggested) */
+  .sa-ai {
+    position: relative; margin-bottom: 16px; overflow: hidden;
+    background: linear-gradient(180deg, var(--sa-brand-soft), var(--sa-surface) 64px);
+    border: 1px solid color-mix(in srgb, var(--sa-brand) 22%, var(--sa-line)); border-radius: var(--sa-radius-lg);
+    box-shadow: 0 1px 2px rgb(41 37 36 / 0.04); animation: sa-fade-up 0.34s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: var(--sa-delay, 0ms);
+    transition: box-shadow 0.2s ease-out, border-color 0.2s ease-out;
+  }
+  .sa-ai[data-open='true'] { border-color: color-mix(in srgb, var(--sa-brand) 38%, var(--sa-line)); box-shadow: 0 1px 2px rgb(41 37 36 / 0.05), 0 14px 32px -20px color-mix(in srgb, var(--sa-brand) 40%, transparent); }
+  .sa-ai__head { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 18px; border: 0; background: transparent; text-align: left; color: inherit; cursor: pointer; transition: background-color 0.15s; }
+  .sa-ai__head:hover { background: color-mix(in srgb, var(--sa-brand) 5%, transparent); }
+  .sa-ai__head:focus-visible { outline: none; box-shadow: inset var(--sa-ring); }
+  .sa-ai__lead { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .sa-ai__mark {
+    display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 11px; color: #fff;
+    background: linear-gradient(145deg, var(--sa-accent), var(--sa-brand)); box-shadow: 0 6px 14px -6px color-mix(in srgb, var(--sa-brand) 70%, transparent);
+  }
+  .sa-ai__head:hover .sa-ai__mark svg { animation: sa-twinkle 0.7s ease-in-out; }
+  .sa-ai__title { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; font-family: var(--sa-font-display); font-size: 14.5px; font-weight: 700; letter-spacing: -0.01em; color: var(--sa-ink); }
+  .sa-ai__badge { padding: 1px 8px; border-radius: 999px; background: var(--sa-brand-tint); color: var(--sa-brand-ink); font-family: var(--sa-font); font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+  .sa-ai__sub { display: block; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--sa-ink-3); }
+  .sa-ai__chev { flex-shrink: 0; color: var(--sa-ink-3); transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1); }
+  .sa-ai[data-open='true'] .sa-ai__chev { transform: rotate(180deg); }
+
+  /* The body always exists; it opens by animating its row from 0fr to 1fr (no height measuring), and is inert while closed */
+  .sa-ai__body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+  .sa-ai[data-open='true'] .sa-ai__body { grid-template-rows: 1fr; }
+  .sa-ai__clip { min-height: 0; overflow: hidden; }
+  .sa-ai__content { display: grid; gap: 16px; padding: 16px 18px 18px; border-top: 1px solid color-mix(in srgb, var(--sa-brand) 14%, var(--sa-line-soft)); opacity: 0; transform: translateY(-4px); transition: opacity 0.22s ease-out, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+  .sa-ai[data-open='true'] .sa-ai__content { opacity: 1; transform: none; transition-delay: 0.05s; }
+
+  .sa-ai__summary { margin: 0; max-width: 78ch; font-size: 14.5px; line-height: 1.65; color: var(--sa-ink); }
+  .sa-ai__label { margin: 0; font-size: 11.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--sa-ink-3); }
+  .sa-ai__card { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--sa-line-soft); border-radius: var(--sa-radius); background: var(--sa-surface); }
+  .sa-ai__rowline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  .sa-ai__muted { font-size: 12.5px; color: var(--sa-ink-3); }
+  .sa-ai__text { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--sa-ink-2); }
+  .sa-ai__ok { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--sa-sage-ink); }
+
+  /* Guidance: recap, decision, next steps, missing information, the draft question */
+  .sa-ai__guide { display: grid; gap: 18px; padding: 16px; border: 1px solid var(--sa-line-soft); border-radius: var(--sa-radius-lg); background: color-mix(in srgb, var(--sa-sand) 55%, var(--sa-surface)); }
+  .sa-ai__guide > section { display: grid; gap: 7px; }
+  .sa-ai__guide > section + section { padding-top: 16px; border-top: 1px dashed var(--sa-line); }
+  .sa-ai__stale { display: flex; align-items: center; gap: 8px; margin: 0; padding: 7px 11px; border-radius: var(--sa-radius); background: var(--sa-amber-soft); color: var(--sa-amber-ink); font-size: 12.5px; font-weight: 500; }
+  .sa-ai__decision { border-left: 3px solid var(--sa-brand); padding-left: 12px; }
+
+  .sa-ai__steps { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; counter-reset: step; }
+  .sa-ai__step {
+    display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: start; gap: 12px; counter-increment: step; padding: 11px 13px;
+    border: 1px solid var(--sa-line-soft); border-radius: 10px; background: var(--sa-surface);
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s; animation: sa-fade-up 0.34s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: calc(var(--i, 0) * 60ms + 90ms);
+  }
+  .sa-ai__step::before {
+    content: counter(step); display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--sa-brand-tint); color: var(--sa-brand-ink); font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  .sa-ai__step:hover { border-color: color-mix(in srgb, var(--sa-brand) 38%, var(--sa-line)); box-shadow: 0 8px 20px -14px color-mix(in srgb, var(--sa-brand) 55%, transparent); transform: translateY(-1px); }
+  .sa-ai__step strong { display: block; font-size: 14px; font-weight: 600; color: var(--sa-ink); }
+  .sa-ai__step p { margin: 2px 0 0; font-size: 13px; line-height: 1.5; color: var(--sa-ink-2); }
+
+  .sa-ai__list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  .sa-ai__list li { position: relative; padding-left: 16px; font-size: 13.5px; line-height: 1.5; color: var(--sa-ink-2); }
+  .sa-ai__list li::before { content: ''; position: absolute; left: 3px; top: 0.55em; width: 5px; height: 5px; border-radius: 50%; background: var(--sa-accent); }
+
+  .sa-ai__quote { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--sa-line-soft); border-radius: var(--sa-radius); background: var(--sa-surface); }
+  .sa-ai__quote blockquote { margin: 0; padding-left: 12px; border-left: 3px solid var(--sa-amber); font-size: 14px; line-height: 1.6; color: var(--sa-ink); }
+
+  .sa-ai__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding-top: 2px; }
+  .sa-ai__foot p { margin: 0; max-width: 66ch; font-size: 12.5px; line-height: 1.5; color: var(--sa-ink-3); }
+
+  @media (max-width: 640px) {
+    .sa-casepage .sa-casehead { padding: 20px 16px 16px; }
+    .sa-casepage .sa-casehead__title { font-size: 21px; line-height: 28px; }
+    .sa-alertbar { padding: 12px 14px 12px 16px; }
+    .sa-ai__head { padding: 12px 14px; }
+    .sa-ai__content { padding: 14px; }
+    .sa-ai__step { grid-template-columns: 26px minmax(0, 1fr); }
+    .sa-ai__step > :last-child { grid-column: 2; justify-self: start; }
+  }
+}
+
+/*
+ * The complaint page and the missing-pet / found-animal page (the `sa-mc` family) get the same treatment as the standard case page: their
+ * root also carries `.sa-casepage`, and their cards use `.sa-mc-card` instead of per-element border, radius and shadow utilities.
+ */
+@layer components {
+  @keyframes sa-dot-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: 0.55; } }
+
+  /* One card for every section of these pages */
+  .sa-mc-card {
+    position: relative; background: var(--sa-surface); border: 1px solid var(--sa-line); border-radius: var(--sa-radius-lg);
+    box-shadow: 0 1px 2px rgb(41 37 36 / 0.04); transition: box-shadow 0.2s ease-out, border-color 0.2s ease-out;
+  }
+  .sa-mc-card:hover { box-shadow: 0 1px 2px rgb(41 37 36 / 0.05), 0 10px 26px -18px rgb(41 37 36 / 0.22); }
+  .sa-mc-card--pad { padding: 18px 20px; }
+  .sa-mc-card--tight { padding: 12px 18px; }
+  /* The hero: the same brand stripe as the standard case header */
+  .sa-mc-card--hero { overflow: hidden; background: linear-gradient(180deg, var(--sa-surface), color-mix(in srgb, var(--sa-sand) 40%, var(--sa-surface))); }
+  .sa-mc-card--hero::before {
+    content: ''; position: absolute; inset: 0 0 auto 0; height: 3px;
+    background: linear-gradient(90deg, var(--sa-brand), var(--sa-accent), var(--sa-amber), var(--sa-accent), var(--sa-brand)); background-size: 200% 100%;
+    animation: sa-accent-sweep 1.4s ease-out both;
+  }
+
+  /* The slim header row: reference chip, kind of case, and the one status chip */
+  .sa-casepage .sa-mc__top { margin-top: 2px; margin-bottom: 14px; }
+  .sa-casepage .sa-mc__chip { transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s; }
+  .sa-casepage .sa-mc__chip[data-tone='amber']:hover { box-shadow: 0 6px 16px -10px color-mix(in srgb, var(--sa-brand) 60%, transparent); }
+  .sa-casepage .sa-mc__chip[data-tone='amber']::before { animation: sa-dot-pulse 1.8s ease-in-out infinite; }
+
+  /* The missing-pet / found-animal page: its cards come in one after another */
+  .sa-mc.sa-casepage .sa-mc-card, .sa-mc.sa-casepage .sa-mc-lane, .sa-mc.sa-casepage .sa-mc-more {
+    animation: sa-fade-up 0.34s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: var(--sa-delay, 0ms);
+  }
+  .sa-mc.sa-casepage [role='tabpanel'] > :nth-child(2) { --sa-delay: 50ms; }
+  .sa-mc.sa-casepage [role='tabpanel'] > :nth-child(3) { --sa-delay: 100ms; }
+  .sa-mc.sa-casepage [role='tabpanel'] > :nth-child(4) { --sa-delay: 150ms; }
+  .sa-mc.sa-casepage [role='tabpanel'] > :nth-child(n + 5) { --sa-delay: 190ms; }
+
+  /* "Needs you": the lane, its items, and the situation tiles */
+  .sa-casepage .sa-mc-lane { transition: box-shadow 0.2s ease-out; }
+  .sa-casepage .sa-mc-lane[data-active] { box-shadow: inset 4px 0 0 var(--sa-brand), 0 1px 2px rgb(41 37 36 / 0.04); }
+  .sa-casepage .sa-mc-lane__head svg { animation: sa-twinkle 2.4s ease-in-out 0.6s 2; transform-origin: 50% 10%; }
+  .sa-casepage .sa-mc-need { transition: background-color 0.15s; animation: sa-fade-up 0.34s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .sa-casepage .sa-mc-need:nth-child(2) { animation-delay: 70ms; }
+  .sa-casepage .sa-mc-need:nth-child(3) { animation-delay: 140ms; }
+  .sa-casepage .sa-mc-need:nth-child(n + 4) { animation-delay: 200ms; }
+  .sa-casepage .sa-mc-need:hover { background: var(--sa-hover); }
+  .sa-casepage .sa-mc-need__icon { transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s; }
+  .sa-casepage .sa-mc-need:hover .sa-mc-need__icon { transform: scale(1.06) rotate(-3deg); background: var(--sa-brand-tint); }
+  .sa-mc-tile--card { transition: background-color 0.15s; }
+  .sa-mc-tile--card:hover { background: var(--sa-hover); }
+
+  /* Lists of sightings, linked reports and alerts */
+  .sa-casepage .sa-mc-list { box-shadow: 0 1px 2px rgb(41 37 36 / 0.04); overflow: hidden; }
+  .sa-casepage .sa-mc-row, .sa-casepage .sa-mc-alert { transition: background-color 0.15s; }
+  .sa-casepage .sa-mc-row:hover, .sa-casepage .sa-mc-alert:hover { background: var(--sa-hover); }
+  .sa-casepage .sa-mc-sec__title { display: flex; align-items: baseline; gap: 4px; }
+  .sa-casepage .sa-mc-hero__name { text-wrap: balance; }
+  .sa-casepage .sa-mc-more > summary { transition: color 0.15s; }
+  .sa-casepage .sa-mc-more > summary:hover { color: var(--sa-ink); }
+}
+
+/* A warm off-white for the quiet surfaces inside cards (replaces the one-off hex values the case tabs used) */
+@layer components {
+  .sa-root { --sa-warm: color-mix(in srgb, var(--sa-sand) 45%, var(--sa-surface)); }
+}
+
+/* The sighting trail under the map of a missing pet: the list of steps and the switch for the search area */
+@layer components {
+  .sa-trail > summary { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--sa-ink-2); }
+  .sa-trail > summary:hover { color: var(--sa-brand-ink); }
+  .sa-trail__steps { display: grid; gap: 4px; margin: 6px 0 0; padding-left: 20px; font-size: 13px; color: var(--sa-ink-2); font-variant-numeric: tabular-nums; }
+  .sa-trail__steps li[data-kind='jump'] { color: var(--sa-amber-ink); font-weight: 600; }
+  .sa-trail__steps li[data-kind='unclear'] { color: var(--sa-ink-3); }
+  .sa-trail__zone { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; color: var(--sa-ink-2); cursor: pointer; }
+  .sa-trail__zone input { accent-color: var(--sa-sage); }
+}
+
+/* The AI's suggested rule in the complaint's Verify dialog: a quiet box above the rule choice, never filled in for the Leader */
+@layer components {
+  .sa-rulesuggest { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--sa-brand) 22%, var(--sa-line)); border-radius: var(--sa-radius-lg); background: linear-gradient(180deg, var(--sa-brand-soft), var(--sa-surface) 70%); }
+  .sa-rulesuggest__head { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 11.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--sa-brand-ink); }
+  .sa-rulesuggest__list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .sa-rulesuggest__list li { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--sa-line-soft); border-radius: 10px; background: var(--sa-surface); transition: border-color 0.15s, box-shadow 0.15s; animation: sa-fade-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .sa-rulesuggest__list li[data-picked] { border-color: var(--sa-brand); box-shadow: inset 0 0 0 1px var(--sa-brand); }
+  .sa-rulesuggest__list strong { display: block; font-size: 14px; font-weight: 600; color: var(--sa-ink); }
+  .sa-rulesuggest__list p { margin: 3px 0 0; font-size: 13px; line-height: 1.5; color: var(--sa-ink-2); }
+  .sa-rulesuggest__list .sa-rulesuggest__covers { color: var(--sa-ink-3); font-size: 12.5px; }
+  .sa-rulesuggest__note { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--sa-ink-3); }
+}
+
+/* Watch areas on the Dashboard: a calm card, amber for "watch", red for "high"; each place comes in one after another */
+@layer components {
+  .sa-watch .sa-sec__card { box-shadow: 0 1px 2px rgb(41 37 36 / 0.04); }
+  .sa-watch__sub { margin: 0; padding: 12px 18px 0; font-size: 13px; line-height: 1.55; color: var(--sa-ink-3); }
+  .sa-watch__list { margin: 0; padding: 0; list-style: none; }
+  .sa-watch__item {
+    display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: start; gap: 14px; padding: 14px 18px 14px 20px; border-top: 1px solid var(--sa-line-soft);
+    box-shadow: inset 4px 0 0 var(--sa-amber); transition: background-color 0.15s;
+    animation: sa-fade-up 0.34s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: calc(var(--i, 0) * 70ms + 60ms);
+  }
+  .sa-watch__item:first-child { border-top: 0; }
+  .sa-watch__item:hover { background: var(--sa-hover); }
+  .sa-watch__item[data-tier='high'] { box-shadow: inset 4px 0 0 var(--sa-red); }
+  .sa-watch__icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--sa-amber-soft); color: var(--sa-amber-ink); }
+  .sa-watch__item[data-tier='high'] .sa-watch__icon { background: var(--sa-red-soft); color: var(--sa-red-ink); animation: sa-pulse-ring 2.4s ease-out infinite; }
+  .sa-watch__title { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; font-size: 15px; font-weight: 650; line-height: 22px; color: var(--sa-ink); }
+  .sa-watch__line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; margin: 2px 0 0; font-size: 14px; color: var(--sa-ink-2); }
+  .sa-watch__line strong { font-weight: 600; color: var(--sa-ink); }
+  .sa-watch__trend { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; color: var(--sa-amber-ink); }
+  .sa-watch__item[data-tier='high'] .sa-watch__trend { color: var(--sa-red-ink); }
+  .sa-watch__meta { margin: 2px 0 0; font-size: 13px; color: var(--sa-ink-3); }
+  .sa-watch__cases { margin-top: 6px; }
+  .sa-watch__cases > summary { display: inline-flex; align-items: center; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--sa-ink-2); }
+  .sa-watch__cases > summary:hover { color: var(--sa-brand-ink); }
+  .sa-watch__cases ul { display: grid; gap: 3px; margin: 6px 0 0; padding: 0; list-style: none; font-size: 13px; }
+  .sa-watch__cases a { color: var(--sa-ink-2); text-decoration: none; }
+  .sa-watch__cases a:hover { color: var(--sa-brand-ink); text-decoration: underline; }
+  @media (max-width: 640px) { .sa-watch__item { grid-template-columns: 1fr; gap: 8px; padding: 12px 14px 12px 16px; } .sa-watch__sub { padding: 10px 14px 0; } }
+}

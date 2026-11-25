@@ -1,6 +1,6 @@
 import './map.css';
 
-export type KeyKind = 'outline' | 'radius' | 'area' | 'pin' | 'dot' | 'latest';
+export type KeyKind = 'outline' | 'radius' | 'area' | 'pin' | 'dot' | 'latest' | 'trail' | 'unclear' | 'jump' | 'zone';
 
 /** A one-line key under a map. The symbols are drawn with CSS to match the markers and overlays. */
 export function MapLegend({ items }: { items: { kind: KeyKind; label: string }[] }) {

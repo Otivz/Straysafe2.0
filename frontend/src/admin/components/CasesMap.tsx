@@ -139,12 +139,12 @@ export default function CasesMap({
                 pathOptions={{ color: st.color, fillColor: st.fillColor, fillOpacity: 0.2, weight: 1.5, dashArray: '4 4' }}
               >
                 <Tooltip sticky direction="top">
-                  <span className="font-semibold">{h.area ?? 'Hotspot'}</span> · {h.total} cases
+                  <span className="font-semibold">{h.area}</span> · {h.total} cases
                 </Tooltip>
                 <Popup>
                   <div className="min-w-[190px] space-y-1 text-[12.5px]">
                     <p className="m-0 text-[11px] font-semibold uppercase tracking-wide" style={{ color: st.color }}>{st.label} hotspot</p>
-                    <p className="m-0 font-semibold text-[#1c1917]">{h.area ?? 'Area not named'}</p>
+                    <p className="m-0 font-semibold text-[#1c1917]">{h.area}</p>
                     <p className="m-0 text-[#57534e]"><strong>{h.total}</strong> cases in this hotspot</p>
                     <p className="m-0 text-[#78716c]">{h.urgent} urgent · {h.open} open · {h.closed} closed</p>
                   </div>

@@ -598,6 +598,10 @@ def verify(db: Session, report: Report, actor: User, data: VerifyIn) -> None:
         L.history(db, report, actor, "Complaint could not be verified.")
     L.audit(db, actor, "COMPLAINT_VERIFIED", report, f"{actor.name} recorded on complaint #{report.report_id}: {data.incident}.",
             old={"incident": before}, new={"incident": data.incident, "basis": basis, "policy_id": f.policy_id, "no_rule": f.no_rule})
+    if data.incident == "verified":
+        # Whether the Leader chose a rule the AI suggested is noted (ids only); the choice itself is the Leader's and is already saved above
+        from app.services import case_ai_insights
+        case_ai_insights.record_rule_decision(db, report, actor, "none" if f.no_rule else (f.policy_id or "none"))
 
 
 def _merge_ruled_out(f: ComplaintFinding, items, actor: User) -> None:

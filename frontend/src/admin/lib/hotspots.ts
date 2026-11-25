@@ -1,4 +1,4 @@
-import { distanceM } from '../../preview/geo';
+import { distanceM, placeLabel } from '../../preview/geo';
 import type { Case } from '../data/types';
 
 /** Pins this close together (metres, to a cluster's centre) are one cluster. */
@@ -20,8 +20,8 @@ export interface Hotspot {
   lng: number;
   radiusM: number;
   tier: 'amber' | 'red';
-  /** The most common area text among the cases (the first alphabetically on a tie), or null when none has one. */
-  area: string | null;
+  /** Where it is, named from the zone's centre (the pins), not from what the reports typed: "Near Clubhouse", "About 150 m north of ...". */
+  area: string;
   total: number;
   urgent: number;
   open: number;
@@ -31,21 +31,6 @@ export interface Hotspot {
 
 const isOpen = (c: Case) => c.status !== 'closed';
 const isOpenUrgent = (c: Case) => c.priority === 'urgent' && isOpen(c);
-
-/** The most common non-empty area among the cases; ties go to the first alphabetically so the name does not flicker. */
-function commonArea(cases: Case[]): string | null {
-  const counts = new Map<string, number>();
-  for (const c of cases) {
-    const a = c.location.area?.trim();
-    if (a) counts.set(a, (counts.get(a) ?? 0) + 1);
-  }
-  let best: string | null = null;
-  let bestN = 0;
-  for (const [a, n] of [...counts].sort((x, y) => x[0].localeCompare(y[0]))) {
-    if (n > bestN) { best = a; bestN = n; }
-  }
-  return best;
-}
 
 /**
  * Hotspot zones, computed from the pinned cases it is given (never from fixed places): each case joins the first cluster whose centre is
@@ -81,7 +66,8 @@ export function computeHotspots(pinned: PinnedCase[]): Hotspot[] {
         lng: cl.lng,
         radiusM: Math.min(RADIUS_MAX_M, RADIUS_MIN_M + (total - HOTSPOT_MIN_CASES) * RADIUS_STEP_M),
         tier: total >= RED_AT_CASES || urgent > 0 ? ('red' as const) : ('amber' as const),
-        area: commonArea(cl.cases),
+        // From the pins: a typed place ('near the corner', 'Location not named') is often vague or differs between reports of one spot
+        area: placeLabel({ lat: cl.lat, lng: cl.lng }),
         total,
         urgent,
         open: cl.cases.filter(isOpen).length,

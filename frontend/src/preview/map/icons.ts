@@ -20,6 +20,19 @@ export function landmarkPinIcon(n: number): L.DivIcon {
   return icon;
 }
 
+const arrows = new Map<number, L.DivIcon>();
+
+/** An arrowhead turned along a leg (degrees clockwise from north), rounded to 5 so a few icons are reused. */
+export function arrowIcon(bearing: number): L.DivIcon {
+  const key = Math.round(bearing / 5) * 5 % 360;
+  let icon = arrows.get(key);
+  if (!icon) {
+    icon = L.divIcon({ className: 'pv-arrow', html: `<span style="transform:rotate(${key}deg)"></span>`, iconSize: [18, 18], iconAnchor: [9, 9] });
+    arrows.set(key, icon);
+  }
+  return icon;
+}
+
 const dots = new Map<string, L.DivIcon>();
 
 /** A numbered sighting marker. The most recent one is ringed. */

@@ -12,6 +12,7 @@ import type { Case } from '../../data/types';
 import { usePageTitle } from '../../lib/hooks';
 import { useNow } from '../../../preview/lib/hooks';
 import { AlertTagMessages } from '../../components/PetTagBlocks';
+import AiInsightsCard from './AiInsightsCard';
 import { CaseDialogs } from './CaseDialogs';
 import type { CaseDialog } from './dialogState';
 import { Activity, Resolve } from './monitored/Activity';
@@ -58,10 +59,10 @@ export default function MonitoredCasePage({ c, detail }: { c: Case; detail: { st
     : needs.length > 0 ? { tone: 'amber', text: `Needs you · ${needs.length}` } : { tone: undefined, text: 'Under monitoring' };
 
   return (
-    <div className="sa-mc">
-      <Link className="sa-back" to={adminPath('/cases')}>← Cases</Link>
+    <div className="sa-mc sa-casepage">
+      <Link className="sa-back" to={adminPath('/cases')}><span aria-hidden="true">←</span> Cases</Link>
       <header className="sa-mc__top">
-        <p className="sa-mc__eyebrow"><span className="sa-ref" style={{ fontSize: 13.5 }}>{c.id}</span><span className="sa-meta flex items-center gap-1.5"><Icon size={14} aria-hidden="true" />{found ? 'Found animal' : 'Lost pet'}</span></p>
+        <p className="sa-mc__eyebrow"><span className="sa-casehead__ref">{c.id}</span><span className="sa-meta flex items-center gap-1.5"><Icon size={14} aria-hidden="true" />{found ? 'Found animal' : 'Lost pet'}</span></p>
         {full ? (chip.tone === 'amber'
           ? <button type="button" className="sa-mc__chip" data-tone="amber" onClick={toLane} aria-label={`${chip.text}. Go to what needs you`}>{chip.text}</button>
           : <span className="sa-mc__chip" data-tone={chip.tone}>{chip.text}</span>) : null}
@@ -80,11 +81,11 @@ export default function MonitoredCasePage({ c, detail }: { c: Case; detail: { st
                 items={[{ key: 'case', label: 'Case' }, { key: 'referrals', label: 'Referrals', count: c.referrals.length }]}
               />
               {tab === 'referrals' ? (
-                <div role="tabpanel" id="mc-panel" aria-labelledby="mc-tab-referrals" className="pt-5">
+                <div key="referrals" role="tabpanel" id="mc-panel" aria-labelledby="mc-tab-referrals" className="pt-5">
                   <CaseReferralsSection c={c} openDialog={open} />
                 </div>
               ) : (
-              <div role="tabpanel" id="mc-panel" aria-labelledby="mc-tab-case" className="pt-5">
+              <div key="case" role="tabpanel" id="mc-panel" aria-labelledby="mc-tab-case" className="pt-5">
               {openReferrals.length > 0 ? (
                 <Callout className="mb-4">
                   {openReferrals.length === 1 ? `1 open referral: ${openReferrals[0].orgName}.` : `${openReferrals.length} open referrals.`}{' '}
@@ -93,6 +94,7 @@ export default function MonitoredCasePage({ c, detail }: { c: Case; detail: { st
               ) : null}
               <HeroBlock c={c} hero={hero} people={people} now={now} openDialog={open} canLog={!closed} />
               <Lane c={c} needs={needs} tiles={tiles} line={monitoringLine(c, now)} now={now} openDialog={open} />
+              <div className="mt-4"><AiInsightsCard c={c} openDialog={open} /></div>
               <Alerts c={c} now={now} openDialog={open} />
               <Sightings c={c} now={now} openDialog={open} />
               {c.lostPet?.alertId ? <AlertTagMessages alertId={c.lostPet.alertId} /> : null}

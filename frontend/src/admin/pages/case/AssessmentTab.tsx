@@ -175,11 +175,11 @@ function ConditionContextCard({
 }) {
   const facts = parseConditionFacts(conditionText);
   return (
-    <Panel className="sa-fade-up border-[#e7e2da] shadow-xs" >
+    <Panel className="sa-fade-up">
       <Block
         title={
           <span className="flex items-center gap-2">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#f5f0e8] text-[#78716c]">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--sa-warm)] text-[var(--sa-ink-3)]">
               <Icon size={15} aria-hidden="true" />
             </span>
             <span>{title}</span>
@@ -204,7 +204,7 @@ function ConditionContextCard({
             {facts.map((item, idx) => (
               <div
                 key={`${item.label}-${idx}`}
-                className="rounded-xl border border-[#e7e2da] bg-gradient-to-b from-white to-[#fcfaf6] px-3.5 py-2.5 shadow-xs transition-colors hover:border-[#d6cfc7]"
+                className="rounded-xl border border-[var(--sa-line)] bg-gradient-to-b from-white to-[var(--sa-warm)] px-3.5 py-2.5 shadow-xs transition-colors hover:border-[var(--sa-line-control)]"
               >
                 <dt className="text-[11px] font-semibold uppercase tracking-wide text-[var(--sa-ink-3)]">
                   {item.label}
@@ -301,12 +301,12 @@ function IncidentSection({
           />
         ) : null}
 
-        <Panel className="sa-fade-up border-[#e7e2da] shadow-xs" >
+        <Panel className="sa-fade-up">
           <div style={{ animationDelay: '60ms' }}>
             <Block
               title={
                 <span className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#fff7ed] text-[#b45309]">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--sa-brand-soft)] text-[var(--sa-brand-ink)]">
                     <ClipboardCheck size={15} aria-hidden="true" />
                   </span>
                   <span>Incident review</span>
@@ -460,7 +460,7 @@ function IncidentSection({
             <Block
               title={
                 <span className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#f5f0e8] text-[#57534e]">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--sa-warm)] text-[var(--sa-ink-2)]">
                     <Images size={15} aria-hidden="true" />
                   </span>
                   <span>Evidence review</span>
@@ -542,7 +542,7 @@ function IncidentSection({
             <Block
               title={
                 <span className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#fef3c7] text-[#b45309]">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--sa-amber-soft)] text-[var(--sa-brand-ink)]">
                     <AlertTriangle size={15} aria-hidden="true" />
                   </span>
                   <span>Urgency</span>
@@ -612,7 +612,7 @@ function IncidentSection({
             <Block
               title={
                 <span className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#f5f0e8] text-[#57534e]">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--sa-warm)] text-[var(--sa-ink-2)]">
                     <NotebookPen size={15} aria-hidden="true" />
                   </span>
                   <span>Assessment notes</span>
@@ -683,7 +683,7 @@ function IdentitySection({
   const decidedBadge = f.status !== c.identity.status || Boolean(f.note.trim()) ? true : c.identity.decided;
 
   return (
-    <Panel className="sa-fade-up border-[#e7e2da] shadow-xs transition-shadow hover:shadow-sm">
+    <Panel className="sa-fade-up">
       <Block>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -838,7 +838,7 @@ function OwnershipSection({
 
   return (
     <div className="flex flex-col gap-5">
-      <Panel className="sa-fade-up border-[#e7e2da] shadow-xs transition-shadow hover:shadow-sm">
+      <Panel className="sa-fade-up">
         <Block>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
@@ -1108,15 +1108,6 @@ function UnifiedAssessmentForm({ c, openDialog, ownershipOnly }: { c: Case; open
   if (ownershipOnly) {
     return (
       <form onSubmit={submit} noValidate className="flex max-w-[920px] flex-col gap-5 pb-4">
-        <style>{`
-          @keyframes saFadeUp {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-          .sa-fade-up {
-            animation: saFadeUp 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
-          }
-        `}</style>
         {locked ? <Callout>This case is closed, so ownership is read-only. Reopen the case to change it.</Callout> : null}
         {domestic ? (
           <>
@@ -1133,15 +1124,6 @@ function UnifiedAssessmentForm({ c, openDialog, ownershipOnly }: { c: Case; open
 
   return (
     <form onSubmit={submit} noValidate className="flex max-w-[920px] flex-col gap-5 pb-4">
-      <style>{`
-        @keyframes saFadeUp {
-          from { opacity: 0; transform: translateY(8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .sa-fade-up {
-          animation: saFadeUp 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
-        }
-      `}</style>
       {locked ? <Callout>This case is closed, so the assessment is read-only. Reopen the case to change it.</Callout> : null}
       <IncidentSection
         c={c}
@@ -1179,7 +1161,7 @@ export default function AssessmentTab({ c, openDialog, ownershipOnly = false }: 
   const formKey = `${JSON.stringify(c.assessment)}:${JSON.stringify(c.identity)}:${JSON.stringify(c.ownership)}:${c.priority}:${c.timeline.length}:${c.claims.map((x) => x.status).join()}`;
   return (
     <>
-      {ownershipOnly ? null : <AiInsightsCard c={c} />}
+      {ownershipOnly ? null : <AiInsightsCard c={c} openDialog={openDialog} />}
       <UnifiedAssessmentForm key={formKey} c={c} openDialog={openDialog} ownershipOnly={ownershipOnly} />
     </>
   );

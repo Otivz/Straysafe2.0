@@ -6,7 +6,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
-# Comes from backend/migrations/2026-11-24_case_ai_insights.sql (+ ..._evidence.sql for evidence_check), applied by the developer. The start-up code skips tables marked
+# Comes from backend/migrations/2026-11-24_case_ai_insights.sql (+ ..._evidence.sql for evidence_check, 2026-11-25_..._guidance.sql for
+# guidance), applied by the developer. The start-up code skips tables marked
 # with a migration (main.py) and only checks that it exists (app/db_migrations/case_ai_insights.py).
 MIGRATION = "2026-11-24_case_ai_insights.sql"
 
@@ -35,6 +36,9 @@ class CaseAiInsight(Base):
     category_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # The advisory evidence check as JSON {status, flags, summary, confidence} (2026-11-24_case_ai_insights_evidence.sql); NULL = none made
     evidence_check: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Advisory guidance as JSON {status, next_steps, missing, draft_question, recap, case_signature} (2026-11-25_case_ai_insights_guidance.sql);
+    # NULL = none made (a row from before guidance existed)
+    guidance: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     model: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
     generated_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
     generated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)

@@ -23,6 +23,7 @@ import { LinkButton } from '../components/Button';
 import { ANIMAL_ICON } from '../components/icons';
 import { EmptyState } from '../components/layout';
 import { MatchCard } from '../components/MatchParts';
+import WatchAreas from '../components/WatchAreas';
 import { CATEGORIES } from '../data/constants';
 import { useAdminData } from '../data/context';
 import { attentionItems, dashboardCounts, dueReferralItems, isLostOrFound, isOpen, matchesToReview, mediationOf, pendingFollowUps, recentActivity, type ReasonKind } from '../data/selectors';
@@ -131,12 +132,6 @@ export default function DashboardPage() {
           <h1 className="sa-dash-head__title">{greeting(now)}, {state.admin.name.split(' ')[0]}</h1>
           <p className="sa-dash-head__line">{sentence}</p>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {counts.urgent > 0 ? (
-            <LinkButton size="sm" variant="primary" to={`${casesPath}?status=open&priority=urgent`}>Review urgent ({counts.urgent})</LinkButton>
-          ) : null}
-          <LinkButton size="sm" variant="secondary" to={casesPath}>All cases <ArrowRight size={13} aria-hidden="true" /></LinkButton>
-        </div>
       </header>
 
       {/* Key figures, each a shortcut to the matching list */}
@@ -211,6 +206,9 @@ export default function DashboardPage() {
           </div>
         </section>
       ) : null}
+
+      {/* Places with several reports in a short time: a pattern, shown before it gets worse (nothing shows when there is none) */}
+      <WatchAreas cases={state.cases} now={now} />
 
       <div className="sa-dash-cols sa-fade-up items-start [animation-delay:110ms]">
         <div className="flex min-w-0 flex-col gap-6">

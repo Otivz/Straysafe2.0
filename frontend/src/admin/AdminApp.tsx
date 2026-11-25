@@ -1,6 +1,7 @@
 import '../preview/styles/tokens.css';
 import './styles/ui.css';
 import './styles/pages.css';
+import './styles/case.css';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, RequireAuth } from './auth/AuthProvider';
 import { adminPath } from './config';

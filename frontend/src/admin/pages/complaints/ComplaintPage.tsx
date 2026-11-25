@@ -25,6 +25,7 @@ import {
   SUSPECT_RP, STAGE_TEXT, VERIFIED_RP, activityOf, evidenceLabel, fmt, fmtDay, lc, needInputOf, needsOf, ord, peso, stepBadge, stepNext, stepTrail,
   type ComplaintDialogState, type Need, type NeedIcon,
 } from '../../complaints/model';
+import AiInsightsCard from '../case/AiInsightsCard';
 import { CaseDialogs } from '../case/CaseDialogs';
 import type { CaseDialog } from '../case/dialogState';
 import { ComplaintDialogs } from './ComplaintDialogs';
@@ -136,27 +137,18 @@ export default function ComplaintPage({ c }: { c: Case }) {
   const activity = activityOf(d, refOf, { at: c.reportedAt, by: c.reporter.name }, c.closure ? { at: c.closure.closedAt, label: DISPOSITIONS[c.closure.disposition].label } : null);
 
   return (
-    <div>
-      <style>{`
-        @keyframes saFadeUp {
-          from { opacity: 0; transform: translateY(8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .sa-fade-up {
-          animation: saFadeUp 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
-        }
-      `}</style>
-      <Link className="sa-back" to={adminPath('/complaints')}>← Complaints</Link>
+    <div className="sa-casepage">
+      <Link className="sa-back" to={adminPath('/complaints')}><span aria-hidden="true">←</span> Complaints</Link>
       <header className="sa-mc__top sa-fade-up mb-3 mt-1">
         <p className="sa-mc__eyebrow">
-          <span className="sa-ref" style={{ fontSize: 13.5 }}>{c.id}</span>
+          <span className="sa-casehead__ref">{c.id}</span>
           <span className="sa-meta flex items-center gap-1.5"><Megaphone size={14} aria-hidden="true" />Animal complaint</span>
           <span className="sa-meta flex items-center gap-1.5"><Lock size={13} aria-hidden="true" />Private</span>
         </p>
         {chip}
       </header>
 
-      <section className="sa-mc-hero sa-fade-up rounded-2xl border border-[#e7e2da] bg-gradient-to-b from-white to-[#fcfaf6] shadow-xs [animation-delay:40ms]" aria-label="What was reported">
+      <section className="sa-mc-hero sa-fade-up sa-mc-card sa-mc-card--hero [animation-delay:40ms]" aria-label="What was reported">
         <div className="sa-mc-hero__photo">
           <div className="sa-mc-photo relative overflow-hidden group">
             {currentMedia ? (
@@ -302,13 +294,13 @@ export default function ComplaintPage({ c }: { c: Case }) {
       </section>
 
       {closed ? (
-        <section className="sa-mc-lane sa-fade-up rounded-2xl border border-[#e7e2da] shadow-xs [animation-delay:80ms]" data-closed aria-label="How this complaint ended">
+        <section className="sa-mc-lane sa-fade-up [animation-delay:80ms]" data-closed aria-label="How this complaint ended">
           <p className="sa-mc-calm"><CircleCheck size={18} aria-hidden="true" />{d.same_as ? `Same occurrence as ${refOf(d.same_as.report_id)}` : c.closure ? DISPOSITIONS[c.closure.disposition].label : 'Closed'}</p>
           <p className="sa-small sa-text-2 mt-1">Its findings, decision and steps stay in the history.</p>
           {!d.same_as ? <p className="mt-3"><Button size="sm" icon={RotateCcw} onClick={() => setCaseDialog({ kind: 'reopen' })}>Reopen this complaint</Button></p> : null}
         </section>
       ) : needs.length ? (
-        <section className="sa-mc-lane sa-fade-up rounded-2xl border border-[#e7e2da] shadow-xs [animation-delay:80ms]" data-active aria-label="Needs you">
+        <section className="sa-mc-lane sa-fade-up [animation-delay:80ms]" data-active aria-label="Needs you">
           <h2 className="sa-mc-lane__head"><Bell size={15} aria-hidden="true" />Needs you</h2>
           <ul className="sa-mc-needs">
             {needs.map((n, i) => {
@@ -324,16 +316,19 @@ export default function ComplaintPage({ c }: { c: Case }) {
           </ul>
         </section>
       ) : (
-        <section className="sa-mc-lane sa-fade-up rounded-2xl border border-[#e7e2da] shadow-xs [animation-delay:80ms]" aria-label="Situation">
+        <section className="sa-mc-lane sa-fade-up [animation-delay:80ms]" aria-label="Situation">
           <div className="sa-mc-lane__calm"><p className="sa-mc-calm" role="status"><CircleCheck size={18} aria-hidden="true" />Nothing needs you right now</p><p className="sa-mc-lane__line">{waiting}</p></div>
         </section>
       )}
 
+      <div className="mt-4">
+        <AiInsightsCard c={c} openDialog={setCaseDialog} onComplaintAction={(kind) => setDialog({ kind })} />
+      </div>
       <Findings c={c} d={d} closed={closed} refOf={refOf} onOpen={setDialog} leadCount={leadCount} />
       <History d={d} refOf={refOf} self={id} />
       <Enforcement d={d} closed={closed} now={now} onOpen={setDialog} />
 
-      <section className="sa-mc-sec sa-fade-up rounded-xl border border-[#e7e2da] bg-white p-4 sm:p-5 shadow-xs [animation-delay:160ms]" aria-labelledby="cm-activity">
+      <section className="sa-mc-sec sa-fade-up sa-mc-card sa-mc-card--pad [animation-delay:160ms]" aria-labelledby="cm-activity">
         <div className="sa-mc-sec__head">
           <h2 id="cm-activity" className="sa-mc-sec__title inline-flex items-center gap-2">
             <FileText size={16} className="text-[var(--sa-brand)]" aria-hidden="true" />
@@ -347,7 +342,7 @@ export default function ComplaintPage({ c }: { c: Case }) {
       </section>
 
       {!closed ? (
-        <details className="sa-mc-more sa-mc-more--section rounded-xl border border-[#e7e2da] bg-white px-4 py-3 shadow-xs">
+        <details className="sa-mc-more sa-mc-more--section sa-mc-card sa-mc-card--tight">
           <summary className="cursor-pointer font-semibold text-[var(--sa-ink)]">Close this complaint</summary>
           <p className="sa-small sa-text-2 mt-3">Closing records how it ended. It never removes a finding, a decision or a step.</p>
           <p className="mt-3"><Button size="sm" onClick={() => setCaseDialog({ kind: 'close' })}>Close the complaint</Button></p>
@@ -399,7 +394,7 @@ const fmtActivity = (iso: string) => activityFmt.format(new Date(iso));
 function Findings({ c, d, closed, refOf, onOpen, leadCount }: { c: Case; d: ApiComplaint; closed: boolean; refOf: (id: number) => string; onOpen: (x: ComplaintDialogState) => void; leadCount?: number }) {
   if (d.same_as) {
     return (
-      <section className="sa-mc-sec sa-fade-up rounded-xl border border-[#e7e2da] bg-white p-4 sm:p-5 shadow-xs [animation-delay:120ms]">
+      <section className="sa-mc-sec sa-fade-up sa-mc-card sa-mc-card--pad [animation-delay:120ms]">
         <div className="sa-mc-sec__head">
           <h2 className="sa-mc-sec__title inline-flex items-center gap-2">
             <ClipboardCheck size={16} className="text-[var(--sa-brand)]" aria-hidden="true" />
@@ -415,7 +410,7 @@ function Findings({ c, d, closed, refOf, onOpen, leadCount }: { c: Case; d: ApiC
   const incLabel = inc.status === 'verified' ? 'Verified' : inc.status === 'unverified' ? 'Not verified' : inc.status === 'invalid' ? 'Invalid' : 'Can’t tell yet';
   const decided = !!d.offense;
   return (
-    <section className="sa-mc-sec sa-fade-up rounded-xl border border-[#e7e2da] bg-white p-4 sm:p-5 shadow-xs [animation-delay:120ms]">
+    <section className="sa-mc-sec sa-fade-up sa-mc-card sa-mc-card--pad [animation-delay:120ms]">
       <div className="sa-mc-sec__head">
         <h2 className="sa-mc-sec__title inline-flex items-center gap-2">
           <ClipboardCheck size={16} className="text-[var(--sa-brand)]" aria-hidden="true" />
@@ -451,7 +446,7 @@ function Findings({ c, d, closed, refOf, onOpen, leadCount }: { c: Case; d: ApiC
                   {d.ruled_out.map((r, i) => (
                     <span
                       key={`${r.label}-${i}`}
-                      className="inline-flex items-center rounded-md border border-[#e7e2da] bg-[#f7f4ee] px-2 py-0.5 text-[12px] text-[var(--sa-ink-2)]"
+                      className="inline-flex items-center rounded-md border border-[var(--sa-line)] bg-[var(--sa-sand)] px-2 py-0.5 text-[12px] text-[var(--sa-ink-2)]"
                     >
                       {r.label}{r.reason ? ` (${r.reason})` : ''}
                     </span>
@@ -460,7 +455,7 @@ function Findings({ c, d, closed, refOf, onOpen, leadCount }: { c: Case; d: ApiC
               </div>
             ) : null}
             {!d.respondent && d.check ? (
-              <p className="mt-2 rounded-lg border border-[#ede8df] bg-[#faf8f4] px-3 py-1.5 text-[12.5px] text-[var(--sa-ink-2)]">
+              <p className="mt-2 rounded-lg border border-[var(--sa-line-soft)] bg-[var(--sa-sand)] px-3 py-1.5 text-[12.5px] text-[var(--sa-ink-2)]">
                 <strong className="font-semibold text-[var(--sa-ink)]">Checked so far:</strong> {d.check.note}
               </p>
             ) : null}
@@ -487,7 +482,7 @@ function History({ d, refOf, self }: { d: ApiComplaint; refOf: (id: number) => s
   const pending = h.pending;
   const notCounted = h.not_counted.filter((x) => x.report_id !== self || x.kind === 'corrected');
   return (
-    <section className="sa-mc-sec sa-fade-up rounded-xl border border-[#e7e2da] bg-white p-4 sm:p-5 shadow-xs [animation-delay:120ms]">
+    <section className="sa-mc-sec sa-fade-up sa-mc-card sa-mc-card--pad [animation-delay:120ms]">
       <div className="sa-mc-sec__head"><h2 className="sa-mc-sec__title">{d.respondent.name} · {h.policy_title ?? d.rule?.title}</h2><Link className="sa-small" to={adminPath(`/complaints/people/${d.respondent.respondent_id}`)}>Full history</Link></div>
       <p className="sa-hint mb-2">Counts only verified incidents of this rule where you confirmed {d.respondent.name} as responsible{h.count_window_days ? `, within ${h.count_window_days} days` : ''}. Each occurrence counts once.</p>
       <ol className="sa-cm-ladder">

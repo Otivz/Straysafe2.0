@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Camera, Clock, Download, FileText, FolderOpen, Image as ImageIcon, Images, MapPin, Maximize2, PawPrint, Play, Upload, User, UserRound, X } from 'lucide-react';
+import { Camera, Clock, Download, FileText, FolderOpen, Image as ImageIcon, Images, MapPin, Maximize2, PawPrint, Play, Sparkles, Upload, User, UserRound, X } from 'lucide-react';
 import { WarningLetterDocument } from '../../../components/WarningLetterDocument';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
@@ -12,7 +12,7 @@ import { useAdminData } from '../../data/context';
 import type { Case } from '../../data/types';
 import { FormFooter } from '../../dialogs/BasicDialogs';
 import { useSubmit } from '../../lib/useSubmit';
-import { adminApi, type ApiGeneratedWarningLetter, type ApiTemplatePreviewResult, type ApiWarningTemplate } from '../../live/api';
+import { adminApi, type ApiAiInsights, type ApiGeneratedWarningLetter, type ApiTemplatePreviewResult, type ApiWarningTemplate } from '../../live/api';
 import { templateOptionLabel, templatesForLevel } from '../../lib/warningTemplates';
 import { reportIdOf } from '../../../live/refs';
 import { toLocalInput } from '../../../preview/lib/format';
@@ -65,6 +65,15 @@ function VerifyDialog(p: Props) {
   const [basis, setBasis] = useState(p.d.incident.basis ?? '');
   const [rule, setRule] = useState(p.d.rule?.policy_id ?? (p.d.no_rule ? 'none' : ''));
   const [err, setErr] = useState<Record<string, string>>({});
+  // The AI's suggested rule, if one was made on the case page (read only: this never asks Gemini). Never chosen for the Leader.
+  const [ai, setAi] = useState<ApiAiInsights | null>(null);
+  useEffect(() => {
+    let live = true;
+    adminApi.aiInsights(rid(p.c)).then((x) => { if (live) setAi(x); }, () => undefined);
+    return () => { live = false; };
+  }, [p.c]);
+  const suggested = (ai?.insight?.guidance?.rule_suggestions ?? []).filter((s) => rules.some((r) => r.id === s.id));
+  const noMatch = Boolean(ai?.insight?.guidance?.rules_asked) && suggested.length === 0;
   const { pending, error, save } = useSave(p, 'Saved');
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -89,6 +98,35 @@ function VerifyDialog(p: Props) {
         ]} />
       </FieldGroup>
       <Field label="What you based it on" required error={err.basis}><Textarea rows={2} value={basis} onChange={(e) => setBasis(e.target.value)} placeholder="e.g. The guard also saw the dog on Tuesday evening." /></Field>
+      {v === 'verified' && rules.length > 0 ? (
+        <div className="sa-rulesuggest" aria-label="AI suggested rule">
+          {suggested.length > 0 ? (
+            <>
+              <p className="sa-rulesuggest__head"><Sparkles size={14} aria-hidden="true" />AI suggestion · you decide</p>
+              <ul className="sa-rulesuggest__list">
+                {suggested.map((s) => {
+                  const r = rules.find((x) => x.id === s.id);
+                  return (
+                    <li key={s.id} data-picked={rule === s.id ? '' : undefined}>
+                      <div className="min-w-0">
+                        <strong>{r?.title ?? s.title ?? s.id}</strong>
+                        {s.reason ? <p>{s.reason}</p> : null}
+                        {r?.summary ? <p className="sa-rulesuggest__covers">The rule covers: {r.summary}</p> : null}
+                      </div>
+                      <Button size="sm" variant="secondary" type="button" onClick={() => setRule(s.id)}>{rule === s.id ? 'Chosen' : 'Use this rule'}</Button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="sa-rulesuggest__note">It only suggests, from what the report says. Read the rule, and choose below.</p>
+            </>
+          ) : noMatch ? (
+            <p className="sa-rulesuggest__note">AI found no clear match with your confirmed rules. Choose below.</p>
+          ) : ai?.status === 'not_generated' ? (
+            <p className="sa-rulesuggest__note">Want a suggested rule? Close this window and press “Generate AI Insights” on the complaint page first.</p>
+          ) : null}
+        </div>
+      ) : null}
       {v === 'verified' ? (
         <Field label="Which rule was broken?" required error={err.rule} hint={rules.length ? 'Only confirmed rules are offered. History is counted per rule.' : 'No rule for animal complaints is confirmed yet. Add one in Settings, Policies.'}>
           <Select value={rule} onChange={(e) => setRule(e.target.value)}>

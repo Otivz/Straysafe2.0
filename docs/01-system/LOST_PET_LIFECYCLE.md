@@ -71,6 +71,17 @@ One conversation per possible recovery. `mode` is `none` (nobody agreed), `direc
 - **Dashboard**: "Needs your attention" ranks urgent safety cases, then requests to help an owner and a neighbour, then a Barangay nobody has contacted, then overdue follow-ups. A missing-pet report is **not** a task for being new, and the "New reports" count excludes it; missing pets are listed separately ("Missing pets").
 - **Missing-pet case** (`pages/case/LostPetOverview.tsx`): the registered pet and owner → where it was last seen (with the map) → possible recoveries and sightings (newest first, with review) → getting in touch → Barangay assistance → related reports; the History tab is the chronological record. The header's one action is "Record owner confirmation" (or "Reopen case"); there is no Start review, Mark in progress or manual status for a lost pet, and no "create notice". "Close without recovery…" is in the menu; its dialog disables "Missing pet recovered" and never offers "Withdrawn by the reporter".
 
+### The sighting trail on the Leader's map (2026-11-25)
+
+On the missing-pet case page the "Last seen" map (`pages/case/monitored/Hero.tsx`, `preview/map/ReadOnlyMap.tsx`) joins the places in the order they were **seen** (`seen_at`, not the time they were typed in): the last-seen place, then sighting 1, 2, 3... The pure rules are in `frontend/src/admin/lib/sightingTrail.ts`. It describes what was reported; it never predicts. Admin only (the Leader already sees the exact spots).
+
+- **Legs are dashed** because nobody knows the way the animal took. A leg has an arrowhead when the time between the two places is short enough (up to 12 hours) for the direction to mean something; with a longer wait, or a missing time, it is drawn grey without an arrowhead ("too long between the two to say which way"); a place within 25 m of the last is the same spot (no line).
+- **A "jump" is flagged, not hidden.** Two sightings at least 200 m apart that are farther than a loose animal can go in that time (above 8 km/h for a cat, 15 for a dog, 10 for other animals) get an amber leg and a warning under the map: "Sighting 3 is 2.0 km from sighting 2 after only 5 min: it may be a different animal. Check it before relying on the trail." A sighting seen before the time the report gives for the last-seen place is also flagged.
+- **Which sightings count.** A sighting the Leader dismissed ("not a match") is not drawn and takes no number (the numbers are the place among the others). A possible-recovery lead ("someone may have the pet") is shown as a numbered place but never joined into the trail, because it is where the pet is kept, not where it walked. A sighting with no position is skipped.
+- **The area to start looking** is a green circle around the latest place, only for a missing pet that is still open (never for a found animal or a closed case). It starts at 150 m for a cat (400 m for a dog, 250 m for others) and widens with the hours since that sighting (10, 40 and 20 m per hour), up to 400, 1200 and 600 m. The key says "a guide, not a prediction", the Leader can switch it off, and there is no predicted direction.
+- The map opens by itself when there are two or more places to join; otherwise it stays one tap away ("Show on the map"). Under it: the key, the warnings, and a "How it moved" list (for example "Last seen → 1: 150 m in 30 min") so the trail can also be read as text.
+- Tests: `frontend/tests/adminSightingTrail.test.mjs`.
+
 ## Notifications
 
 | `type` | `related_id` is | Recipient | Opens |
