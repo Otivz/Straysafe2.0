@@ -397,9 +397,11 @@
   .rs-option input { flex-shrink: 0; width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--sa-brand-strong); }
   .rs-option:has(input:checked) { border-color: var(--sa-brand); background: var(--sa-brand-soft); box-shadow: inset 0 0 0 1px var(--sa-brand); }
   .rs-option:has(input:focus-visible) { outline: 2px solid var(--sa-brand); outline-offset: 2px; }
-  .rs-option__icon { display: grid; place-items: center; flex-shrink: 0; width: 38px; height: 38px; border-radius: 11px; background: var(--sa-sand); color: var(--sa-ink-2); }
+  .rs-option__icon { position: relative; display: grid; place-items: center; flex-shrink: 0; width: 38px; height: 38px; overflow: hidden; border-radius: 11px; background: var(--sa-sand); color: var(--sa-ink-2); }
   .rs-option__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .rs-option__icon img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+  /* A photo fills the square whatever its shape: it is taken out of the grid flow, because a percentage height inside a grid whose row is auto
+     is ignored, and a tall phone photo then ran past the box at its own proportions. */
+  .rs-option__icon img { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
   .rs-option--taken { align-items: center; background: var(--sa-sand); cursor: default; }
   .rs-option--taken .rs-option__text { flex: 1; }
   .rs-option__title { font-size: 16px; font-weight: 600; line-height: 22px; }

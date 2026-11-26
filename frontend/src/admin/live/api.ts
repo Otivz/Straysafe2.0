@@ -65,6 +65,31 @@ export interface ApiAiEvidenceCheck {
   summary: string;
   confidence: number;
 }
+/** A next step the AI may suggest: each opens an existing screen of the case page (never a warning or closing the case). */
+export type AiGuidanceAction =
+  | 'start_review' | 'record_assessment' | 'mark_in_progress' | 'request_more_evidence' | 'schedule_follow_up'
+  | 'complete_follow_up' | 'create_referral' | 'review_possible_owners' | 'review_claim'
+  // animal complaints (the complaint page)
+  | 'verify_incident' | 'find_respondent'
+  // missing pets and found animals (the monitored page)
+  | 'review_possible_match' | 'review_sighting';
+export interface ApiAiGuidance {
+  /** none: made before guidance existed (Refresh makes it). unavailable: the AI gave nothing usable (the rest of the insight is fine). */
+  status: 'ok' | 'unavailable' | 'none';
+  /** Only steps that still fit the case as it is now. */
+  next_steps: { action: AiGuidanceAction; label: string; reason: string | null }[];
+  missing: string[];
+  draft_question: string | null;
+  /** A closed case only: what was decided and why, from the recorded closure. */
+  decision?: string | null;
+  /** An animal complaint with no rule chosen yet: up to 2 of the subdivision's confirmed rules the reported behaviour falls under. The Leader chooses. */
+  rule_suggestions?: { id: string; title: string | null; reason: string | null }[];
+  /** Suggestions were asked for (so an empty list means "no clear match", not "not asked"). */
+  rules_asked?: boolean;
+  recap: string | null;
+  /** The case changed since this guidance was made. */
+  stale: boolean;
+}
 /** One AI suggestion for a case (backend/app/services/case_ai_insights.py). Suggestions only: nothing here is applied by itself. */
 export interface ApiAiInsight {
   summary: string;
@@ -74,6 +99,8 @@ export interface ApiAiInsight {
   category_check: { mismatch: boolean; suggested_category: CategoryId | null; suggested_category_label: string | null; reason: string | null };
   /** Advisory only: it never rejects a photo or changes the evidence sufficiency the Leader decides. */
   evidence_check: ApiAiEvidenceCheck;
+  /** Next steps, missing information and a recap. Absent only from an older server. */
+  guidance?: ApiAiGuidance;
   model: string | null;
   generated_at: string | null;
 }

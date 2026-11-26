@@ -55,16 +55,7 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
 
   return (
     <div className="sa-case">
-      <style>{`
-        @keyframes saFadeUp {
-          from { opacity: 0; transform: translateY(8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .sa-fade-up {
-          animation: saFadeUp 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
-        }
-      `}</style>
-      <Panel className="sa-fade-up border-[#e7e2da] shadow-xs">
+      <Panel className="sa-fade-up">
         <Block
           title={
             <span className="inline-flex items-center gap-2">
@@ -74,7 +65,7 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
           }
         >
           {reportText ? (
-            <div className="rounded-xl border border-[#e7e2da] bg-[#faf7f2] px-4 py-3 text-[15px] leading-relaxed text-[#1c1917] whitespace-pre-wrap">
+            <div className="rounded-xl border border-[var(--sa-line)] bg-[var(--sa-warm)] px-4 py-3 text-[15px] leading-relaxed text-[var(--sa-ink)] whitespace-pre-wrap">
               {reportText}
             </div>
           ) : null}
@@ -202,7 +193,7 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
       </Panel>
 
       <aside className="sa-case__aside" aria-label="Case details">
-        <Panel className="sa-fade-up border-[#e7e2da] shadow-xs">
+        <Panel className="sa-fade-up">
           <Block
             tight
             title={
@@ -229,7 +220,7 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
 
         <RegisteredPetPanel c={c} />
 
-        <Panel className="sa-fade-up border-[#e7e2da] shadow-xs">
+        <Panel className="sa-fade-up">
           <Block tight title={<span className="flex items-center gap-2"><Lock size={14} className="text-[var(--sa-brand)]" aria-hidden="true" />Reporter</span>} description="Visible to authorized administrators only.">
             <Kv stack rows={[
               ['Name', c.reporter.name],
@@ -260,7 +251,7 @@ export default function OverviewTab({ c, now, openDialog }: { c: Case; now: Date
           </Block>
         </Panel>
 
-        <Panel className="sa-fade-up border-[#e7e2da] shadow-xs">
+        <Panel className="sa-fade-up">
           <Block tight title={<span className="flex items-center gap-2"><NotebookPen size={14} className="text-[var(--sa-brand)]" aria-hidden="true" />Recent internal notes</span>} description="Staff-only notes. Never shown to residents.">
             {recentNotes.length === 0 ? (
               <p className="sa-small sa-text-2">No internal notes recorded yet.</p>

@@ -137,13 +137,13 @@ export default function CaseDetailPage() {
         : <Button variant="primary" icon={RotateCcw} onClick={() => open({ kind: 'reopen' })}>Reopen case</Button>;
 
   return (
-    <div>
-      <Link className="sa-back" to={adminPath('/cases')}>← Cases</Link>
+    <div className="sa-casepage">
+      <Link className="sa-back" to={adminPath('/cases')}><span aria-hidden="true">←</span> Cases</Link>
       <header className="sa-casehead">
         <div className="sa-casehead__top">
           <div className="min-w-0">
-            <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="sa-ref" style={{ fontSize: 13.5 }}>{c.id}</span>
+            <p className="sa-casehead__eyebrow">
+              <span className="sa-casehead__ref">{c.id}</span>
               <span className="sa-meta flex items-center gap-1.5"><CategoryIcon size={14} aria-hidden="true" />{CATEGORIES[c.category].label}</span>
               {c.sensitive ? <span className="sa-meta flex items-center gap-1.5"><Lock size={13} aria-hidden="true" />Private complaint</span> : null}
             </p>
@@ -168,8 +168,8 @@ export default function CaseDetailPage() {
           <CaseStatusBadge c={c} large />
           {c.closure ? <OutcomeBadge group={c.closure.outcome} large /> : null}
           <PriorityMark priority={c.priority} />
-          <span className="sa-meta">Reported {fmtDate(c.reportedAt)}{ago(c.reportedAt, now) ? ` · ${ago(c.reportedAt, now)}` : ''}</span>
-          <span className="sa-meta">Assigned to {c.assignedTo}</span>
+          <span className="sa-casehead__fact sa-casehead__fact--lead">Reported <strong>{fmtDate(c.reportedAt)}</strong>{ago(c.reportedAt, now) ? <span className="sa-text-3">· {ago(c.reportedAt, now)}</span> : null}</span>
+          <span className="sa-casehead__fact">Assigned to <strong>{c.assignedTo}</strong></span>
         </div>
       </header>
 
@@ -180,63 +180,46 @@ export default function CaseDetailPage() {
         const primaryAgency = agencies.find((a) => a.type === 'barangay') ?? agencies[0];
         const hasReferral = full && c.referrals.length > 0;
         return (
-          <div className="mb-4 rounded-xl border border-[#ef4444]/30 bg-gradient-to-r from-[#fef2f2] to-[#fff5f5] p-3.5 shadow-xs">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="flex items-start gap-3 min-w-0 flex-1">
-                <span className="relative mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#fee2e2] text-[#b91c1c]">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#ef4444]/35" />
-                  <AlertTriangle size={15} aria-hidden="true" />
-                </span>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="m-0 text-sm font-semibold text-[#991b1b]">
-                      {c.category === 'injured' ? 'Urgent injured / sick animal response' : 'Urgent safety concern'}
-                    </p>
-                    {hasReferral ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
-                        <CheckCircle2 size={11} aria-hidden="true" />
-                        Referral active ({c.referrals.length})
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="m-0 mt-0.5 text-xs leading-relaxed text-[#7f1d1d]">
-                    {c.category === 'injured'
-                      ? 'Coordinate immediate on-site guardhouse check, veterinary care, or Barangay/animal welfare assistance.'
-                      : 'Begin safety coordination now. You do not need to identify the animal or confirm ownership first, and routine warnings or observation periods must not delay it.'}
-                  </p>
-                  {triggers.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                      {triggers.map((t) => (
-                        <span
-                          key={t}
-                          className="inline-flex items-center rounded-md border border-[#ef4444]/25 bg-white/85 px-2 py-0.5 text-[11px] font-semibold text-[#991b1b]"
-                        >
-                          {t}
-                        </span>
-                      ))}
-                    </div>
+          <div className="sa-alertbar" data-tone="red" data-pulse style={{ ['--sa-delay' as string]: '60ms' }}>
+            <div className="sa-alertbar__main">
+              <span className="sa-alertbar__icon"><AlertTriangle size={17} aria-hidden="true" /></span>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="sa-alertbar__title">{c.category === 'injured' ? 'Urgent injured / sick animal response' : 'Urgent safety concern'}</p>
+                  {hasReferral ? (
+                    <span className="sa-alertbar__pill"><CheckCircle2 size={11} aria-hidden="true" />Referral active ({c.referrals.length})</span>
                   ) : null}
                 </div>
+                <p className="sa-alertbar__text">
+                  {c.category === 'injured'
+                    ? 'Coordinate immediate on-site guardhouse check, veterinary care, or Barangay/animal welfare assistance.'
+                    : 'Begin safety coordination now. You do not need to identify the animal or confirm ownership first, and routine warnings or observation periods must not delay it.'}
+                </p>
+                {triggers.length > 0 ? (
+                  <div className="sa-alertbar__tags">
+                    {triggers.map((t) => <span key={t} className="sa-alertbar__tag">{t}</span>)}
+                  </div>
+                ) : null}
               </div>
-              {full ? (
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    icon={Share2}
-                    onClick={() =>
-                      open({
-                        kind: 'referral',
-                        agencyId: primaryAgency?.id ?? 'manual',
-                        initialReason: urgentSummary,
-                      })
-                    }
-                  >
-                    {primaryAgency ? `Refer to ${primaryAgency.name}` : 'Refer to Barangay'}
-                  </Button>
-                </div>
-              ) : null}
             </div>
+            {full ? (
+              <div className="sa-alertbar__actions">
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon={Share2}
+                  onClick={() =>
+                    open({
+                      kind: 'referral',
+                      agencyId: primaryAgency?.id ?? 'manual',
+                      initialReason: urgentSummary,
+                    })
+                  }
+                >
+                  {primaryAgency ? `Refer to ${primaryAgency.name}` : 'Refer to Barangay'}
+                </Button>
+              </div>
+            ) : null}
           </div>
         );
       })() : null}
@@ -245,34 +228,32 @@ export default function CaseDetailPage() {
         const top = dupCandidates[0];
         const topPct = top && typeof top.combined_score === 'number' ? Math.round(top.combined_score * 100) : null;
         return (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#d97706]/35 bg-gradient-to-r from-[#fffbeb] to-[#fef3c7]/45 px-3.5 py-2.5 shadow-xs">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#fef3c7] text-[#b45309]">
-                <Link2 size={15} aria-hidden="true" />
-              </span>
+          <div className="sa-alertbar" data-tone="amber" style={{ ['--sa-delay' as string]: '120ms' }}>
+            <div className="sa-alertbar__main">
+              <span className="sa-alertbar__icon"><Link2 size={16} aria-hidden="true" /></span>
               <div className="min-w-0">
-                <p className="m-0 text-xs font-semibold text-[#92400e]">
+                <p className="sa-alertbar__title">
                   {dupCandidates.length} similar {dupCandidates.length === 1 ? 'report' : 'reports'} detected
                   {top?.reference ? ` · Top match ${top.reference}${topPct !== null ? ` (${topPct}%)` : ''}` : ''}
                 </p>
-                <p className="m-0 text-[11px] text-[#78350f]">
-                  Review and link or merge potential duplicates to avoid duplicate staff work.
-                </p>
+                <p className="sa-alertbar__text">Review and link or merge potential duplicates to avoid duplicate staff work.</p>
               </div>
             </div>
-            <Button
-              size="sm"
-              variant="secondary"
-              icon={Link2}
-              onClick={() => {
-                if (tab !== 'overview') setTab('overview');
-                window.setTimeout(() => {
-                  document.getElementById('related-reports')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 60);
-              }}
-            >
-              Review &amp; Link
-            </Button>
+            <div className="sa-alertbar__actions">
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={Link2}
+                onClick={() => {
+                  if (tab !== 'overview') setTab('overview');
+                  window.setTimeout(() => {
+                    document.getElementById('related-reports')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }, 60);
+                }}
+              >
+                Review &amp; Link
+              </Button>
+            </div>
           </div>
         );
       })() : null}
@@ -291,7 +272,8 @@ export default function CaseDetailPage() {
         ]}
       />
 
-      <div role="tabpanel" id="case-panel" aria-labelledby={`case-tab-${tab}`} className="pt-6">
+      {/* keyed by tab, so each tab fades in again when it is chosen */}
+      <div key={tab} role="tabpanel" id="case-panel" aria-labelledby={`case-tab-${tab}`} className="pt-6">
         {detail.status === 'error' ? <ErrorState message={detail.error} onRetry={() => { void loadCase(c.id); }} />
           : !full ? <PageSkeleton />
             : (

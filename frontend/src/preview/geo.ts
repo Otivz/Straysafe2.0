@@ -70,6 +70,14 @@ export function checkReportingArea(lat: number, lng: number): AreaCheck {
 
 export const distanceM = (a: Point, b: Point): number => calculateDistanceMeters(a.lat, a.lng, b.lat, b.lng);
 
+/** The bearing from one place to another, in degrees clockwise from north (0 = north, 90 = east): for turning an arrowhead along a line. */
+export function bearingDeg(a: Point, b: Point): number {
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const y = Math.sin(rad(b.lng - a.lng)) * Math.cos(rad(b.lat));
+  const x = Math.cos(rad(a.lat)) * Math.sin(rad(b.lat)) - Math.sin(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.cos(rad(b.lng - a.lng));
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
 // ----------------------------------------------------------------------------------------------------------- landmarks
 export interface Landmark { id: number; name: string; lat: number; lng: number }
 
@@ -93,6 +101,26 @@ export function nearestLandmark(lat: number, lng: number, withinM = 80): Landmar
     if (d <= withinM && (!best || d < best.d)) best = { l, d };
   }
   return best?.l ?? null;
+}
+
+const COMPASS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+
+/**
+ * A place named from its POSITION (a pin, or the centre of several), never from the words someone typed: "Near Selera Community Park &
+ * Clubhouse" within 80 m of a registered landmark, else the distance and direction from the nearest one ("About 150 m north-east of ..."),
+ * and the coordinates when there is no registered landmark at all. Staff screens only: it can point at a spot.
+ */
+export function placeLabel(p: Point, nearM = 80): string {
+  let best: { l: Landmark; d: number } | null = null;
+  for (const l of registeredLandmarks()) {
+    const d = calculateDistanceMeters(p.lat, p.lng, l.lat, l.lng);
+    if (!best || d < best.d) best = { l, d };
+  }
+  if (!best) return `Pinned spot ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`;
+  if (best.d <= nearM) return landmarkLabel(best.l);
+  const dir = COMPASS[Math.round(bearingDeg(best.l, p) / 45) % 8];
+  const dist = best.d < 1000 ? `${Math.round(best.d / 10) * 10} m` : `${(best.d / 1000).toFixed(1)} km`;
+  return `About ${dist} ${dir} of ${best.l.name}`;
 }
 
 // ------------------------------------------------------------------------------------------------------ community views

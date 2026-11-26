@@ -49,7 +49,7 @@ function Tiles({ tiles, caseId, openDialog }: { tiles: Tile[]; caseId: string; o
   return (
     <ul className="sa-mc-tiles" aria-label="The situation">
       {tiles.map((t) => (
-        <li key={t.key} className="sa-mc-tile rounded-xl border border-[#e7e2da]/80 bg-white/80 transition-all duration-150 hover:border-[#d6cfc7] hover:bg-white">
+        <li key={t.key} className="sa-mc-tile sa-mc-tile--card">
           <span className="sa-mc-kicker">{t.label}</span>
           <span className="sa-mc-tile__value"><span className="sa-mc-dot" data-tone={t.tone} aria-hidden="true" />{t.value}</span>
           {t.meta ? <span className="sa-mc-tile__meta">{t.meta}</span> : null}
@@ -88,7 +88,7 @@ export default function Lane({ c, needs, tiles, line, now, openDialog }: { c: Ca
   return (
     <section
       id="mc-lane"
-      className="sa-mc-lane rounded-2xl border border-[#e7e2da] shadow-xs"
+      className="sa-mc-lane"
       data-active={active || undefined}
       aria-label={active ? 'Needs you' : 'Situation'}
     >

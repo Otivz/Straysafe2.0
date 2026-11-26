@@ -87,7 +87,7 @@ function WarningCard({ w, c, now, openDialog, delayMs = 0 }: { w: Warning; c: Ca
 
   const accentClass =
     w.status === 'active'
-      ? 'border-l-[3.5px] border-l-[#b45309]'
+      ? 'border-l-[3.5px] border-l-[var(--sa-brand-ink)]'
       : w.outcome === 'compliant'
         ? 'border-l-[3.5px] border-l-emerald-600'
         : w.outcome === 'non_compliant'
@@ -96,7 +96,7 @@ function WarningCard({ w, c, now, openDialog, delayMs = 0 }: { w: Warning; c: Ca
 
   return (
     <div
-      className={`sa-fade-up rounded-xl border border-[#e7e2da] bg-gradient-to-b from-white to-[#fcfaf6] p-4 shadow-xs transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-[#d6cfc7] hover:shadow-sm ${accentClass}`}
+      className={`sa-fade-up rounded-xl border border-[var(--sa-line)] bg-gradient-to-b from-white to-[var(--sa-warm)] p-4 shadow-xs transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-[var(--sa-line-control)] hover:shadow-sm ${accentClass}`}
       style={{ animationDelay: `${delayMs}ms` }}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -104,7 +104,7 @@ function WarningCard({ w, c, now, openDialog, delayMs = 0 }: { w: Warning; c: Ca
           <p className="m-0 flex flex-wrap items-center gap-2">
             {w.warningReference ? <span className="sa-ref">{w.warningReference}</span> : null}
             {w.warningLevel ? <Badge tone="amber">{w.warningLevel}</Badge> : null}
-            <span className="sa-semibold text-[#1c1917]">{w.policyRef}</span>
+            <span className="sa-semibold text-[var(--sa-ink)]">{w.policyRef}</span>
             <span className="sa-text-2">{w.policyTitle}</span>
           </p>
           <p className="sa-meta mt-1">
@@ -130,7 +130,7 @@ function WarningCard({ w, c, now, openDialog, delayMs = 0 }: { w: Warning; c: Ca
           {notifErr} — Warning record is preserved.
         </Callout>
       ) : null}
-      <div className="mt-3 rounded-lg border border-[#ede7de] bg-[#faf7f2] px-3 py-2 text-sm text-[#1c1917] whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+      <div className="mt-3 rounded-lg border border-[var(--sa-line-soft)] bg-[var(--sa-warm)] px-3 py-2 text-sm text-[var(--sa-ink)] whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
         {w.details}
       </div>
 
@@ -164,9 +164,9 @@ function WarningCard({ w, c, now, openDialog, delayMs = 0 }: { w: Warning; c: Ca
       ) : null}
 
       {w.observationEnd ? (
-        <div className="mt-4 rounded-lg border border-[#ede7de] bg-white/80 p-3">
+        <div className="mt-4 rounded-lg border border-[var(--sa-line-soft)] bg-white/80 p-3">
           <div className="flex items-center justify-between sa-small">
-            <span className="font-medium text-[#292524]">{w.observationDays} {w.observationDays === 1 ? 'day' : 'days'} observation</span>
+            <span className="font-medium text-[var(--sa-ink)]">{w.observationDays} {w.observationDays === 1 ? 'day' : 'days'} observation</span>
             <span className={w.status === 'active' && end && end < now.getTime() ? 'sa-text-red sa-semibold' : 'sa-text-2 font-medium'}>{w.status === 'active' ? remaining(w.observationEnd, now) : `ended ${fmtDateTime(w.observationEnd).split(' · ')[0]}`}</span>
           </div>
           <div className="sa-progress mt-2 overflow-hidden" role="progressbar" aria-label="Observation period elapsed" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct ?? 0)}>
@@ -181,7 +181,7 @@ function WarningCard({ w, c, now, openDialog, delayMs = 0 }: { w: Warning; c: Ca
           <p className="sa-label mb-1.5">Compliance observations</p>
           <ul className="m-0 list-none space-y-1 p-0">
             {w.observations.map((o) => (
-              <li key={o.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 rounded-lg bg-[#faf7f2] px-2.5 py-1.5">
+              <li key={o.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 rounded-lg bg-[var(--sa-warm)] px-2.5 py-1.5">
                 <Badge tone={COMPLIANCE_RESULTS[o.result].tone}>{COMPLIANCE_RESULTS[o.result].label}</Badge>
                 <span className="sa-small">{o.notes}</span>
                 <span className="sa-meta">{fmtDateTime(o.at)}</span>
@@ -192,7 +192,7 @@ function WarningCard({ w, c, now, openDialog, delayMs = 0 }: { w: Warning; c: Ca
       ) : null}
 
       {w.status === 'concluded' && w.outcomeNote ? <p className="sa-small sa-text-2 mt-3"><span className="sa-semibold">Outcome:</span> {w.outcomeNote}</p> : null}
-      {w.status === 'active' && c.status !== 'closed' ? <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-[#ede7de] pt-3"><Button size="sm" icon={ClipboardCheck} onClick={() => openDialog({ kind: 'compliance' })}>Record compliance observation</Button><span className="sa-meta">No fine is assessed by the subdivision.</span></div> : null}
+      {w.status === 'active' && c.status !== 'closed' ? <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-[var(--sa-line-soft)] pt-3"><Button size="sm" icon={ClipboardCheck} onClick={() => openDialog({ kind: 'compliance' })}>Record compliance observation</Button><span className="sa-meta">No fine is assessed by the subdivision.</span></div> : null}
 
       {letterModal ? (
         <Dialog
@@ -243,21 +243,21 @@ function ActionTile({
 }: ActionTileProps) {
   const toneClasses =
     tone === 'primary'
-      ? 'border-[#b45309]/35 bg-gradient-to-br from-[#fff7ed] to-[#ffedd5]/60 hover:border-[#b45309]/65'
+      ? 'border-[var(--sa-brand-ink)]/35 bg-gradient-to-br from-[var(--sa-brand-soft)] to-[var(--sa-brand-tint)]/60 hover:border-[var(--sa-brand-ink)]/65'
       : tone === 'amber'
-        ? 'border-[#d97706]/30 bg-gradient-to-b from-[#fffdf7] to-[#fffbeb]/80 hover:border-[#d97706]/55'
-        : 'border-[#e7e2da] bg-gradient-to-b from-white to-[#fcfaf6] hover:border-[#c7bfb5]';
+        ? 'border-[var(--sa-amber)]/30 bg-gradient-to-b from-[var(--sa-warm)] to-[var(--sa-amber-soft)]/80 hover:border-[var(--sa-amber)]/55'
+        : 'border-[var(--sa-line)] bg-gradient-to-b from-white to-[var(--sa-warm)] hover:border-[var(--sa-line-control)]';
 
   const iconClasses =
     tone === 'primary'
-      ? 'bg-[#b45309] text-white shadow-xs'
+      ? 'bg-[var(--sa-brand-ink)] text-white shadow-xs'
       : tone === 'amber'
-        ? 'bg-[#fef3c7] text-[#b45309] border border-[#fde68a]/70'
-        : 'bg-[#f5f0e8] text-[#57534e] border border-[#e7e2da]/80';
+        ? 'bg-[var(--sa-amber-soft)] text-[var(--sa-brand-ink)] border border-[var(--sa-amber-tint)]/70'
+        : 'bg-[var(--sa-warm)] text-[var(--sa-ink-2)] border border-[var(--sa-line)]/80';
 
   const baseClass = `group relative flex w-full items-start gap-3.5 rounded-xl border p-4 text-left transition-all duration-200 ease-out sa-fade-up ${
     disabled
-      ? 'cursor-not-allowed border-[#e7e2da] bg-[#faf8f5] opacity-70'
+      ? 'cursor-not-allowed border-[var(--sa-line)] bg-[var(--sa-warm)] opacity-70'
       : `${toneClasses} cursor-pointer shadow-xs hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0`
   }`;
 
@@ -272,21 +272,21 @@ function ActionTile({
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center justify-between gap-2">
-          <span className="text-sm font-semibold text-[#1c1917]">{title}</span>
+          <span className="text-sm font-semibold text-[var(--sa-ink)]">{title}</span>
           {disabled ? (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#e7e2da] bg-white px-2 py-0.5 text-[10px] font-medium text-[#78716c]">
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--sa-line)] bg-white px-2 py-0.5 text-[10px] font-medium text-[var(--sa-ink-3)]">
               <Lock size={10} aria-hidden="true" />
               Locked
             </span>
           ) : (
             <ArrowRight
               size={14}
-              className="shrink-0 text-[#78716c] opacity-55 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-[#b45309] group-hover:opacity-100"
+              className="shrink-0 text-[var(--sa-ink-3)] opacity-55 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-[var(--sa-brand-ink)] group-hover:opacity-100"
               aria-hidden="true"
             />
           )}
         </span>
-        <span className="mt-1 block text-xs leading-relaxed text-[#57534e]">{subtitle}</span>
+        <span className="mt-1 block text-xs leading-relaxed text-[var(--sa-ink-2)]">{subtitle}</span>
       </span>
     </>
   );
@@ -392,15 +392,6 @@ export default function ActionsTab({ c, now, openDialog }: Props) {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <style>{`
-        @keyframes saFadeUp {
-          from { opacity: 0; transform: translateY(8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .sa-fade-up {
-          animation: saFadeUp 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
-        }
-      `}</style>
 
       {closed ? (
         <div className="sa-fade-up">
@@ -409,7 +400,7 @@ export default function ActionsTab({ c, now, openDialog }: Props) {
       ) : null}
 
       {pending.length > 0 || completedFollowUps.length > 0 ? (
-        <Panel className="sa-fade-up border-[#e7e2da] shadow-xs">
+        <Panel className="sa-fade-up">
           <Block
             title={
               <span className="flex flex-wrap items-center gap-2">
@@ -500,7 +491,7 @@ export default function ActionsTab({ c, now, openDialog }: Props) {
         </Panel>
       ) : null}
 
-      <Panel className="sa-fade-up border-[#e7e2da] shadow-xs">
+      <Panel className="sa-fade-up">
         <Block
           title={
             <span className="inline-flex items-center gap-2">
@@ -519,7 +510,7 @@ export default function ActionsTab({ c, now, openDialog }: Props) {
       </Panel>
 
       {warnings.length > 0 ? (
-        <Panel className="sa-fade-up border-[#e7e2da] shadow-xs">
+        <Panel className="sa-fade-up">
           <Block
             title={
               <span className="inline-flex items-center gap-2">

@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import L from 'leaflet';
-import { Circle, MapContainer, Marker, Polygon, TileLayer, useMap } from 'react-leaflet';
+import { Circle, MapContainer, Marker, Polygon, Polyline, TileLayer, useMap } from 'react-leaflet';
 import { Maximize, Minimize } from 'lucide-react';
 import MapAutoResize from '../../components/MapControls/MapAutoResize';
-import { GENERAL_AREA_RADIUS_M, OSM_TILES, areaOutline } from '../geo';
-import { dotIcon, pinIcon } from './icons';
-import { AREA_STYLE, OUTLINE_STYLE } from './styles';
-import type { ReadOnlyMapProps } from './types';
+import { GENERAL_AREA_RADIUS_M, OSM_TILES, areaOutline, bearingDeg } from '../geo';
+import { arrowIcon, dotIcon, pinIcon } from './icons';
+import { AREA_STYLE, OUTLINE_STYLE, TRAIL_JUMP_STYLE, TRAIL_STYLE, TRAIL_UNCLEAR_STYLE, ZONE_STYLE } from './styles';
+import type { ReadOnlyMapProps, TrailLine, TrailZone } from './types';
 import './map.css';
 
 const PADDING: L.PointExpression = [10, 10];
@@ -25,11 +25,39 @@ function FitView({ south, west, north, east }: { south: number; west: number; no
 }
 
 /**
+ * The sighting trail: the search area underneath, the dashed legs on top of it, and an arrowhead in the middle of each leg whose direction
+ * means something. Drawn between the outline and the markers, so the numbered dots stay on top. Nothing here is interactive.
+ */
+function TrailOverlay({ trail, zone, prefix }: { trail: TrailLine[]; zone: TrailZone | null; prefix: string }) {
+  return (
+    <>
+      {zone ? <Circle key={`${prefix}-zone`} center={[zone.lat, zone.lng]} radius={zone.radiusM} pathOptions={ZONE_STYLE} /> : null}
+      {trail.map((t, i) => (
+        <Polyline
+          key={`${prefix}-leg-${i}`}
+          positions={[[t.from.lat, t.from.lng], [t.to.lat, t.to.lng]]}
+          pathOptions={t.kind === 'jump' ? TRAIL_JUMP_STYLE : t.kind === 'unclear' ? TRAIL_UNCLEAR_STYLE : TRAIL_STYLE}
+        />
+      ))}
+      {trail.filter((t) => t.kind === 'arrow').map((t, i) => (
+        <Marker
+          key={`${prefix}-arrow-${i}`}
+          position={[(t.from.lat + t.to.lat) / 2, (t.from.lng + t.to.lng) / 2]}
+          icon={arrowIcon(bearingDeg(t.from, t.to))}
+          interactive={false}
+          keyboard={false}
+        />
+      ))}
+    </>
+  );
+}
+
+/**
  * A compact, read-only map: the approximate subdivision outline, an exact pin and/or general areas and numbered markers.
  * It only shows what it is given. Callers decide the precision, so an exact position is passed only to a viewer who is
  * authorized to see it. Loaded lazily by LocationMapPreview.
  */
-export default function ReadOnlyMap({ pin = null, areas = [], numbered = [], height = 180, label, interactive = false }: ReadOnlyMapProps) {
+export default function ReadOnlyMap({ pin = null, areas = [], numbered = [], trail = [], zone = null, height = 180, label, interactive = false }: ReadOnlyMapProps) {
   const [tilesFailed, setTilesFailed] = useState(false);
   const [maximized, setMaximized] = useState(false);
 
@@ -50,13 +78,14 @@ export default function ReadOnlyMap({ pin = null, areas = [], numbered = [], hei
     if (pin) b.extend([pin.lat, pin.lng]);
     for (const a of areas) b.extend(L.latLng(a.lat, a.lng).toBounds(a.radiusM * 2));
     for (const p of numbered) b.extend(p.general ? L.latLng(p.lat, p.lng).toBounds(GENERAL_AREA_RADIUS_M * 2) : [p.lat, p.lng]);
+    if (zone) b.extend(L.latLng(zone.lat, zone.lng).toBounds(zone.radiusM * 2));
     return b;
-  }, [pin, areas, numbered]);
+  }, [pin, areas, numbered, zone]);
 
   const exact = Boolean(pin) || numbered.some((p) => !p.general);
   const general = areas.length > 0 || numbered.some((p) => p.general);
   // What is plotted, as data: it shows at a glance that a community view carries only rounded positions.
-  const plotted = JSON.stringify({ pin, areas, numbered });
+  const plotted = JSON.stringify({ pin, areas, numbered, trail: trail.length, zone: zone ? zone.radiusM : null });
 
   return (
     <div>
@@ -89,6 +118,7 @@ export default function ReadOnlyMap({ pin = null, areas = [], numbered = [], hei
           <Polygon positions={areaOutline()} pathOptions={OUTLINE_STYLE} />
           {areas.map((a) => <Circle key={`area-${a.lat}-${a.lng}`} center={[a.lat, a.lng]} radius={a.radiusM} pathOptions={AREA_STYLE} />)}
           {numbered.filter((p) => p.general).map((p) => <Circle key={`around-${p.n}`} center={[p.lat, p.lng]} radius={GENERAL_AREA_RADIUS_M} pathOptions={AREA_STYLE} />)}
+          <TrailOverlay trail={trail} zone={zone} prefix="t" />
           {pin ? <Marker position={[pin.lat, pin.lng]} icon={pinIcon} interactive={false} keyboard={false} /> : null}
           {numbered.map((p) => <Marker key={`n-${p.n}`} position={[p.lat, p.lng]} icon={dotIcon(p.n, Boolean(p.latest))} interactive={false} keyboard={false} />)}
         </MapContainer>
@@ -129,6 +159,7 @@ export default function ReadOnlyMap({ pin = null, areas = [], numbered = [], hei
               <Polygon positions={areaOutline()} pathOptions={OUTLINE_STYLE} />
               {areas.map((a) => <Circle key={`fs-area-${a.lat}-${a.lng}`} center={[a.lat, a.lng]} radius={a.radiusM} pathOptions={AREA_STYLE} />)}
               {numbered.filter((p) => p.general).map((p) => <Circle key={`fs-around-${p.n}`} center={[p.lat, p.lng]} radius={GENERAL_AREA_RADIUS_M} pathOptions={AREA_STYLE} />)}
+              <TrailOverlay trail={trail} zone={zone} prefix="fs" />
               {pin ? <Marker position={[pin.lat, pin.lng]} icon={pinIcon} interactive={false} keyboard={false} /> : null}
               {numbered.map((p) => <Marker key={`fs-n-${p.n}`} position={[p.lat, p.lng]} icon={dotIcon(p.n, Boolean(p.latest))} interactive={false} keyboard={false} />)}
             </MapContainer>

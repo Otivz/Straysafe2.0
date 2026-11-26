@@ -19,12 +19,23 @@
   .pv-outline { stroke: var(--sa-brand); fill: var(--sa-brand); fill-opacity: 0.06; }
   .pv-radius { stroke: var(--sa-sage); fill: none; }
   .pv-area { stroke: var(--sa-brand); fill: var(--sa-brand); fill-opacity: 0.14; }
+  /* The sighting trail: dashed legs in the brand colour, grey when the direction is unclear, amber when it may be a different animal; the search area in sage */
+  .pv-trail { stroke: var(--sa-brand); fill: none; stroke-opacity: 0.9; }
+  .pv-trail--unclear { stroke: var(--sa-ink-3); stroke-opacity: 0.8; }
+  .pv-trail--jump { stroke: var(--sa-amber-ink); stroke-opacity: 0.95; }
+  .pv-zone { stroke: var(--sa-sage); fill: var(--sa-sage); fill-opacity: 0.1; }
 
   /* Markers */
   .pv-pin { background: none; border: 0; }
   .pv-pin span {
     display: block; width: 28px; height: 28px; margin: 3px 0 0 1px; border: 3px solid #fff; border-radius: 50% 50% 50% 0;
     background: var(--sa-brand); box-shadow: 0 2px 6px rgb(0 0 0 / 0.4); transform: rotate(-45deg);
+  }
+  .pv-arrow { background: none; border: 0; }
+  .pv-arrow span { display: block; width: 18px; height: 18px; transform-origin: 50% 50%; }
+  .pv-arrow span::before {
+    content: ''; display: block; width: 0; height: 0; margin: 1px auto 0; border-left: 6px solid transparent; border-right: 6px solid transparent;
+    border-bottom: 13px solid var(--sa-brand); filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff);
   }
   .pv-dot { background: none; border: 0; }
   .pv-dot span {
@@ -51,6 +62,10 @@
   .pv-key--area { width: 13px; height: 13px; border: 1.5px solid var(--sa-brand); border-radius: 50%; background: color-mix(in srgb, var(--sa-brand) 16%, transparent); }
   .pv-key--pin { width: 10px; height: 10px; border-radius: 50% 50% 50% 0; background: var(--sa-brand); transform: rotate(-45deg); }
   .pv-key--dot { width: 14px; height: 14px; border-radius: 50%; background: var(--sa-ink); }
+  .pv-key--trail { width: 22px; height: 0; border-top: 3px dotted var(--sa-brand); }
+  .pv-key--unclear { width: 22px; height: 0; border-top: 3px dotted var(--sa-ink-3); }
+  .pv-key--jump { width: 22px; height: 0; border-top: 3px dashed var(--sa-amber-ink); }
+  .pv-key--zone { width: 13px; height: 13px; border: 1.5px dashed var(--sa-sage); border-radius: 50%; background: color-mix(in srgb, var(--sa-sage) 14%, transparent); }
   .pv-key--latest { width: 14px; height: 14px; border-radius: 50%; background: var(--sa-ink); box-shadow: 0 0 0 2px var(--sa-brand); }
 }
 
